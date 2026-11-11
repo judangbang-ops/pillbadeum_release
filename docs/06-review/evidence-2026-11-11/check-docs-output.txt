@@ -1,0 +1,14 @@
+requirements: 72 rows, REQ-001..REQ-072, missing numbers: none
+  kind: {'기능': 53, '비기능': 19}
+  priority: {'Must': 59, 'Could': 1, 'Should': 11, 'Must (새 개인 계정일 때)': 1}
+  rows with an empty requirement/kind/priority/source/acceptance cell: none
+  RR counterexamples linked from acceptance criteria: 21 of 25, not linked: [5, 11, 12, 25]
+sitemap: 10 screens, duplicate ids: 0, duplicate paths: 0
+  functional requirements not used by any screen: none
+  screen reqs that are not functional requirements: ['REQ-026', 'REQ-068']; unknown ids: none
+  screens.md sections whose REQ set differs from sitemap.yaml: none
+wbs: 39 tasks; requirements without a task: none; unknown requirement ids: none
+  owners: {'미정': 39} | tasks without a done condition: none
+  size sum without open-ended tasks ['TASK-039']: 35.5일
+  dependency cycles: none
+  longest dependency chain ending at TASK-038: 9.0일 = TASK-003 > TASK-011 > TASK-024 > TASK-027 > TASK-029 > TASK-032 > TASK-038

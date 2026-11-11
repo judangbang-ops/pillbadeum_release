@@ -1,0 +1,86 @@
+# Build and APK checks, 2026-11-11 (UTC), clean clone of pillbadeum_release at 7b8d9df35aac58b8f0d0e170094ee24815fb6e58
+# Host: Linux container. openjdk version "17.0.21" 2026-10-20. Gradle wrapper 8.14.6. Android SDK platform 36, build-tools 36.0.0.
+# No emulator or device was available: nothing below was run on Android.
+
+## 1. ./gradlew :shared:jvmTest --rerun-tasks   (exit 0)
+com.zmanlab.diditake.data.DoseRecordDaoTest                  tests=5 failures=0 errors=0 skipped=0
+com.zmanlab.diditake.data.ScheduleParamsTest                 tests=4 failures=0 errors=0 skipped=0
+com.zmanlab.diditake.domain.DayBoundaryTest                  tests=4 failures=0 errors=0 skipped=0
+com.zmanlab.diditake.domain.UuidV7Test                       tests=6 failures=0 errors=0 skipped=0
+com.zmanlab.diditake.domain.WindowTest                       tests=14 failures=0 errors=0 skipped=0
+com.zmanlab.diditake.status.StatusBoardTest                  tests=9 failures=0 errors=0 skipped=0
+com.zmanlab.diditake.usecase.ManageIntakesTest               tests=10 failures=0 errors=0 skipped=0
+com.zmanlab.diditake.usecase.RecordRulesCounterexampleTest   tests=19 failures=0 errors=0 skipped=0
+TOTAL tests=71 failures=0 errors=0 skipped=0
+
+## 2. ./gradlew :androidApp:assembleDebug   (exit 0)
+androidApp-debug.apk bytes=16859055
+
+## 3. aapt2 dump permissions androidApp-debug.apk
+package: com.zmanlab.diditake
+uses-permission: name='android.permission.RECEIVE_BOOT_COMPLETED'
+uses-permission: name='android.permission.WAKE_LOCK'
+uses-permission: name='android.permission.ACCESS_NETWORK_STATE'
+uses-permission: name='android.permission.FOREGROUND_SERVICE'
+permission: com.zmanlab.diditake.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+uses-permission: name='com.zmanlab.diditake.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'
+
+## 4. Where the merged permissions come from (manifest-merger-debug-report.txt)
+uses-permission#android.permission.RECEIVE_BOOT_COMPLETED
+ADDED from <repo>/androidApp/src/main/AndroidManifest.xml:5:5-81
+uses-permission#android.permission.WAKE_LOCK
+ADDED from [androidx.work:work-runtime:2.7.1] <gradle-cache>/work-runtime-2.7.1/AndroidManifest.xml:25:5-68
+uses-permission#android.permission.ACCESS_NETWORK_STATE
+ADDED from [androidx.work:work-runtime:2.7.1] <gradle-cache>/work-runtime-2.7.1/AndroidManifest.xml:26:5-79
+uses-permission#android.permission.FOREGROUND_SERVICE
+ADDED from [androidx.work:work-runtime:2.7.1] <gradle-cache>/work-runtime-2.7.1/AndroidManifest.xml:28:5-77
+uses-permission#${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+ADDED from [androidx.core:core:1.18.0] <gradle-cache>/core-1.18.0/AndroidManifest.xml:26:5-97
+uses-permission#com.zmanlab.diditake.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+ADDED from [androidx.core:core:1.18.0] <gradle-cache>/core-1.18.0/AndroidManifest.xml:26:5-97
+
+## 5. aapt2 dump badging (selected lines)
+package: name='com.zmanlab.diditake' versionCode='1' versionName='0.1.0' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'
+targetSdkVersion:'36'
+application: label='DidITake' icon=''
+native-code: 'arm64-v8a' 'armeabi-v7a' 'x86' 'x86_64'
+A: http://schemas.android.com/apk/res/android:minSdkVersion(0x0101020c)=26
+A: http://schemas.android.com/apk/res/android:allowBackup(0x01010280)=false
+
+## 6. 16 KB page size: zipalign -c -P 16 -v 4 (native libraries only) and ELF LOAD alignment
+10960896 lib/arm64-v8a/libandroidx.graphics.path.so (OK)
+10977280 lib/arm64-v8a/libsqliteJni.so (OK)
+12271616 lib/armeabi-v7a/libandroidx.graphics.path.so (OK)
+12288000 lib/armeabi-v7a/libsqliteJni.so (OK)
+13549568 lib/x86/libandroidx.graphics.path.so (OK)
+13565952 lib/x86/libsqliteJni.so (OK)
+14712832 lib/x86_64/libandroidx.graphics.path.so (OK)
+14729216 lib/x86_64/libsqliteJni.so (OK)
+Verification successful
+lib/arm64-v8a/libandroidx.graphics.path.so       LOAD p_align=['0x4000']
+lib/arm64-v8a/libsqliteJni.so                    LOAD p_align=['0x4000']
+lib/armeabi-v7a/libandroidx.graphics.path.so     LOAD p_align=['0x4000']
+lib/armeabi-v7a/libsqliteJni.so                  LOAD p_align=['0x4000']
+lib/x86/libandroidx.graphics.path.so             LOAD p_align=['0x4000']
+lib/x86/libsqliteJni.so                          LOAD p_align=['0x4000']
+lib/x86_64/libandroidx.graphics.path.so          LOAD p_align=['0x4000']
+lib/x86_64/libsqliteJni.so                       LOAD p_align=['0x4000']
+
+## 7. Library scan of the APK's dex files (class descriptors containing the name, case-insensitive)
+firebase=0 crashlytics=0 sentry=0 gms/=0 datatransport=0 facebook=0 appsflyer=0 amplitude=0 mixpanel=0 bugsnag=0 openai=0 anthropic=0 generativeai=0 mlkit=0 tensorflow=0 okhttp=0 retrofit=0 ktor=0 admob=0 google/ads=0 
+
+## 8. Journal mode chosen by Room on Android (dexdump of androidx.room3.RoomDatabase$JournalMode.resolve$room3_runtime)
+      name          : 'resolve$room3_runtime'
+0000: sget-object v0, Landroidx/room3/RoomDatabase$JournalMode;.AUTOMATIC:Landroidx/room3/RoomDatabase$JournalMode; // field@266a
+0019: invoke-virtual {v0}, Landroid/app/ActivityManager;.isLowRamDevice:()Z // method@0043
+001f: sget-object v1, Landroidx/room3/RoomDatabase$JournalMode;.TRUNCATE:Landroidx/room3/RoomDatabase$JournalMode; // field@266b
+0022: sget-object v1, Landroidx/room3/RoomDatabase$JournalMode;.WRITE_AHEAD_LOGGING:Landroidx/room3/RoomDatabase$JournalMode; // field@266c
+
+## 9. Source checks (grep in the repository at the same commit)
+database close() calls outside tests: 0
+journal mode or checkpoint settings: 0
+Log calls in app source:
+  androidApp/src/main/kotlin/com/zmanlab/diditake/boundary/DayBoundaryAlarm.kt:38:        Log.i(TAG, "next day boundary refresh at $at")
+  androidApp/src/main/kotlin/com/zmanlab/diditake/boundary/DayBoundaryAlarm.kt:52:                Log.e("DayBoundaryReceiver", "boundary refresh failed (${intent.action})", e)
+  androidApp/src/main/kotlin/com/zmanlab/diditake/widget/DidITakeWidget.kt:132:        runCatching { block() }.onFailure { Log.e(TAG, "widget model load failed", it) }.getOrNull()
+  androidApp/src/main/kotlin/com/zmanlab/diditake/widget/DidITakeWidget.kt:162:        if (result is RecordResult.Error) Log.e("DidITakeWidget", "record failed: ${result.message}")

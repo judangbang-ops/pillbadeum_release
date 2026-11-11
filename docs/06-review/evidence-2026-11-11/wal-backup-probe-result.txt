@@ -1,0 +1,19 @@
+# Output of WalBackupProbeTest (JVM, same database builder as the app, file database, 2026-11-11)
+# One daily item, one record per day, database never closed (a killed Android process does not close it either).
+journal_mode=wal wal_autocheckpoint=1000 page_size=4096
+after-001 recorded=1 files: diditake.db=4096 diditake.db-shm=32768 diditake.db-wal=173072 diditake.db.lck=0
+after-030 recorded=30 files: diditake.db=4096 diditake.db-shm=32768 diditake.db-wal=786952 diditake.db.lck=0
+after-090 recorded=90 files: diditake.db=4096 diditake.db-shm=32768 diditake.db-wal=2092992 diditake.db.lck=0
+main file written (checkpoint) after record 178: diditake.db=196608
+main file written (checkpoint) after record 343: diditake.db=266240
+after-365 recorded=365 files: diditake.db=266240 diditake.db-shm=32768 diditake.db-wal=4128272 diditake.db.lck=0
+after-400 recorded=400 files: diditake.db=266240 diditake.db-shm=32768 diditake.db-wal=4128272 diditake.db.lck=0
+
+# What each copy contains when opened with sqlite3 (inspect-wal-copies.py)
+# only-db = diditake.db alone, db-and-wal = diditake.db + diditake.db-wal (no -shm file)
+# sqlite library used to open the copies: 3.53.1
+after-001 | only-db: tables=0 dose_record rows=no table | db-and-wal: tables=9 dose_record rows=1
+after-030 | only-db: tables=0 dose_record rows=no table | db-and-wal: tables=9 dose_record rows=30
+after-090 | only-db: tables=0 dose_record rows=no table | db-and-wal: tables=9 dose_record rows=90
+after-365 | only-db: tables=9 dose_record rows=343 | db-and-wal: tables=9 dose_record rows=365
+after-400 | only-db: tables=9 dose_record rows=343 | db-and-wal: tables=9 dose_record rows=400

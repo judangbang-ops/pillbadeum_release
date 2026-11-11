@@ -1,14 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
+    Default and minimum size 4x2 (250dp x 110dp): at 2x1 the buttons were cut in half on an
+    API 34 emulator (2026-11-11 check), so the widget cannot be shrunk below the size that fits one row.
     updatePeriodMillis is 0: periodic updates are at least 30 minutes apart and not exact, so day
     boundary refresh will use its own alarm instead (docs/02-design/architecture.md section 6).
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:initialLayout="@layout/glance_default_loading_layout"
-    android:minWidth="110dp"
-    android:minHeight="40dp"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="250dp"
+    android:minResizeHeight="110dp"
     android:resizeMode="horizontal|vertical"
-    android:targetCellWidth="2"
-    android:targetCellHeight="1"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
     android:updatePeriodMillis="0"
     android:widgetCategory="home_screen" />

@@ -5,11 +5,18 @@ import androidx.room3.Insert
 import androidx.room3.OnConflictStrategy
 import androidx.room3.Query
 import androidx.room3.Upsert
+import com.zmanlab.diditake.domain.SlotLabel
 
 @Dao
 interface PersonDao {
     @Insert
     suspend fun insert(person: PersonEntity)
+
+    @Query("SELECT * FROM person WHERE archived_at IS NULL ORDER BY created_at, id")
+    suspend fun listActive(): List<PersonEntity>
+
+    @Query("SELECT * FROM person WHERE id = :id")
+    suspend fun findById(id: String): PersonEntity?
 }
 
 @Dao
@@ -19,6 +26,31 @@ interface IntakeDao {
 
     @Query("SELECT * FROM intake WHERE id = :id")
     suspend fun findById(id: String): IntakeEntity?
+
+    /** Intakes shown on the widget and the app list: not archived, in display order. */
+    @Query("SELECT * FROM intake WHERE archived_at IS NULL ORDER BY sort_order, created_at, id")
+    suspend fun listActive(): List<IntakeEntity>
+
+    @Query("SELECT COALESCE(MAX(sort_order), -1) FROM intake")
+    suspend fun maxSortOrder(): Int
+
+    /** Edits display fields only; schedule changes go to a new schedule_version row. */
+    @Query(
+        """
+        UPDATE intake
+        SET person_id = :personId, name = :name, widget_alias = :widgetAlias, slot_label = :slotLabel,
+            updated_at = :now, version = version + 1
+        WHERE id = :id AND archived_at IS NULL
+        """,
+    )
+    suspend fun updateDetails(
+        id: String,
+        personId: String,
+        name: String,
+        widgetAlias: String?,
+        slotLabel: SlotLabel?,
+        now: Long,
+    ): Int
 
     /** Soft delete (data-model.md section 3). Returns the number of rows changed (0 or 1). */
     @Query(
@@ -59,6 +91,10 @@ interface ScheduleVersionDao {
         """,
     )
     suspend fun close(id: String, effectiveTo: Long, now: Long): Int
+
+    /** Every version of one intake, oldest first (history and tests). */
+    @Query("SELECT * FROM schedule_version WHERE intake_id = :intakeId ORDER BY effective_from, id")
+    suspend fun listByIntake(intakeId: String): List<ScheduleVersionEntity>
 }
 
 @Dao
@@ -103,6 +139,17 @@ interface DoseRecordDao {
         """,
     )
     suspend fun voidActive(id: String, now: Long, reason: String): Int
+
+    /** Latest active judgment taken before [before] ("마지막 기록" on the widget and app). */
+    @Query(
+        """
+        SELECT * FROM dose_record
+        WHERE intake_id = :intakeId AND active = 1 AND taken_at < :before
+        ORDER BY taken_at DESC
+        LIMIT 1
+        """,
+    )
+    suspend fun findLastActiveBefore(intakeId: String, before: Long): DoseRecordEntity?
 
     @Query("SELECT * FROM dose_record WHERE id = :id")
     suspend fun findById(id: String): DoseRecordEntity?

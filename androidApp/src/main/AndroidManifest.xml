@@ -1,18 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Re-arm the day-boundary widget refresh after a reboot. No exact-alarm permission is used. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <!--
         Backup policy is still pending (docs/01-planning/planning-v3.md section 8). Until it is decided,
         Android auto backup stays off. Note: on Android 12+ allowBackup="false" stops cloud backup but not
         device-to-device transfer; dataExtractionRules will be set together with the final policy.
     -->
     <application
+        android:name=".DidITakeApplication"
         android:allowBackup="false"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
         <activity
+            android:windowSoftInputMode="adjustResize"
             android:name=".MainActivity"
             android:exported="true">
             <intent-filter>
@@ -31,6 +36,18 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/diditake_widget_info" />
+        </receiver>
+
+        <!-- Day-boundary alarm (own explicit intent) plus system time/boot broadcasts. -->
+        <receiver
+            android:name=".boundary.DayBoundaryReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
         </receiver>
     </application>
 

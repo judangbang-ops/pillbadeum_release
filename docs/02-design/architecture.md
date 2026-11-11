@@ -30,6 +30,10 @@
 | 알림 | AlarmManager + NotificationManager | 앱 자체 알림 (카카오톡은 추후 확장) |
 | 의존성 주입 | 수동 주입으로 시작 | 작은 앱에 프레임워크를 먼저 넣지 않음. 필요해지면 Koin(KMP 지원) |
 
+실제 버전(2026-11-11 뼈대 기준): Kotlin 2.4.21, AGP 8.13.2, Gradle 8.14.6, KSP 2.3.12, Compose Multiplatform 1.11.1, Room 3.0.3, sqlite-bundled 2.7.1, kotlinx-datetime 0.8.0, coroutines 1.11.0, Glance 1.2.0, activity-compose 1.13.0, SDK compile·target 36 / min 26, JDK 17. 정본은 `gradle/libs.versions.toml`임.
+
+- KSP가 KMP Android 대상의 Room 생성 코드를 컴파일 경로에 연결하지 못하는 문제(google/ksp#2476)가 있어 `shared/build.gradle.kts`에서 생성 폴더를 직접 등록함. KSP·AGP가 고쳐지면 걷어냄
+
 ### 2.2 나중 (확장)
 
 | 단계 | 추가하는 것 | 지금 해 두는 대비 |

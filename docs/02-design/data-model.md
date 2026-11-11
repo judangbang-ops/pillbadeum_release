@@ -132,7 +132,8 @@ erDiagram
 | effective_from | INTEGER | NOT NULL | 적용 시작 |
 | effective_to | INTEGER | NULL | 적용 끝. NULL이면 현재 버전 |
 
-- 수정은 현재 버전의 `effective_to`를 채우고 새 행을 추가함. 덮어쓰지 않음
+- 주기·기준 요일이 바뀌면 현재 버전의 `effective_to`를 채우고 새 행을 추가함. 일정은 덮어쓰지 않음
+- 이름·위젯 별칭·시간대 표시 같은 표시 필드는 `intake` 행을 고치고 `version`을 올림 (일정 버전을 만들지 않음)
 - 중단 구간(확장)은 `params_json`의 중단 기간 또는 별도 버전으로 표현함
 
 `params_json` 예시

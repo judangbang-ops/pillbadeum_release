@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DidITake UI 초안 v3</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap">
+<style>
+body{margin:0;background:#D5DBE1;font-family:'IBM Plex Sans KR',system-ui,sans-serif;color:#1C2129;padding:32px 16px}
+.wrap{display:flex;flex-wrap:wrap;gap:40px;justify-content:center;align-items:flex-start}
+.label{font-size:14px;color:#3B4452;margin:0 0 10px 6px;font-weight:700}
+.phone{width:390px;height:844px;border-radius:36px;overflow:hidden;box-sizing:border-box;display:flex;flex-direction:column}
+/* 홈 화면 */
+.home{background:#2F4A50;padding:96px 16px 32px;gap:28px}
+.clock{display:flex;flex-direction:column;gap:2px;padding:0 8px}
+.clock b{font-size:56px;font-weight:500;color:#F2F5F6;line-height:1.05}
+.clock span{font-size:15px;color:#C9D6D8}
+.widget{background:#F7F8FA;border-radius:28px;padding:18px 14px 16px;display:flex;flex-direction:column;gap:16px}
+.whead{display:flex;justify-content:space-between;align-items:baseline;padding:0 4px;gap:8px}
+.whead b{font-size:17px}.whead .date{font-size:14px;font-weight:700;color:#1D4E89}.whead span{font-size:13px;color:#5A6372}
+.pills{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.pill{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;position:relative}
+.pill button{width:64px;height:64px;border-radius:50%;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;position:relative}
+.pill button.pending{border:2px dashed #8E98A6;background:#fff}
+.pill button.done{border:none;background:#1D4E89}
+.who{position:absolute;top:-4px;left:-4px;width:22px;height:22px;border-radius:50%;font-size:11px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center;border:2px solid #F7F8FA}
+.who.me{background:#3F7D58}.who.mom{background:#B5562B}
+.pill .n{font-size:12px;font-weight:700;line-height:1.3;word-break:keep-all}
+.pill .s{font-size:11px;color:#5A6372;line-height:1.35;word-break:keep-all}
+.msg{border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.45}
+.msg.hint{color:#5A6372;padding:0 4px}
+.msg.warn{background:#FCEBD9;color:#7A3E06}
+.msg.stale{background:#E3ECF8;color:#173E6C}
+.icons{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;padding:0 14px;margin-top:auto}
+.icons div{aspect-ratio:1;border-radius:16px;background:#3F5D63}
+.sim{display:flex;gap:8px;margin:12px 0 0 6px;flex-wrap:wrap;max-width:390px}
+.sim button{min-height:36px;padding:0 12px;border:1px solid #9AA4B1;border-radius:10px;background:#F7F8FA;font:inherit;font-size:13px;cursor:pointer}
+.sim p{margin:0;font-size:12px;color:#3B4452;line-height:1.5;flex-basis:100%}
+/* 앱 화면 */
+.app{background:#EEF1F4;padding:56px 18px 28px;gap:18px}
+.top{display:flex;justify-content:space-between;align-items:center}
+.top h1{margin:0;font-size:26px}
+.btn-dark{min-height:44px;padding:0 16px;border:none;border-radius:12px;background:#1C2129;color:#fff;font:inherit;font-weight:700;font-size:15px}
+h2{margin:0;font-size:15px;font-weight:500;color:#5A6372}
+.list{display:flex;flex-direction:column;gap:10px}
+.row{background:#fff;border-radius:16px;padding:12px 14px;display:flex;align-items:center;gap:12px}
+.dot{width:36px;height:36px;border-radius:50%;flex-shrink:0;box-sizing:border-box;display:flex;align-items:center;justify-content:center;color:#fff}
+.dot.done{background:#1D4E89}.dot.pending{border:2px dashed #8E98A6}
+.row .t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.row .t b{font-size:15px}.row .t span{font-size:12.5px;color:#5A6372;line-height:1.4}
+.tag{font-size:11px;font-weight:700;border-radius:6px;padding:1px 6px;color:#fff;margin-right:4px}
+.row .t .tag{color:#fff;font-size:11px}.tag.me{background:#3F7D58}.tag.mom{background:#B5562B}
+.btn-line{min-height:44px;padding:0 12px;border:1px solid #C3CAD3;border-radius:10px;background:#fff;color:#5A6372;font:inherit;font-size:13px;flex-shrink:0}
+.week{background:#fff;border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.wr{display:grid;grid-template-columns:64px repeat(7,minmax(0,1fr));gap:6px;align-items:center;font-size:13px}
+.wr.h{font-size:12px;color:#5A6372;text-align:center}
+.c{aspect-ratio:1;border-radius:6px;background:#E1E5EA}.c.on{background:#1D4E89}.c.today{outline:2px solid #1C2129;outline-offset:1px}
+.set{background:#fff;border-radius:16px;padding:12px 14px;font-size:13px;color:#3B4452;display:flex;justify-content:space-between}
+.foot{margin:0;font-size:12px;color:#5A6372;line-height:1.5}
+/* 알림 */
+.notif-col{width:340px;display:flex;flex-direction:column;gap:14px}
+.notif{background:#F7F8FA;border-radius:22px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.nh{display:flex;align-items:center;gap:8px;font-size:12px;color:#5A6372}
+.nh i{width:18px;height:18px;border-radius:5px;background:#1D4E89;display:inline-block}
+.notif b{font-size:16px}.notif span{font-size:13px;color:#3B4452;line-height:1.45}
+.acts{display:flex;gap:8px;margin-top:4px}
+.acts button{flex:1;min-height:40px;border:none;border-radius:12px;background:#E3ECF8;color:#173E6C;font:inherit;font-size:13px;font-weight:700}
+.acts button.primary{background:#1D4E89;color:#fff}
+.note{font-size:12px;color:#3B4452;line-height:1.55;background:#EEF1F4;border-radius:14px;padding:12px 14px}
+.note b{font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <p class="label">홈 화면 위젯 (탭해서 체험)</p>
+    <div class="phone home">
+      <div class="clock"><b>08:12</b><span id="clockDate">11월 11일 수요일</span></div>
+      <div class="widget">
+        <div class="whead"><b>DidITake</b><span class="date" id="wdate"></span><span id="count"></span></div>
+        <div class="pills" id="pills"></div>
+        <div id="msg" class="msg hint">같은 창(매일 약은 하루, 주 1회 약은 기준 요일부터 7일)에는 한 번만 기록돼요. 다시 눌러도 바뀌지 않아요.</div>
+      </div>
+      <div class="icons"><div></div><div></div><div></div><div></div></div>
+    </div>
+    <div class="sim">
+      <button id="nextDay">날짜 넘기기 (위젯 갱신 지연 재현)</button>
+      <button id="refresh">위젯 갱신</button>
+      <p id="simNote">실제 날짜와 위젯 기준 날짜가 같음</p>
+    </div>
+  </div>
+
+  <div>
+    <p class="label">앱 화면 · 기록</p>
+    <div class="phone app">
+      <div class="top"><h1>기록</h1><button class="btn-dark">항목 추가</button></div>
+      <div class="list">
+        <h2>오늘 · 이번 주</h2>
+        <div class="row"><div class="dot done">✓</div><div class="t"><b><span class="tag me">나</span>아침약</b><span>매일 아침 · 오늘 08:02 기록</span></div><button class="btn-line">기록 취소</button></div>
+        <div class="row"><div class="dot pending"></div><div class="t"><b><span class="tag me">나</span>비타민</b><span>매일 저녁 · 아직 안 먹음 · 마지막 어제 21:40</span></div></div>
+        <div class="row"><div class="dot done">✓</div><div class="t"><b><span class="tag me">나</span>주사제 A</b><span>주 1회 · 월 · 이번 창 월 08:30 완료 · 다음 창 11/16 (월)</span></div><button class="btn-line">기록 취소</button></div>
+        <div class="row"><div class="dot pending"></div><div class="t"><b><span class="tag mom">엄마</span>주 1회 약</b><span>주 1회 · 수 · 이번 창 아직 · 마지막 11/04 (수) 09:10</span></div></div>
+      </div>
+      <div class="list">
+        <h2>이번 주</h2>
+        <div class="week">
+          <div class="wr h"><span></span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span><span>일</span></div>
+          <div class="wr"><span>아침약</span><div class="c on"></div><div class="c on"></div><div class="c on today"></div><div class="c"></div><div class="c"></div><div class="c"></div><div class="c"></div></div>
+          <div class="wr"><span>비타민</span><div class="c on"></div><div class="c on"></div><div class="c today"></div><div class="c"></div><div class="c"></div><div class="c"></div><div class="c"></div></div>
+        </div>
+      </div>
+      <div class="set"><span>하루 시작 04:00</span><span>기준 시간대 Asia/Seoul</span></div>
+      <p class="foot">기록 취소는 앱에서만 할 수 있어요. 취소해도 기록은 지워지지 않고 무효로 남아요.</p>
+    </div>
+  </div>
+
+  <div class="notif-col">
+    <p class="label">반복 알림</p>
+    <div class="notif">
+      <div class="nh"><i></i>DidITake · 지금</div>
+      <b>아침약 먹어~!</b>
+      <span>아직 기록이 없어요. 1시간마다 다시 알려 드려요.</span>
+      <div class="acts"><button class="primary">먹었어</button><button>30분 뒤</button><button>오늘 건너뜀</button></div>
+    </div>
+    <div class="notif">
+      <div class="nh"><i></i>DidITake · 잠금 화면 (약 이름 숨김)</div>
+      <b>복용 시간이에요</b>
+      <span>기록하려면 잠금을 풀어 주세요.</span>
+    </div>
+    <div class="note"><b>알림 규칙</b><br>· 기록·건너뜀이 되면 남은 알림을 바로 취소함<br>· 창 끝 · 방해 금지 시간 · 하루 최대 횟수에서 멈춤<br>· [먹었어]는 위젯과 같은 기록 함수로 처리함<br>· 날짜가 바뀐 뒤 누르면 기록하지 않고 안내함</div>
+  </div>
+</div>
+
+<script>
+const DAYS = ['수', '목', '금', '토', '일', '월', '화'];
+const items = [
+  {id: 'am', name: '아침약', who: 'me', daily: true, taken: '08:02', last: '어제 08:01'},
+  {id: 'vit', name: '비타민', who: 'me', daily: true, taken: null, last: '어제 21:40'},
+  {id: 'inj', name: '주사제 A', who: 'me', daily: false, anchorIn: 5, taken: '월 08:30', last: '지난 월 08:31'},
+  {id: 'mom', name: '주 1회 약', who: 'mom', daily: false, anchorIn: 7, taken: null, last: '11/04 (수) 09:10'}
+];
+let realDay = 0, renderDay = 0;
+const hintText = document.getElementById('msg').textContent;
+const check = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+const dateLabel = d => `11/${11 + d} (${DAYS[d % 7]})`;
+const now = () => { const t = new Date(); return String(t.getHours()).padStart(2, '0') + ':' + String(t.getMinutes()).padStart(2, '0'); };
+function setMsg(cls, text) { const m = document.getElementById('msg'); m.className = 'msg ' + cls; m.textContent = text; }
+function render() {
+  document.getElementById('wdate').textContent = dateLabel(renderDay);
+  document.getElementById('pills').innerHTML = items.map(p => {
+    const sub = p.taken ? p.taken : '마지막 ' + p.last;
+    const who = p.who === 'me' ? '나' : '엄';
+    return `<div class="pill"><button class="${p.taken ? 'done' : 'pending'}" data-id="${p.id}" data-key="${renderDay}" aria-label="${p.name}, ${p.taken ? p.taken + ' 기록됨' : '미완료'}"><span class="who ${p.who}">${who}</span>${p.taken ? check : ''}</button><span class="n">${p.name}</span><span class="s">${sub}</span></div>`;
+  }).join('');
+  document.getElementById('count').textContent = `${items.filter(p => p.taken).length} / ${items.length} 완료`;
+  document.getElementById('simNote').textContent = realDay === renderDay
+    ? '실제 날짜와 위젯 기준 날짜가 같음'
+    : `실제 날짜는 ${dateLabel(realDay)}인데 위젯은 아직 ${dateLabel(renderDay)} 기준으로 그려져 있음 (갱신 지연)`;
+}
+function rollTo(day) {
+  for (let d = renderDay + 1; d <= day; d++) {
+    items.forEach(p => {
+      const newWindow = p.daily || d === p.anchorIn;
+      if (!newWindow) return;
+      if (p.taken) p.last = (p.daily ? '어제 ' : '지난 ') + p.taken.replace(/^. /, '');
+      p.taken = null;
+    });
+  }
+  renderDay = day;
+}
+document.getElementById('pills').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const p = items.find(x => x.id === b.dataset.id);
+  if (Number(b.dataset.key) !== realDay) {           // 렌더 기간키 대조
+    rollTo(realDay); render();
+    setMsg('stale', '날짜가 바뀌었어요. 다시 눌러 주세요. (기록하지 않고 새로고침함)');
+    return;
+  }
+  if (p.taken) { setMsg('warn', `${p.name}: 이미 기록됨 (${p.taken}). 변경 없음.`); return; }
+  p.taken = (p.daily ? '' : DAYS[realDay % 7] + ' ') + now();
+  setMsg('hint', hintText); render();
+});
+document.getElementById('nextDay').addEventListener('click', () => { if (realDay < 6) realDay++; render(); });
+document.getElementById('refresh').addEventListener('click', () => { rollTo(realDay); setMsg('hint', hintText); render(); });
+render();
+</script>
+</body>
+</html>

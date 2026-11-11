@@ -37,7 +37,7 @@
       "human": "github",
       "source": "diditake:docs/02-design/data-model.md",
       "truth": "source",
-      "note": "실제 스키마는 DidITake shared/schemas의 Room 스키마 JSON. TBL ID 없음"
+      "note": "실제 스키마는 이 저장소 shared/schemas의 Room 스키마 JSON (DidITake 7a800ac에서 가져옴). TBL ID 없음"
     },
     "06-api": {
       "skip": true,
@@ -69,7 +69,7 @@
     "11-development": {
       "human": "github",
       "truth": "source",
-      "note": "앱 코드는 지금 DidITake에 있음 (가쟈누님 프로토타입 7a800ac). 어느 저장소에서 이어 갈지는 정할 것"
+      "note": "앱 코드는 이 저장소의 shared/·androidApp/. 가쟈누님 프로토타입 DidITake 7a800ac를 이력째 가져옴 (2026-11-11 21:52 동희님 결정)"
     },
     "12-qa": {
       "human": "github",

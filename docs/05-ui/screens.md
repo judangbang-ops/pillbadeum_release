@@ -12,7 +12,7 @@
 - **출처**: 서버 API가 없어서 공통 코드의 함수 이름을 적음. `LoadStatusBoard`·`RecordDose`·`VoidDose`·`ChangeJudgment`·`SaveIntake`·`ArchiveIntake`·`ManagePeople`은 지금 있음. '(새로 만듦)'은 아직 없는 함수임
 - **결과 → 상태**: `RecordResult`의 Recorded·Already·Stale·Gone·Error, `VoidResult`의 Voided·NotActive, `SaveIntakeResult`의 Saved·Invalid·Gone이 어느 상태로 가는지 각 화면에 적음
 - **(제안)**: Claude 제안이고 확정 전임. 5장에 모아 둠
-- **지금 코드**: DidITake develop `7a800ac`을 Claude가 읽고 판단함(빌드·실행하지 않음)
+- **지금 코드**: DidITake develop `7a800ac`(이 저장소로 가져온 코드와 같음)을 Claude가 읽고 판단함(빌드·실행하지 않음)
 
 ## 1. 화면 지도
 

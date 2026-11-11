@@ -1,14 +1,14 @@
 # 요구사항 (1차 릴리즈)
 
 - 상태: **초안** (2026-11-11, Claude 작성). 동희님·가쟈누님의 범위 확정 전임
-- 위치: 이 문서와 화면·작업 분해 문서는 릴리즈 저장소에 둠. 가쟈누님 기획·설계 원본은 [DidITake](https://github.com/judangbang-ops/DidITake/tree/7a800ac)에 있고, 그 문서로 가는 링크는 모두 `7a800ac` 판을 가리킴
+- 위치: 이 문서와 화면·작업 분해 문서는 릴리즈 저장소에 둠. 가쟈누님 기획·설계 원본은 [DidITake](https://github.com/judangbang-ops/DidITake/tree/7a800ac)에 있고, 그 문서로 가는 링크는 모두 `7a800ac` 판을 가리킴. 앱 코드도 이 저장소에서 이어 가며, DidITake `7a800ac`를 이력째 가져온 것임 (2026-11-11 21:52 결정)
 - 기준: DidITake develop `7a800ac`의 [기획 v3](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/01-planning/planning-v3.md), [기록 규칙](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/02-design/record-rules.md), [데이터 모델](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/02-design/data-model.md), [아키텍처](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/02-design/architecture.md), [플로우](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/04-flow/flows.md), [UI 초안](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/05-ui/README.md), [QA 2026-11-11](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/07-qa/2026-11-11-prototype/report.md), 그리고 v3 뒤에 정한 결정(0장)
 - 이 문서는 기획 v3를 대신하지 않음. v3의 규칙에 요구 ID와 합격 기준을 붙이고, v3 뒤에 정한 결정을 반영함. 규칙이 서로 다르면 기록 규칙(record-rules)이 우선이고, 다른 점은 4장에 적음
 - 화면 목록·상태는 [05-ui/screens.md](../05-ui/screens.md), 작업 분해는 [08-wbs/wbs.md](../08-wbs/wbs.md)에 있음
 
 ## 0. v3 뒤에 정한 결정
 
-원문과 선택지는 Notion '결정할 것' 표에 있음. 동희님이 결정 카드에서 고르셨고, Q10의 바뀐 부분은 스레드에서 말씀하심.
+원문과 선택지는 Notion '결정할 것' 표에 있음. 동희님이 결정 카드에서 고르셨고, Q10의 21:12 부분은 스레드에서 말씀하심.
 
 | 결정 | 내용 | 때 | v3와 다른 점 |
 | --- | --- | --- | --- |
@@ -16,7 +16,7 @@
 | Q3 약 입력 | 1차는 복용 항목 이름을 직접 입력함 | 20:19 (Q1 카드에 포함) | 같음 |
 | Q4 미복용 알림 | 1차는 휴대폰 반복 알림. 카카오톡은 2차 이후 | 20:19 (Q1 카드에 포함) | 같음 |
 | Q7 백업 | 복용 기록 DB만 Android 자동 백업에 넣음 | 20:27 | v3·data-model은 `backup_policy` 기본 NONE, 매니페스트는 `allowBackup="false"` |
-| Q10 저장소 | 20:27에는 앱 소스와 문서를 DidITake 하나에 두기로 함. 21:12에 바뀜: 우리 설계 문서는 릴리즈 저장소(`pillbadeum_release`)에 두고, DidITake는 가쟈누님이 기획을 올리는 곳임. 앱 코드를 어디서 이어 갈지는 정할 것 | 20:27, 21:12 (스레드 말씀) | v3·DidITake README는 DidITake 루트에 둠 |
+| Q10 저장소 | 20:27에는 앱 소스와 문서를 DidITake 하나에 두기로 함. 21:12에 바뀜: 우리 설계 문서는 릴리즈 저장소(`pillbadeum_release`)에 두고, DidITake는 가쟈누님이 기획을 올리는 곳임. 21:52: 앱 코드도 릴리즈 저장소로 가져와 이어 개발함 (DidITake `7a800ac`를 이력째 가져옴) | 20:27, 21:12 (스레드 말씀), 21:52 | v3·DidITake README는 앱 소스·문서를 DidITake 루트에 둠 |
 | Q13 배포 순서 | APK 다음은 Google Play 비공개 테스트, iOS는 그 뒤 | 20:27 | v3는 "스토어 배포는 하지 않음", APK 다음 iOS |
 
 ## 1. 읽는 법
@@ -26,7 +26,7 @@
 - **우선**: Must = 1차 출시에 꼭 있음, Should = 1차에 넣되 막히면 미룰 수 있음, Could = 여유가 있으면
 - **합격 기준**: `RR-n`은 [기록 규칙 9장](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/02-design/record-rules.md#9-반례별-기대-동작)의 반례 n번이고, 그 표의 기대 동작이 곧 합격 기준임. 그 밖에는 "전제 → 동작 → 결과"로 씀
 - **출처**: '기획 v3 3.1'은 planning-v3 3.1절, 'QA n'은 2026-11-11 QA 보고서의 확인 항목 n번, '결정 Qn'은 0장, '킥오프 hh:mm'은 2026-11-11 킥오프 대화(저장소 밖 기록), 'Play'는 6장의 공식 문서, 'Claude 제안'은 확정 전 제안임
-- **지금 코드**: DidITake develop `7a800ac`을 Claude가 읽고 판단함(빌드·실행하지 않음). 있음 / 일부 / 없음 / 확인 전
+- **지금 코드**: DidITake develop `7a800ac`(이 저장소로 가져온 코드와 같음)을 Claude가 읽고 판단함(빌드·실행하지 않음). 있음 / 일부 / 없음 / 확인 전
 
 ## 2. 1차 요구
 

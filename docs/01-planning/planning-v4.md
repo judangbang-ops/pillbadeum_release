@@ -1,7 +1,7 @@
 # DidITake 기획 v4 (초안)
 
 - 작성일: 2026-11-11 (Claude 작성. 동희님·가쟈누님의 범위 확정 전 초안)
-- 위치: 가쟈누님 기획 v1~v3는 DidITake에 있고, v4는 동희님 말씀(2026-11-11 21:12)에 따라 릴리즈 저장소에 둠
+- 위치: 가쟈누님 기획 v1~v3는 DidITake에 있고, v4는 동희님 말씀(2026-11-11 21:12)에 따라 릴리즈 저장소에 둠. 앱 코드도 릴리즈 저장소에서 이어 감(21:52 결정, DidITake `7a800ac`를 가져옴)
 - 기준: [v3](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/01-planning/planning-v3.md) + v3 뒤에 동희님이 정한 결정(2026-11-11 20:19·20:27 KST)
 - 이 판은 v3에서 **바뀐 점만** 적음. 여기 없는 내용은 v3 그대로임
 - 요구 ID와 합격 기준은 [requirements](requirements.md), 화면 ID와 상태는 [05-ui/screens](../05-ui/screens.md), 작업 분해는 [08-wbs](../08-wbs/wbs.md)에 있음
@@ -12,6 +12,7 @@
 2. 백업: 복용 기록 DB만 Android 자동 백업에 넣음 (결정 Q7)
 3. 배포: APK 다음은 Google Play 비공개 테스트, iOS는 그 뒤 (결정 Q13)
 4. 요구 ID·합격 기준, 화면 ID·상태, 작업 분해를 따로 둠
+5. 저장소: 우리 설계 문서와 앱 코드는 릴리즈 저장소에 두고, DidITake는 가쟈누님이 기획을 올리는 곳으로 둠 (결정 Q10). v3와 DidITake README는 앱 소스·문서를 DidITake 루트에 둔다고 적음
 
 결정마다의 선택지와 출처는 [requirements 0장](requirements.md#0-v3-뒤에-정한-결정)에 있음.
 
@@ -49,7 +50,6 @@
 
 | 항목 | 상태 |
 | --- | --- |
-| 저장소 역할 | 21:12 동희님 말씀: 우리 설계는 릴리즈 저장소, DidITake는 가쟈누님이 기획을 올리는 곳. 앱 코드를 어디서 이어 갈지는 정할 것 |
 | 작업 방식 (Q14) | 지금은 릴리즈 저장소에 작업 브랜치 + 초안 PR로 올리고 동희님이 합침 |
 | 범위 확정 때 정할 것 10개 | [requirements 4장](requirements.md#4-범위-확정-때-정할-것-claude-추천-기본값) |
 | 화면에서 정할 것 7개 | [screens 5장](../05-ui/screens.md#5-화면에서-정할-것-claude-추천) |

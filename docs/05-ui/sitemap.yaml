@@ -1,13 +1,13 @@
 # 화면 목록 (사이트맵) — 초안 2026-11-11, Claude 작성. 범위 확정 전
 #
-# - 기준: DidITake develop 7a800ac. 요구는 ../01-planning/requirements.md, 화면별 상태는 screens.md
+# - 기준: DidITake develop 7a800ac (이 저장소로 가져온 코드와 같음). 요구는 ../01-planning/requirements.md, 화면별 상태는 screens.md
 # - 이 파일이 화면 목록의 원본임. screens.md 1장의 그림과 표는 이 파일에서 옮겨 그림
 # - path: 안드로이드 화면이라 URL이 아님. 진입 지점별로 widget: / notification: / app: 을 붙임
 # - 진입 지점이 셋(홈 화면 위젯, 알림, 앱 아이콘)이라 최상위 항목이 셋임
 # - access: 계정이 없어 모두 '기기 사용자'임. 잠금 화면에 보이는 것만 따로 적음
 # - flows: DidITake docs/04-flow/flows.md(7a800ac)의 장 번호 (플로우에 FL ID가 아직 없음)
 # - reqs: 이 화면이 쓰는 요구 ID
-# - code: DidITake develop 7a800ac에 있는 정도 (있음 / 일부 / 없음). Claude가 코드를 읽고 판단함
+# - code: 7a800ac 코드(DidITake에서 이 저장소로 가져옴)에 있는 정도 (있음 / 일부 / 없음). Claude가 코드를 읽고 판단함
 # - terms: 도메인 단계(01)를 하지 않아 모두 none
 
 - id: SCR-001

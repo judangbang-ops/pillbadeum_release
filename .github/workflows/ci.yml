@@ -12,13 +12,15 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
-  # 같은 PR에 새로 푸시하면 앞 실행을 멈춤. main은 커밋마다 끝까지 돌림.
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # 같은 PR에 새로 푸시하면 앞 실행을 멈춤. main 푸시·수동 실행은 커밋마다 따로 묶여 서로 취소하지 않음.
+  group: ci-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
+  cancel-in-progress: true
 
 jobs:
-  jvm-test:
-    name: JVM 테스트 (:shared:jvmTest)
+  build:
+    # 한 작업에서 테스트와 APK 빌드를 차례로 함. 두 작업으로 나누면 같은 Gradle 캐시 키를 두고 다퉈
+    # 늦게 끝난 쪽(Android 의존성)이 저장되지 않음 (2026-11-11 첫 실행에서 확인).
+    name: JVM 테스트 + 디버그 APK
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -26,8 +28,8 @@ jobs:
         with:
           persist-credentials: false
 
-      # 커밋된 gradle-wrapper.jar가 Gradle 공식 배포본과 같은지 확인함
-      - uses: gradle/actions/wrapper-validation@v5
+      # 커밋된 gradle-wrapper.jar가 Gradle 공식 배포본과 같은지 확인함. 서드파티 액션이라 커밋으로 고정함.
+      - uses: gradle/actions/wrapper-validation@0723195856401067f7a2779048b490ace7a47d7c # v5
 
       - uses: actions/setup-java@v5
         with:
@@ -35,62 +37,58 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: ./gradlew :shared:jvmTest
+      - name: JVM 테스트 (./gradlew :shared:jvmTest)
+        id: jvm-test
         run: ./gradlew :shared:jvmTest
 
+      # 아래 단계들은 테스트가 실패해도 돌되, 그 앞(체크아웃·wrapper 검증)에서 멈췄으면 돌지 않음
       - name: 테스트 결과 요약
-        if: ${{ !cancelled() }}
-        run: python3 .github/scripts/junit_summary.py shared/build/test-results/jvmTest >> "$GITHUB_STEP_SUMMARY"
+        if: ${{ !cancelled() && steps.jvm-test.outcome != 'skipped' }}
+        shell: bash
+        run: python3 .github/scripts/junit_summary.py shared/build/test-results/jvmTest | tee -a "$GITHUB_STEP_SUMMARY"
 
-      - name: 테스트 보고서 올리기 (실패했을 때)
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@v5
+      - name: 테스트 보고서 올리기 (테스트가 실패했을 때)
+        if: ${{ !cancelled() && steps.jvm-test.outcome == 'failure' }}
+        uses: actions/upload-artifact@v6
         with:
           name: jvmTest-report
           path: |
             shared/build/reports/tests/jvmTest/
             shared/build/test-results/jvmTest/
           retention-days: 7
+          overwrite: true
           if-no-files-found: ignore
 
-  debug-apk:
-    name: 디버그 APK (:androidApp:assembleDebug)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - uses: gradle/actions/wrapper-validation@v5
-
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "17"
-          cache: gradle
-
       # Android SDK는 GitHub 호스트 러너에 있는 것(ANDROID_HOME)을 씀
-      - name: ./gradlew :androidApp:assembleDebug
+      - name: 디버그 APK (./gradlew :androidApp:assembleDebug)
+        id: debug-apk
+        if: ${{ !cancelled() && steps.jvm-test.outcome != 'skipped' }}
         run: ./gradlew :androidApp:assembleDebug
 
       - name: APK 정보
+        if: ${{ !cancelled() && steps.debug-apk.outcome == 'success' }}
+        shell: bash
         env:
           APK: androidApp/build/outputs/apk/debug/androidApp-debug.apk
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BUILT_SHA: ${{ github.sha }}
         run: |
           test -f "$APK"
           {
             echo "### 디버그 APK"
             echo ""
             echo "- 파일: \`$APK\` ($(du -h "$APK" | cut -f1))"
+            echo "- 커밋: \`$HEAD_SHA\` (실제 빌드는 \`$BUILT_SHA\`. PR이면 base와 합친 머지 커밋임)"
             echo "- SHA-256: \`$(sha256sum "$APK" | cut -d' ' -f1)\`"
             echo "- 확인용임. 실행마다 새 디버그 키로 서명되어 이전 APK 위에 덮어 설치되지 않고, 지우고 다시 설치하면 기기 안 기록이 사라짐."
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: APK 올리기
-        uses: actions/upload-artifact@v5
+        if: ${{ !cancelled() && steps.debug-apk.outcome == 'success' }}
+        uses: actions/upload-artifact@v6
         with:
           name: androidApp-debug-${{ github.event.pull_request.head.sha || github.sha }}
           path: androidApp/build/outputs/apk/debug/androidApp-debug.apk
           retention-days: 7
+          overwrite: true
           if-no-files-found: error

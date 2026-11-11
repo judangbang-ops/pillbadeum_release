@@ -3,10 +3,11 @@
 
 쓰는 법: python3 junit_summary.py <test-results 폴더>
 - 표준 출력에 Markdown을 씀 (워크플로에서 $GITHUB_STEP_SUMMARY로 보냄)
-- 결과 파일이 없거나 실행된 테스트가 0개면 종료 코드 1.
+- 결과 파일이 없거나, 테스트가 0개이거나, 모두 건너뛰어 통과한 테스트가 없으면 종료 코드 1.
   테스트 작업이 '통과'했는데 실제로는 아무 테스트도 안 돈 경우를 잡으려는 것임.
 """
 
+import html
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -50,7 +51,9 @@ def main() -> int:
             if problem is not None:
                 first_line = (problem.get("message") or "").strip().splitlines()
                 reason = first_line[0][:200] if first_line else problem.tag
-                failed_cases.append(f"`{case.get('classname', '')}.{case.get('name', '')}`: {reason}")
+                # kotlin.test 메시지 'Expected <A>, actual <B>.'의 <A>가 HTML 태그로 지워지지 않게 함
+                test_name = html.escape(f"{case.get('classname', '')}.{case.get('name', '')}")
+                failed_cases.append(f"<code>{test_name}</code>: {html.escape(reason)}")
 
     passed = total - failures - errors - skipped
     print("| 전체 | 통과 | 실패 | 오류 | 건너뜀 | 시간 |")
@@ -75,6 +78,10 @@ def main() -> int:
     if total == 0:
         print()
         print("실행된 테스트가 0개임. 테스트 소스가 빠졌는지 확인하세요.")
+        return 1
+    if passed == 0 and failures == 0 and errors == 0:
+        print()
+        print("모든 테스트가 건너뜀이라 통과한 테스트가 없음.")
         return 1
     return 0
 

@@ -19,6 +19,10 @@ interface PersonDao {
     @Query("SELECT * FROM person WHERE archived_at IS NOT NULL ORDER BY archived_at DESC, id")
     suspend fun listArchived(): List<PersonEntity>
 
+    /** Everyone, archived people too (history keeps their past cells). */
+    @Query("SELECT * FROM person ORDER BY created_at, id")
+    suspend fun listAll(): List<PersonEntity>
+
     @Query("SELECT COUNT(*) FROM person WHERE archived_at IS NULL")
     suspend fun countActive(): Int
 
@@ -63,6 +67,10 @@ interface IntakeDao {
     /** Intakes shown on the widget and the app list: not archived, in display order. */
     @Query("SELECT * FROM intake WHERE archived_at IS NULL ORDER BY sort_order, created_at, id")
     suspend fun listActive(): List<IntakeEntity>
+
+    /** Every intake, archived ones too, in display order (history keeps archived items, P-8). */
+    @Query("SELECT * FROM intake ORDER BY sort_order, created_at, id")
+    suspend fun listAll(): List<IntakeEntity>
 
     @Query("SELECT COALESCE(MAX(sort_order), -1) FROM intake")
     suspend fun maxSortOrder(): Int
@@ -231,6 +239,26 @@ interface DoseRecordDao {
     @Query("SELECT * FROM dose_record WHERE id = :id")
     suspend fun findById(id: String): DoseRecordEntity?
 
+    /**
+     * Active judgments of one intake that a cell between [fromKey] and [toKey] can show: by period key
+     * (same schedule version) or by taken_at in [fromMillis, toMillis) (other versions, supplement P-8).
+     */
+    @Query(
+        """
+        SELECT * FROM dose_record
+        WHERE intake_id = :intakeId AND active = 1
+          AND ((period_key >= :fromKey AND period_key <= :toKey) OR (taken_at >= :fromMillis AND taken_at < :toMillis))
+        ORDER BY taken_at, id
+        """,
+    )
+    suspend fun listActiveForCells(
+        intakeId: String,
+        fromKey: String,
+        toKey: String,
+        fromMillis: Long,
+        toMillis: Long,
+    ): List<DoseRecordEntity>
+
     /** Full history of one intake, voided rows included. */
     @Query("SELECT * FROM dose_record WHERE intake_id = :intakeId ORDER BY recorded_at, id")
     suspend fun listByIntake(intakeId: String): List<DoseRecordEntity>
@@ -272,4 +300,42 @@ interface IntakePurgeDao {
     /** Deletes the intake only when it is archived. Returns the number of rows deleted (0 or 1). */
     @Query("DELETE FROM intake WHERE id = :intakeId AND archived_at IS NOT NULL")
     suspend fun deleteArchivedIntake(intakeId: String): Int
+}
+
+/**
+ * Warnings for judgments written while the phone clock was ahead (record-rules-supplement.md C-1~C-3,
+ * TASK-006). A flag sits next to its judgment so the judgment row itself is never rewritten (I-2).
+ */
+@Dao
+interface ClockFlagDao {
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertOrIgnore(flag: ClockFlagEntity): Long
+
+    /** Active judgments taken after [threshold] that have no flag yet (a resolved flag counts). */
+    @Query(
+        """
+        SELECT * FROM dose_record
+        WHERE active = 1 AND taken_at > :threshold
+          AND id NOT IN (SELECT dose_id FROM clock_flag)
+        ORDER BY taken_at, id
+        """,
+    )
+    suspend fun findUnflaggedTakenAfter(threshold: Long): List<DoseRecordEntity>
+
+    /** Active judgments with an unresolved flag, oldest first. */
+    @Query(
+        """
+        SELECT d.* FROM dose_record d JOIN clock_flag f ON f.dose_id = d.id
+        WHERE f.resolved_at IS NULL AND d.active = 1
+        ORDER BY d.taken_at, d.id
+        """,
+    )
+    suspend fun listFlaggedJudgments(): List<DoseRecordEntity>
+
+    @Query("SELECT * FROM clock_flag WHERE dose_id = :doseId")
+    suspend fun find(doseId: String): ClockFlagEntity?
+
+    /** Resolves the flag of [doseId]. Returns rows changed (0 when there is no open flag). */
+    @Query("UPDATE clock_flag SET resolved_at = :now WHERE dose_id = :doseId AND resolved_at IS NULL")
+    suspend fun resolve(doseId: String, now: Long): Int
 }

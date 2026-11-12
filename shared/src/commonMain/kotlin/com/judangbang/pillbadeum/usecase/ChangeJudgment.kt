@@ -14,7 +14,8 @@ import kotlin.time.Instant
  * not land, the void is rolled back so the window is never left without its judgment.
  *
  * Results: [RecordResult.Recorded] with the new row; [RecordResult.Already] when the active
- * judgment already has the requested kind; [RecordResult.Stale]/[RecordResult.Gone] as in
+ * judgment already has the requested kind; [RecordResult.Locked] when that judgment's own cell ended
+ * before the last settings change (supplement P-5); [RecordResult.Stale]/[RecordResult.Gone] as in
  * [RecordDose]; [RecordResult.Error] on an inconsistent state (nothing changed).
  * With no active judgment in the window this simply records the requested kind.
  */
@@ -45,7 +46,10 @@ class ChangeJudgment(
         val current = dao.findActiveIn(open.intake.id, open.window)
         if (current != null) {
             if (current.kind == command.kind) return RecordResult.Already(current)
-            if (dao.voidActive(current.id, now.toEpochMilliseconds(), reason) != 1) {
+            // The judgment counted for this window may belong to a cell that ended before the last settings
+            // change (supplement P-5): it is not changed here either, like VoidDose and RecordInWindow.
+            if (db.isLockedJudgment(current, now)) return RecordResult.Locked
+            if (db.voidJudgment(current.id, now, reason) != 1) {
                 rollback(RecordResult.Error("judgment ${current.id} could not be voided"))
             }
         }

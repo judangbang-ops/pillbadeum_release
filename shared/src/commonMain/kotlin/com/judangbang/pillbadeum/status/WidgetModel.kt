@@ -29,8 +29,9 @@ data class WidgetModel(
                         personInitial = item.person.name.take(1),
                         personColor = item.person.color,
                         done = item.isDone,
-                        subtitle = Labels.widgetSubtitle(item, board.now, zone),
+                        subtitle = if (item.clockWarning) Labels.CLOCK_CHECK_IN_APP else Labels.widgetSubtitle(item, board.now, zone),
                         description = Labels.widgetDescription(item, board.now, zone),
+                        clockWarning = item.clockWarning,
                     )
                 },
                 restoreLine = board.restoreNotice?.let { Labels.restoreWidgetLine(it, zone) },
@@ -50,4 +51,6 @@ data class WidgetButton(
     val done: Boolean,
     val subtitle: String,
     val description: String,
+    /** Draw `!`: this window's judgment was recorded while the clock was ahead (SCR-001#clock, C-2). */
+    val clockWarning: Boolean = false,
 )

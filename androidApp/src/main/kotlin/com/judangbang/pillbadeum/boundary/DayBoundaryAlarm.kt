@@ -39,13 +39,18 @@ object DayBoundaryAlarm {
     }
 }
 
-/** Boundary alarm, boot, clock and time zone changes: refresh widgets and re-arm the alarm. */
+/**
+ * Boundary alarm, boot, clock and time zone changes: raise clock warnings (supplement C-1), refresh
+ * widgets and re-arm the alarm.
+ */
 class DayBoundaryReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action !in HANDLED) return
         val pending = goAsync()
         context.container.appScope.launch {
             try {
+                // A judgment taken "in the future" means the clock was ahead when it was recorded.
+                context.container.core().flagClockMismatch()
                 WidgetUpdater.updateAll(context)
                 DayBoundaryAlarm.scheduleNext(context)
             } catch (e: Exception) {

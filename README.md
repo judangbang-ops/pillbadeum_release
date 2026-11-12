@@ -35,7 +35,7 @@ adb install -r androidApp/build/outputs/apk/debug/androidApp-debug.apk
 ```
 
 - 디버그 서명 APK임. 정식 서명 키로 바꾸면 한 번 지우고 다시 설치해야 하고, 기기에 저장된 기록은 사라짐 (REQ-062, TASK-002)
-- 가져온 뒤 이 저장소에서는 아직 빌드·테스트를 돌리지 않음. DidITake README에는 JVM 테스트 71개 통과로 적혀 있음
+- PR마다 GitHub Actions([`.github/workflows/ci.yml`](.github/workflows/ci.yml))가 위 두 명령을 돌리고, 디버그 APK의 권한 목록을 [`androidApp/expected-permissions.txt`](androidApp/expected-permissions.txt)와 비교함. `INTERNET` 권한이 있으면 실패함(REQ-057). 결과 표는 실행 요약에, 디버그 APK는 7일 보관 아티팩트에 있음. 2026-11-12 첫 실행(PR #2)에서 JVM 테스트 71개 통과, 디버그 APK 빌드됨
 
 ## 작업 규칙
 

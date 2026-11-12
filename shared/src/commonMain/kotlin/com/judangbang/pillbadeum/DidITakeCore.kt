@@ -8,15 +8,18 @@ import com.judangbang.pillbadeum.domain.DoseSource
 import com.judangbang.pillbadeum.domain.UuidV7
 import com.judangbang.pillbadeum.domain.WindowSettings
 import com.judangbang.pillbadeum.domain.nextDayBoundary
+import com.judangbang.pillbadeum.status.LoadHistory
 import com.judangbang.pillbadeum.status.LoadStatusBoard
 import com.judangbang.pillbadeum.usecase.ArchiveIntake
 import com.judangbang.pillbadeum.usecase.DeleteArchivedIntake
+import com.judangbang.pillbadeum.usecase.FlagClockMismatch
 import com.judangbang.pillbadeum.usecase.ManagePeople
 import com.judangbang.pillbadeum.usecase.ManageSettings
 import com.judangbang.pillbadeum.usecase.RecordCommand
 import com.judangbang.pillbadeum.usecase.RecordDose
 import com.judangbang.pillbadeum.usecase.RecordInWindow
 import com.judangbang.pillbadeum.usecase.RecordResult
+import com.judangbang.pillbadeum.usecase.ResolveClockFlag
 import com.judangbang.pillbadeum.usecase.SaveIntake
 import com.judangbang.pillbadeum.usecase.VoidDose
 import kotlin.time.Clock
@@ -44,9 +47,18 @@ class DidITakeCore private constructor(
     val settings: ManageSettings = ManageSettings(db, clock)
     val deleteArchivedIntake: DeleteArchivedIntake = DeleteArchivedIntake(db)
 
+    /** Raises clock warnings (supplement C-1): call on clock, time zone and boot broadcasts. */
+    val flagClockMismatch: FlagClockMismatch = FlagClockMismatch(db, clock)
+
+    /** [그대로 두기] / [기록 취소] on a clock warning (supplement C-3). */
+    val resolveClockFlag: ResolveClockFlag = ResolveClockFlag(db, clock)
+
     /** App-only writes to any started window and time edits (SCR-007, supplement P-1~P-6). */
     val recordInWindow: RecordInWindow = RecordInWindow(db, clock, ids, deviceId)
     val loadStatusBoard: LoadStatusBoard = LoadStatusBoard(db, clock)
+
+    /** One month of history (SCR-008, supplement P-8). */
+    val loadHistory: LoadHistory = LoadHistory(db, clock)
 
     /** Records TAKEN for [intakeId] from [source], checked against [renderedPeriodKey]. */
     suspend fun record(intakeId: String, source: DoseSource, renderedPeriodKey: String?): RecordResult =

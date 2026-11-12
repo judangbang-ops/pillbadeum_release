@@ -411,6 +411,25 @@ class RecordInWindowTest {
     }
 
     @Test
+    fun changing_the_current_windows_judgment_follows_the_settings_change_lock() = runTest {
+        // Day start 06:00; a dose at 11-10 05:00 belongs to the 11-09 cell.
+        fx.at("2026-11-09T12:00")
+        settings.saveWindowSettings(WindowSettings(dayStart = LocalTime(6, 0)))
+        val intake = fx.newIntake()
+        fx.at("2026-11-10T05:00")
+        val dose = assertIs<RecordResult.Recorded>(fx.record(intake, renderedKey = "2026-11-09")).record
+        // Day start moves to 04:00: the dose now falls in the open 11-10 window, but its own 11-09 cell ended
+        // at 11-10 04:00, before the change, so it is locked like every other way of changing it (P-5).
+        fx.at("2026-11-10T05:30")
+        settings.saveWindowSettings(WindowSettings(dayStart = LocalTime(4, 0)))
+
+        val skip = RecordCommand(intake, DoseKind.SKIPPED, DoseSource.APP, "2026-11-10", SEOUL.id)
+        assertEquals(RecordResult.Locked, fx.changeJudgment(skip))
+        assertEquals(listOf(dose.id), fx.activeRows(intake).map { it.id })
+        assertEquals(VoidResult.Locked, fx.voidDose(dose.id))
+    }
+
+    @Test
     fun a_failed_insert_rolls_back_the_void() = runTest {
         // Every id is the same while the clock stands still, so the new row clashes with the old one.
         val sameIds = RecordInWindow(fx.db, fx.clock, UuidV7(fx.clock, ZeroRandom), TEST_DEVICE_ID)

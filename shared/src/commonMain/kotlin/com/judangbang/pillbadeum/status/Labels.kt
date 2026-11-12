@@ -106,7 +106,17 @@ object Labels {
     fun widgetDescription(item: IntakeStatus, now: Instant, zone: TimeZone): String {
         val judgment = item.judgment ?: return "${item.person.name} ${item.displayName}, 미완료"
         val at = Instant.fromEpochMilliseconds(judgment.takenAt)
-        return "${item.person.name} ${item.displayName}, ${relative(at, now, zone)} 기록됨"
+        val base = "${item.person.name} ${item.displayName}, ${relative(at, now, zone)} 기록됨"
+        return if (item.clockWarning) "$base. $CLOCK_CHECK_IN_APP" else base
+    }
+
+    /** Widget button line for a judgment with a clock warning (SCR-001#clock, supplement C-2). */
+    const val CLOCK_CHECK_IN_APP: String = "! 앱에서 확인"
+
+    /** App warning (SCR-004#future): `기록 시각이 휴대폰 시계와 맞지 않았어요 (금 08:00). 확인해 주세요`. */
+    fun clockWarning(judgment: DoseRecordEntity, zone: TimeZone): String {
+        val local = Instant.fromEpochMilliseconds(judgment.takenAt).toLocalDateTime(zone)
+        return "기록 시각이 휴대폰 시계와 맞지 않았어요 (${weekday(local.dayOfWeek)} ${hhmm(local)}). 확인해 주세요"
     }
 
     /** Second line of an app row (ui-mockup-v3 app screen). */
@@ -148,6 +158,7 @@ object Labels {
             "$name: 이미 기록됨 (${stamp(Instant.fromEpochMilliseconds(result.existing.takenAt), now, zone)}). 변경 없음"
         is RecordResult.Stale -> STALE
         RecordResult.Gone -> null
+        RecordResult.Locked -> LOCKED
         is RecordResult.Error -> ERROR
     }
 

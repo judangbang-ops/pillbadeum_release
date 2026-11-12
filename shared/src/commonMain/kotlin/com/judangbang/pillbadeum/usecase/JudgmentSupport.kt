@@ -96,3 +96,13 @@ internal suspend fun DidITakeDatabase.isLockedJudgment(record: DoseRecordEntity,
         ?: return false
     return window.end <= minOf(changedAt, now)
 }
+
+/**
+ * Voids an active judgment and resolves its clock flag in the caller's write transaction (record-rules.md
+ * 6.1, supplement C-3: every way a judgment is voided also clears its warning). Returns rows voided (0 or 1).
+ */
+internal suspend fun DidITakeDatabase.voidJudgment(id: String, now: Instant, reason: String): Int {
+    val voided = doseRecordDao().voidActive(id, now.toEpochMilliseconds(), reason)
+    if (voided == 1) clockFlagDao().resolve(id, now.toEpochMilliseconds())
+    return voided
+}

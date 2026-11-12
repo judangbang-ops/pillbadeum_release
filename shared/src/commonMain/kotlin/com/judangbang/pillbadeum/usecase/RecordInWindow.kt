@@ -107,8 +107,8 @@ enum class InvalidTimeReason {
  * and the insert of the new one either all land or none does (I-2). The clock is read after the writer
  * lock is held.
  *
- * Not here: re-planning the current window's reminder after a change (P-7, TASK-027), and resolving a
- * clock flag when its judgment is voided (C-3, TASK-006).
+ * Not here: re-planning the current window's reminder after a change (P-7, TASK-027). A voided row's clock
+ * flag is resolved in the same transaction (C-3).
  */
 class RecordInWindow(
     private val db: DidITakeDatabase,
@@ -290,7 +290,7 @@ class RecordInWindow(
     }
 
     private suspend fun TransactionScope<WindowWriteResult>.voidOrRollBack(row: DoseRecordEntity, now: Instant, reason: String) {
-        if (db.doseRecordDao().voidActive(row.id, now.toEpochMilliseconds(), reason) != 1) {
+        if (db.voidJudgment(row.id, now, reason) != 1) {
             rollback(WindowWriteResult.Error("judgment ${row.id} could not be voided"))
         }
     }

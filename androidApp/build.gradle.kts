@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "com.zmanlab.diditake"
+    namespace = "com.judangbang.pillbadeum"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "com.zmanlab.diditake"
+        applicationId = "com.judangbang.pillbadeum"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1

@@ -204,24 +204,40 @@ def stop_app() -> None:
     sh(f"am force-stop {PKG}")
 
 
-def add_item(name: str) -> Node:
-    """Home > [항목 추가] > name > [저장]. Returns the new row's name on the home screen."""
-    tap_text("항목 추가")
-    field_node = next((n for n in dump_ui() if n.cls.endswith("EditText")), None)
-    if field_node is None:
-        raise RuntimeError("name field not found")
-    tap(field_node)
-    sh(f"input text {name}")
-    tap_text("저장")
+def add_item(name: str, r: Report | None = None) -> Node:
+    """Home > [항목 추가] > name > [저장]. Returns the new row's name on the home screen.
+
+    The app keeps its current screen only in memory (BUG-003), so when the system restarts the
+    activity the form closes and home comes back. Right after a reinstall the late package
+    broadcasts can do that (API 34, run 43189568290). Then the form is filled in once more and the
+    restart is noted in the report."""
+    for attempt in (1, 2):
+        tap_text("항목 추가")
+        field_node = next((n for n in dump_ui() if n.cls.endswith("EditText")), None)
+        if field_node is None:
+            raise RuntimeError("name field not found")
+        tap(field_node)
+        sh(f"input text {name}")
+        save = find("저장", 20)
+        if save is not None:
+            tap(save)
+            break
+        if attempt == 2 or not screen_has("항목 추가"):
+            raise RuntimeError("'저장' not on screen")
+        text = f"항목 추가 화면이 저절로 닫히고 첫 화면으로 돌아옴(앱 화면 다시 만들어짐, BUG-003). {name}을 한 번 더 입력함"
+        if r is not None:
+            r.note(text)
+        else:
+            print(f"[note] {text}", flush=True)
     row = find(name, 20)
     if row is None:
         raise RuntimeError(f"row {name} did not show")
     return row
 
 
-def add_item_and_record(name: str) -> None:
+def add_item_and_record(name: str, r: Report | None = None) -> None:
     """Home > [항목 추가] > name > [저장] > that row's [먹었어]."""
-    row = add_item(name)
+    row = add_item(name, r)
     # The row's button sits at the right edge on the same line as the name.
     buttons = [n for n in dump_ui() if n.text == "먹었어"]
     if not buttons:
@@ -498,7 +514,7 @@ def fresh_install_with_record(apk: Path, r: Report, name: str = ITEM_A) -> AppSt
     uninstall()
     install(apk)
     launch_app()
-    add_item_and_record(name)
+    add_item_and_record(name, r)
     state = read_state()
     r.check(f"준비: 새 설치에서 {name} 기록", "활성 판정 1, 표식 = device_id",
             describe(state), state.active_records == 1 and state.marker == state.settings.get("device_id"))
@@ -533,7 +549,7 @@ def cases_api31(apk: Path, r: Report) -> None:
     new_id = after.settings.get("device_id")
 
     # RR-32: recording before [확인했어요] works, with the new device id; the notice stays.
-    add_item_and_record(ITEM_B)
+    add_item_and_record(ITEM_B, r)
     tapped = read_state()
     still = screen_has(NOTICE, 5)
     r.check("RR-32 확인 전에 기록", "기록됨, 새 행 device_id = 새 값, 안내 남음",

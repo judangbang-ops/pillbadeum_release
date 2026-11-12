@@ -33,7 +33,7 @@ import sys
 import time
 from pathlib import Path
 
-from backup_restore_check import CLOSED_DIALOGS, adb, api_level, dump_ui, sh, wait_boot
+from backup_restore_check import CLOSED_DIALOGS, adb, api_level, dump_ui, sh, tap, wait_boot
 
 EXP_PKG = "com.judangbang.pillbadeum.lockexp"
 RECEIVER = f"{EXP_PKG}/.PostReceiver"
@@ -84,14 +84,32 @@ class Run:
 # Device
 
 
+KEYGUARD_SOURCES = (
+    # PhoneWindowManager's KeyguardServiceDelegate block ("KeyguardServiceDelegate" then "showing=true"), all versions
+    ("dumpsys window policy", r"KeyguardServiceDelegate\s+showing=(true|false)"),
+    # ActivityTaskManager's KeyguardController (Android 10+)
+    ("dumpsys activity activities", r"\bmKeyguardShowing=(true|false)"),
+    ("dumpsys window", r"\bmShowingLockscreen=(true|false)"),
+    ("dumpsys window", r"\bisStatusBarKeyguard=(true|false)"),
+)
+
+
 def keyguard_showing() -> bool | None:
-    """Whether the lock screen is up, from `dumpsys window` (field names differ between versions)."""
-    out = sh("dumpsys window", check=False) + sh("dumpsys window policy", check=False)
-    for pattern in (r"mKeyguardShowing=(true|false)", r"mShowingLockscreen=(true|false)", r"isStatusBarKeyguard=(true|false)"):
+    """Whether the lock screen is up. Field names differ between versions, so several dumps are tried.
+    (The first run on 2026-11-12 looked only at the last two and got None on API 34.)"""
+    cache: dict[str, str] = {}
+    for cmd, pattern in KEYGUARD_SOURCES:
+        out = cache.setdefault(cmd, sh(cmd, check=False))
         m = re.search(pattern, out)
         if m:
             return m.group(1) == "true"
     return None
+
+
+def save_keyguard_dumps(out: Path, api: int) -> None:
+    """Raw dumps once, so a version whose fields are not matched can be read afterwards."""
+    text = "\n".join(f"===== {cmd}\n{sh(cmd, check=False)}" for cmd in dict.fromkeys(c for c, _ in KEYGUARD_SOURCES))
+    (out / f"api{api}-keyguard-dumps.txt").write_text(text, encoding="utf-8")
 
 
 def set_pin() -> str:
@@ -148,7 +166,7 @@ def post(method: str) -> str:
     return m.group(1) if m else out.strip()
 
 
-def read_screen() -> dict:
+def read_once() -> dict:
     nodes = dump_ui()
     blob = "\n".join(t for n in nodes for t in (n.text, n.desc) if t)
     return {
@@ -157,6 +175,28 @@ def read_screen() -> dict:
         "button": BUTTON in blob,
         "generic": GENERIC in blob,
     }
+
+
+def read_screen(expand: int = 3) -> dict:
+    """Reads the screen, then taps up to [expand] notification expand buttons (buttons show only on an
+    expanded notification) and reads again. The result is what any of the reads saw."""
+    seen = read_once()
+    taps = 0
+    for _ in range(expand):
+        button = next((n for n in dump_ui() if n.rid.endswith(":id/expand_button") and "ollapse" not in n.desc), None)
+        if button is None:
+            break
+        tap(button)
+        taps += 1
+        again = read_once()
+        seen = {
+            "names": [name for name in NAMES if name in seen["names"] or name in again["names"]],
+            "body": seen["body"] or again["body"],
+            "button": seen["button"] or again["button"],
+            "generic": seen["generic"] or again["generic"],
+        }
+    seen["expand_taps"] = taps
+    return seen
 
 
 # ------------------------------------------------------------------------------------------------
@@ -254,6 +294,7 @@ def main() -> int:
     try:
         print(adb("install", "-r", "-g", str(args.apk), timeout=300), flush=True)
         run.note(set_pin())
+        save_keyguard_dumps(args.out, api)
         # Unlock once so the first case starts from a normal unlocked phone.
         sleep_screen()
         wake_screen()

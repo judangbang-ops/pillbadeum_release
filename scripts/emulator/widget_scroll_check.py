@@ -45,11 +45,13 @@ from backup_restore_check import (
     api_level,
     become_root,
     dump_ui,
+    find,
     sh,
     tap,
     uninstall,
     wait_boot,
 )
+from release_check import drag, go_home, on_screen, screen_size
 
 HOST = f"{PKG}/.debug.WidgetHostActivity"
 DENSITY = {"d": 0.0}
@@ -175,8 +177,13 @@ def scroll_to(name: str, need: float = 1.0, tries: int = 14) -> Node | None:
             # all of it (fixed steps kept skipping past it, API 26 at 250x110, 2026-11-12).
             missing = (item.bounds[1] - top - 4) if down else (bottom - 4 - item.bounds[3])
             span = max(slop + 6, missing + slop)
+            # Slowly (25dp/s, under the 50dp/s fling threshold), or the list flings on past the item:
+            # a 234px swipe in 0.8s overshot a 205px row (API 34 at 200%, 2026-11-12).
+            duration = max(800, int(span / (25 * d) * 1000))
+        else:
+            duration = 800
         y1, y2 = (bottom - 6, bottom - 6 - span) if down else (top + 6, top + 6 + span)
-        sh(f"input swipe {x} {y1} {x} {y2} 800")
+        sh(f"input swipe {x} {y1} {x} {y2} {duration}")
         time.sleep(1.5)
     return None
 
@@ -264,6 +271,28 @@ def run_case(r: Report, case: str, layout: str, w: int, h: int, font: float, tar
                    "호스트 준비, 목록(GridView/ListView)과 항목이 보임",
                    f"{status}; 목록 {box.cls.rsplit('.', 1)[-1] if box else '없음'}; 보인 항목 {len(items)}", ok_ready):
         return
+    exercise(r, case, layout, tag, target, nodes, host=True)
+
+
+def header_above(box: Node) -> Node | None:
+    """The widget's own header (DidITake) just above its list, not an app label elsewhere on screen."""
+    x1, y1, x2, _ = box.bounds
+    return next((n for n in dump_ui() if n.text == "DidITake" and n.bounds[3] <= y1 + 4
+                 and n.bounds[1] >= y1 - 400 and n.bounds[0] < x2 and n.bounds[2] > x1), None)
+
+
+def host_events() -> list[str]:
+    """WidgetHostActivity logs onStart/onStop (it starts and stops listening there). The log is not
+    cleared, so the full logcat stays in the artifacts; callers compare counts before and after."""
+    out = adb("logcat", "-d", "-s", "WidgetHostActivity:I", check=False, timeout=30)
+    return re.findall(r"host (onStop|onStart)", out)
+
+
+def exercise(r: Report, case: str, layout: str, tag: str, target: str | None, nodes: list[Node], host: bool) -> None:
+    """Scroll to [target], tap it, check the record and the redraw. Shared by the debug host and the
+    launcher case."""
+    box = list_view(nodes)
+    items = items_on_screen(nodes)
     visible = sorted((name for name, n in items.items() if fully_inside(n, box)), key=lambda s: int(s[4:]))
     row = first_row(items, box)
     r.note(f"{tag}: 스크롤 전 다 보인 항목 {', '.join(visible) or '없음'}; 첫 줄 {', '.join(row) or '없음'}; "
@@ -287,10 +316,12 @@ def run_case(r: Report, case: str, layout: str, w: int, h: int, font: float, tar
     if not r.check(f"{case} 스크롤로 {target}에 닿음", f"목록만 스크롤되어 {target}가 {want}",
                    "보임" if item is not None else "닿지 못함", item is not None):
         return
-    header_after = next((n for n in dump_ui() if n.text == "DidITake"), None)
-    r.check(f"{case} 머리글 고정", "스크롤 뒤에도 머리글(DidITake)이 보임",
+    box = list_view(dump_ui()) or box
+    header_after = header_above(box)
+    r.check(f"{case} 머리글 고정", "스크롤 뒤에도 목록 바로 위 머리글(DidITake)이 보임",
             "보임" if header_after is not None else "안 보임", header_after is not None)
     before_y = item.bounds[1]
+    events_before = len(host_events()) if host else 0
     tap(item)
     source = wait_record(target)
     r.check(f"{case} 목록 안 버튼 탭 → 기록", f"{target}의 활성 판정, source = WIDGET",
@@ -312,6 +343,11 @@ def run_case(r: Report, case: str, layout: str, w: int, h: int, font: float, tar
     else:
         kept = f"바뀜 ({target}가 화면 밖, 보이는 항목 {shown})"
     r.note(f"{tag}: 탭 뒤 다시 그릴 때 스크롤 위치 {kept}")
+    if host:
+        # Glance runs the tap through a trampoline activity in its own task. If the host activity
+        # stops (and stops listening) meanwhile, a reset can come from the debug host, not the list.
+        during = host_events()[events_before:]
+        r.note(f"{tag}: 탭 동안 시험 호스트의 onStop/onStart: {' → '.join(during) or '없음'}")
     # The redraw check reads the button's TalkBack sentence. It looks where the button is now and
     # scrolls only when it is off screen; half of it showing is enough to read it.
     started = time.time()
@@ -330,6 +366,75 @@ def run_case(r: Report, case: str, layout: str, w: int, h: int, font: float, tar
         r.note(f"{tag}: {target}가 화면 밖이라 다시 스크롤해 다시 그린 문장을 읽음")
     r.check(f"{case} 탭 뒤 다시 그림", f"{target} 버튼이 완료로 바뀜(TalkBack 문장에 '기록됨', 화면 밖이면 다시 스크롤해 봄)",
             redrawn.desc if redrawn else (node.desc if node else "찾지 못함"), redrawn is not None)
+
+
+PROBE_LABEL = "Scroll probe (debug)"  # android:label of ScrollProbeWidgetReceiver
+
+
+def place_probe_in_launcher(r: Report, tag: str) -> str:
+    """Home > touch and hold > Widgets > search DidITake > drag the probe's preview (the one above the
+    'Scroll probe (debug)' name) to the middle of the home screen. Returns '' or why it did not work."""
+    w, h = screen_size()
+    go_home()
+    sh(f"input swipe {w // 2} {h // 2} {w // 2} {h // 2} 1500")
+    if find("Widgets", 10) is None:
+        return "홈 길게 누르기 메뉴에 Widgets 없음"
+    tap(find("Widgets", 2))
+    time.sleep(1)
+    search = next((n for n in dump_ui() if n.cls.endswith("EditText")), None)
+    if search is not None:
+        tap(search)
+        sh("input text DidITake")
+        time.sleep(2)
+    for _ in range(8):
+        nodes = dump_ui()
+        header = next((n for n in nodes if n.text == "DidITake" and n.rid.endswith("/app_title")), None)
+        name = next((n for n in nodes if n.text == PROBE_LABEL), None)
+        if name is None and header is not None and not any(n.rid.endswith("/widget_preview_container") for n in nodes):
+            tap(header)  # the app row is folded: open it
+            time.sleep(1)
+            continue
+        if name is not None and on_screen(name, h):
+            previews = [n for n in nodes if n.rid.endswith("/widget_preview_container")
+                        and n.bounds[3] <= name.bounds[1] + 4 and n.bounds[0] < name.bounds[2] and n.bounds[2] > name.bounds[0]]
+            preview = max(previews, key=lambda n: n.bounds[3], default=None)
+            if preview is not None and on_screen(preview, h):
+                save_ui(r, f"{tag}-picker")
+                r.shot(f"{tag}-picker")
+                x, y = preview.center
+                drag(x, y, w // 2, h // 2, r, tag)
+                go_home()
+                return ""
+        sh(f"input swipe {w // 2} {h * 3 // 4} {w // 2} {h // 2} 1000")
+        time.sleep(1)
+    save_ui(r, f"{tag}-picker-not-found")
+    return f"위젯 목록에서 '{PROBE_LABEL}' 미리보기를 찾지 못함"
+
+
+def run_launcher_case(r: Report, case: str, target: str) -> None:
+    """The same flow on a real home screen (Pixel Launcher, API 31+), at the size the launcher gives a
+    4x2 widget, to see whether a scroll reset after a tap also happens outside the debug host."""
+    tag = f"{case}-grid-launcher-font100"
+    CURRENT["key"] = "grid-1.0"
+    set_font(1.0)
+    start_host("grid", 250, 110)  # sets the probe layout to grid; HOME then sends the host to the back
+    wait_status()
+    why = place_probe_in_launcher(r, tag)
+    if why:
+        # Launcher steps differ between images: an observation, not a failure of the scroll test.
+        r.note(f"{tag}: 런처 경우를 하지 못함 — {why}")
+        return
+    nodes = wait_items(45)
+    r.shot(f"{tag}-before")
+    save_ui(r, f"{tag}-before")
+    box = list_view(nodes)
+    if box is None or not items_on_screen(nodes):
+        r.note(f"{tag}: 런처에 놓은 시험 위젯이 45초 안에 그려지지 않음 (Glance 로딩 화면, 관찰)")
+        return
+    d = DENSITY["d"] or 1
+    r.note(f"{tag}: 런처가 준 목록 영역 {round((box.bounds[2] - box.bounds[0]) / d)}×"
+           f"{round((box.bounds[3] - box.bounds[1]) / d)}dp")
+    exercise(r, case, "grid", tag, target, nodes, host=False)
 
 
 def main() -> int:
@@ -368,6 +473,10 @@ def main() -> int:
         run_case(r, "C", "list", 276, 220, largest, "Test7")
         run_case(r, "D", "list", 250, 110, largest, "Test4")
         run_case(r, "E", "grid", 276, 220, largest, None)
+        if api >= 31:
+            run_launcher_case(r, "L", "Test11")
+        else:
+            r.note("L 런처 경우: API 31 미만 이미지의 런처는 위젯 목록 화면이 달라 하지 않음")
     except Exception as exc:
         r.check("스크립트", "끝까지 돎", f"{type(exc).__name__}: {exc}", False)
         try:

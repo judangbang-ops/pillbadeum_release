@@ -174,13 +174,17 @@ class WidgetHostActivity : Activity() {
         Log.i(TAG, status.text.toString())
     }
 
+    // Logged for the scroll check: Glance runs a tap through a trampoline activity in its own task,
+    // and a stop here (no listening) would explain a scroll reset that a launcher might not have.
     override fun onStart() {
         super.onStart()
+        Log.i(TAG, "host onStart: startListening")
         host.startListening()
     }
 
     override fun onStop() {
         super.onStop()
+        Log.i(TAG, "host onStop: stopListening")
         host.stopListening()
     }
 

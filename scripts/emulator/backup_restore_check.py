@@ -75,13 +75,19 @@ def api_level() -> int:
     return int(sh("getprop ro.build.version.sdk").strip())
 
 
-def become_root() -> None:
+def become_root(timeout: int = 60) -> None:
+    # `adb root` restarts adbd. `wait-for-device` can return while the old connection is still listed,
+    # and the next shell then fails with exit 255 (seen on API 27, 2026-11-12), so ask again until root answers.
     adb("root", check=False)
-    time.sleep(2)
-    adb("wait-for-device")
-    who = sh("id -u").strip()
-    if who != "0":
-        raise RuntimeError(f"adb root failed (id -u = {who}); use a google_apis image")
+    who = ""
+    end = time.time() + timeout
+    while time.time() < end:
+        time.sleep(2)
+        adb("wait-for-device", check=False, timeout=60)
+        who = sh("id -u", check=False).strip()
+        if who == "0":
+            return
+    raise RuntimeError(f"adb root failed (id -u = {who!r}); use a google_apis or default image")
 
 
 def wait_boot(timeout: int = 300) -> None:
@@ -103,6 +109,7 @@ class Node:
     desc: str
     cls: str
     bounds: tuple[int, int, int, int]
+    rid: str = ""  # resource-id, e.g. "com.android.launcher3:id/widget_preview"
 
     @property
     def center(self) -> tuple[int, int]:
@@ -113,20 +120,35 @@ class Node:
 BOUNDS = re.compile(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]")
 
 
+# A system app that stalls on a slow emulator (seen: "System UI isn't responding" on API 34, 2026-11-12)
+# puts an ANR dialog over every app, so the screen below cannot be read. Such a dialog is closed with [Wait].
+ANR_TITLE = "isn't responding"
+
+
 def dump_ui() -> list[Node]:
-    for _ in range(5):
+    out = ""
+    nodes: list[Node] = []
+    for _ in range(8):
         out = sh("uiautomator dump /sdcard/ui.xml", check=False)
-        if "dumped" in out:
-            xml = adb("exec-out", "cat", "/sdcard/ui.xml")
-            nodes = []
-            for el in ET.fromstring(xml).iter("node"):
-                m = BOUNDS.match(el.get("bounds", ""))
-                if not m:
-                    continue
-                nodes.append(Node(el.get("text", ""), el.get("content-desc", ""), el.get("class", ""),
-                                  tuple(int(v) for v in m.groups())))
+        if "dumped" not in out:
+            time.sleep(1)
+            continue
+        xml = adb("exec-out", "cat", "/sdcard/ui.xml")
+        nodes = []
+        for el in ET.fromstring(xml).iter("node"):
+            m = BOUNDS.match(el.get("bounds", ""))
+            if not m:
+                continue
+            nodes.append(Node(el.get("text", ""), el.get("content-desc", ""), el.get("class", ""),
+                              tuple(int(v) for v in m.groups()), el.get("resource-id", "")))
+        title = next((n.text for n in nodes if ANR_TITLE in n.text), None)
+        wait = next((n for n in nodes if n.text == "Wait"), None)
+        if title is None or wait is None:
             return nodes
-        time.sleep(1)
+        print(f"[note] closed a system dialog with [Wait]: {title}", flush=True)
+        tap(wait)
+    if nodes:
+        return nodes
     raise RuntimeError(f"uiautomator dump failed: {out}")
 
 

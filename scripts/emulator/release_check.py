@@ -14,8 +14,10 @@ Takes two release APKs of one commit signed with one test key, the way personal 
      same device_id and marker, no restore notice.
   5. Tap the second item on the widget the launcher kept: the new build records it.
 
-If the launcher's widget picker cannot be driven, that is one failed check and the flow records in
-the app instead, so the backup and update checks still run.
+The widget is placed the way a person does it: touch and hold the app icon > Widgets > drag the
+preview onto the home screen, or, when the icon has no Widgets entry, the home screen's full widget
+picker. If neither can be driven, or the placed widget does not show the item, that is a failed
+check and the flow records in the app instead, so the backup and update checks still run.
 
 Writes report.md, screenshots and logs to --out. Exits 1 when a check fails.
 Standard library only. Not product code. Screen and file helpers are in backup_restore_check.py.
@@ -34,6 +36,7 @@ from backup_restore_check import (
     ITEM_B,
     NOTICE,
     PKG,
+    Node,
     Report,
     adb,
     add_item,
@@ -109,10 +112,44 @@ def drag(x1: int, y1: int, x2: int, y2: int) -> None:
     time.sleep(2)
 
 
-def place_widget(r: Report, tag: str) -> None:
-    """Home > touch and hold > Widgets > DidITake > drag the preview onto the home screen."""
+def on_screen(node: Node, h: int) -> bool:
+    """Fully visible and clear of the gesture bar at the bottom."""
+    x1, y1, x2, y2 = node.bounds
+    return x2 > x1 and y2 > y1 and y1 >= 0 and y2 <= h - 120
+
+
+def widget_preview(h: int) -> Node | None:
+    """The DidITake widget's preview in an open widget sheet (Launcher3 ids), or its size label ("4 × 2")."""
+    nodes = dump_ui()
+    for name in ("widget_preview_container", "widget_preview", "widget_cell_content"):
+        hit = next((n for n in nodes if n.rid.endswith(f"/{name}") and on_screen(n, h)), None)
+        if hit is not None:
+            return hit
+    # The size label sits in the same cell; the label itself takes no touches, so the cell gets the hold.
+    return next((n for n in nodes if re.fullmatch(r"\d+\s*[×x]\s*\d+", n.text) and on_screen(n, h)), None)
+
+
+def open_app_widget_sheet(w: int, h: int) -> bool:
+    """Home > touch and hold the app icon > Widgets: a sheet with this app's widgets only."""
     go_home()
-    w, h = screen_size()
+    icon = next((n for n in dump_ui() if WIDGET_LABEL in (n.text, n.desc)), None)
+    if icon is None:
+        return False
+    x, y = icon.center
+    sh(f"input swipe {x} {y} {x} {y} 1200")
+    time.sleep(1)
+    entry = next((n for n in dump_ui() if "Widgets" in (n.text, n.desc)), None)
+    if entry is None:
+        go_home()
+        return False
+    tap(entry)
+    time.sleep(2)
+    return True
+
+
+def open_full_widget_picker(w: int, h: int) -> None:
+    """Home > touch and hold empty space > Widgets > the DidITake row, scrolled so its preview shows."""
+    go_home()
     sh(f"input swipe {w // 2} {h // 2} {w // 2} {h // 2} 1500")
     tap_text("Widgets", 10)
     header = None
@@ -126,13 +163,24 @@ def place_widget(r: Report, tag: str) -> None:
         raise RuntimeError(f"widget picker has no '{WIDGET_LABEL}'")
     tap(header)
     time.sleep(1)
+    if widget_preview(h) is None:
+        # The previews open below the row, often past the bottom edge (first run, 2026-11-12).
+        sh(f"input swipe {w // 2} {h * 3 // 4} {w // 2} {h // 3} 800")
+        time.sleep(1)
+
+
+def place_widget(r: Report, tag: str) -> None:
+    """Drags the DidITake widget preview onto the middle of the home screen."""
+    w, h = screen_size()
+    if not open_app_widget_sheet(w, h):
+        r.note(f"위젯 놓기 ({tag}): 앱 아이콘에 Widgets 메뉴가 없어 전체 위젯 목록으로 감")
+        open_full_widget_picker(w, h)
+    preview = widget_preview(h)
     r.shot(f"{tag}-picker")
-    # The expanded app shows the preview with its size ("4 × 2"); drag from just above that label.
-    size = next((n for n in dump_ui() if re.fullmatch(r"\d+\s*[×x]\s*\d+", n.text)), None)
-    if size is None:
-        raise RuntimeError("widget preview (size label) not found")
-    x, y = size.center
-    drag(x, y - 150, w // 2, h // 2)
+    if preview is None:
+        raise RuntimeError("widget preview not on screen")
+    x, y = preview.center
+    drag(x, y, w // 2, h // 2)
     go_home()
     r.shot(f"{tag}-placed")
 
@@ -146,6 +194,8 @@ def try_place_widget(r: Report, tag: str) -> bool:
     except Exception as exc:  # the launcher UI differs between images
         r.check(f"위젯 놓기 ({tag})", f"홈 화면에 {WIDGET_LABEL} 위젯", f"{type(exc).__name__}: {exc}", False)
         r.shot(f"{tag}-widget-failed")
+        (r.out / f"api{r.api}-{tag}-ui.xml").write_text(adb("exec-out", "cat", "/sdcard/ui.xml", check=False),
+                                                       encoding="utf-8")
         go_home()
         return False
 
@@ -161,15 +211,17 @@ def record_in_app(name: str) -> None:
     time.sleep(2)
 
 
-def record(r: Report, name: str, widget: bool) -> bool:
-    """Records `name` from the widget when it is placed, else from the app. True when the widget
-    showed the item and was tapped."""
+def record(r: Report, name: str, widget: bool) -> tuple[bool, str]:
+    """Records `name` from the widget when it is placed and shows the item, else in the app.
+    Returns (the widget showed the item and was tapped, the source the new record should have)."""
     if widget:
         shown = tap_widget_item(name)
         r.shot(f"widget-after-tap-{name}")
-        return shown
+        if shown:
+            return True, "WIDGET"
+        r.note(f"홈 화면 위젯에 {name}이 보이지 않아 앱에서 기록함")
     record_in_app(name)
-    return False
+    return False, "APP"
 
 
 def tap_widget_item(name: str) -> bool:
@@ -202,8 +254,7 @@ def run_flow(apk: Path, next_apk: Path, r: Report) -> None:
     launch_app()
     add_item(ITEM_A)
     widget = try_place_widget(r, "n")
-    shown = record(r, ITEM_A, widget)
-    source = "WIDGET" if widget else "APP"
+    shown, source = record(r, ITEM_A, widget)
     tapped = read_state()
     r.check("위젯 탭 기록 (릴리즈 N)", "활성 판정 1, source WIDGET",
             f"위젯에 {ITEM_A} {'보임' if shown else '없음'}; 활성 판정 {tapped.active_records}, source {tapped.sources}",
@@ -250,13 +301,13 @@ def run_flow(apk: Path, next_apk: Path, r: Report) -> None:
             and updated.marker == before_update.marker)
 
     # 5. the kept widget still records with the new build
-    shown = record(r, ITEM_B, widget)
+    shown, _ = record(r, ITEM_B, widget)
     final = read_state()
     this_phone = updated.settings.get("device_id")
     r.check("덮어 설치 뒤 위젯 탭 (N+1)", "기록 2건, 둘 다 source WIDGET, 새 기록의 device_id = 이 폰 값, 옛 기록은 옛 값",
             f"위젯에 {ITEM_B} {'보임' if shown else '없음'}; 활성 판정 {final.active_records}, "
             f"source {final.sources}, device_id {[short(d) for d in final.device_ids]}, 이 폰 {short(this_phone)}",
-            shown and final.active_records == 2 and final.sources == ["WIDGET", "WIDGET"]
+            shown and final.active_records == 2 and final.sources == [source, "WIDGET"]
             and final.device_ids[-1:] == [this_phone] and final.device_ids[:1] == [old_id])
     launch_app()
     r.check("덮어 설치 뒤 앱", "복원 안내 없음", f"안내 {'보임' if screen_has(NOTICE, 3) else '없음'}",

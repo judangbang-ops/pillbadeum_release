@@ -7,6 +7,7 @@ import com.judangbang.pillbadeum.boundary.DayBoundaryAlarm
 import com.judangbang.pillbadeum.data.DidITakeDatabase
 import com.judangbang.pillbadeum.data.buildDidITakeDatabase
 import com.judangbang.pillbadeum.data.didITakeDatabaseBuilder
+import com.judangbang.pillbadeum.reminder.Reminders
 import com.judangbang.pillbadeum.restore.FileInstallMarker
 import com.judangbang.pillbadeum.restore.InstallState
 import com.judangbang.pillbadeum.status.WidgetModel
@@ -62,6 +63,10 @@ class AppContainer(private val context: Context, private val clock: Clock) {
      * day-boundary alarm, which is cheap and replaces the same alarm. After a restore (supplement
      * R-4, REQ-056) the widgets were drawn before the check, so they are redrawn too. Doing the
      * alarm on every process start also covers a restore whose rebuild was cut off.
+     *
+     * Reminders (TASK-027, TASK-040): every process start re-plans the one reminder alarm, which also
+     * re-arms it after exact alarms were disallowed (that stops the app and cancels its exact alarms).
+     * After a restore only the restore notice shows, until [확인했어요] (supplement R-3).
      */
     private fun afterOpen(restored: Boolean) {
         appScope.launch {
@@ -74,14 +79,22 @@ class AppContainer(private val context: Context, private val clock: Clock) {
             } catch (e: Exception) {
                 Log.e(TAG, "after-open work failed (restored=$restored)", e)
             }
+            if (restored) Reminders.restored(context) else Reminders.replan(context)
         }
     }
 
     suspend fun widgetModel(): WidgetModel = WidgetModel.from(core().loadStatusBoard())
 
-    /** Called after every write so every widget re-renders from the database. */
+    /**
+     * Called after every write so every widget re-renders from the database, the reminder alarm is planned
+     * again and the reminder notifications on screen follow (supplement N-9, N-13, R-3).
+     */
     suspend fun afterWrite() {
-        WidgetUpdater.updateAll(context)
+        try {
+            WidgetUpdater.updateAll(context)
+        } finally {
+            Reminders.afterWrite(context)
+        }
     }
 
     private companion object {

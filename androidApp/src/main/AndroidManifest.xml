@@ -1,8 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Re-arm the day-boundary widget refresh after a reboot. No exact-alarm permission is used. -->
+    <!-- Re-arm the day-boundary widget refresh and the reminder alarm after a reboot. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Dose reminders (TASK-025). Android 13 and later ask when reminders are switched on (TASK-023, SPEC-028). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
+        Exact reminder alarm while the person allows it (TASK-024, REQ-050); an inexact alarm otherwise.
+        USE_EXACT_ALARM is never declared (REQ-052). The day-boundary alarm stays inexact.
+    -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <!--
         Backup (TASK-028, REQ-055): only the record database and its -wal/-journal files, cloud backup
@@ -50,6 +59,19 @@
                 <action android:name="android.intent.action.TIME_SET" />
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!--
+            Reminder alarm, notification buttons and swipes (own explicit immutable intents) plus the system's
+            exact-alarm permission broadcast (TASK-024, TASK-025). Not exported, so no other app can record,
+            skip or snooze through it (REQ-081).
+        -->
+        <receiver
+            android:name=".reminder.ReminderReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
             </intent-filter>
         </receiver>
     </application>

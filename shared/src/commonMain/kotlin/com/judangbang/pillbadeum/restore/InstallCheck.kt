@@ -5,6 +5,8 @@ import androidx.room3.useWriterConnection
 import com.judangbang.pillbadeum.data.DidITakeDatabase
 import com.judangbang.pillbadeum.data.SettingEntity
 import com.judangbang.pillbadeum.data.SettingKeys
+import com.judangbang.pillbadeum.data.saveReminderAlarmAt
+import com.judangbang.pillbadeum.data.saveReminderLastRunAt
 import com.judangbang.pillbadeum.domain.UuidV7
 import kotlin.time.Clock
 
@@ -75,6 +77,10 @@ class CheckInstall(
      * R-2. The new id goes to the marker FIRST: if the process dies before the transaction, the
      * next start sees marker != database again and repeats R-2, and `restored_from_device_id`
      * still gets the old phone's id from the database (RR-72).
+     *
+     * The old phone's reminder run state goes in the same transaction: its planned alarm
+     * (`reminder_alarm_at`) and its [30분 뒤] rows, so neither can show a dose reminder here (R-3,
+     * N-12, TASK-040; Claude default for the snoozes, which are per-device run state like N-2 says).
      */
     private suspend fun restore(previous: String): String {
         val id = ids.next()
@@ -87,6 +93,9 @@ class CheckInstall(
                 settings.upsert(SettingEntity(SettingKeys.RESTORED_FROM_DEVICE_ID, previous))
                 settings.upsert(SettingEntity(SettingKeys.RESTORE_NOTICE_LAST_RECORD_AT, lastRecordValue(now)))
                 settings.upsert(SettingEntity(SettingKeys.RESTORE_NOTICE_PENDING, PENDING))
+                settings.saveReminderAlarmAt(null)
+                val reminders = db.reminderDao()
+                for (snooze in reminders.listSnoozes()) reminders.deleteSnooze(snooze.intakeId)
             }
         }
         return id
@@ -114,11 +123,21 @@ class CheckInstall(
 }
 
 /**
- * [확인했어요] on the restore notice (supplement R-3): the notice disappears from the app and the
- * widgets. Re-scheduling dose reminders with `reminder_last_run_at` = now is TASK-040.
+ * [확인했어요] on the restore notice (supplement R-3, TASK-040): the notice disappears from the app and
+ * the widgets, and dose reminders start again from this moment: `reminder_last_run_at` = now and no
+ * planned alarm, so slots that passed before the tap (with the old phone's `reminder_last_run_at`) do
+ * not ring (RR-73). The caller re-plans afterwards (N-9), as after any write. A second tap changes nothing.
  */
-class AcknowledgeRestore(private val db: DidITakeDatabase) {
+class AcknowledgeRestore(private val db: DidITakeDatabase, private val clock: Clock) {
     suspend operator fun invoke() {
-        db.settingDao().upsert(SettingEntity(SettingKeys.RESTORE_NOTICE_PENDING, CheckInstall.DONE))
+        db.useWriterConnection { transactor ->
+            transactor.immediateTransaction {
+                val settings = db.settingDao()
+                if (settings.get(SettingKeys.RESTORE_NOTICE_PENDING) != CheckInstall.PENDING) return@immediateTransaction
+                settings.upsert(SettingEntity(SettingKeys.RESTORE_NOTICE_PENDING, CheckInstall.DONE))
+                settings.saveReminderLastRunAt(clock.now())
+                settings.saveReminderAlarmAt(null)
+            }
+        }
     }
 }

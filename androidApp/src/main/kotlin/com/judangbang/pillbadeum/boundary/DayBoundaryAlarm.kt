@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.judangbang.pillbadeum.container
+import com.judangbang.pillbadeum.reminder.Reminders
 import com.judangbang.pillbadeum.widget.WidgetUpdater
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.launch
@@ -42,19 +43,27 @@ object DayBoundaryAlarm {
 /**
  * Boundary alarm, boot, clock and time zone changes: raise clock warnings (supplement C-1), refresh
  * widgets and re-arm the alarm.
+ *
+ * Reminders (TASK-027): after a boot, clock or time zone change the overdue slots are collected, one
+ * reminder per item (supplement N-10, N-12, SPEC-041). At the boundary and after an update only the next
+ * reminder alarm is planned, and reminders of windows that ended are taken off (N-9, N-13, SPEC-040).
  */
 class DayBoundaryReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action !in HANDLED) return
+        val action = intent.action
+        if (action !in HANDLED) return
         val pending = goAsync()
         context.container.appScope.launch {
             try {
-                // A judgment taken "in the future" means the clock was ahead when it was recorded.
-                context.container.core().flagClockMismatch()
-                WidgetUpdater.updateAll(context)
-                DayBoundaryAlarm.scheduleNext(context)
-            } catch (e: Exception) {
-                Log.e("DayBoundaryReceiver", "boundary refresh failed (${intent.action})", e)
+                try {
+                    // A judgment taken "in the future" means the clock was ahead when it was recorded.
+                    context.container.core().flagClockMismatch()
+                    WidgetUpdater.updateAll(context)
+                    DayBoundaryAlarm.scheduleNext(context)
+                } catch (e: Exception) {
+                    Log.e("DayBoundaryReceiver", "boundary refresh failed ($action)", e)
+                }
+                if (action in COLLECT) Reminders.collect(context) else Reminders.afterWrite(context)
             } finally {
                 pending.finish()
             }
@@ -68,6 +77,13 @@ class DayBoundaryReceiver : BroadcastReceiver() {
             Intent.ACTION_TIME_CHANGED,
             Intent.ACTION_TIMEZONE_CHANGED,
             Intent.ACTION_MY_PACKAGE_REPLACED,
+        )
+
+        /** When overdue reminder slots are collected (supplement N-12); the rest only re-plan. */
+        val COLLECT = setOf(
+            Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_TIME_CHANGED,
+            Intent.ACTION_TIMEZONE_CHANGED,
         )
     }
 }

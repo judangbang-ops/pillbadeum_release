@@ -65,7 +65,8 @@ class DidITakeCore private constructor(
     /** App-only writes to any started window and time edits (SCR-007, supplement P-1~P-6). */
     val recordInWindow: RecordInWindow = RecordInWindow(db, clock, ids, deviceId)
     val loadStatusBoard: LoadStatusBoard = LoadStatusBoard(db, clock)
-    val acknowledgeRestore: AcknowledgeRestore = AcknowledgeRestore(db)
+    /** [확인했어요] on the restore notice; dose reminders start again from the tap (R-3, TASK-040). */
+    val acknowledgeRestore: AcknowledgeRestore = AcknowledgeRestore(db, clock)
 
     /** One month of history (SCR-008, supplement P-8). */
     val loadHistory: LoadHistory = LoadHistory(db, clock)
@@ -76,12 +77,20 @@ class DidITakeCore private constructor(
     /** Reminder settings of items, the common settings and [30분 뒤] (TASK-011, N-1~N-7). */
     val reminders: ManageReminders = ManageReminders(db, clock, deviceId)
 
-    /** Records TAKEN for [intakeId] from [source], checked against [renderedPeriodKey]. */
-    suspend fun record(intakeId: String, source: DoseSource, renderedPeriodKey: String?): RecordResult =
+    /**
+     * Records [kind] (TAKEN unless a notification's [오늘 건너뜀] says SKIPPED) for [intakeId] from [source],
+     * checked against [renderedPeriodKey].
+     */
+    suspend fun record(
+        intakeId: String,
+        source: DoseSource,
+        renderedPeriodKey: String?,
+        kind: DoseKind = DoseKind.TAKEN,
+    ): RecordResult =
         recordDose(
             RecordCommand(
                 intakeId = intakeId,
-                kind = DoseKind.TAKEN,
+                kind = kind,
                 source = source,
                 renderedPeriodKey = renderedPeriodKey,
                 deviceZoneId = deviceZone().id,

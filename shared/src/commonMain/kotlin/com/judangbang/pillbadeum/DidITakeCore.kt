@@ -17,7 +17,9 @@ import com.judangbang.pillbadeum.usecase.ArchiveIntake
 import com.judangbang.pillbadeum.usecase.DeleteArchivedIntake
 import com.judangbang.pillbadeum.usecase.FlagClockMismatch
 import com.judangbang.pillbadeum.usecase.ManagePeople
+import com.judangbang.pillbadeum.usecase.ManageReminders
 import com.judangbang.pillbadeum.usecase.ManageSettings
+import com.judangbang.pillbadeum.usecase.PlanReminders
 import com.judangbang.pillbadeum.usecase.RecordCommand
 import com.judangbang.pillbadeum.usecase.RecordDose
 import com.judangbang.pillbadeum.usecase.RecordInWindow
@@ -67,6 +69,12 @@ class DidITakeCore private constructor(
 
     /** One month of history (SCR-008, supplement P-8). */
     val loadHistory: LoadHistory = LoadHistory(db, clock)
+
+    /** Reminder plan: next alarm after a change, overdue reminders when the alarm rings (TASK-011, N-8). */
+    val planReminders: PlanReminders = PlanReminders(db, clock)
+
+    /** Reminder settings of items, the common settings and [30분 뒤] (TASK-011, N-1~N-7). */
+    val reminders: ManageReminders = ManageReminders(db, clock, deviceId)
 
     /** Records TAKEN for [intakeId] from [source], checked against [renderedPeriodKey]. */
     suspend fun record(intakeId: String, source: DoseSource, renderedPeriodKey: String?): RecordResult =

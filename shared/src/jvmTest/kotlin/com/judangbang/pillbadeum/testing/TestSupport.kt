@@ -99,7 +99,8 @@ class DbFixture(start: Instant = seoul("2026-11-11T08:00"), ids: UuidV7? = null)
                 intakeId = intakeId,
                 type = ScheduleParams.typeOf(rule),
                 paramsJson = ScheduleParams.encode(rule),
-                latePolicy = LatePolicy.ASK,
+                // Same value the app writes (SaveIntake, TASK-004).
+                latePolicy = LatePolicy.KEEP,
                 effectiveFrom = effectiveFrom.toEpochMilliseconds(),
                 createdAt = nowMillis,
                 updatedAt = nowMillis,

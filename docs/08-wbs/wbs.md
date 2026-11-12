@@ -28,7 +28,7 @@
 | TASK-001 | 패키지 이름(`applicationId`)을 정해 빌드 설정에 넣기. **끝남** (2026-11-12, [PR #4](https://github.com/judangbang-ops/pillbadeum_release/pull/4)) | REQ-061 | `androidApp/build.gradle.kts` | 결정 Q9 (2026-11-12 정함) | Claude | 0.5일 | 정한 이름이 빌드 설정·README에 있고, CI가 만든 디버그 APK의 패키지 이름이 그 이름임 |
 | TASK-002 | 릴리즈 서명과 버전 번호: Gradle `signingConfig`(비밀값은 환경 변수). 서명은 `pull_request`를 받지 않는 `release.yml`에서만 함(main 푸시·`v*` 태그·수동 실행). 그 한 번의 실행에서 업로드 키로 서명한 릴리즈 AAB와 서명하지 않은 개인 APK 원본이 함께 나오고, 개인 APK는 PC 스크립트가 앱 서명 키로 서명함. 개인 APK는 release 변형(디버그 불가)이고 코드 축소(R8)는 1차에 끔. 버전 번호(versionCode)는 빌드한 커밋의 `git rev-list --count HEAD`라 AAB와 개인 APK가 한 수열을 씀. PR에서는 임시 키 서명 시험과 릴리즈 변형 권한 비교를 `ci.yml`에서 함 (검토 A1~A3·B1). 키와 계획은 아래 메모 | REQ-057, REQ-062 | `androidApp/build.gradle.kts`, `.github/workflows/release.yml`(새로)·`ci.yml`, 개인 APK 서명 스크립트(새로) | TASK-001 | Claude | 1.5일 | 두 키의 알고리즘·길이를 `keytool -list -v`로 확인해 아래 메모에 적음(RSA 2048 이상, Play 요건). CI 로그에서 릴리즈 AAB의 인증서 SHA-256 = 업로드 키 지문. 동희님 PC에서 스크립트로 서명한 APK의 `apksigner verify --print-certs` SHA-256 = 앱 서명 키 지문. main의 서로 다른 두 커밋으로 만든 빌드에서 뒤 커밋의 버전 번호가 큼. CI가 개인 APK의 디버그 불가와 릴리즈 변형의 권한 목록을 확인함. 키·비밀번호가 Git과 CI 로그에 없음 |
 | TASK-003 | Room 스키마 2: 알림 규칙·미루기·시계 표식 표와 1→2 마이그레이션(첫 일정 버전의 유효 시작을 등록 창 시작으로 앞당김). 설정 키는 key-value라 쓰는 작업에서 더함 (보충 N-1·N-2·C-1·P-4) | REQ-041, REQ-042, REQ-072, REQ-009 | `reminder_rule`, `reminder_snooze`, `clock_flag`, `schedule_version`, `shared/schemas` | 없음 | Claude | 1.5일 | 스키마 2 JSON이 생기고, 1→2 마이그레이션 테스트가 기존 판정 행을 그대로 남기고 첫 일정 버전의 유효 시작을 옮김 |
-| TASK-004 | 새 일정 버전의 `late_policy`를 `KEEP`으로 저장 (보충 W-1, 요구 4장 1번). 개인 APK를 나눠 주기 전에 넣음(R0b). 그 사이에 만든 일정 버전이 `ASK`로 남지 않게 하기 위함 (검토 C4) | REQ-010 | `ManageIntakes`, `schedule_version` | 없음 (2026-11-12 확정) | Claude | 0.5일 | 새 항목·주기 변경의 `late_policy` = KEEP. RR-60·RR-62(기준 요일 그대로) JVM 테스트. 기존 테스트 통과 |
+| TASK-004 | 새 일정 버전의 `late_policy`를 `KEEP`으로 저장 (보충 W-1, 요구 4장 1번). 개인 APK를 나눠 주기 전에 넣음(R0b). 그 사이에 만든 일정 버전이 `ASK`로 남지 않게 하기 위함 (검토 C4). **끝남** (2026-11-12, [PR #7](https://github.com/judangbang-ops/pillbadeum_release/pull/7)) | REQ-010 | `ManageIntakes`, `schedule_version` | 없음 (2026-11-12 확정) | Claude | 0.5일 | 새 항목·주기 변경의 `late_policy` = KEEP. RR-60·RR-62(기준 요일 그대로) JVM 테스트. 기존 테스트 통과 |
 
 진행 메모 (2026-11-12)
 
@@ -133,7 +133,7 @@
 
 ```mermaid
 flowchart LR
-    R0["R0 CI<br/>TASK-033 끝남"] --> R0b["R0b 실사용 전<br/>TASK-001 끝남, 002, 004, 028, 029, 051"]
+    R0["R0 CI<br/>TASK-033 끝남"] --> R0b["R0b 실사용 전<br/>TASK-001·004 끝남, 002, 028, 029, 051"]
     R0b --> P["개인 APK 단계<br/>TASK-047, 7일 이상"]
     R0b --> R1["R1 공통 규칙<br/>TASK-003, 005~011"]
     A["계정·테스터<br/>TASK-048, 지금 시작"] --> K["Play 앱·앱 서명 키<br/>TASK-050"]
@@ -150,7 +150,7 @@ flowchart LR
 | 단계 | 작업 | 지금 (2026-11-12) | 끝나는 때 |
 | --- | --- | --- | --- |
 | R0 CI | TASK-033 | 끝남 | PR마다 테스트·빌드·권한 비교가 돎 |
-| R0b 실사용 전 | TASK-001(끝남), TASK-002, TASK-004, TASK-028, TASK-029, TASK-051 | 다음 차례 | 개인 APK를 나눠 줘도 키·패키지 이름·버전 번호·빌드 변형·백업 때문에 기록을 잃지 않음 (검토 5.1절, 2026-11-12 검토 A1~A4·C4) |
+| R0b 실사용 전 | TASK-001(끝남), TASK-002, TASK-004(끝남), TASK-028, TASK-029, TASK-051 | 진행 중 (2026-11-12) | 개인 APK를 나눠 줘도 키·패키지 이름·버전 번호·빌드 변형·백업 때문에 기록을 잃지 않음 (검토 5.1절, 2026-11-12 검토 A1~A4·C4) |
 | 개인 APK 단계 | TASK-047 | R0b 뒤 동희님 폰부터, 가족 폰은 TASK-050 뒤. R1~R4와 함께 감 | 7일 이상의 실사용 기록. 개인 APK → Play 전환 시험은 TASK-038 |
 | R1 공통 규칙 | TASK-003, TASK-005~TASK-011 | R0b 다음 | JVM 테스트로 규칙 보충의 반례가 통과함 |
 | R2 위젯·앱 화면 | TASK-044·TASK-042 먼저, TASK-012~TASK-023, TASK-041, TASK-043, TASK-045 | R1 뒤 | 화면별 캡처 |
@@ -177,7 +177,7 @@ flowchart LR
 - 요구 83개가 모두 작업 하나 이상의 '근거'에 있음. 작업이 없는 Must 요구도 없음 (스크립트)
 - [기록 규칙 보충](../04-spec/record-rules-supplement.md)의 반례 RR-26~89가 모두 어느 작업의 작업 칸이나 끝난 조건에 있음 (스크립트)
 - '먼저 할 것'에 순환이 없고, 가리키는 작업이 모두 표에 있음 (스크립트)
-- 크기 합은 '이상'이 붙은 TASK-039(14일 이상)와 TASK-047(7일 이상)을 빼고 53.0일이고, 그중 끝난 TASK-001·TASK-033이 1.0일임 (스크립트). 2026-11-11 초안의 35.5일에서 새 작업 TASK-040~049가 8.0일, 범위 확정과 규칙 보충으로 기존 작업 15개를 0.5일씩 늘린 것이 7.5일, 2026-11-12 검토로 새 작업 TASK-050~052가 1.5일, TASK-002를 0.5일 늘린 것이 0.5일임
+- 크기 합은 '이상'이 붙은 TASK-039(14일 이상)와 TASK-047(7일 이상)을 빼고 53.0일이고, 그중 끝난 TASK-001·TASK-004·TASK-033이 1.5일임 (스크립트, TASK-004는 2026-11-12 PR #7에서 더함). 2026-11-11 초안의 35.5일에서 새 작업 TASK-040~049가 8.0일, 범위 확정과 규칙 보충으로 기존 작업 15개를 0.5일씩 늘린 것이 7.5일, 2026-11-12 검토로 새 작업 TASK-050~052가 1.5일, TASK-002를 0.5일 늘린 것이 0.5일임
 - 가장 긴 사슬은 TASK-038까지 12.0일임: TASK-003 > TASK-011 > TASK-024 > TASK-025 > TASK-041 > TASK-046 > TASK-032 > TASK-038 ('이상' 작업은 0으로 셈, 스크립트). 달력으로는 TASK-047(7일 이상)과 TASK-048의 계정·테스터 모집, TASK-032의 하룻밤 측정 두 번이 더 길 수 있음
 - API가 없어 '응답마다 테스트' 검사는 해당 없음. 대신 공통 함수의 결과(`RecordResult` 등)마다 화면 상태가 [screens.md](../05-ui/screens.md)에 있음
 - 사람 확인: 담당과 R 단계 순서는 Claude 제안이고 동희님이 아직 보지 않음. 2026-11-12 지시("범위 확정 후 Fable 5.2 독립검토를 거쳐 Opus 5.5 xhigh로 개발 구현 및 배포 파이프라인을 완결하세요")에 따라 독립 검토 뒤 R0b·R1을 이 순서로 시작하고, 바꾸라고 하시면 이 표를 고침. 2026-11-12 검토 반영으로 TASK-004를 R0b로 당기고 TASK-050~052를 더한 것도 Claude 제안임

@@ -53,6 +53,8 @@ sealed interface SaveIntakeResult {
  * - Create: intake row + first schedule_version, effective from now, in one transaction.
  * - Edit: display fields are updated in place; a changed schedule closes the current version at
  *   now (`effective_to`) and inserts a new one. Versions are never overwritten (data-model.md 2).
+ * - Every new version stores `late_policy` = [NEW_VERSION_LATE_POLICY] (KEEP): the 1st release never
+ *   moves a weekly anchor after a late dose (record-rules-supplement.md W-1, decision Q15, TASK-004).
  */
 class SaveIntake(
     private val db: DidITakeDatabase,
@@ -117,6 +119,15 @@ class SaveIntake(
         return null
     }
 
+    companion object {
+        /**
+         * `late_policy` of every schedule version this app writes. KEEP, not the data model's ASK:
+         * the 1st release has no "move the anchor?" question (decision Q15, 1st-release method).
+         * If that question is added later, change this together with supplement section 6 and N-5.
+         */
+        val NEW_VERSION_LATE_POLICY: LatePolicy = LatePolicy.KEEP
+    }
+
     private suspend fun insertVersion(intakeId: String, rule: ScheduleRule, now: Long) {
         db.scheduleVersionDao().insert(
             ScheduleVersionEntity(
@@ -124,7 +135,7 @@ class SaveIntake(
                 intakeId = intakeId,
                 type = ScheduleParams.typeOf(rule),
                 paramsJson = ScheduleParams.encode(rule),
-                latePolicy = LatePolicy.ASK,
+                latePolicy = NEW_VERSION_LATE_POLICY,
                 effectiveFrom = now,
                 createdAt = now,
                 updatedAt = now,

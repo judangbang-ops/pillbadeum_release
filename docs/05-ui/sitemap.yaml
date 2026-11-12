@@ -1,4 +1,4 @@
-# 화면 목록 (사이트맵) — 초안 2026-11-11, Claude 작성. 범위 확정 전
+# 화면 목록 (사이트맵) — 1차 범위 확정 반영 2026-11-12 (화면 5장 7개, 2026-11-12 10:18 KST 동희님 확정). 처음 초안 2026-11-11, Claude 작성
 #
 # - 기준: DidITake develop 7a800ac (이 저장소로 가져온 코드와 같음). 요구는 ../01-planning/requirements.md, 화면별 상태는 screens.md
 # - 이 파일이 화면 목록의 원본임. screens.md 1장의 그림과 표는 이 파일에서 옮겨 그림
@@ -6,8 +6,8 @@
 # - 진입 지점이 셋(홈 화면 위젯, 알림, 앱 아이콘)이라 최상위 항목이 셋임
 # - access: 계정이 없어 모두 '기기 사용자'임. 잠금 화면에 보이는 것만 따로 적음
 # - flows: DidITake docs/04-flow/flows.md(7a800ac)의 장 번호 (플로우에 FL ID가 아직 없음)
-# - reqs: 이 화면이 쓰는 요구 ID
-# - code: 7a800ac 코드(DidITake에서 이 저장소로 가져옴)에 있는 정도 (있음 / 일부 / 없음). Claude가 코드를 읽고 판단함
+# - reqs: 이 화면이 쓰는 요구 ID. screens.md의 그 화면 절에 나오는 요구 ID와 같아야 함 (.github/scripts/check_docs.py가 대조함)
+# - code: 이 저장소 main(2026-11-12 843a737, DidITake 7a800ac 프로토타입에서 패키지 이름만 바뀜)에 있는 정도 (있음 / 일부 / 없음). Claude가 코드를 읽고 판단함
 # - terms: 도메인 단계(01)를 하지 않아 모두 none
 
 - id: SCR-001
@@ -17,7 +17,7 @@
   status: active
   code: 있음 (대상자 필터·넘칠 때 처리는 없음)
   flows: [플로우 1, 플로우 2, 플로우 3]
-  reqs: [REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-007, REQ-008, REQ-014, REQ-017, REQ-018, REQ-019, REQ-020, REQ-021, REQ-022, REQ-023, REQ-024, REQ-025, REQ-026, REQ-027, REQ-033, REQ-043, REQ-056, REQ-068]
+  reqs: [REQ-001, REQ-002, REQ-003, REQ-004, REQ-005, REQ-007, REQ-008, REQ-009, REQ-014, REQ-017, REQ-018, REQ-019, REQ-020, REQ-021, REQ-022, REQ-023, REQ-024, REQ-025, REQ-026, REQ-027, REQ-033, REQ-043, REQ-056, REQ-066, REQ-068, REQ-073, REQ-075, REQ-078, REQ-079, REQ-082]
   terms: none
   children:
     - id: SCR-002
@@ -27,7 +27,7 @@
       status: active
       code: 없음
       flows: [플로우 1]
-      reqs: [REQ-016, REQ-017, REQ-018, REQ-025]
+      reqs: [REQ-016, REQ-017, REQ-018, REQ-025, REQ-079]
       terms: none
 
 - id: SCR-003
@@ -37,7 +37,7 @@
   status: active
   code: 없음
   flows: [플로우 1, 플로우 4]
-  reqs: [REQ-003, REQ-004, REQ-027, REQ-041, REQ-042, REQ-043, REQ-044, REQ-045, REQ-046, REQ-047, REQ-049, REQ-056]
+  reqs: [REQ-003, REQ-004, REQ-021, REQ-027, REQ-041, REQ-042, REQ-043, REQ-044, REQ-045, REQ-046, REQ-047, REQ-049, REQ-073, REQ-075, REQ-076, REQ-082]
   terms: none
 
 - id: SCR-004
@@ -47,7 +47,7 @@
   status: active
   code: 있음 (건너뜀·미래 시각 경고·권한 안내는 없음)
   flows: [플로우 1, 플로우 2]
-  reqs: [REQ-001, REQ-002, REQ-003, REQ-007, REQ-009, REQ-018, REQ-028, REQ-029, REQ-033, REQ-035, REQ-036, REQ-044, REQ-049, REQ-050]
+  reqs: [REQ-001, REQ-002, REQ-003, REQ-007, REQ-009, REQ-018, REQ-028, REQ-029, REQ-033, REQ-035, REQ-036, REQ-044, REQ-047, REQ-048, REQ-049, REQ-050, REQ-068, REQ-073, REQ-074, REQ-075, REQ-082]
   terms: none
   children:
     - id: SCR-005
@@ -57,7 +57,7 @@
       status: active
       code: 없음
       flows: [플로우 1]
-      reqs: [REQ-016, REQ-036, REQ-049]
+      reqs: [REQ-016, REQ-036, REQ-049, REQ-074, REQ-080]
       terms: none
     - id: SCR-006
       name: 항목 추가·수정
@@ -66,16 +66,16 @@
       status: active
       code: 있음 (알림 설정·권한 요청은 없음)
       flows: [플로우 1, 플로우 4]
-      reqs: [REQ-010, REQ-012, REQ-013, REQ-014, REQ-016, REQ-018, REQ-027, REQ-041, REQ-042, REQ-049]
+      reqs: [REQ-010, REQ-012, REQ-013, REQ-014, REQ-016, REQ-018, REQ-027, REQ-041, REQ-042, REQ-049, REQ-077]
       terms: none
     - id: SCR-007
       name: 판정 고치기
-      path: app:/judgment/:intakeId/:periodKey
+      path: app:/judgment/:intakeId/:scheduleVersionId/:periodKey
       access: 기기 사용자
       status: active
       code: 일부 (기록·취소만 첫 화면 버튼으로 있음)
       flows: [플로우 2]
-      reqs: [REQ-003, REQ-006, REQ-029, REQ-030, REQ-031, REQ-032, REQ-033, REQ-034, REQ-043, REQ-044]
+      reqs: [REQ-003, REQ-006, REQ-009, REQ-029, REQ-030, REQ-031, REQ-032, REQ-033, REQ-034, REQ-043, REQ-044, REQ-082]
       terms: none
     - id: SCR-008
       name: 지난 기록
@@ -84,7 +84,7 @@
       status: active
       code: 없음 (첫 화면의 이번 주 칸만 있음)
       flows: [플로우 2]
-      reqs: [REQ-009, REQ-018, REQ-037, REQ-038, REQ-039, REQ-040]
+      reqs: [REQ-009, REQ-018, REQ-037, REQ-038, REQ-039, REQ-040, REQ-082]
       terms: none
     - id: SCR-009
       name: 설정
@@ -93,7 +93,7 @@
       status: active
       code: 없음 (첫 화면에 하루 시작·기준 시간대 표시만 있음)
       flows: [플로우 1]
-      reqs: [REQ-011, REQ-015, REQ-036, REQ-046, REQ-049, REQ-050, REQ-051, REQ-053, REQ-054, REQ-055]
+      reqs: [REQ-011, REQ-015, REQ-036, REQ-042, REQ-046, REQ-047, REQ-049, REQ-050, REQ-051, REQ-053, REQ-054, REQ-055, REQ-063, REQ-077]
       terms: none
       children:
         - id: SCR-010
@@ -103,5 +103,5 @@
           status: active
           code: 일부 (항목 화면에서 대상자 추가만 있음)
           flows: [플로우 1]
-          reqs: [REQ-016, REQ-017, REQ-018]
+          reqs: [REQ-016, REQ-017, REQ-018, REQ-047, REQ-074, REQ-079]
           terms: none

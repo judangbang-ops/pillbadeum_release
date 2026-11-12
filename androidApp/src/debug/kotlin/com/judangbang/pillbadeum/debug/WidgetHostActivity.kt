@@ -37,7 +37,8 @@ import kotlinx.coroutines.withContext
  * - `w`, `h`: widget size in dp (default 250 x 110, the declared 4x2 minimum)
  * - `seed`: make sure at least this many active items exist (`Test1`, `Test2`, ...), created through
  *   the shared SaveIntake use case like the app's [저장]
- * - `keepwork`: enqueue [KeepWork] (the WorkManager experiment of the launcher case)
+ * - `bind`: `false` only seeds and binds nothing, so no Glance session starts (the launcher case
+ *   places the first widget itself, as after a fresh install)
  *
  * Binding needs `adb shell appwidget grantbind --package com.judangbang.pillbadeum` first; without it
  * the system bind dialog opens and the script taps its button.
@@ -70,13 +71,20 @@ class WidgetHostActivity : Activity() {
 
         val layout = if (intent.getStringExtra("layout") == "list") ProbeLayout.LIST else ProbeLayout.GRID
         ProbeLayout.set(this, layout)
-        if (intent.getBooleanExtra("keepwork", false)) KeepWork.enqueue(applicationContext)
+        val bind = intent.getBooleanExtra("bind", true)
         val seed = intent.getIntExtra("seed", 0)
         val app = applicationContext
         app.container.appScope.launch {
             try {
-                if (seed > 0) seedItems(seed)
-                withContext(Dispatchers.Main) { bindWidget() }
+                val seeded = if (seed > 0) seedItems(seed) else 0
+                withContext(Dispatchers.Main) {
+                    if (bind) {
+                        bindWidget()
+                    } else {
+                        status.text = "probe-seeded $seeded"
+                        Log.i(TAG, status.text.toString())
+                    }
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "host setup failed", e)
                 withContext(Dispatchers.Main) { status.text = "probe-error ${e.message}" }
@@ -86,7 +94,7 @@ class WidgetHostActivity : Activity() {
 
     /** Creates the missing `Test1`..`Test<count>` by name, one seeding at a time (a host restarted
      * while the first was seeding made every name twice, API 34, 2026-11-12). */
-    private suspend fun seedItems(count: Int) = seedLock.withLock {
+    private suspend fun seedItems(count: Int): Int = seedLock.withLock {
         val core = applicationContext.container.core()
         val person = core.people.list().first()
         val existing = core.loadStatusBoard().items.map { it.name }.toSet()
@@ -95,6 +103,7 @@ class WidgetHostActivity : Activity() {
             core.saveIntake.create(IntakeDraft(personId = person.id, name = name, rule = ScheduleRule.Daily))
         }
         Log.i(TAG, "seeded ${missing.size} items")
+        missing.size
     }
 
     private fun widthDp() = intent.getIntExtra("w", 250)

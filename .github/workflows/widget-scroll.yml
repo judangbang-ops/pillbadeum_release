@@ -63,11 +63,6 @@ jobs:
       matrix:
         # 26: 최소 지원(RemoteViewsService 경로), 34: 지금 흔한 폰, 36: 대상 API (작업 분해 TASK-042)
         api: [26, 34, 36]
-        # 런처 경우(L)의 대조 실험: 36에서만 WorkManager 빈 작업을 먼저 넣어 RescheduleReceiver가
-        # 켜졌다 꺼지지 않게 함. 34(빈 작업 없음)와 PACKAGE_CHANGED·위젯 다시 불러오기 횟수를 비교
-        include:
-          - api: 36
-            keep_work: true
     steps:
       - uses: actions/checkout@v6
         with:
@@ -88,8 +83,7 @@ jobs:
         run: |
           python3 scripts/emulator/widget_scroll_check.py \
             --apk "$RUNNER_TEMP/apk/androidApp-debug.apk" \
-            --out "$RUNNER_TEMP/widget-scroll-${{ matrix.api }}" --commit "$COMMIT" \
-            ${{ matrix.keep_work && '--keep-work' || '' }}
+            --out "$RUNNER_TEMP/widget-scroll-${{ matrix.api }}" --commit "$COMMIT"
 
       - name: 결과 표
         if: ${{ !cancelled() }}

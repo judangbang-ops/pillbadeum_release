@@ -64,6 +64,7 @@ import com.judangbang.pillbadeum.widget.RecordFromWidget
 import com.judangbang.pillbadeum.widget.WidgetColors
 import com.judangbang.pillbadeum.widget.WidgetParams
 import com.judangbang.pillbadeum.widget.WidgetState
+import kotlin.coroutines.cancellation.CancellationException
 
 /** Which body the probe draws. Set by [WidgetHostActivity] before it binds the widget. */
 enum class ProbeLayout {
@@ -114,8 +115,14 @@ class ScrollProbeWidget : GlanceAppWidget() {
         Log.i(TAG, "provideGlance layout=$layout items=${initial?.buttons?.size} core=${container.hashCode()}")
     }
 
-    private suspend fun load(context: Context): WidgetModel? =
-        runCatching { context.container.widgetModel() }.onFailure { Log.e(TAG, "load failed", it) }.getOrNull()
+    private suspend fun load(context: Context): WidgetModel? = try {
+        context.container.widgetModel()
+    } catch (e: CancellationException) {
+        throw e // the session closed while loading (logged as a failure before, API 36)
+    } catch (e: Exception) {
+        Log.e(TAG, "load failed", e)
+        null
+    }
 
     companion object {
         const val TAG = "ScrollProbeWidget"

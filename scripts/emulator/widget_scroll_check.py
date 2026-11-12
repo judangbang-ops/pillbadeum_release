@@ -11,14 +11,19 @@ driven, so the size and the font are exact: 276x220dp (4x2 in portrait in the An
 and 250x110dp (the declared minimum), at font 100% and at the largest font the Settings app offers
 (Android 14+: 200%, older: 130%).
 
-Cases (6 daily items Test1..Test6, one person, so every tap must find a different pending item):
-  A grid 276x220 font 100%: four buttons in the first row; scroll the grid; tap Test6 -> recorded
-  B grid 250x110 font 100%: scroll; tap Test5 -> recorded
-  C list 276x220 largest font: scroll; tap Test4 -> recorded
-  D list 250x110 largest font: scroll; tap Test3 -> recorded
+Cases (12 daily items Test1..Test12, one person; every case taps a different item, so a record
+found after the tap is the tap's own):
+  L (API 31+, first) the probe placed on the Pixel Launcher home screen right after install, before
+    any widget session ran (the first placement of a fresh install): time to draw, PACKAGE_CHANGED
+    and widget view re-creations around it; then scroll; tap Test12 -> recorded
+  A grid 276x220 font 100%: four buttons in the first row; scroll the grid; tap Test10 -> recorded
+  B grid 250x110 font 100%: scroll; tap Test7 -> recorded
+  C list 276x220 largest font: scroll; tap Test5 -> recorded
+  D list 250x110 largest font: scroll; tap Test4 -> recorded
   E grid 276x220 largest font: screenshot only (does the grid still fit?)
 "recorded" = an active dose_record row for that item with source WIDGET (DB read as root), and the
-button redrawn as done. The report also lists which buttons were fully visible before scrolling.
+button redrawn as done. The report also lists which buttons were fully visible before scrolling and
+where the list is after the tap redraw (an observation for TASK-014).
 
 Writes report.md, screenshots, UI dumps and logcat to --out. Exits 1 when a check fails.
 Standard library only. Not product code. Screen and file helpers are in backup_restore_check.py.
@@ -63,13 +68,10 @@ ITEM = re.compile(r"(Test\d+), ")  # Labels.widgetDescription: "나 Test6, 미�
 # Host and widget
 
 
-KEEP_WORK = {"on": False}
-
-
-def start_host(layout: str, w: int, h: int, seed: int = 12) -> None:
+def start_host(layout: str, w: int, h: int, seed: int = 12, bind: bool = True) -> None:
     sh(f"am force-stop {PKG}", check=False)
-    keep = " --ez keepwork true" if KEEP_WORK["on"] else ""
-    sh(f"am start -n {HOST} --es layout {layout} --ei w {w} --ei h {h} --ei seed {seed}{keep}")
+    extra = "" if bind else " --ez bind false"
+    sh(f"am start -n {HOST} --es layout {layout} --ei w {w} --ei h {h} --ei seed {seed}{extra}")
 
 
 def wait_status(timeout: float = 40) -> str:
@@ -86,7 +88,7 @@ def wait_status(timeout: float = 40) -> str:
                 tap(allow)
             tap(create)
             continue
-        if status is not None and status.text.startswith(("probe-ready", "probe-error")):
+        if status is not None and status.text.startswith(("probe-ready", "probe-seeded", "probe-error")):
             return status.text
         time.sleep(1)
     return "no status"
@@ -153,39 +155,70 @@ def wait_items(timeout: float = 30) -> list[Node]:
 
 
 def scroll_to(name: str, need: float = 1.0, tries: int = 14) -> Node | None:
-    """Swipes inside the list (about 40% of its height a step) until [need] of [name] is visible.
-    Items are numbered top to bottom, so the direction comes from the numbers on screen."""
-    for _ in range(tries):
+    """Drags inside the list until [need] of [name] is visible. Items are numbered top to bottom, so
+    the direction comes from the numbers on screen. Each try is printed as a [debug] line."""
+    d = DENSITY["d"] or 2.75
+    # The list starts moving only after the touch slop (8dp), so every drag adds it.
+    slop = round(8 * d)
+    full = FULL_HEIGHT.get(CURRENT["key"], 0)
+    for attempt in range(tries + 1):
         nodes = dump_ui()
         box = list_view(nodes)
         items = items_on_screen(nodes)
         item = items.get(name)
-        if box is not None and item is not None and fully_inside(item, box, need):
-            return item
         if box is None:
             return None
+        if item is not None and fully_inside(item, box, need):
+            return item
+        if attempt == tries:
+            break  # the last drag is checked above, then give up
         x = (box.bounds[0] + box.bounds[2]) // 2
         top, bottom = box.bounds[1], box.bounds[3]
-        # The list starts scrolling only after the touch slop (8dp), so every swipe adds it. A step is
-        # 40% of the list or 70dp, whichever is more: in a 39dp list 40% minus the slop moved about
-        # 8dp a swipe and never reached Test4 (API 34 at 200%, 2026-11-12). The finger may leave the
-        # list; the list keeps the gesture.
-        d = DENSITY["d"] or 2.75
-        slop = round(8 * d)
-        span = max((bottom - top) * 2 // 5, round(70 * d)) + slop
-        shown = [int(k[4:]) for k in items]
-        down = not shown or int(name[4:]) > min(shown) or (item is not None and item.bounds[3] >= bottom - 2)
-        if item is not None and item.bounds[1] <= top + 2 and item.bounds[3] < bottom - 2:
-            down = False  # cut off at the top: scroll back up a little
-        if item is not None and item.bounds[3] > item.bounds[1]:
-            # Partly visible: move by what is missing, so a list about one item high can still show
-            # all of it (fixed steps kept skipping past it, API 26 at 250x110, 2026-11-12).
-            missing = (item.bounds[1] - top - 4) if down else (bottom - 4 - item.bounds[3])
-            span = max(slop + 6, missing + slop)
+        if item is not None and item.bounds[3] > item.bounds[1] and full:
+            # Partly visible: move its middle to the middle of the list. The earlier rule (align the
+            # cut edge) moved a cut-off-at-the-top row to the bottom edge and back again, 14 tries
+            # without a stop (list at 200%, two rows of 205px in 409px, API 34 and 36, 2026-11-12).
+            true_top = item.bounds[3] - full if item.bounds[1] <= top + 2 else item.bounds[1]
+            delta = top + ((bottom - top) - full) // 2 - true_top  # > 0: the content moves down
+            down = delta < 0
+            span = max(abs(delta), 6) + slop
+            how = f"{name} {item.bounds[1]}-{item.bounds[3]} (온전하면 {true_top}-{true_top + full})"
+        else:
+            # A step is 40% of the list or 70dp, whichever is more: in a 39dp list 40% minus the slop
+            # moved about 8dp a drag (API 34 at 200%, 2026-11-12).
+            span = max((bottom - top) * 2 // 5, round(70 * d)) + slop
+            shown = [int(k[4:]) for k in items]
+            down = not shown or int(name[4:]) > min(shown)
+            how = f"{name} 안 보임, 보이는 항목 {', '.join(sorted(items, key=lambda k: int(k[4:]))) or '없음'}"
+        print(f"[debug] scroll try {attempt + 1}: {how}; 목록 {top}-{bottom}; "
+              f"{'아래로' if down else '위로'} {span}px", flush=True)
+        # The finger may leave the list; the list keeps the gesture.
         y1, y2 = (bottom - 6, bottom - 6 - span) if down else (top + 6, top + 6 + span)
         drag_list(x, y1, y2)
         time.sleep(1.5)
     return None
+
+
+def scroll_offset(items: dict[str, Node], box: Node, layout: str) -> int | None:
+    """How far the list is scrolled from the top, in px, counted in rows of the full item height (a
+    grid row holds 4 items). A few px off per row: done rows differ a little in height."""
+    full = FULL_HEIGHT.get(CURRENT["key"], 0)
+    if not items or not full:
+        return None
+    per_row = 4 if layout == "grid" else 1
+    top, bottom = box.bounds[1], box.bounds[3]
+    # An item whose top shows gives its true top; one cut off only at the top gives it from its
+    # bottom. One cut off at both edges (taller than the list) gives neither.
+    estimates = []
+    for name, n in items.items():
+        if n.bounds[1] > top + 2:
+            true_top = n.bounds[1]
+        elif n.bounds[3] < bottom - 2:
+            true_top = n.bounds[3] - full
+        else:
+            continue
+        estimates.append((int(name[4:]) - 1) // per_row * full - (true_top - top))
+    return min(estimates) if estimates else None
 
 
 def drag_list(x: int, y1: int, y2: int) -> None:
@@ -340,32 +373,61 @@ def exercise(r: Report, case: str, layout: str, tag: str, target: str | None, no
     if not r.check(f"{case} 스크롤로 {target}에 닿음", f"목록만 스크롤되어 {target}가 {want}",
                    "보임" if item is not None else "닿지 못함", item is not None):
         return
-    box = list_view(dump_ui()) or box
+    tapped_nodes = dump_ui()
+    box = list_view(tapped_nodes) or box
     header_after = header_above(box)
     r.check(f"{case} 머리글 고정", "스크롤 뒤에도 목록 바로 위 머리글(DidITake)이 보임",
             "보임" if header_after is not None else "안 보임", header_after is not None)
     before_y = item.bounds[1]
+    before_offset = scroll_offset(items_on_screen(tapped_nodes), box, layout)
+    if "기록됨" in item.desc:
+        r.note(f"{tag}: 주의 — {target}가 탭 전에 이미 기록됨 ({item.desc})")
     events_before = len(host_events()) if host else 0
     tap(item)
+    tapped_at = time.time()
     source = wait_record(target)
     r.check(f"{case} 목록 안 버튼 탭 → 기록", f"{target}의 활성 판정, source = WIDGET",
             source or "판정 없음", source == "WIDGET")
     time.sleep(3)
+    # Observation for TASK-014 (not pass/fail): does the list keep its scroll position when the
+    # widget redraws after the tap, or jump back to the top? Wait for the redraw first (the button's
+    # sentence says 기록됨): at 3s it had not come yet in some runs and the jump came later.
+    def redrawn_or_gone(nodes: list[Node]) -> bool:
+        shown_item = items_on_screen(nodes).get(target)
+        return shown_item is None or "기록됨" in shown_item.desc
+
+    after_nodes = dump_ui()
+    end = time.time() + 10
+    while not redrawn_or_gone(after_nodes) and time.time() < end:
+        time.sleep(1)
+        after_nodes = dump_ui()
+    time.sleep(1)
+    after_nodes = dump_ui()
     r.shot(f"{tag}-after-tap")
     save_ui(r, f"{tag}-after-tap")
-    # Observation for TASK-014 (not pass/fail): does the list keep its scroll position when the
-    # widget redraws after the tap, or jump back to the top?
-    after = items_on_screen(dump_ui())
+    after = items_on_screen(after_nodes)
+    after_box = list_view(after_nodes) or box
+    after_offset = scroll_offset(after, after_box, layout)
     node = after.get(target)
     shown = ", ".join(sorted(after, key=lambda s: int(s[4:]))) or "없음"
-    if node is not None and abs(node.bounds[1] - before_y) <= 12:
-        kept = f"그대로 ({target} y {before_y} → {node.bounds[1]})"
-    elif node is not None:
-        kept = f"조금 움직임 ({target}는 보이지만 y {before_y} → {node.bounds[1]})"
-    elif "Test1" in after:
-        kept = f"맨 위로 돌아감 ({target}가 화면 밖, 보이는 항목 {shown})"
+    if before_offset is not None and after_offset is not None:
+        where = f"스크롤 {before_offset}px → {after_offset}px"
+        if before_offset > 16 and after_offset <= 16:
+            kept = f"맨 위로 돌아감 ({where}; {target} {'보임' if node else '화면 밖'}, 보이는 항목 {shown})"
+        elif abs(after_offset - before_offset) <= 16:
+            kept = f"그대로 ({where})"
+        else:
+            kept = f"바뀜 ({where}; 보이는 항목 {shown})"
     else:
-        kept = f"바뀜 ({target}가 화면 밖, 보이는 항목 {shown})"
+        # An item taller than the list (250x110) shows neither edge: compare what shows instead.
+        before_names = set(items_on_screen(tapped_nodes))
+        same_y = node is not None and abs(node.bounds[1] - before_y) <= 4
+        if set(after) == before_names and same_y:
+            kept = f"그대로 (보이는 항목 {shown}, {target} y {before_y} → {node.bounds[1]})"
+        elif "Test1" in after and "Test1" not in before_names:
+            kept = f"맨 위로 돌아감 ({target} {'보임' if node else '화면 밖'}, 보이는 항목 {shown})"
+        else:
+            kept = f"바뀜 (보이는 항목 {', '.join(sorted(before_names, key=lambda k: int(k[4:])))} → {shown})"
     r.note(f"{tag}: 탭 뒤 다시 그릴 때 스크롤 위치 {kept}")
     if host:
         # Glance runs the tap through a trampoline activity in its own task. If the host activity
@@ -374,7 +436,6 @@ def exercise(r: Report, case: str, layout: str, tag: str, target: str | None, no
         r.note(f"{tag}: 탭 동안 시험 호스트의 onStop/onStart: {' → '.join(during) or '없음'}")
     # The redraw check reads the button's TalkBack sentence. It looks where the button is now and
     # scrolls only when it is off screen; half of it showing is enough to read it.
-    started = time.time()
     on_screen = target in after
     node = after.get(target) or scroll_to(target, min(need, 0.5))
     redrawn = node if node is not None and "기록됨" in node.desc else None
@@ -385,7 +446,7 @@ def exercise(r: Report, case: str, layout: str, tag: str, target: str | None, no
         node = again or node
         redrawn = again if again is not None and "기록됨" in again.desc else None
     if redrawn is not None and on_screen:
-        r.note(f"{tag}: 다시 그린 문장이 보이기까지 탭 3초 뒤부터 {time.time() - started:.0f}초 더")
+        r.note(f"{tag}: 탭 뒤 {time.time() - tapped_at:.0f}초 안에 버튼 문장이 '기록됨'으로 바뀐 것을 확인(덤프 간격 포함)")
     elif redrawn is not None:
         r.note(f"{tag}: {target}가 화면 밖이라 다시 스크롤해 다시 그린 문장을 읽음")
     r.check(f"{case} 탭 뒤 다시 그림", f"{target} 버튼이 완료로 바뀜(TalkBack 문장에 '기록됨', 화면 밖이면 다시 스크롤해 봄)",
@@ -462,33 +523,75 @@ def place_probe_in_launcher(r: Report, tag: str) -> str:
     return f"위젯 목록에서 '{PROBE_LABEL}' 미리보기를 찾지 못함"
 
 
+TIMELINE = [
+    (re.compile(rf"onPackageModified: {re.escape(PKG)}\s*$"), "PACKAGE_CHANGED(우리 패키지)"),
+    (re.compile(r"Bound widget (\d+) to provider .*ScrollProbeWidgetReceiver"), "위젯 {0} 묶임"),
+    (re.compile(r"LauncherAppWidgetHostView: App widget created with id: (\d+)"), "런처가 위젯 {0} 뷰를 만듦"),
+    (re.compile(r"ScrollProbeWidget: provideGlance"), "Glance 그리기 시작"),
+    (re.compile(r"Closing session (appWidget-\d+)"), "Glance 세션 {0} 닫힘"),
+]
+
+
+def device_time() -> str:
+    return sh("date +'%m-%d %H:%M:%S.000'", check=False).strip()
+
+
+def launcher_timeline(since: str) -> list[str]:
+    """What happened to our widget since [since] (device time), from the logcat, in order."""
+    out = adb("logcat", "-d", "-T", since, check=False, timeout=90) if since else ""
+    events = []
+    for line in out.splitlines():
+        for pattern, label in TIMELINE:
+            m = pattern.search(line)
+            if m:
+                events.append(f"{line[6:18]} {label.format(*m.groups())}")
+                break
+    return events
+
+
 def run_launcher_case(r: Report, case: str, target: str) -> None:
     """The same flow on a real home screen (Pixel Launcher, API 31+), at the size the launcher gives a
-    4x2 widget, to see whether a scroll reset after a tap also happens outside the debug host."""
+    4x2 widget. Runs first, right after install: the host only seeds the items and binds nothing, so
+    the launcher's widget starts the app's first Glance session (and first WorkManager work), as when a
+    user places the widget after installing. Glance keeps a long-delayed work so WorkManager never
+    disables its RescheduleReceiver again, but the first enable still sends PACKAGE_CHANGED, and a
+    launcher re-creates its widget views on that (the suspected cause of the release check's widget
+    stuck on its loading layout, 2026-11-12). The timeline from the logcat shows the order."""
     tag = f"{case}-grid-launcher-font100"
     CURRENT["key"] = "grid-1.0"
     set_font(1.0)
-    start_host("grid", 250, 110)  # sets the probe layout to grid; HOME then sends the host to the back
-    wait_status()
+    start_host("grid", 250, 110, bind=False)  # seeds 12 items and sets the probe layout to grid
+    status = wait_status()
+    if not status.startswith("probe-seeded"):
+        r.note(f"{tag}: 런처 경우를 하지 못함 — 호스트가 항목만 만들지 못함 ({status})")
+        return
+    since = device_time()
     changed0, created0 = widget_reload_counts()
-    r.note(f"{tag}: WorkManager 빈 작업 {'있음' if KEEP_WORK['on'] else '없음'}, 놓기 전 RescheduleReceiver {reschedule_receiver_state()}")
+    r.note(f"{tag}: 설치 뒤 처음 놓는 위젯(그 전에 Glance 세션 없음). 놓기 전 RescheduleReceiver {reschedule_receiver_state()}")
     placed_at = time.time()
     why = place_probe_in_launcher(r, tag)
     if why:
         # Launcher steps differ between images: an observation, not a failure of the scroll test.
         r.note(f"{tag}: 런처 경우를 하지 못함 — {why}")
         return
-    nodes = wait_items(90)
+    dropped_at = time.time()
+    nodes = wait_items(120)
+    shown_at = time.time()
     r.shot(f"{tag}-before")
     save_ui(r, f"{tag}-before")
     box = list_view(nodes)
+    items = items_on_screen(nodes)
     changed1, created1 = widget_reload_counts()
-    reloads = (f"놓은 뒤 우리 패키지 PACKAGE_CHANGED {changed1 - changed0}번, 런처가 위젯 뷰를 다시 만든 횟수 "
-               f"{created1 - created0}번(놓을 때 1번 포함), RescheduleReceiver {reschedule_receiver_state()}")
-    if box is None or not items_on_screen(nodes):
-        r.note(f"{tag}: 런처에 놓은 시험 위젯이 90초 안에 그려지지 않음 (Glance 로딩 화면, 관찰). {reloads}")
+    reloads = (f"우리 패키지 PACKAGE_CHANGED {changed1 - changed0}번, 런처가 위젯 뷰를 만든 횟수 "
+               f"{created1 - created0}번(놓을 때 1번 포함), 지금 RescheduleReceiver {reschedule_receiver_state()}")
+    events = launcher_timeline(since)
+    r.note(f"{tag}: 로그 순서 — {'; '.join(events[:14]) or '찾은 줄 없음'}")
+    if box is None or not items:
+        r.note(f"{tag}: 런처에 놓은 시험 위젯이 놓고 120초 안에 그려지지 않음 (Glance 로딩 화면, 관찰). {reloads}")
         return
-    r.note(f"{tag}: 놓고 {time.time() - placed_at:.0f}초 뒤 항목이 보임. {reloads}")
+    r.note(f"{tag}: 놓고 {shown_at - dropped_at:.0f}초 뒤 항목이 보임(위젯 목록 화면 조작까지 "
+           f"{shown_at - placed_at:.0f}초). {reloads}")
+    note_heights(items)
     d = DENSITY["d"] or 1
     r.note(f"{tag}: 런처가 준 목록 영역 {round((box.bounds[2] - box.bounds[0]) / d)}×"
            f"{round((box.bounds[3] - box.bounds[1]) / d)}dp")
@@ -500,10 +603,7 @@ def main() -> int:
     parser.add_argument("--apk", required=True, type=Path, help="debug APK")
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--commit", default="")
-    parser.add_argument("--keep-work", action="store_true",
-                        help="enqueue the debug KeepWork first (WorkManager experiment of the launcher case)")
     args = parser.parse_args()
-    KEEP_WORK["on"] = args.keep_work
     args.out.mkdir(parents=True, exist_ok=True)
 
     adb("wait-for-device")
@@ -528,17 +628,19 @@ def main() -> int:
         adb("install", "-t", str(args.apk), timeout=180)
         grant = sh(f"appwidget grantbind --package {PKG}", check=False).strip()
         r.note(f"appwidget grantbind: {grant or '출력 없음'}")
-        # 12 items: at 276x220 two grid rows (8 items) show, so Test10 needs a real scroll and the
-        # scroll position after the tap redraw means something (2026-11-12 run: 6 items all fit).
-        run_case(r, "A", "grid", 276, 220, 1.0, "Test10")
-        run_case(r, "B", "grid", 250, 110, 1.0, "Test7")
-        run_case(r, "C", "list", 276, 220, largest, "Test7")
-        run_case(r, "D", "list", 250, 110, largest, "Test4")
-        run_case(r, "E", "grid", 276, 220, largest, None)
+        # The launcher case first: it needs the app before its first Glance session.
         if api >= 31:
-            run_launcher_case(r, "L", "Test11")
+            run_launcher_case(r, "L", "Test12")
         else:
             r.note("L 런처 경우: API 31 미만 이미지의 런처는 위젯 목록 화면이 달라 하지 않음")
+        # 12 items: at 276x220 two grid rows (8 items) show, so Test10 needs a real scroll and the
+        # scroll position after the tap redraw means something (2026-11-12 run: 6 items all fit).
+        # Every case taps another item (C tapped B's Test7 once and found B's record).
+        run_case(r, "A", "grid", 276, 220, 1.0, "Test10")
+        run_case(r, "B", "grid", 250, 110, 1.0, "Test7")
+        run_case(r, "C", "list", 276, 220, largest, "Test5")
+        run_case(r, "D", "list", 250, 110, largest, "Test4")
+        run_case(r, "E", "grid", 276, 220, largest, None)
     except Exception as exc:
         r.check("스크립트", "끝까지 돎", f"{type(exc).__name__}: {exc}", False)
         try:

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Backup rules for Android 8.0 to 11 (android:fullBackupContent). Android 12 and later read
+    data_extraction_rules.xml instead. TASK-028, REQ-055, docs/04-spec/record-rules-supplement.md B-1 to B-3.
+
+    - Only the record database and its companion files (B-1). Widget state, caches and
+      noBackupFilesDir (install_marker, TASK-029) stay out: with <include> nothing else is backed up.
+    - The framework also adds "-journal" and "-wal" by itself for a database file (AOSP
+      FullBackup.java), but that is not in the official documentation, so they are listed here.
+    - Cloud backup only when the backup is encrypted on the phone, i.e. a screen lock is set
+      (requireFlags="clientSideEncryption", Android 9+). Decision Q16 (2026-11-12).
+    - Device-to-device transfer is not sent to a server, so on Android 9 to 11 it gets the same
+      files without the screen-lock condition, like <device-transfer> on Android 12+ (B-3 proposal).
+      Each <include> is checked on its own, so either flag is enough (AOSP BackupAgent.java).
+    - Android 8.x (API 26, 27): a third attribute on <include> makes the parser fail and the whole
+      backup is skipped (AOSP FullBackup.java, android-8.1.0_r1). That is intended: 8.x has no
+      encrypted backup, so its records are not uploaded (B-3 limit). No v27 fallback file on purpose.
+-->
+<full-backup-content>
+    <include domain="database" path="diditake.db" requireFlags="clientSideEncryption" />
+    <include domain="database" path="diditake.db-wal" requireFlags="clientSideEncryption" />
+    <include domain="database" path="diditake.db-journal" requireFlags="clientSideEncryption" />
+
+    <include domain="database" path="diditake.db" requireFlags="deviceToDeviceTransfer" />
+    <include domain="database" path="diditake.db-wal" requireFlags="deviceToDeviceTransfer" />
+    <include domain="database" path="diditake.db-journal" requireFlags="deviceToDeviceTransfer" />
+</full-backup-content>

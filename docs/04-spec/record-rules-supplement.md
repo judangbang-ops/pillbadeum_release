@@ -7,7 +7,7 @@
 - 결정과의 관계
   - A3(6장)은 결정 Q15의 1차 방식(기준일을 옮기지 않고 마지막 복용을 크게 보임)으로 씀. 묻기를 1차에 넣을지는 가쟈누님과 정하고, 정해지면 6장을 고침
   - 백업 암호화 조건(1장 B-3)은 결정 Q16(화면 잠금이 없는 폰은 백업하지 않음)으로 씀
-- 읽는 법: **규칙**은 구현이 지켜야 할 문장, **제안**은 Claude가 고른 방법, **Claude 기본값**은 확정 카드에 없던 값을 Claude가 고른 것(N-4 첫 칸과 고를 수 있는 값, N-5 주 1회 알림 날, N-12 밀린 칸, W-2 글자 크기, W-4, C-1 5분 여유), **한계**는 1차에서 일부러 하지 않는 것. 제안과 기본값은 동희님·가쟈누님이 바꿀 수 있음
+- 읽는 법: **규칙**은 구현이 지켜야 할 문장, **제안**은 Claude가 고른 방법, **Claude 기본값**은 확정 카드에 없던 값을 Claude가 고른 것(N-4 첫 칸과 고를 수 있는 값, N-5 주 1회 알림 날, N-12 밀린 칸, W-2 글자 크기, W-4, C-1 5분 여유, R-3 복원된 판정이 없거나 모두 뒤일 때의 문구), **한계**는 1차에서 일부러 하지 않는 것. 제안과 기본값은 동희님·가쟈누님이 바꿀 수 있음
 
 ## 0. 불변식
 
@@ -26,11 +26,16 @@
 - **B-1** Android 자동 백업(cloud-backup)과 기기 간 이전(device-transfer)에는 복용 기록 DB와 **그 짝 파일**을 넣음: `diditake.db`, `diditake.db-wal`, `diditake.db-journal`. 그 밖의 파일(위젯 상태, 캐시, `noBackupFilesDir`)은 넣지 않음. **원본과 다름**: 요구 REQ-055와 결정 Q7은 "DB만"이라고 적었음
   - 근거: 검토 A1의 실측(같은 Room 설정에서 본 파일은 400건 동안 두 번만 쓰이고 나머지는 WAL에 있음). 자동 백업은 백업 전에 앱을 종료하므로 본 파일과 WAL이 서로 맞는 상태로 함께 들어감
   - `-shm`은 넣지 않음. 본 파일과 WAL만으로 모든 기록이 열리는 것을 검토가 확인함
+  - 구현 (2026-11-12 TASK-028, PR #9): `res/xml/data_extraction_rules.xml`(Android 12 이상)과 `res/xml/backup_rules.xml`(Android 11 이하)에 세 파일을 하나씩 적음. Android는 `database` 영역의 파일을 넣으면 `-journal`·`-wal`을 스스로 더하지만(AOSP `FullBackup.java`) 공식 문서에 없는 동작이라 기대지 않음
 - **B-2** 대안은 저널 모드를 `TRUNCATE`로 바꿔 본 파일 하나가 늘 최신이 되게 하는 것임. **제안**: B-1(짝 파일 포함)을 기본으로 함. 코드에 저널 모드 설정을 새로 두지 않아도 되고, 1차 쓰기 양에서는 둘의 차이를 재지 않았기 때문임. TASK-028에서 실기기 시험이 B-1로 통과하지 않을 때만 B-2로 바꿈
 - **B-3** 화면 잠금이 없는 폰은 클라우드 백업을 하지 않음 (결정 Q16, 2026-11-12. 검토 B9의 (가))
   - `fullBackupContent`(Android 11 이하)의 `include`에 `requireFlags="clientSideEncryption"`, `dataExtractionRules`(Android 12 이상)의 `cloud-backup`에 `disableIfNoEncryptionCapabilities="true"`
   - 기기 간 이전(device-transfer): Android 12 이상은 화면 잠금과 상관없이 B-1의 파일을 넣음(공식 문서: 기기 간 이전은 서버로 보내지 않아 암호화가 없어도 계속됨). Android 9~11에서 기기 간 이전이 이 조건에 걸리는지는 공식 문서에 없어 TASK-028에서 확인하고 TASK-032 실기기 항목에 넣음 (2026-11-12 검토 A4)
+    - TASK-028 확인 (2026-11-12, Android 소스 읽기): Android 9~11의 규칙 파일에서 `requireFlags="clientSideEncryption"`만 두면 기기 간 이전도 그 조건을 따름. `include`는 줄마다 따로 조건을 보므로(AOSP `BackupAgent.applyXmlFiltersAndDoFullBackupForDomain`) 같은 세 파일을 `requireFlags="deviceToDeviceTransfer"`로 한 번 더 적어, 9~11의 기기 간 이전도 12 이상처럼 화면 잠금과 상관없이 넣음 (**제안**)
+    - 이 두 번째 줄이 실제 기기 간 이전에서 쓰이는지는 에뮬레이터로 볼 수 없음. 시험용 전송(LocalTransport)은 Android 12부터 `is_encrypted`·`is_device_transfer` 값을 받고 11 이하는 받지 않음(AOSP `LocalTransportParameters`). 그래서 9~11 기기 간 이전은 TASK-032(RR-29)에 남김
   - **한계**: Android 8.x(API 26·27)는 백업하지 않음. 공식 문서는 규칙 파일에 조건을 더하면 Android 8.1 이하에서는 백업이 되지 않으니 대체 리소스를 두라고 적음. 8.x에는 종단 간 암호화가 없어 대체 규칙 파일로 백업을 켜면 암호화 없이 올라가므로, 결정 Q16의 뜻(암호화되지 않으면 올리지 않음)대로 대체 파일을 두지 않음. 8.x의 기기 간 이전도 함께 막히는지는 확인 전 (2026-11-12 검토 A4)
+    - TASK-028 확인 (2026-11-12, Android 소스 읽기): Android 8.1은 `include`의 속성이 둘을 넘으면 규칙 파일 읽기를 실패로 보고(AOSP `FullBackup.validateInnerTagContents`) 그 백업을 통째로 건너뜀(`BackupAgent.onFullBackup`의 "Aborting full backup"). 복원 쪽도 같은 파일을 읽다 멈춤. 기기 간 이전도 같은 백업 에이전트를 지나므로 함께 막힌다고 봄. 에뮬레이터 API 26·27에서 시험용 전송으로 본 결과는 [QA 보고서](../07-qa/2026-11-12-backup-restore/report.md)
+  - 시험 방법 (에뮬레이터, TASK-028): 공식 [백업 시험 문서](https://developer.android.com/identity/data/testingbackup)의 스크립트처럼 `adb shell settings put secure backup_local_transport_parameters 'is_encrypted=true'`로 시험용 전송의 암호화 조건을 켬(RR-69). `is_encrypted=false`는 화면 잠금이 없는 폰(RR-68), `is_device_transfer=true`는 기기 간 이전에 해당함. 자동 실행은 `.github/workflows/emulator.yml`
   - 설정 화면은 화면 잠금이 없는 동안 "화면 잠금이 없어 복용 기록이 백업되지 않아요"를, Android 8.x에서는 "이 휴대폰은 Android 버전이 낮아 복용 기록이 백업되지 않아요"를 보임 (REQ-054)
 
 ### 반례
@@ -62,14 +67,17 @@
   - 업데이트는 `noBackupFilesDir`를 지우지 않으므로 복원으로 잘못 보지 않음. 이것은 표식이 든 빌드끼리만 맞음. 표식 없는 빌드에서 올라오는 길은 없음: 패키지 이름이 프로토타입과 다르고(TASK-001), 나눠 주는 첫 개인 APK부터 표식이 들어감(TASK-029가 R0b) (2026-11-12 검토 C9)
   - 표식에 `device_id`를 적어 두고 DB 값과 견주는 것은 2026-11-12 검토 B10을 따른 것임. 표식이 있는 채로 기록이 바뀐 경우도 잡음
   - 복원 콜백(`BackupAgent.onRestoreFinished`)에 기대지 않음. 백업·복원 중에는 앱의 `Application` 클래스가 아니라 기본 클래스로 실행된다고 공식 문서에 적혀 있어서임(검토 A2)
+  - 구현 (2026-11-12 TASK-029, PR #9): `restore.CheckInstall`이 `DidITakeCore.open`에서 쓰기 전에 돎. 표식 파일은 `FileInstallMarker`(임시 파일에 쓰고 디스크에 내린 뒤 이름을 바꾸고, 폴더도 디스크에 내림). 프로세스마다 한 번이고 `AppContainer`가 잠금으로 줄을 세움
+  - 깔린 앱 위에 복원할 때(RR-71): Android는 자체 백업 에이전트가 없는 앱의 데이터를 전체 복원 전에 지움(AOSP `FullRestoreEngine`, android-14.0.0_r1). 그래서 실제로는 표식도 지워져 표의 '표식 없음' 길로 감. 결과(복원으로 처리)는 같음. 표식이 남아 값만 다른 길은 JVM 테스트로 봄
 - **R-2 복원 처리**: 새 `device_id`를 만들어 **표식에 먼저 쓰고**, 그다음 한 트랜잭션에서 아래를 함
   1. 새 `device_id`를 `setting`에 쓰고, DB에 있던 값은 `restored_from_device_id`에 남김 (REQ-056의 "새 `device_id`"를 이 감지로 이룸)
-  2. 복원된 기록 가운데 **지금보다 앞의** 활성 판정 중 가장 늦은 것의 `taken_at`을 `restore_notice_last_record_at`에 씀(없으면 빈 값). 시계가 틀렸던 미래 기록이 안내에 나오지 않게 함 (2026-11-12 검토 C9)
+  2. 복원된 기록 가운데 **지금보다 앞의** 활성 판정 중 가장 늦은 것의 `taken_at`을 `restore_notice_last_record_at`에 씀(없으면 빈 값, 판정이 모두 지금보다 뒤이면 `later`. R-3). 시계가 틀렸던 미래 기록이 안내에 나오지 않게 함 (2026-11-12 검토 C9)
   3. `restore_notice_pending` = 1
   - 표식을 먼저 쓰므로 트랜잭션 전에 멈추면 다음 실행에서 표식과 DB의 `device_id`가 달라 R-2를 다시 함. 그때 `restored_from_device_id`에는 다시 DB에 있던 옛 기기 값이 들어가므로 잃지 않음 (2026-11-12 검토 B10)
 - **R-3 안내**: `restore_notice_pending` = 1인 동안
   - 앱 첫 화면 맨 위에 "백업에서 복원했어요. 마지막 기록은 11/09 21:40이에요. 그 뒤의 기록은 없을 수 있어요"와 "한 약은 한 휴대폰에서 기록해 주세요"(검토 B4), [확인했어요]를 보임
   - 모든 위젯 머리글 아래에는 짧게 "복원됨 · 마지막 기록 11/09 21:40 · 앱에서 확인"을 보임. 위젯은 큰 글씨에서 잘리기 쉬워(검토 B6) 긴 문구를 앱에 둠
+  - 복원된 기록에 판정이 하나도 없으면 앱은 "백업에서 복원했어요. 복원된 복용 기록이 없어요. 다른 휴대폰에서 한 기록은 없을 수 있어요"와 "한 약은 한 휴대폰에서 기록해 주세요", 위젯은 "복원됨 · 기록 없음 · 앱에서 확인"을 보임. 판정은 있지만 모두 이 폰의 시계보다 뒤이면(새 폰 시계가 늦음) 시각 없이 "백업에서 복원했어요. 다른 휴대폰에서 한 기록은 없을 수 있어요"와 같은 문장, 위젯은 "복원됨 · 앱에서 확인"을 보이고 `restore_notice_last_record_at`에는 `later`를 씀 (**Claude 기본값**, 2026-11-12 TASK-029. 화면 문서에 없던 경우)
   - 위젯 탭 기록은 막지 않음. 탭하면 기록하고, 안내는 그대로 남김. **제안**: 복원 직후에 기록을 막으면 위젯이 고장 난 것처럼 보이고, 이중 복용 위험은 안내 문구로 낮추는 쪽을 고름
   - 반복 알림은 복용 알림 대신 복원 안내 알림 **1개**만 띄움. 복원을 감지한 때 한 번 띄우고, 확인 전에는 다시 띄우지 않음. 사용자가 앱에서 [확인했어요]를 누르면 `restore_notice_pending` = 0으로 바꾸고, `reminder_last_run_at`을 그 시각으로 둔 뒤 복용 알림을 다시 예약함. 복원된 옛 `reminder_last_run_at` 때문에 오늘 지난 칸이 바로 울리지 않게 하기 위함임 (N-12, 2026-11-12 검토 B10)
   - 위젯의 대상자 선택은 DB 밖에 있어 백업되지 않으므로, 복원 뒤에는 위젯이 누구를 골랐었는지 알 수 없음. 그래서 선택이 없는 위젯은 대상자가 둘 이상이면 '전체'로 바꾸지 않고 "위젯을 다시 설정해 주세요"만 보이고, 누르면 대상자 고르기(SCR-002)가 열림(검토 B7, REQ-079). 이 안내는 [확인했어요]와 상관없이 위젯을 다시 설정할 때까지 남음. 대상자가 한 명이면 그대로 그 사람 항목을 보임

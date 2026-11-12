@@ -1,0 +1,143 @@
+# 에뮬레이터에서 백업·복원과 복원 감지를 확인함 (TASK-028, TASK-029, 릴리즈 단계 R0b).
+# 앱 화면을 직접 눌러 기록하고, 시험용 백업 전송(LocalTransport)으로 백업 → 지우고 다시 설치 →
+# 앱 파일을 root로 읽어 확인함. 경우와 기대 동작은 scripts/emulator/backup_restore_check.py 첫 주석.
+#
+# - 백업 규칙·복원 감지 코드를 바꾼 PR과 수동 실행에서만 돎(실행마다 약 15분 × API 수, 무료 분 한도)
+# - 서명 키·비밀값을 쓰지 않음. 디버그 APK로 확인함
+# - Android SDK·에뮬레이터는 러너에 있는 sdkmanager로 받음. 서드파티 액션을 쓰지 않음
+name: 에뮬레이터 확인
+
+on:
+  pull_request:
+    paths:
+      - androidApp/src/main/AndroidManifest.xml
+      - androidApp/src/main/res/xml/**
+      - androidApp/src/main/kotlin/com/judangbang/pillbadeum/AppContainer.kt
+      - androidApp/src/main/kotlin/com/judangbang/pillbadeum/restore/**
+      - shared/src/commonMain/kotlin/com/judangbang/pillbadeum/restore/**
+      - scripts/emulator/**
+      - .github/workflows/emulator.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: emulator-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    name: 디버그 APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: gradle/actions/wrapper-validation@0723195856401067f7a2779048b490ace7a47d7c # v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: 디버그 APK (./gradlew :androidApp:assembleDebug)
+        run: ./gradlew :androidApp:assembleDebug
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: emulator-apk
+          path: androidApp/build/outputs/apk/debug/androidApp-debug.apk
+          retention-days: 1
+          overwrite: true
+          if-no-files-found: error
+
+  backup:
+    name: 백업·복원 (API ${{ matrix.api }})
+    needs: apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        # 34: 클라우드 백업(암호화 있음·없음)·기기 간 이전·복원 감지 전부
+        # 30: Android 9~11 규칙(시험 전송은 암호화 플래그를 켤 수 없어 '안 올라감'만 확인)
+        # 27, 26: Android 8.x는 백업하지 않음 (RR-70). 27은 google_apis x86_64 이미지가 없어 default 이미지로 함
+        api: [34, 30, 27, 26]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: emulator-apk
+          path: ${{ runner.temp }}/apk
+
+      - name: KVM 켜기
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+
+      - name: 에뮬레이터와 시스템 이미지 받기
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$sdkmanager" --licenses > /dev/null || true
+          "$sdkmanager" --install emulator platform-tools > "$RUNNER_TEMP/sdkmanager.log"
+          # API 27은 google_apis x86_64 이미지가 없음. root로 앱 파일을 읽을 수 있는 이미지를 차례로 시도함
+          for tag in google_apis default; do
+            image="system-images;android-${{ matrix.api }};$tag;x86_64"
+            if "$sdkmanager" --install "$image" >> "$RUNNER_TEMP/sdkmanager.log" 2>&1 \
+              && [ -d "$ANDROID_HOME/system-images/android-${{ matrix.api }}/$tag/x86_64" ]; then
+              echo "SYSTEM_IMAGE=$image" >> "$GITHUB_ENV"
+              echo "시스템 이미지: $image"
+              break
+            fi
+          done
+          tail -n 3 "$RUNNER_TEMP/sdkmanager.log"
+          grep -q '^SYSTEM_IMAGE=' "$GITHUB_ENV" || { echo "시스템 이미지를 받지 못함"; exit 1; }
+          echo "$ANDROID_HOME/emulator" >> "$GITHUB_PATH"
+          echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+
+      - name: AVD 만들고 켜기
+        run: |
+          # AVD 위치를 정해 둠 (러너마다 기본 위치가 다름)
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n check -k "$SYSTEM_IMAGE" -d pixel_5 --force
+          # 실제 키보드가 있는 것으로 두어 화면 키보드가 버튼을 가리지 않게 함
+          printf 'hw.keyboard=yes\nhw.ramSize=3072\n' >> "$ANDROID_AVD_HOME/check.avd/config.ini"
+          nohup emulator -avd check -no-window -no-audio -no-boot-anim -no-snapshot \
+            -gpu swiftshader_indirect -camera-back none -camera-front none \
+            > "$RUNNER_TEMP/emulator.log" 2>&1 &
+          adb wait-for-device
+          timeout 600 bash -c 'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = "1" ]; do sleep 3; done'
+          adb shell getprop ro.build.version.release
+
+      - name: 백업·복원 확인 (scripts/emulator/backup_restore_check.py)
+        id: check
+        run: |
+          python3 scripts/emulator/backup_restore_check.py \
+            --apk "$RUNNER_TEMP/apk/androidApp-debug.apk" \
+            --out "$RUNNER_TEMP/emulator-${{ matrix.api }}"
+
+      - name: 결과 표
+        if: ${{ !cancelled() }}
+        run: |
+          report="$RUNNER_TEMP/emulator-${{ matrix.api }}/report.md"
+          if [ -f "$report" ]; then cat "$report" >> "$GITHUB_STEP_SUMMARY"; else echo "보고서 없음" >> "$GITHUB_STEP_SUMMARY"; fi
+          cp "$RUNNER_TEMP/emulator.log" "$RUNNER_TEMP/emulator-${{ matrix.api }}/" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() }}
+        with:
+          name: emulator-backup-api${{ matrix.api }}
+          path: ${{ runner.temp }}/emulator-${{ matrix.api }}/
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: ignore

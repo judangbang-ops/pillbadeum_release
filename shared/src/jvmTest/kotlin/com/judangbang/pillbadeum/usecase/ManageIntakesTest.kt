@@ -1,6 +1,5 @@
 package com.judangbang.pillbadeum.usecase
 
-import com.judangbang.pillbadeum.data.loadOrCreateDeviceId
 import com.judangbang.pillbadeum.domain.ScheduleRule
 import com.judangbang.pillbadeum.domain.ScheduleType
 import com.judangbang.pillbadeum.domain.SlotLabel
@@ -49,13 +48,6 @@ class ManageIntakesTest {
         people.ensureDefault()
         people.add(" 엄마 ", "#B5562B")
         assertEquals(listOf("나", "엄마"), people.list().map { it.name })
-    }
-
-    @Test
-    fun deviceId_is_created_once_and_reused() = runTest {
-        val first = fx.db.settingDao().loadOrCreateDeviceId(fx.ids)
-        fx.at("2026-11-12T08:00")
-        assertEquals(first, fx.db.settingDao().loadOrCreateDeviceId(fx.ids))
     }
 
     @Test

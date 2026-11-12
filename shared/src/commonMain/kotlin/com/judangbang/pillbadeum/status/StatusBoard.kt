@@ -5,6 +5,8 @@ import com.judangbang.pillbadeum.data.DoseRecordEntity
 import com.judangbang.pillbadeum.data.IntakeEntity
 import com.judangbang.pillbadeum.data.PersonEntity
 import com.judangbang.pillbadeum.data.ScheduleParams
+import com.judangbang.pillbadeum.data.SettingDao
+import com.judangbang.pillbadeum.data.SettingKeys
 import com.judangbang.pillbadeum.data.loadWindowSettings
 import com.judangbang.pillbadeum.domain.ScheduleRule
 import com.judangbang.pillbadeum.domain.SlotLabel
@@ -13,6 +15,7 @@ import com.judangbang.pillbadeum.domain.WindowSettings
 import com.judangbang.pillbadeum.domain.logicalDateOf
 import com.judangbang.pillbadeum.domain.mondayToSunday
 import com.judangbang.pillbadeum.domain.windowOf
+import com.judangbang.pillbadeum.restore.CheckInstall
 import com.judangbang.pillbadeum.usecase.FlagClockMismatch
 import com.judangbang.pillbadeum.usecase.findActiveIn
 import kotlin.time.Clock
@@ -28,6 +31,9 @@ data class StatusBoard(
     /** Monday..Sunday of the week containing [baseDate]. */
     val week: List<LocalDate>,
     val items: List<IntakeStatus>,
+    /** Shown until [확인했어요] after a restore (supplement R-3, REQ-073); null otherwise. */
+    val restoreNotice: RestoreNotice? = null,
+
     /**
      * Judgments recorded while the phone clock was ahead and not answered yet, oldest first (REQ-009,
      * supplement C-2). The app shows each one until [그대로 두기] or [기록 취소], even after its day comes.
@@ -95,6 +101,26 @@ enum class DayState {
 data class DayCell(val date: LocalDate, val state: DayState, val isToday: Boolean)
 
 /**
+ * Restore notice state (supplement R-2, R-3).
+ *
+ * @property lastRecordAt latest active judgment before the restore was detected; null when the
+ *   restored database held none.
+ */
+/**
+ * The pending restore notice. [lastRecordAt] is the latest restored judgment before the restore;
+ * null with [hasRecords] = true means every restored judgment is after this phone's clock.
+ */
+data class RestoreNotice(val lastRecordAt: Instant?, val hasRecords: Boolean = lastRecordAt != null)
+
+/** Reads the restore notice settings; null unless `restore_notice_pending` = 1. */
+suspend fun SettingDao.loadRestoreNotice(): RestoreNotice? {
+    if (get(SettingKeys.RESTORE_NOTICE_PENDING) != CheckInstall.PENDING) return null
+    val value = get(SettingKeys.RESTORE_NOTICE_LAST_RECORD_AT)
+    val last = value?.toLongOrNull()?.let(Instant::fromEpochMilliseconds)
+    return RestoreNotice(last, hasRecords = last != null || value == CheckInstall.ONLY_LATER_RECORDS)
+}
+
+/**
  * Builds the [StatusBoard] from the database at the injected clock's time. Archived intakes are
  * excluded; their records stay in the database.
  *
@@ -147,7 +173,7 @@ class LoadStatusBoard(
             val person = people[intake.personId] ?: return@mapNotNull null
             ClockWarning(judgment = record, intakeName = intake.name, person = person)
         }
-        return StatusBoard(now, settings, baseDate, week, items, clockWarnings)
+        return StatusBoard(now, settings, baseDate, week, items, db.settingDao().loadRestoreNotice(), clockWarnings)
     }
 
     /**

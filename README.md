@@ -17,6 +17,7 @@
 | --- | --- | --- |
 | [기획 v4](docs/01-planning/planning-v4.md) | DidITake 기획 v3 뒤에 정한 결정(1차 범위, DB만 백업, Play 비공개 테스트)으로 바뀐 점 | 초안 |
 | [요구사항](docs/01-planning/requirements.md) | 요구 REQ-001~072, 합격 기준, 범위 확정 때 정할 것 | 초안 |
+| [기록 규칙 보충](docs/04-spec/record-rules-supplement.md) | 설계 독립 검토(PR #3) A1·A2·A4·A5·A6을 규칙과 반례 RR-26~58로 적음. A3은 결정 Q15 대기 | 초안 |
 | [화면 목록](docs/05-ui/sitemap.yaml) · [화면 상태](docs/05-ui/screens.md) | 화면 SCR-001~010과 화면별 상태 | 초안 |
 | [작업 분해](docs/08-wbs/wbs.md) | 작업 TASK-001~039, 지금 프로토타입에서 Play 비공개 테스트까지 | 초안 |
 | [.corthex/project.json](.corthex/project.json) | 단계별 원본 위치 (CORTHEX) | |

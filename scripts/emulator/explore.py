@@ -39,6 +39,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from backup_restore_check import (
+    CLOSED_DIALOGS,
     PKG,
     Node,
     Report,
@@ -200,8 +201,28 @@ def set_clock(at: datetime) -> str:
         now = int(sh("date +%s").strip() or 0)
     if abs(now - target) > 120:
         raise RuntimeError(f"clock not set: wanted {target}, phone says {now}")
-    time.sleep(3)
+    settle()
     return sh("date '+%Y-%m-%d %H:%M %Z'").strip()
+
+
+def settle(quiet: float = 30, longest: float = 180) -> None:
+    """Waits until no system ANR dialog has shown for `quiet` seconds (at most `longest`).
+
+    A clock change sends TIME_SET to every app, and on the CI emulator system_server and Google
+    Play services then stall for about a minute (fifth run, 2026-11-12: 42 "isn't responding"
+    dialogs, the first right after setting 08:30, and one ate the tap on [추가]). dump_ui closes
+    each dialog with [Wait]; this keeps reading the screen until the dialogs stop coming.
+    """
+    start = time.time()
+    seen = len(CLOSED_DIALOGS)
+    last_dialog = start
+    while time.time() - start < longest:
+        dump_ui()
+        if len(CLOSED_DIALOGS) != seen:
+            seen, last_dialog = len(CLOSED_DIALOGS), time.time()
+        if time.time() - last_dialog >= quiet:
+            return
+        time.sleep(3)
 
 
 def font_scale(scale: str) -> None:
@@ -228,6 +249,7 @@ def reboot() -> None:
     sh("input keyevent KEYCODE_WAKEUP", check=False)
     sh("wm dismiss-keyguard", check=False)
     time.sleep(10)
+    settle()
 
 
 # ------------------------------------------------------------------------------------------------

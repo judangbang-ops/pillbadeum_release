@@ -9,6 +9,10 @@ inputs:
   api:
     description: Android API 수준 (예 34)
     required: true
+  cores:
+    description: 에뮬레이터 CPU 코어 수. 기본 2. 둘러보기는 4 (2개면 시계를 바꾼 뒤 시스템 ANR이 쏟아짐, 2026-11-12 5회차)
+    required: false
+    default: "2"
 runs:
   using: composite
   steps:
@@ -44,12 +48,14 @@ runs:
 
     - name: AVD 만들고 켜기
       shell: bash
+      env:
+        CORES: ${{ inputs.cores }}
       run: |
         export ANDROID_AVD_HOME="$RUNNER_TEMP/avd"
         mkdir -p "$ANDROID_AVD_HOME"
         echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n check -k "$SYSTEM_IMAGE" -d pixel_5 --force
         # 실제 키보드가 있는 것으로 두어 화면 키보드가 버튼을 가리지 않게 함
-        printf 'hw.keyboard=yes\nhw.ramSize=3072\n' >> "$ANDROID_AVD_HOME/check.avd/config.ini"
+        printf 'hw.keyboard=yes\nhw.ramSize=3072\nhw.cpu.ncore=%s\n' "$CORES" >> "$ANDROID_AVD_HOME/check.avd/config.ini"
         nohup emulator -avd check -no-window -no-audio -no-boot-anim -no-snapshot \
           -gpu swiftshader_indirect -camera-back none -camera-front none \
           > "$RUNNER_TEMP/emulator.log" 2>&1 &

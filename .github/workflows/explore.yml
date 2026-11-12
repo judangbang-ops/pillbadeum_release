@@ -40,12 +40,16 @@ jobs:
           cache: gradle
 
       - name: 디버그 APK (./gradlew :androidApp:assembleDebug)
-        run: ./gradlew :androidApp:assembleDebug
+        run: |
+          ./gradlew :androidApp:assembleDebug
+          # 에뮬레이터와 CPU·메모리를 나누지 않게 Gradle 데몬을 끔 (2026-11-12 5회차의 시스템 ANR)
+          ./gradlew --stop
 
       # KVM, 시스템 이미지, AVD를 준비하고 부팅을 기다림 (백업·복원 확인과 같은 액션)
       - uses: ./.github/actions/android-emulator
         with:
           api: "34"
+          cores: "4"
 
       - name: 둘러보기 (scripts/emulator/explore.py)
         run: |

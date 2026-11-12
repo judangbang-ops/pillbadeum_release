@@ -60,7 +60,7 @@ ITEM = re.compile(r"(Test\d+), ")  # Labels.widgetDescription: "나 Test6, 미�
 # Host and widget
 
 
-def start_host(layout: str, w: int, h: int, seed: int = 6) -> None:
+def start_host(layout: str, w: int, h: int, seed: int = 12) -> None:
     sh(f"am force-stop {PKG}", check=False)
     sh(f"am start -n {HOST} --es layout {layout} --ei w {w} --ei h {h} --ei seed {seed}")
 
@@ -113,11 +113,25 @@ def note_heights(items: dict[str, Node]) -> None:
         FULL_HEIGHT[key] = max(FULL_HEIGHT.get(key, 0), n.bounds[3] - n.bounds[1])
 
 
-def fully_inside(item: Node, box: Node) -> bool:
+def fully_inside(item: Node, box: Node, need: float = 1.0) -> bool:
+    """True when at least [need] of the item's full height shows inside the list (1.0 = all of it)."""
     x1, y1, x2, y2 = item.bounds
     bx1, by1, bx2, by2 = box.bounds
     inside = x1 >= bx1 and y1 >= by1 and x2 <= bx2 and y2 <= by2 and y2 > y1
-    return inside and (y2 - y1) >= FULL_HEIGHT.get(CURRENT["key"], 0) - 4
+    full = FULL_HEIGHT.get(CURRENT["key"], 0)
+    # A recorded button is a few px lower or higher than an open one (check mark, "15:32" instead of
+    # "기록 없음"; API 34 at 200%: 304 vs 310px), so allow 4% or 8px.
+    return inside and (y2 - y1) >= full * need - max(8, full * 0.04)
+
+
+def needed_fraction(box: Node) -> float:
+    """1.0 when one item fits in the list. When the list is lower than one item (a layout finding
+    for TASK-014, not a scrolling failure), most of what can show: the list height less a margin."""
+    full = FULL_HEIGHT.get(CURRENT["key"], 0)
+    height = box.bounds[3] - box.bounds[1]
+    if full <= 0 or height >= full:
+        return 1.0
+    return max(0.2, (height - 8) / full)
 
 
 def wait_items(timeout: float = 30) -> list[Node]:
@@ -131,16 +145,15 @@ def wait_items(timeout: float = 30) -> list[Node]:
     return nodes
 
 
-def scroll_to(name: str, tries: int = 10) -> Node | None:
-    """Swipes inside the list (about 40% of its height a step) until [name] is fully visible. Items
-    are numbered top to bottom, so the direction comes from the numbers on screen."""
+def scroll_to(name: str, need: float = 1.0, tries: int = 14) -> Node | None:
+    """Swipes inside the list (about 40% of its height a step) until [need] of [name] is visible.
+    Items are numbered top to bottom, so the direction comes from the numbers on screen."""
     for _ in range(tries):
         nodes = dump_ui()
         box = list_view(nodes)
         items = items_on_screen(nodes)
-        note_heights(items)
         item = items.get(name)
-        if box is not None and item is not None and fully_inside(item, box):
+        if box is not None and item is not None and fully_inside(item, box, need):
             return item
         if box is None:
             return None
@@ -250,10 +263,17 @@ def run_case(r: Report, case: str, layout: str, w: int, h: int, font: float, tar
                 row == ["Test1", "Test2", "Test3", "Test4"])
     if target is None:
         return
-    item = scroll_to(target)
+    need = needed_fraction(box)
+    if need < 1.0:
+        d = DENSITY["d"] or 1
+        r.note(f"{tag}: 배치 관찰 — 목록 높이 {round((box.bounds[3] - box.bounds[1]) / d)}dp가 항목 한 칸 "
+               f"{round(FULL_HEIGHT.get(CURRENT['key'], 0) / d)}dp보다 낮아 한 칸이 다 보일 수 없음. "
+               f"항목 높이의 {int(need * 100)}% 이상 보이면 닿은 것으로 보고, 보이는 부분을 누름")
+    want = "다 보임" if need >= 1.0 else f"{int(need * 100)}% 이상 보임"
+    item = scroll_to(target, need)
     r.shot(f"{tag}-scrolled")
     save_ui(r, f"{tag}-scrolled")
-    if not r.check(f"{case} 스크롤로 {target}에 닿음", f"목록만 스크롤되어 {target}가 다 보임",
+    if not r.check(f"{case} 스크롤로 {target}에 닿음", f"목록만 스크롤되어 {target}가 {want}",
                    "보임" if item is not None else "닿지 못함", item is not None):
         return
     header_after = next((n for n in dump_ui() if n.text == "DidITake"), None)
@@ -276,15 +296,20 @@ def run_case(r: Report, case: str, layout: str, w: int, h: int, font: float, tar
     else:
         kept = f"바뀜 ({target}가 화면 밖, 보이는 항목 {', '.join(sorted(after, key=lambda s: int(s[4:]))) or '없음'})"
     r.note(f"{tag}: 탭 뒤 다시 그릴 때 스크롤 위치 {kept}")
-    node = scroll_to(target)
+    # The redraw check reads the button's TalkBack sentence. It looks where the button is now and
+    # scrolls only when it is off screen; half of it showing is enough to read it.
+    started = time.time()
+    node = after.get(target) or scroll_to(target, min(need, 0.5))
     redrawn = node if node is not None and "기록됨" in node.desc else None
-    if node is not None and redrawn is None:
-        end = time.time() + 10
-        while time.time() < end and redrawn is None:
-            time.sleep(1)
-            again = items_on_screen(dump_ui()).get(target)
-            redrawn = again if again is not None and "기록됨" in again.desc else None
-    r.check(f"{case} 탭 뒤 다시 그림", f"{target} 버튼이 완료로 바뀜(TalkBack 문장에 '기록됨', 필요하면 다시 스크롤해 봄)",
+    end = time.time() + 15
+    while node is not None and redrawn is None and time.time() < end:
+        time.sleep(1)
+        again = items_on_screen(dump_ui()).get(target) or scroll_to(target, min(need, 0.5))
+        node = again or node
+        redrawn = again if again is not None and "기록됨" in again.desc else None
+    if redrawn is not None:
+        r.note(f"{tag}: 다시 그린 문장을 읽기까지 탭 3초 뒤부터 {time.time() - started:.0f}초")
+    r.check(f"{case} 탭 뒤 다시 그림", f"{target} 버튼이 완료로 바뀜(TalkBack 문장에 '기록됨', 화면 밖이면 다시 스크롤해 봄)",
             redrawn.desc if redrawn else (node.desc if node else "찾지 못함"), redrawn is not None)
 
 
@@ -317,10 +342,12 @@ def main() -> int:
         adb("install", "-t", str(args.apk), timeout=180)
         grant = sh(f"appwidget grantbind --package {PKG}", check=False).strip()
         r.note(f"appwidget grantbind: {grant or '출력 없음'}")
-        run_case(r, "A", "grid", 276, 220, 1.0, "Test6")
-        run_case(r, "B", "grid", 250, 110, 1.0, "Test5")
-        run_case(r, "C", "list", 276, 220, largest, "Test4")
-        run_case(r, "D", "list", 250, 110, largest, "Test3")
+        # 12 items: at 276x220 two grid rows (8 items) show, so Test10 needs a real scroll and the
+        # scroll position after the tap redraw means something (2026-11-12 run: 6 items all fit).
+        run_case(r, "A", "grid", 276, 220, 1.0, "Test10")
+        run_case(r, "B", "grid", 250, 110, 1.0, "Test7")
+        run_case(r, "C", "list", 276, 220, largest, "Test7")
+        run_case(r, "D", "list", 250, 110, largest, "Test4")
         run_case(r, "E", "grid", 276, 220, largest, None)
     except Exception as exc:
         r.check("스크립트", "끝까지 돎", f"{type(exc).__name__}: {exc}", False)

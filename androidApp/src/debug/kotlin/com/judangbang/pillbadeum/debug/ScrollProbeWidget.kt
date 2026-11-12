@@ -18,8 +18,6 @@ import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
 import androidx.glance.ImageProvider
-import androidx.glance.LocalContext
-import androidx.glance.LocalSize
 import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
@@ -144,8 +142,6 @@ class ProbeRecord : ActionCallback {
 
 @Composable
 private fun ProbeContent(model: WidgetModel?, layout: ProbeLayout, message: String?) {
-    val size = LocalSize.current
-    val fontScale = LocalContext.current.resources.configuration.fontScale
     Column(
         modifier = GlanceModifier.fillMaxSize()
             .background(ImageProvider(R.drawable.widget_background))
@@ -186,12 +182,6 @@ private fun ProbeContent(model: WidgetModel?, layout: ProbeLayout, message: Stri
                 items(buttons) { button -> ListRow(button) }
             }
         }
-        // Debug footer: what the probe was given, for the screenshots.
-        Text(
-            "probe ${layout.name.lowercase()} ${size.width.value.toInt()}x${size.height.value.toInt()}dp font ${"%.2f".format(fontScale)}",
-            maxLines = 1,
-            style = TextStyle(color = ColorProvider(WidgetColors.Muted), fontSize = 9.sp),
-        )
     }
 }
 

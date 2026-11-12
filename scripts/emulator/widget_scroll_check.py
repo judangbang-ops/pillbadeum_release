@@ -52,6 +52,7 @@ from backup_restore_check import (
 )
 
 HOST = f"{PKG}/.debug.WidgetHostActivity"
+DENSITY = {"d": 0.0}
 ITEM = re.compile(r"(Test\d+), ")  # Labels.widgetDescription: "나 Test6, 미완료"
 
 
@@ -98,10 +99,25 @@ def list_view(nodes: list[Node]) -> Node | None:
     return next((n for n in nodes if n.cls.endswith(("GridView", "ListView"))), None)
 
 
+# uiautomator reports bounds clipped to what is on screen, so an item cut off by the list edge still
+# looks "inside" the list. An item counts as fully visible when its height is the full item height:
+# the tallest item seen so far with the same layout and font. Cases run large size first (A before B,
+# C before D), so the 250x110 cases are measured against items that were not cut off.
+FULL_HEIGHT: dict[str, int] = {}
+CURRENT = {"key": ""}
+
+
+def note_heights(items: dict[str, Node]) -> None:
+    key = CURRENT["key"]
+    for n in items.values():
+        FULL_HEIGHT[key] = max(FULL_HEIGHT.get(key, 0), n.bounds[3] - n.bounds[1])
+
+
 def fully_inside(item: Node, box: Node) -> bool:
     x1, y1, x2, y2 = item.bounds
     bx1, by1, bx2, by2 = box.bounds
-    return x1 >= bx1 and y1 >= by1 and x2 <= bx2 and y2 <= by2 and y2 > y1
+    inside = x1 >= bx1 and y1 >= by1 and x2 <= bx2 and y2 <= by2 and y2 > y1
+    return inside and (y2 - y1) >= FULL_HEIGHT.get(CURRENT["key"], 0) - 4
 
 
 def wait_items(timeout: float = 30) -> list[Node]:
@@ -115,20 +131,28 @@ def wait_items(timeout: float = 30) -> list[Node]:
     return nodes
 
 
-def scroll_to(name: str, tries: int = 6) -> Node | None:
-    """Swipes up inside the list until [name] is fully visible."""
+def scroll_to(name: str, tries: int = 10) -> Node | None:
+    """Swipes inside the list (about 40% of its height a step) until [name] is fully visible. Items
+    are numbered top to bottom, so the direction comes from the numbers on screen."""
     for _ in range(tries):
         nodes = dump_ui()
         box = list_view(nodes)
-        item = items_on_screen(nodes).get(name)
+        items = items_on_screen(nodes)
+        note_heights(items)
+        item = items.get(name)
         if box is not None and item is not None and fully_inside(item, box):
             return item
         if box is None:
             return None
         x = (box.bounds[0] + box.bounds[2]) // 2
         top, bottom = box.bounds[1], box.bounds[3]
-        span = max(10, (bottom - top) * 3 // 4)
-        sh(f"input swipe {x} {bottom - 4} {x} {bottom - 4 - span} 400")
+        span = max(10, (bottom - top) * 2 // 5)
+        shown = [int(k[4:]) for k in items]
+        down = not shown or int(name[4:]) > min(shown) or (item is not None and item.bounds[3] >= bottom - 2)
+        if item is not None and item.bounds[1] <= top + 2 and item.bounds[3] < bottom - 2:
+            down = False  # cut off at the top: scroll back up a little
+        y1, y2 = (bottom - 6, bottom - 6 - span) if down else (top + 6, top + 6 + span)
+        sh(f"input swipe {x} {y1} {x} {y2} 600")
         time.sleep(1.5)
     return None
 
@@ -194,14 +218,23 @@ def save_ui(r: Report, name: str) -> None:
 
 def run_case(r: Report, case: str, layout: str, w: int, h: int, font: float, target: str | None) -> None:
     tag = f"{case}-{layout}-{w}x{h}-font{int(font * 100)}"
+    CURRENT["key"] = f"{layout}-{font}"
     set_font(font)
     start_host(layout, w, h)
     status = wait_status()
-    nodes = wait_items()
+    nodes = wait_items(45)
+    if list_view(nodes) is None or not items_on_screen(nodes):
+        # First start on a slow emulator (API 34, 2026-11-12): the widget was not drawn in time once.
+        r.note(f"{tag}: 위젯이 45초 안에 그려지지 않아 호스트를 한 번 다시 띄움")
+        r.shot(f"{tag}-not-drawn")
+        start_host(layout, w, h)
+        status = wait_status()
+        nodes = wait_items(45)
     r.shot(f"{tag}-before")
     save_ui(r, f"{tag}-before")
     box = list_view(nodes)
     items = items_on_screen(nodes)
+    note_heights(items)
     ok_ready = status.startswith("probe-ready") and box is not None and bool(items)
     if not r.check(f"{case} 위젯 그려짐 ({layout}, {w}×{h}dp, 글자 {int(font * 100)}%)",
                    "호스트 준비, 목록(GridView/ListView)과 항목이 보임",
@@ -210,7 +243,8 @@ def run_case(r: Report, case: str, layout: str, w: int, h: int, font: float, tar
     visible = sorted((name for name, n in items.items() if fully_inside(n, box)), key=lambda s: int(s[4:]))
     row = first_row(items, box)
     r.note(f"{tag}: 스크롤 전 다 보인 항목 {', '.join(visible) or '없음'}; 첫 줄 {', '.join(row) or '없음'}; "
-           f"목록 영역 {box.bounds}")
+           f"목록 영역 {box.bounds}, 높이 {box.bounds[3] - box.bounds[1]}px; 항목 한 칸의 온전한 높이 "
+           f"{FULL_HEIGHT.get(CURRENT['key'], 0)}px (px = dp × {DENSITY['d']})")
     if layout == "grid" and case == "A":
         r.check(f"{case} 가로 4개", "첫 줄에 Test1~Test4가 나란히", ", ".join(row) or "없음",
                 row == ["Test1", "Test2", "Test3", "Test4"])
@@ -225,21 +259,33 @@ def run_case(r: Report, case: str, layout: str, w: int, h: int, font: float, tar
     header_after = next((n for n in dump_ui() if n.text == "DidITake"), None)
     r.check(f"{case} 머리글 고정", "스크롤 뒤에도 머리글(DidITake)이 보임",
             "보임" if header_after is not None else "안 보임", header_after is not None)
+    before_y = item.bounds[1]
     tap(item)
     source = wait_record(target)
     r.check(f"{case} 목록 안 버튼 탭 → 기록", f"{target}의 활성 판정, source = WIDGET",
             source or "판정 없음", source == "WIDGET")
-    redrawn = None
-    end = time.time() + 15
-    while time.time() < end and redrawn is None:
-        node = items_on_screen(dump_ui()).get(target)
-        if node is not None and "기록됨" in node.desc:
-            redrawn = node
-        else:
-            time.sleep(1)
+    time.sleep(3)
     r.shot(f"{tag}-after-tap")
-    r.check(f"{case} 탭 뒤 다시 그림", f"{target} 버튼이 완료로 바뀜(TalkBack 문장에 '기록됨')",
-            redrawn.desc if redrawn else "바뀌지 않음", redrawn is not None)
+    save_ui(r, f"{tag}-after-tap")
+    # Observation for TASK-014 (not pass/fail): does the list keep its scroll position when the
+    # widget redraws after the tap, or jump back to the top?
+    after = items_on_screen(dump_ui())
+    node = after.get(target)
+    if node is not None:
+        kept = f"그대로 ({target}가 같은 자리 근처, y {before_y} → {node.bounds[1]})"
+    else:
+        kept = f"바뀜 ({target}가 화면 밖, 보이는 항목 {', '.join(sorted(after, key=lambda s: int(s[4:]))) or '없음'})"
+    r.note(f"{tag}: 탭 뒤 다시 그릴 때 스크롤 위치 {kept}")
+    node = scroll_to(target)
+    redrawn = node if node is not None and "기록됨" in node.desc else None
+    if node is not None and redrawn is None:
+        end = time.time() + 10
+        while time.time() < end and redrawn is None:
+            time.sleep(1)
+            again = items_on_screen(dump_ui()).get(target)
+            redrawn = again if again is not None and "기록됨" in again.desc else None
+    r.check(f"{case} 탭 뒤 다시 그림", f"{target} 버튼이 완료로 바뀜(TalkBack 문장에 '기록됨', 필요하면 다시 스크롤해 봄)",
+            redrawn.desc if redrawn else (node.desc if node else "찾지 못함"), redrawn is not None)
 
 
 def main() -> int:
@@ -262,6 +308,8 @@ def main() -> int:
     sh("input keyevent KEYCODE_WAKEUP", check=False)
     sh("wm dismiss-keyguard", check=False)
     largest = 2.0 if api >= 34 else 1.3
+    m = re.search(r"(\d+)\s*$", sh("wm density").strip())
+    DENSITY["d"] = int(m.group(1)) / 160 if m else 0.0
     r.note(f"기기: API {api}, {sh('getprop ro.product.model').strip()}, 디버그 APK {args.apk.name}"
            + (f", 커밋 {args.commit}" if args.commit else "") + f". 가장 큰 글자 = {int(largest * 100)}%")
     try:

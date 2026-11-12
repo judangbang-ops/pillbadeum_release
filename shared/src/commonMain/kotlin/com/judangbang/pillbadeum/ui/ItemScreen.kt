@@ -297,7 +297,7 @@ private fun Field(
 
 /** Cells of equal width in rows of [columns] (box.css `.pick`). */
 @Composable
-private fun <T> PickGrid(items: List<T>, columns: Int, cell: @Composable (T, Modifier) -> Unit) {
+internal fun <T> PickGrid(items: List<T>, columns: Int, cell: @Composable (T, Modifier) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         items.chunked(columns).forEach { row ->
             Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

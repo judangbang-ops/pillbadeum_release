@@ -22,7 +22,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.judangbang.pillbadeum.DidITakeCore
 import com.judangbang.pillbadeum.data.PersonEntity
+import com.judangbang.pillbadeum.domain.DoseKind
 import com.judangbang.pillbadeum.domain.DoseSource
+import com.judangbang.pillbadeum.status.JudgeCell
+import com.judangbang.pillbadeum.status.JudgeLoad
 import com.judangbang.pillbadeum.status.Labels
 import com.judangbang.pillbadeum.status.StatusBoard
 import com.judangbang.pillbadeum.usecase.ClockFlagResult
@@ -30,8 +33,10 @@ import com.judangbang.pillbadeum.usecase.RecordResult
 import com.judangbang.pillbadeum.usecase.SaveIntakeResult
 import com.judangbang.pillbadeum.usecase.VoidResult
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
@@ -57,9 +62,9 @@ internal sealed interface Route {
         override val back: Route get() = Home
     }
 
-    /** SCR-007 for one window of an item (TASK-018). */
-    data class Judge(val intakeId: String, val periodKey: String) : Route {
-        override val key get() = "judge:$intakeId:$periodKey"
+    /** SCR-007 for one cell: a schedule version's window with its period key (supplement P-1, TASK-018). */
+    data class Judge(val intakeId: String, val versionId: String, val periodKey: String) : Route {
+        override val key get() = "judge:$intakeId:$versionId:$periodKey"
         override val back: Route get() = Home
     }
 
@@ -86,7 +91,7 @@ internal sealed interface Route {
             val parts = key.split(':')
             return when (parts[0]) {
                 "item" -> Item(parts.getOrNull(1)?.takeIf { it.isNotEmpty() })
-                "judge" -> if (parts.size == 3) Judge(parts[1], parts[2]) else Home
+                "judge" -> if (parts.size == 4) Judge(parts[1], parts[2], parts[3]) else Home
                 "history" -> History
                 "settings" -> Settings
                 "people" -> People
@@ -125,6 +130,8 @@ fun App(
     var message by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var route by rememberSaveable(stateSaver = Route.Saver) { mutableStateOf<Route>(Route.Home) }
+    // Counts the reads, so a screen with data of its own (SCR-007) reads it again after every read of the board.
+    var reads by remember { mutableIntStateOf(0) }
     val zone = TimeZone.currentSystemDefault()
 
     suspend fun reload() {
@@ -132,6 +139,7 @@ fun App(
         people = c.people.list()
         board = c.loadStatusBoard()
         failed = false
+        reads++
     }
 
     suspend fun reloadOrFail() {
@@ -220,7 +228,7 @@ fun App(
                     settings = { go(Route.Settings) },
                     add = { go(Route.Item(null)) },
                     edit = { go(Route.Item(it.intakeId)) },
-                    more = { go(Route.Judge(it.intakeId, it.window.periodKey)) },
+                    more = { go(Route.Judge(it.intakeId, it.scheduleVersionId, it.window.periodKey)) },
                     record = { item ->
                         write { c ->
                             val result = c.record(item.intakeId, DoseSource.APP, item.window.periodKey)
@@ -233,7 +241,7 @@ fun App(
                         if (judgment != null) {
                             write { c ->
                                 message = when (c.voidDose(judgment.id)) {
-                                    VoidResult.Voided -> "${item.name} 기록을 취소했어요. 기록은 무효로 남아요"
+                                    VoidResult.Voided -> Labels.voided(item.name, skip = false)
                                     VoidResult.NotActive -> "이미 취소된 기록이에요"
                                     VoidResult.Locked -> Labels.LOCKED
                                 }
@@ -266,7 +274,7 @@ fun App(
                     cancelClock = { warning ->
                         write { c ->
                             message = when (c.resolveClockFlag.cancel(warning.judgment.id)) {
-                                ClockFlagResult.Resolved -> "${warning.intakeName} 기록을 취소했어요. 기록은 무효로 남아요"
+                                ClockFlagResult.Resolved -> Labels.voided(warning.intakeName, skip = warning.judgment.kind == DoseKind.SKIPPED)
                                 ClockFlagResult.NotFlagged -> null
                                 ClockFlagResult.Locked -> Labels.LOCKED
                             }
@@ -285,7 +293,7 @@ fun App(
                     current.intakeId != null && editing == null -> LaunchedEffect(current) {
                         // SCR-006#gone: archived or deleted meanwhile.
                         go(Route.Home)
-                        message = "이 항목은 보관됐거나 지워졌어요"
+                        message = Labels.GONE
                     }
                     else -> ItemScreen(
                         editing = editing,
@@ -314,7 +322,7 @@ fun App(
                                     }
                                     SaveIntakeResult.Gone -> {
                                         go(Route.Home)
-                                        message = "이 항목은 보관됐거나 지워졌어요"
+                                        message = Labels.GONE
                                         afterWrite()
                                     }
                                 }
@@ -332,8 +340,147 @@ fun App(
                 }
             }
 
-            // Filled by TASK-018 (SCR-007), TASK-019 (SCR-008), TASK-020 (SCR-009) and TASK-021 (SCR-010).
-            is Route.Judge -> NotYet("오늘 기록") { go(Route.Home) }
+            is Route.Judge -> key(current.key) {
+                var cell by remember { mutableStateOf<JudgeCell?>(null) }
+                var cellFailed by remember { mutableStateOf(false) }
+                var attempts by remember { mutableIntStateOf(0) }
+                // When this screen first read its cell. A screen opened on the current window closes when that window
+                // ends (SCR-007#stale), even across a recreated activity.
+                var openedAt by rememberSaveable { mutableStateOf<Long?>(null) }
+
+                fun openedCurrent(shown: JudgeCell): Boolean =
+                    openedAt?.let { Instant.fromEpochMilliseconds(it) in shown.window } == true
+
+                LaunchedEffect(core, reads, attempts) {
+                    val c = core ?: return@LaunchedEffect
+                    val result = try {
+                        c.loadJudgeCell(current.intakeId, current.versionId, current.periodKey)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        cellFailed = true
+                        return@LaunchedEffect
+                    }
+                    cellFailed = false
+                    when (result) {
+                        JudgeLoad.Gone -> {
+                            go(Route.Home)
+                            message = Labels.GONE
+                        }
+                        // A schedule change gave the window to another version (P-8): nothing left to fix here.
+                        JudgeLoad.Missing -> go(Route.Home)
+                        is JudgeLoad.Ready -> {
+                            val read = result.cell
+                            if (openedAt == null) openedAt = read.now.toEpochMilliseconds()
+                            if (openedCurrent(read) && !read.current) {
+                                go(Route.Home)
+                                message = Labels.DAY_CHANGED
+                            } else {
+                                cell = read
+                            }
+                        }
+                    }
+                }
+
+                /** Applies what a write led to (screens.md SCR-007 tables). */
+                suspend fun settle(after: JudgeAfter, shown: JudgeCell, c: DidITakeCore) {
+                    when (after) {
+                        is JudgeAfter.Stay -> {
+                            message = after.message
+                            if (after.wrote) afterWrite() else reloadOrFail()
+                        }
+                        is JudgeAfter.Move -> {
+                            message = after.message
+                            route = Route.Judge(shown.intakeId, after.versionId, after.periodKey)
+                            afterWrite()
+                        }
+                        is JudgeAfter.Home -> {
+                            go(Route.Home)
+                            message = after.message
+                            afterWrite()
+                        }
+                        JudgeAfter.Stale -> {
+                            if (openedCurrent(shown) && c.clock.now() >= shown.window.end) {
+                                go(Route.Home)
+                                message = Labels.STALE
+                            } else {
+                                message = Labels.RELOADED
+                            }
+                            reloadOrFail()
+                        }
+                    }
+                }
+
+                /** One write from this screen; a screen whose window ended meanwhile writes nothing (SCR-007#stale). */
+                fun judge(block: suspend (DidITakeCore, JudgeCell) -> JudgeAfter) {
+                    val shown = cell ?: return
+                    write { c ->
+                        val after = if (openedCurrent(shown) && c.clock.now() >= shown.window.end) JudgeAfter.Stale else block(c, shown)
+                        settle(after, shown, c)
+                    }
+                }
+
+                val shown = cell
+                JudgeScreen(
+                    state = when {
+                        shown != null -> JudgeState.Ready(shown)
+                        cellFailed || failed -> JudgeState.Failed
+                        else -> JudgeState.Loading
+                    },
+                    message = message,
+                    zone = zone,
+                    clock = { (core?.clock ?: Clock.System).now() },
+                    actions = JudgeActions(
+                        back = { go(Route.Home) },
+                        retry = {
+                            failed = false
+                            retries++
+                            attempts++
+                        },
+                        recordNow = {
+                            judge { c, x -> JudgeOutcomes.of(c.record(x.intakeId, DoseSource.APP, x.window.periodKey), c.clock.now(), zone) }
+                        },
+                        recordAt = { at ->
+                            judge { c, x -> JudgeOutcomes.of(c.recordIn(x, DoseKind.TAKEN, takenAt = at), x, edit = false, c.clock.now(), zone) }
+                        },
+                        skip = {
+                            judge { c, x -> JudgeOutcomes.of(c.recordIn(x, DoseKind.SKIPPED), x, edit = false, c.clock.now(), zone) }
+                        },
+                        editTime = { at ->
+                            judge { c, x ->
+                                val dose = x.judgment ?: return@judge JudgeAfter.Stale
+                                JudgeOutcomes.of(c.editTime(x, dose.id, at), x, edit = true, c.clock.now(), zone)
+                            }
+                        },
+                        takeInstead = { at ->
+                            judge { c, x ->
+                                val skip = x.judgment ?: return@judge JudgeAfter.Stale
+                                JudgeOutcomes.of(c.recordIn(x, DoseKind.TAKEN, takenAt = at, replacing = skip.id), x, edit = false, c.clock.now(), zone)
+                            }
+                        },
+                        void = {
+                            judge { c, x ->
+                                val judgment = x.judgment ?: return@judge JudgeAfter.Stale
+                                JudgeOutcomes.of(c.voidDose(judgment.id), x)
+                            }
+                        },
+                        keepClock = {
+                            judge { c, x ->
+                                val judgment = x.judgment ?: return@judge JudgeAfter.Stale
+                                JudgeOutcomes.ofKeep(c.resolveClockFlag.keep(judgment.id))
+                            }
+                        },
+                        cancelClock = {
+                            judge { c, x ->
+                                val judgment = x.judgment ?: return@judge JudgeAfter.Stale
+                                JudgeOutcomes.ofCancel(c.resolveClockFlag.cancel(judgment.id), x)
+                            }
+                        },
+                    ),
+                )
+            }
+
+            // Filled by TASK-019 (SCR-008), TASK-020 (SCR-009) and TASK-021 (SCR-010).
             Route.History -> NotYet("지난 기록") { go(Route.Home) }
             Route.Settings -> NotYet("설정") { go(Route.Home) }
             Route.People -> NotYet("대상자") { go(Route.Settings) }

@@ -106,11 +106,13 @@ internal fun Words(
     modifier: Modifier = Modifier,
     maxLines: Int = Int.MAX_VALUE,
     heading: Boolean = false,
+    /** What TalkBack reads instead of [text] (`11월 11일 수요일 04:00부터 …` for `11/11 (수) 04:00 ~ …`). */
+    spoken: String? = null,
 ) {
     BasicText(
         text = WidgetLayout.keepWords(text),
         modifier = modifier.clearAndSetSemantics {
-            this.text = AnnotatedString(text)
+            if (spoken != null) contentDescription = spoken else this.text = AnnotatedString(text)
             if (heading) heading()
         },
         style = style,
@@ -190,26 +192,29 @@ internal data class ButtonLook(
     }
 }
 
+/** A button; when not [enabled] it is drawn sunken and muted and does nothing (SCR-007's `[이 시각으로 기록]` before a time). */
 @Composable
 internal fun ActionButton(
     label: String,
     look: ButtonLook,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     icon: (@Composable () -> Unit)? = null,
 ) {
-    var m = modifier.heightIn(min = look.minHeight)
-    if (look.wide) m = m.fillMaxWidth()
+    val shown = if (enabled) look else look.copy(fill = Ui.Sunken, ink = Ui.Muted, border = null)
+    var m = modifier.heightIn(min = shown.minHeight)
+    if (shown.wide) m = m.fillMaxWidth()
     m = m.clip(Ui.ButtonShape)
-    look.fill?.let { m = m.background(it) }
-    look.border?.let { m = m.border(1.5.dp, it, Ui.ButtonShape) }
+    shown.fill?.let { m = m.background(it) }
+    shown.border?.let { m = m.border(1.5.dp, it, Ui.ButtonShape) }
     Row(
-        m.clickable(role = Role.Button, onClick = onClick).padding(horizontal = 16.dp, vertical = 6.dp),
+        m.clickable(enabled = enabled, role = Role.Button, onClick = onClick).padding(horizontal = 16.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         icon?.invoke()
-        Words(label, Ui.type(16, look.weight, look.ink, lineHeight = 1.25f, center = true))
+        Words(label, Ui.type(16, shown.weight, shown.ink, lineHeight = 1.25f, center = true))
     }
 }
 

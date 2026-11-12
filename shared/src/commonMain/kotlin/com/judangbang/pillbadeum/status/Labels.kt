@@ -4,6 +4,7 @@ import com.judangbang.pillbadeum.data.DoseRecordEntity
 import com.judangbang.pillbadeum.domain.DoseKind
 import com.judangbang.pillbadeum.domain.ScheduleRule
 import com.judangbang.pillbadeum.domain.SlotLabel
+import com.judangbang.pillbadeum.usecase.InvalidTimeReason
 import com.judangbang.pillbadeum.usecase.RecordResult
 import kotlin.time.Instant
 import kotlinx.datetime.DateTimeUnit
@@ -394,6 +395,161 @@ object Labels {
         RecordResult.Gone -> null
         RecordResult.Locked -> LOCKED
         is RecordResult.Error -> ERROR
+    }
+
+    // -----------------------------------------------------------------------------------------------------------------
+    // SCR-007 판정 고치기 (TASK-018, 09 Judge and JudgeTaken, TASK-044 drawings). A title's date is the window's first
+    // day; times are on the phone's clock (REQ-082). Date, weekday and time are joined with [NBSP], so `11/11 (수) 04:00`
+    // never breaks inside (TASK-044).
+
+    /** SCR-006#gone and SCR-007#gone. */
+    const val GONE: String = "이 항목은 보관됐거나 지워졌어요"
+
+    /** SCR-007#stale: the screen was opened on the current window and that window ended; it closes to SCR-004. */
+    const val DAY_CHANGED: String = "날짜가 바뀌었어요"
+
+    /** SCR-007#locked, the line under the band (proposal, TASK-044). */
+    const val LOCKED_NOTE: String = "하루 시작 시각이나 기준 시간대를 바꾸기 전에 끝난 날이에요."
+
+    /** A time edit that saved (Claude's wording). */
+    const val TIME_EDITED: String = "먹은 시각을 고쳤어요"
+
+    /** A time edit to the stored time (`WindowWriteResult.Unchanged`, Claude's wording). */
+    const val UNCHANGED: String = "바뀐 것이 없어요"
+
+    /** `VoidResult.NotActive`: voided elsewhere meanwhile. */
+    const val ALREADY_VOIDED: String = "이미 취소된 기록이에요"
+
+    /** A past cell's write found the screen out of date (the settings changed after it was read); it reads again. */
+    const val RELOADED: String = "화면을 새로 불러왔어요. 다시 눌러 주세요"
+
+    /** `오늘 기록` for the current window; `11/11 (수) 기록 고치기`, weekly `11/02 (월) 주 기록 고치기` (TASK-044). */
+    fun judgeTitle(cell: JudgeCell): String = when {
+        cell.current -> "오늘 기록"
+        cell.rule is ScheduleRule.Weekly -> "${dateKept(cell.day)} 주 기록${NBSP}고치기"
+        else -> "${dateKept(cell.day)} 기록${NBSP}고치기"
+    }
+
+    /** `매일 · 저녁`, `매일`, `주 1회 · 월요일` (09 Judge). TalkBack reads [schedule] instead. */
+    fun judgeCycle(rule: ScheduleRule, slot: SlotLabel?): String = when (rule) {
+        ScheduleRule.Daily -> if (slot != null) "매일 · ${slot(slot)}" else "매일"
+        is ScheduleRule.Weekly -> "주 1회 · ${weekdayName(rule.anchor)}"
+    }
+
+    /**
+     * The window: daily `11/11 (수) 04:00 ~ 11/12 (목) 04:00` on the phone's clock, weekly its days `11/02 (월) ~ 11/08 (일)`.
+     * A locked day shows only its date `11/11 (수)`: its hours were set by the day start before the change, which is not
+     * kept, so today's day start would draw hours the day never had.
+     */
+    fun judgeWindow(cell: JudgeCell, zone: TimeZone): String = when (cell.rule) {
+        ScheduleRule.Daily -> if (cell.locked) dateKept(cell.day) else "${dateTime(cell.window.start, zone)} ~ ${dateTime(cell.window.end, zone)}"
+        is ScheduleRule.Weekly -> "${dateKept(cell.day)} ~ ${dateKept(cell.day.plus(6, DateTimeUnit.DAY))}"
+    }
+
+    /** What TalkBack reads for [judgeWindow]: `11월 11일 수요일 04:00부터 11월 12일 목요일 04:00까지`. */
+    fun judgeWindowSpoken(cell: JudgeCell, zone: TimeZone): String = when (cell.rule) {
+        ScheduleRule.Daily -> if (cell.locked) longDate(cell.day) else {
+            val start = cell.window.start.toLocalDateTime(zone)
+            val end = cell.window.end.toLocalDateTime(zone)
+            "${longDate(start.date)} ${hhmm(start)}부터 ${longDate(end.date)} ${hhmm(end)}까지"
+        }
+        is ScheduleRule.Weekly -> "${longDate(cell.day)}부터 ${longDate(cell.day.plus(6, DateTimeUnit.DAY))}까지"
+    }
+
+    /**
+     * The judgment under the window (09 Judge, TASK-044): `아직 기록이 없어요` in the current window, `기록이 없어요` in a past
+     * one, `08:10에 먹음`, `건너뜀`. A skip shows its time only when it was pressed in its own window, as the widget and
+     * the first screen do: a past window's skip stores the window start, which is not a time anyone chose (P-3). Its input
+     * time tells them apart even after the day start changed.
+     */
+    fun judgeStatus(cell: JudgeCell, zone: TimeZone): String {
+        val judgment = cell.judgment ?: return if (cell.current) "아직 기록이 없어요" else "기록이 없어요"
+        val at = Instant.fromEpochMilliseconds(judgment.takenAt)
+        return when (judgment.kind) {
+            DoseKind.TAKEN -> "${cellTime(cell, at, zone)}에 먹음"
+            DoseKind.SKIPPED -> if (judgment.takenAt != judgment.recordedAt) SKIPPED else "${cellTime(cell, at, zone)}에 건너뜀"
+        }
+    }
+
+    /**
+     * A time in [cell]: `08:10` on the window's first day; on another day, and always for a weekly item, with its date
+     * `11/12 (목) 01:30` (Claude's choice: 09 draws only a first-day time).
+     */
+    fun cellTime(cell: JudgeCell, at: Instant, zone: TimeZone): String {
+        val local = at.toLocalDateTime(zone)
+        val first = cell.window.start.toLocalDateTime(zone).date
+        return if (cell.rule is ScheduleRule.Daily && local.date == first) hhmm(local) else dateTime(at, zone)
+    }
+
+    /** The note under the buttons (09 Judge and JudgeTaken, TASK-044); the current window's skip note is Claude's. */
+    fun judgeNote(cell: JudgeCell, zone: TimeZone): String {
+        val span = "${dateTime(cell.window.start, zone)}부터 ${dateTime(cell.window.end, zone)} 전까지"
+        return when {
+            cell.locked -> LOCKED_NOTE
+            cell.judgment == null && cell.current ->
+                "먹은 시각은 ${nearTime(cell.window.start, cell.now, zone)}부터 지금(${time(cell.now, zone)})까지 고를 수 있어요. " +
+                    "다른 날은 지난 기록에서 열어요."
+            cell.judgment == null -> "먹은 시각은 ${span} 고를 수 있어요."
+            cell.isTaken -> "기록을 취소해도 지워지지 않고 무효로 남아요."
+            cell.cut -> "건너뜀을 취소해도 지워지지 않고 무효로 남아요."
+            cell.current -> "먹었어로 바꾸면 지금 시각으로 기록해요."
+            else -> "먹었어로 바꾸면 먹은 시각을 먼저 골라요. ${span}예요."
+        }
+    }
+
+    /** The picker's note: `11/11 (수) 04:00부터 11/12 (목) 03:55까지 고를 수 있어요.`; a time edit says it can move the dose. */
+    fun pickNote(range: PickRange, edit: Boolean): String {
+        val first = range.first ?: return "고를 수 있는 시각이 아직 없어요."
+        val last = range.last ?: first
+        val span = "${dateTime(first, range.zone)}부터 ${dateTime(last, range.zone)}까지 고를 수 있어요."
+        return if (edit) "$span 다른 날의 시각이면 그날 기록으로 옮겨요." else span
+    }
+
+    /** The picked time above the confirm button: `11/11 (수) 21:40`. */
+    fun picked(at: Instant, zone: TimeZone): String = dateTime(at, zone)
+
+    /**
+     * SCR-007#already: `이미 기록됨 (08:02)`, a skip `이미 건너뜀으로 기록됨`. [dated] for a time edit stopped by another
+     * judgment, with that judgment's day: `11/11에 이미 기록됨 (21:30)` (REQ-031).
+     */
+    fun judgeAlready(existing: DoseRecordEntity, dated: Boolean, now: Instant, zone: TimeZone): String {
+        val at = Instant.fromEpochMilliseconds(existing.takenAt)
+        val day = if (dated) runCatching { LocalDate.parse(existing.periodKey) }.getOrNull()?.let { "${monthDay(it)}에 " } ?: "" else ""
+        return when (existing.kind) {
+            DoseKind.TAKEN -> "${day}이미 기록됨 (${if (dated) time(at, zone) else stamp(at, now, zone)})"
+            DoseKind.SKIPPED -> "${day}이미 건너뜀으로 기록됨"
+        }
+    }
+
+    /** A picked time the record rules refuse (REQ-032); the picker offers none of these, so they come from a race. */
+    fun invalidTime(reason: InvalidTimeReason): String = when (reason) {
+        InvalidTimeReason.FUTURE -> "지금보다 뒤 시각은 고를 수 없어요"
+        InvalidTimeReason.BEFORE_SCHEDULE -> "항목을 등록하기 전 시각은 고를 수 없어요"
+        InvalidTimeReason.OUTSIDE_WINDOW, InvalidTimeReason.NOT_STARTED -> "고를 수 없는 시각이에요"
+    }
+
+    /** After `[기록 취소]` or `[건너뜀 취소]`: `아침약 기록을 취소했어요. 기록은 무효로 남아요` (SCR-004, SCR-007). */
+    fun voided(name: String, skip: Boolean): String =
+        "$name ${if (skip) "건너뜀을" else "기록을"} 취소했어요. 기록은 무효로 남아요"
+
+    /** `11/11 (수)` with a no-break space before the weekday. */
+    private fun dateKept(date: LocalDate): String = "${monthDay(date)}$NBSP(${weekday(date.dayOfWeek)})"
+
+    /** `11/11 (수) 04:00`, kept on one line. */
+    private fun dateTime(at: Instant, zone: TimeZone): String {
+        val local = at.toLocalDateTime(zone)
+        return "${dateKept(local.date)}$NBSP${hhmm(local)}"
+    }
+
+    /** `오늘 04:00`, `어제 04:00`, else `11/09 (월) 04:00`, seen on [now]'s calendar date. */
+    private fun nearTime(at: Instant, now: Instant, zone: TimeZone): String {
+        val local = at.toLocalDateTime(zone)
+        val today = now.toLocalDateTime(zone).date
+        return when (local.date) {
+            today -> "오늘$NBSP${hhmm(local)}"
+            today.minus(1, DateTimeUnit.DAY) -> "어제$NBSP${hhmm(local)}"
+            else -> dateTime(at, zone)
+        }
     }
 
     private fun hhmm(local: LocalDateTime): String =

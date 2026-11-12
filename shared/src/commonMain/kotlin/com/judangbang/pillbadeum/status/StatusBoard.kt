@@ -79,6 +79,11 @@ data class IntakeStatus(
     val slotLabel: SlotLabel?,
     val person: PersonEntity,
     val rule: ScheduleRule,
+    /**
+     * The schedule version in effect now, whose window [window] is. With the period key it names the cell `[⋯]` opens on
+     * SCR-007 (supplement P-1, TASK-018).
+     */
+    val scheduleVersionId: String,
     /** Current window; its period key is the one a widget button is rendered with. */
     val window: Window,
     /** Active judgment of [window], null while pending. */
@@ -208,6 +213,7 @@ class LoadStatusBoard(
                 slotLabel = intake.slotLabel,
                 person = person,
                 rule = rule,
+                scheduleVersionId = schedule.id,
                 window = window,
                 judgment = judgment,
                 lastBefore = records.findLastActiveBefore(intake.id, window.start.toEpochMilliseconds()),

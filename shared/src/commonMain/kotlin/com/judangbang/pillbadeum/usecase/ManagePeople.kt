@@ -162,9 +162,24 @@ object PersonColors {
     }
 
     /** The token palette of a stored color. A color from neither list gets the first palette. */
-    fun palette(color: String): PersonPalette {
+    fun palette(color: String): PersonPalette = Tokens.PEOPLE[index(color)]
+
+    /** Where a stored color sits in [PALETTE] (0~5): its own place, an old color's place, else 0. */
+    fun index(color: String): Int {
         val index = PALETTE.indexOfFirst { it.equals(color, ignoreCase = true) }
             .takeIf { it >= 0 } ?: BEFORE_TOKENS.indexOfFirst { it.equals(color, ignoreCase = true) }
-        return Tokens.PEOPLE[index.coerceAtLeast(0)]
+        return index.coerceAtLeast(0)
+    }
+
+    /** The [PALETTE] color a stored color is drawn with, so an old color still marks its swatch as chosen. */
+    fun canonical(color: String): String = PALETTE[index(color)]
+
+    /**
+     * The color a new person starts with (09 PersonAdd: 나 파랑 and 엄마 주황 leave 초록 chosen): the first color nobody in
+     * [used] has, or with all six taken the first of the least used. The same color can still be picked (screens.md SCR-010).
+     */
+    fun leastUsed(used: List<String>): String {
+        val counts = used.groupingBy(::index).eachCount()
+        return PALETTE[PALETTE.indices.minBy { counts[it] ?: 0 }]
     }
 }

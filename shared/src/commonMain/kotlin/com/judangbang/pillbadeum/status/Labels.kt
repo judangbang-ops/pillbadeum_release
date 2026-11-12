@@ -1,11 +1,13 @@
 package com.judangbang.pillbadeum.status
 
 import com.judangbang.pillbadeum.data.DoseRecordEntity
+import com.judangbang.pillbadeum.data.PersonEntity
 import com.judangbang.pillbadeum.domain.DoseKind
 import com.judangbang.pillbadeum.domain.ReminderSettings
 import com.judangbang.pillbadeum.domain.ScheduleRule
 import com.judangbang.pillbadeum.domain.SlotLabel
 import com.judangbang.pillbadeum.usecase.InvalidTimeReason
+import com.judangbang.pillbadeum.usecase.PersonColors
 import com.judangbang.pillbadeum.usecase.RecordResult
 import kotlin.time.Duration
 import kotlin.time.Instant
@@ -684,6 +686,67 @@ object Labels {
 
     /** No browser could open the privacy policy: its address instead (SPEC-036). */
     fun noBrowser(url: String): String = "브라우저를 열 수 없어요. 주소: $url"
+
+    // SCR-010 대상자 관리 (TASK-021, 09 People and PersonAdd) --------------------------------------------------------
+
+    /** Under the bar of the people list (09 People). */
+    const val PEOPLE_NOTE: String = "사람마다 색이 있어요. 위젯과 앱에서 이 색으로 누구 약인지 알아봐요."
+
+    /** The people could not be read (Claude's design, as [SETTINGS_LOAD_FAILED]). */
+    const val PEOPLE_LOAD_FAILED: String = "대상자를 불러오지 못했어요"
+
+    /** A person's line in the list: `약 2개`; under `보관됨` `약 1개 · 지난 기록은 남아요` (09 People). */
+    fun personItems(count: Int, archived: Boolean): String = if (archived) "약 ${count}개 · 지난 기록은 남아요" else "약 ${count}개"
+
+    /** The six person colors by the names 09 PersonAdd reads them by, in [PersonColors.PALETTE] order. */
+    val COLOR_NAMES: List<String> = listOf("파랑", "주황", "초록", "보라", "장미", "청록")
+
+    /** A stored person color by name; an old color by the name of the token it is drawn with. */
+    fun colorName(color: String): String = COLOR_NAMES[PersonColors.index(color)]
+
+    /**
+     * Under the colors of the person form (09 PersonAdd): the colors [others] use, each with who uses it, in the order of
+     * the people, `이미 쓰는 색: 파랑(나), 주황(엄마). 같은 색도 고를 수 있어요.`; null when nobody else is there. 09 writes
+     * `파랑·주황은 나·엄마가 쓰고 있어요.`; its particle would read `나가` with 나 alone (Claude's wording, TASK-021).
+     */
+    fun colorsInUse(others: List<PersonEntity>): String? {
+        if (others.isEmpty()) return null
+        val byColor = others.groupBy { PersonColors.index(it.color) }
+        val used = byColor.entries.joinToString(", ") { (index, people) -> "${COLOR_NAMES[index]}(${people.joinToString("·") { it.name }})" }
+        return "이미 쓰는 색: $used. 같은 색도 고를 수 있어요."
+    }
+
+    /**
+     * The one-phone advice of the person form (REQ-074, 09 PersonAdd), with the name being typed: `한 약은 한 휴대폰에서
+     * 기록해 주세요. 아빠 약을 아빠 휴대폰에서도 기록하면 두 기록이 서로 보이지 않아요.`. Before a name is typed it says `같은 약을
+     * 두 휴대폰에서 기록하면`.
+     */
+    fun onePhoneFor(name: String): String {
+        val who = name.trim()
+        val how = if (who.isEmpty()) "같은 약을 두 휴대폰에서 기록하면" else "$who 약을 $who 휴대폰에서도 기록하면"
+        return "$ONE_PHONE. $how 두 기록이 서로 보이지 않아요."
+    }
+
+    /** The question before archiving a person (screens.md SCR-010). */
+    fun archivePersonQuestion(name: String): String = "${withObject(name)} 보관할까요?"
+
+    /** `엄마의 항목 3개가 위젯·알림에서 빠져요. 지난 기록은 남아요` (screens.md SCR-010), or that none leaves. */
+    fun archivePersonNote(name: String, items: Int): String =
+        if (items > 0) "${name}의 항목 ${items}개가 위젯·알림에서 빠져요. 지난 기록은 남아요" else "위젯·알림에서 빠지는 항목은 없어요. 지난 기록은 남아요"
+
+    fun personArchived(name: String): String = "${withObject(name)} 보관했어요. 지난 기록은 남아요"
+
+    fun personRestored(name: String): String = "${withObject(name)} 되살렸어요"
+
+    /** Under the form of the last active person, in place of `[보관]` (REQ-093). */
+    const val LAST_PERSON: String = "대상자가 한 명뿐이라 보관할 수 없어요"
+
+    /** The person was archived meanwhile. */
+    const val PERSON_GONE: String = "이 대상자는 이미 보관됐어요"
+
+    const val ARCHIVE_FAILED: String = "보관하지 못했어요. 다시 눌러 주세요"
+
+    const val RESTORE_FAILED: String = "되살리지 못했어요. 다시 눌러 주세요"
 
     /** A zone's offset now, for the base-zone list: `UTC+09:00`, `UTC-03:00`, `UTC+05:30`. */
     fun utcOffset(zone: TimeZone, at: Instant): String {

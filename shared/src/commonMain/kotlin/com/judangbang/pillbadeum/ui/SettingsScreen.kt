@@ -446,7 +446,7 @@ private fun EndOrBelow(start: @Composable () -> Unit, end: @Composable () -> Uni
 
 /** The board's chevron (`M9 5l7 7-7 7`, 20 dp, muted), turned down while its row is open. */
 @Composable
-private fun Chevron(degrees: Float) {
+internal fun Chevron(degrees: Float) {
     Canvas(Modifier.size(20.dp).rotate(degrees)) {
         val u = size.width / 24f
         val path = Path().apply {

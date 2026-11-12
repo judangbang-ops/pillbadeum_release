@@ -2,7 +2,6 @@ package com.judangbang.pillbadeum.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -29,11 +28,13 @@ import com.judangbang.pillbadeum.status.HistoryMonth
 import com.judangbang.pillbadeum.status.JudgeCell
 import com.judangbang.pillbadeum.status.JudgeLoad
 import com.judangbang.pillbadeum.status.Labels
+import com.judangbang.pillbadeum.status.PeopleView
 import com.judangbang.pillbadeum.status.SettingsView
 import com.judangbang.pillbadeum.status.StatusBoard
 import com.judangbang.pillbadeum.status.showsPeople
 import com.judangbang.pillbadeum.usecase.ClockFlagResult
 import com.judangbang.pillbadeum.usecase.DeleteIntakeResult
+import com.judangbang.pillbadeum.usecase.PersonChange
 import com.judangbang.pillbadeum.usecase.RecordResult
 import com.judangbang.pillbadeum.usecase.SaveIntakeResult
 import com.judangbang.pillbadeum.usecase.SaveReminderSettingsResult
@@ -51,8 +52,9 @@ import kotlinx.datetime.TimeZone
 
 /**
  * The app's screens, one at a time (07 sitemap). [key] is what is saved when the screen is recreated (BUG-003).
- * [back] is where system back goes (REQ-094, SPEC-021): every screen to the first, the people screen to settings,
- * SCR-007 opened from SCR-008 back to that month (TASK-019), and null on the first screen, where back closes the app.
+ * [back] is where system back goes (REQ-094, SPEC-021): every screen to the first, the people screen to settings and its
+ * person form to the people screen (TASK-021), SCR-007 opened from SCR-008 back to that month (TASK-019), and null on the
+ * first screen, where back closes the app.
  */
 internal sealed interface Route {
     val key: String
@@ -97,6 +99,12 @@ internal sealed interface Route {
         override val back: Route = Settings
     }
 
+    /** SCR-010's form for one person, or a new one with [personId] null; back returns to the list (TASK-021). */
+    data class Person(val personId: String?) : Route {
+        override val key get() = "person:${personId ?: ""}"
+        override val back: Route get() = People
+    }
+
     companion object {
         fun parse(key: String): Route {
             if ('@' in key) {
@@ -115,6 +123,7 @@ internal sealed interface Route {
                     ?: Home
                 "settings" -> Settings
                 "people" -> People
+                "person" -> Person(parts.getOrNull(1)?.takeIf { it.isNotEmpty() })
                 else -> Home
             }
         }
@@ -168,6 +177,10 @@ fun App(
     var phoneState by remember { mutableStateOf<PhoneState?>(null) }
     var settingsFailed by remember { mutableStateOf(false) }
     var settingsAttempts by remember { mutableIntStateOf(0) }
+    // SCR-010 (TASK-021): the people last read. They stay while a person's form is open on top, so back shows them at once.
+    var peopleView by remember { mutableStateOf<PeopleView?>(null) }
+    var peopleFailed by remember { mutableStateOf(false) }
+    var peopleAttempts by remember { mutableIntStateOf(0) }
     val zone = TimeZone.currentSystemDefault()
 
     suspend fun reload() {
@@ -236,6 +249,25 @@ fun App(
         settings = null
         settingsFailed = false
         go(Route.Settings)
+    }
+
+    /** SCR-010 from the settings: read anew. */
+    fun openPeople() {
+        peopleView = null
+        peopleFailed = false
+        go(Route.People)
+    }
+
+    /** Reads SCR-010's people; a failure shows `#error` only while nothing has been read. */
+    suspend fun readPeople(c: DidITakeCore) {
+        try {
+            peopleView = c.loadPeople()
+            peopleFailed = false
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            peopleFailed = true
+        }
     }
 
     LaunchedEffect(refreshKey, retries) {
@@ -660,7 +692,7 @@ fun App(
                                 }
                             }
                         },
-                        people = { go(Route.People) },
+                        people = { openPeople() },
                         delete = { item ->
                             write(failure = Labels.DELETE_FAILED) { c ->
                                 message = when (c.deleteArchivedIntake(item.intakeId)) {
@@ -677,8 +709,105 @@ fun App(
                 )
             }
 
-            // Filled by TASK-021 (SCR-010).
-            Route.People -> NotYet("대상자") { go(Route.Settings) }
+            Route.People -> {
+                // Read on opening; a write here reads them again itself. Nothing else changes people (no widget does).
+                LaunchedEffect(core, peopleAttempts) { core?.let { readPeople(it) } }
+                val shown = peopleView
+                PeopleScreen(
+                    state = when {
+                        shown != null -> PeopleState.Ready(shown)
+                        peopleFailed || (failed && core == null) -> PeopleState.Failed
+                        else -> PeopleState.Loading
+                    },
+                    message = message,
+                    actions = PeopleActions(
+                        back = { go(Route.Settings) },
+                        retry = {
+                            failed = false
+                            peopleFailed = false
+                            retries++
+                            peopleAttempts++
+                        },
+                        add = { go(Route.Person(null)) },
+                        edit = { go(Route.Person(it.person.id)) },
+                        restore = { row ->
+                            write(failure = Labels.RESTORE_FAILED) { c ->
+                                val restored = c.people.restore(row.person.id) == PersonChange.Saved
+                                // The widgets and reminders first; the list shows the result once the write is over.
+                                afterWrite()
+                                readPeople(c)
+                                // Restored already (another tap): the list is only read again (screens.md SCR-010).
+                                if (restored) message = Labels.personRestored(row.person.name)
+                            }
+                        },
+                    ),
+                )
+            }
+
+            is Route.Person -> key(current.key) {
+                LaunchedEffect(core, peopleAttempts) { core?.let { readPeople(it) } }
+                val view = peopleView
+                val editing = current.personId?.let { id -> view?.active?.firstOrNull { it.person.id == id } }
+                when {
+                    view == null && (peopleFailed || (failed && core == null)) -> PeopleScreen(
+                        PeopleState.Failed,
+                        message,
+                        PeopleActions(
+                            back = { go(Route.People) },
+                            retry = {
+                                failed = false
+                                peopleFailed = false
+                                retries++
+                                peopleAttempts++
+                            },
+                            add = {},
+                            edit = {},
+                            restore = {},
+                        ),
+                    )
+                    view == null -> Loading()
+                    current.personId != null && editing == null -> LaunchedEffect(current) {
+                        // Archived meanwhile, or an old saved screen.
+                        go(Route.People)
+                        message = Labels.PERSON_GONE
+                    }
+                    else -> PersonFormScreen(
+                        editing = editing,
+                        view = view,
+                        message = message,
+                        onClose = { go(Route.People) },
+                        // The form stays until the write is over (widgets and reminders included), then the list shows it.
+                        onSave = { name, color ->
+                            write(failure = Labels.SAVE_FAILED) { c ->
+                                val id = current.personId
+                                val gone = if (id == null) {
+                                    c.people.add(name, color)
+                                    false
+                                } else {
+                                    c.people.update(id, name, color) != PersonChange.Saved
+                                }
+                                afterWrite()
+                                readPeople(c)
+                                go(Route.People)
+                                if (gone) message = Labels.PERSON_GONE
+                            }
+                        },
+                        onArchive = { row ->
+                            write(failure = Labels.ARCHIVE_FAILED) { c ->
+                                val result = c.people.archive(row.person.id)
+                                afterWrite()
+                                readPeople(c)
+                                go(Route.People)
+                                message = when (result) {
+                                    PersonChange.Saved -> Labels.personArchived(row.person.name)
+                                    PersonChange.LastPerson -> Labels.LAST_PERSON
+                                    PersonChange.Gone -> Labels.PERSON_GONE
+                                }
+                            }
+                        },
+                    )
+                }
+            }
         }
     }
 }
@@ -708,13 +837,4 @@ private fun homeOnlyRetry(retry: () -> Unit) = HomeActions(
 @Composable
 private fun Loading() {
     Words(Labels.LOADING, Ui.type(16, color = Ui.Muted), Modifier.padding(horizontal = 20.dp, vertical = 16.dp))
-}
-
-/** A screen that a later task builds; back and its button return. */
-@Composable
-private fun NotYet(title: String, onBack: () -> Unit) {
-    Column(Modifier.fillMaxSize()) {
-        TopBar(title, navigation = { BarIconButton("뒤로", close = false, onBack) })
-        Words("준비 중인 화면이에요.", Ui.type(16, color = Ui.Muted), Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
-    }
 }

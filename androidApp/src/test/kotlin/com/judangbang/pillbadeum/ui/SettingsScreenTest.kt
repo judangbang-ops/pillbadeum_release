@@ -439,7 +439,7 @@ class SettingsScreenTest {
     fun back_goes_from_people_to_settings_and_from_settings_to_the_first_screen() {
         val activity = openSettings()
         row("대상자 관리, 1명").performClick()
-        compose.waitUntil(10_000) { compose.onAllNodesWithText("준비 중인 화면이에요.").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText(Labels.PEOPLE_NOTE).fetchSemanticsNodes().isNotEmpty() }
         activity.onBackPressedDispatcher.onBackPressed()
         waitForRow("대상자 관리, 1명")
         activity.onBackPressedDispatcher.onBackPressed()

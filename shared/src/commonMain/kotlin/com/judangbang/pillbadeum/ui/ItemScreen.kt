@@ -53,6 +53,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.judangbang.pillbadeum.data.PersonEntity
@@ -89,7 +90,8 @@ internal fun ItemScreen(
     var slotName by rememberSaveable { mutableStateOf(editing?.slotLabel?.name ?: "") }
     var addingPerson by rememberSaveable { mutableStateOf(false) }
     var newPersonName by rememberSaveable { mutableStateOf("") }
-    var newPersonColor by rememberSaveable { mutableStateOf(PersonColors.PALETTE[1]) }
+    // The first color nobody has yet, as 09 PersonAdd draws it (TASK-021).
+    var newPersonColor by rememberSaveable { mutableStateOf(PersonColors.leastUsed(people.map { it.color })) }
     var nameError by rememberSaveable { mutableStateOf(false) }
     var confirmArchive by rememberSaveable { mutableStateOf(false) }
 
@@ -240,7 +242,7 @@ private fun Note(text: String, modifier: Modifier = Modifier) {
 
 /** A text field (box.css `.in`): 1.5 dp border, 2 dp ink while focused, 2 dp danger with [error] under it. */
 @Composable
-private fun Field(
+internal fun Field(
     label: String,
     value: String,
     onChange: (String) -> Unit,
@@ -295,12 +297,12 @@ private fun Field(
     }
 }
 
-/** Cells of equal width in rows of [columns] (box.css `.pick`). */
+/** Cells of equal width in rows of [columns] (box.css `.pick`), [gap] apart. */
 @Composable
-internal fun <T> PickGrid(items: List<T>, columns: Int, cell: @Composable (T, Modifier) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+internal fun <T> PickGrid(items: List<T>, columns: Int, gap: Dp = 6.dp, cell: @Composable (T, Modifier) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(gap)) {
         items.chunked(columns).forEach { row ->
-            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(gap)) {
                 row.forEach { cell(it, Modifier.weight(1f).fillMaxHeight()) }
                 repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
             }
@@ -364,7 +366,7 @@ private fun PersonAdd(
         // 09 PersonAdd `.sw`: 48 dp swatches read by their color name, a check and a ring on the chosen one. Three to a
         // row, because six in a row inside this card would be narrower than 48 dp at 360 dp (REQ-067).
         PickGrid(PersonColors.PALETTE.withIndex().toList(), columns = 3) { (index, hex), modifier ->
-            Swatch(COLOR_NAMES.getOrElse(index) { "색 ${index + 1}" }, personLook(hex).solid, hex == color, modifier) { onColor(hex) }
+            Swatch(Labels.COLOR_NAMES[index], personLook(hex).solid, hex == color, modifier) { onColor(hex) }
         }
         Note(Labels.ONE_PHONE)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
@@ -374,12 +376,9 @@ private fun PersonAdd(
     }
 }
 
-/** The names 09 PersonAdd reads the six person colors by, in [PersonColors.PALETTE] order. */
-private val COLOR_NAMES = listOf("파랑", "주황", "초록", "보라", "장미", "청록")
-
 /** One person color (09 PersonAdd `.sw`): 2 dp surface and 2 dp ink around it and a check when chosen. */
 @Composable
-private fun Swatch(name: String, solid: Color, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+internal fun Swatch(name: String, solid: Color, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
     Box(
         modifier.heightIn(min = 48.dp)
             .drawBehind {

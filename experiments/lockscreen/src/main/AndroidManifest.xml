@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 잠금 화면 알림 실험 앱 (TASK-025 준비). 제품 앱이 아님: 에뮬레이터에서 adb로만 씀. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application android:label="LockExp">
+        <!-- adb shell am broadcast -n com.judangbang.pillbadeum.lockexp/.PostReceiver --es method <방법>.
+             adb 셸이 부를 수 있게 exported. 이 실험 앱은 배포하지 않음. -->
+        <receiver
+            android:name=".PostReceiver"
+            android:exported="true" />
+
+        <!-- 알림 버튼이 가리키는 곳. 누를 일은 없고 버튼이 보이는지만 봄. -->
+        <receiver
+            android:name=".NoopReceiver"
+            android:exported="false" />
+    </application>
+
+</manifest>

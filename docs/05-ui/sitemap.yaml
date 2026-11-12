@@ -66,7 +66,7 @@
       status: active
       code: 있음 (알림 설정·권한 요청은 없음)
       flows: [플로우 1, 플로우 4]
-      reqs: [REQ-010, REQ-012, REQ-013, REQ-014, REQ-016, REQ-018, REQ-027, REQ-041, REQ-042, REQ-049, REQ-077, REQ-085, REQ-089]
+      reqs: [REQ-010, REQ-012, REQ-013, REQ-014, REQ-016, REQ-018, REQ-027, REQ-041, REQ-042, REQ-049, REQ-077, REQ-085, REQ-089, REQ-094]
       terms: none
     - id: SCR-007
       name: 판정 고치기
@@ -75,7 +75,7 @@
       status: active
       code: 일부 (기록·취소만 첫 화면 버튼으로 있음)
       flows: [플로우 2]
-      reqs: [REQ-003, REQ-006, REQ-009, REQ-029, REQ-030, REQ-031, REQ-032, REQ-033, REQ-034, REQ-043, REQ-044, REQ-082]
+      reqs: [REQ-003, REQ-006, REQ-009, REQ-029, REQ-030, REQ-031, REQ-032, REQ-033, REQ-034, REQ-043, REQ-044, REQ-082, REQ-094]
       terms: none
     - id: SCR-008
       name: 지난 기록
@@ -84,7 +84,7 @@
       status: active
       code: 없음 (첫 화면의 이번 주 칸만 있음)
       flows: [플로우 2]
-      reqs: [REQ-009, REQ-018, REQ-037, REQ-038, REQ-039, REQ-040, REQ-082]
+      reqs: [REQ-009, REQ-018, REQ-037, REQ-038, REQ-039, REQ-040, REQ-082, REQ-094]
       terms: none
     - id: SCR-009
       name: 설정
@@ -93,7 +93,7 @@
       status: active
       code: 없음 (첫 화면에 하루 시작·기준 시간대 표시만 있음)
       flows: [플로우 1]
-      reqs: [REQ-011, REQ-015, REQ-036, REQ-042, REQ-046, REQ-047, REQ-050, REQ-051, REQ-053, REQ-054, REQ-055, REQ-063, REQ-077, REQ-089]
+      reqs: [REQ-011, REQ-015, REQ-036, REQ-042, REQ-046, REQ-047, REQ-050, REQ-051, REQ-053, REQ-054, REQ-055, REQ-063, REQ-077, REQ-089, REQ-094]
       terms: none
       children:
         - id: SCR-010
@@ -103,5 +103,5 @@
           status: active
           code: 일부 (항목 화면에서 대상자 추가만 있음)
           flows: [플로우 1]
-          reqs: [REQ-017, REQ-018, REQ-047, REQ-074, REQ-079, REQ-085, REQ-086, REQ-093]
+          reqs: [REQ-017, REQ-018, REQ-047, REQ-074, REQ-079, REQ-085, REQ-086, REQ-093, REQ-094]
           terms: none

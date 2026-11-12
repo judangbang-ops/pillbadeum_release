@@ -102,25 +102,32 @@ def type_into(index: int, text: str) -> None:
     hide_keyboard()
 
 
-IME_VISIBLE = re.compile(r"type=ime\b[^\n]*visible=true", re.IGNORECASE)
+IME_BLOCK = re.compile(r"Window\{[^}]*InputMethod\}:(.*?)(?=\n\s*Window #|\Z)", re.S)
+FRAME = re.compile(r"mFrame=\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]")
+KEYBOARD_NOTES: list[str] = []
 
 
-def keyboard_shown() -> bool:
-    """mInputShown alone stays true while the hardware-keyboard setting keeps the soft keyboard off
-    (third run, 2026-11-12: BACK then closed the dialog and the app), so also ask the window insets."""
-    if "mInputShown=true" not in sh("dumpsys input_method", check=False):
-        return False
-    return IME_VISIBLE.search(sh("dumpsys window", check=False)) is not None
+def keyboard_height() -> int:
+    """Height in pixels of the on-screen keyboard window while it is visible, else 0."""
+    block = IME_BLOCK.search(sh("dumpsys window windows", check=False))
+    if not block or "isVisible=true" not in block.group(1):
+        return 0
+    frame = FRAME.search(block.group(1))
+    return max(0, int(frame.group(4)) - int(frame.group(2))) if frame else 0
 
 
 def hide_keyboard() -> None:
-    """The on-screen keyboard covers [저장] (first run, 2026-11-12), so close it after typing.
+    """Never presses BACK.
 
-    One BACK at most: a second one, or one while no keyboard shows, closes the screen instead.
+    The app has no back handler: its screens are one Compose state in one activity, so a BACK that
+    the keyboard does not take closes the whole app (fourth run, 2026-11-12: after typing a name the
+    form vanished to the launcher; the third run lost the person dialog the same way). The emulator
+    runs with a hardware keyboard and show_ime_with_hard_keyboard 0, so no soft keyboard is drawn.
+    If one is drawn anyway, this only notes it for the report; a covered button then fails the step.
     """
-    if keyboard_shown():
-        sh("input keyevent KEYCODE_BACK")
-        time.sleep(1)
+    h = keyboard_height()
+    if h > 0:
+        KEYBOARD_NOTES.append(f"화면 키보드가 {h}px 높이로 떠 있었음")
 
 
 def ensure_home() -> None:
@@ -207,7 +214,12 @@ def night(on: bool) -> None:
     time.sleep(3)
 
 
+LOG_PARTS: list[str] = []
+
+
 def reboot() -> None:
+    # The log buffer does not survive a reboot (fourth run, 2026-11-12: the morning steps were lost)
+    LOG_PARTS.append(adb("logcat", "-d", "-v", "time", check=False))
     adb("reboot", check=False)
     time.sleep(10)
     adb("wait-for-device", timeout=300)
@@ -546,8 +558,11 @@ def main() -> int:
         traceback.print_exc()
         r.check("둘러보기 진행", "끝까지 감", f"{type(exc).__name__}: {exc}", False)
     finally:
+        for note in sorted(set(KEYBOARD_NOTES)):
+            r.note(note)
         r.write()
-        log = adb("logcat", "-d", "-v", "time", check=False)
+        LOG_PARTS.append(adb("logcat", "-d", "-v", "time", check=False))
+        log = "\n--------- reboot ---------\n".join(LOG_PARTS)
         (args.out / f"api{api}-logcat.txt").write_text(log, encoding="utf-8")
     return 1 if r.failed else 0
 

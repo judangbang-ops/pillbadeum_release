@@ -14,10 +14,11 @@ Takes two release APKs of one commit signed with one test key, the way personal 
   4. Install N+1 over N: version N+1, the record stays, same device_id and marker, no restore notice.
   5. Tap the second item on the widget the launcher kept: the new build records it.
 
-The widget is placed the way a person does it: touch and hold the app icon > Widgets > drag the
-preview onto the home screen, or, when the icon has no Widgets entry, the home screen's full widget
-picker. If neither can be driven, or the placed widget does not show the item, that is a failed
-check and the flow records in the app instead, so the backup and update checks still run.
+The widget is placed the way a person does it: touch and hold the home screen > Widgets > search
+DidITake > drag its preview onto the home screen. (Touch and hold on the app icon is not used: on the
+API 34 image the icon in the dock is an app suggestion whose menu has no Widgets entry.) If the
+launcher cannot be driven, or the placed widget does not show the item, that is a failed check and
+the flow records in the app instead, so the backup and update checks still run.
 
 Writes report.md, screenshots and logs to --out. Exits 1 when a check fails.
 Standard library only. Not product code. Screen and file helpers are in backup_restore_check.py.
@@ -140,30 +141,6 @@ def widget_preview(h: int, below: int = 0) -> Node | None:
     return next((n for n in nodes if re.fullmatch(r"\d+\s*[×x]\s*\d+", n.text) and on_screen(n, h)), None)
 
 
-def open_app_widget_sheet(r: Report, tag: str) -> bool:
-    """Home > touch and hold the app icon > Widgets: a sheet with this app's widgets only."""
-    go_home()
-    icon = next((n for n in dump_ui() if WIDGET_LABEL in (n.text, n.desc) and not n.cls.endswith("EditText")), None)
-    if icon is None:
-        save_ui(r, f"{tag}-home")
-        r.note(f"위젯 놓기 ({tag}): 홈 화면에 앱 아이콘이 없음")
-        return False
-    x, y = icon.center
-    sh(f"input swipe {x} {y} {x} {y} 1200")
-    time.sleep(1)
-    nodes = dump_ui()
-    entry = next((n for n in nodes if "Widgets" in (n.text, n.desc)), None)
-    if entry is None:
-        save_ui(r, f"{tag}-icon-menu")
-        r.shot(f"{tag}-icon-menu")
-        r.note(f"위젯 놓기 ({tag}): 아이콘({icon.cls} {icon.bounds}) 메뉴에 Widgets 없음")
-        go_home()
-        return False
-    tap(entry)
-    time.sleep(2)
-    return True
-
-
 def open_full_widget_picker(r: Report, tag: str, w: int, h: int) -> int:
     """Home > touch and hold empty space > Widgets > search DidITake, so its preview shows near the top."""
     go_home()
@@ -199,10 +176,7 @@ def open_full_widget_picker(r: Report, tag: str, w: int, h: int) -> int:
 def place_widget(r: Report, tag: str) -> None:
     """Drags the DidITake widget preview onto the middle of the home screen."""
     w, h = screen_size()
-    below = 0
-    if not open_app_widget_sheet(r, tag):
-        r.note(f"위젯 놓기 ({tag}): 전체 위젯 목록에서 찾음")
-        below = open_full_widget_picker(r, tag, w, h)
+    below = open_full_widget_picker(r, tag, w, h)
     preview = widget_preview(h, below)
     save_ui(r, f"{tag}-picker")
     r.shot(f"{tag}-picker")

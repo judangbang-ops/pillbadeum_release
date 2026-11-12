@@ -20,10 +20,17 @@
 
 | ID | 작업 | 근거 | 닿는 곳 | 먼저 할 것 | 담당 | 크기 | 끝난 조건 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| TASK-001 | 패키지 이름(`applicationId`)을 정해 빌드 설정에 넣기 | REQ-061 | `androidApp/build.gradle.kts` | 결정 Q9 | 미정 | 0.5일 | 정한 이름이 빌드 설정·README에 있고 디버그 APK가 그 이름으로 설치됨 |
-| TASK-002 | 앱 서명 키를 만들어 저장소 밖 두 곳에 보관하고 릴리즈 서명 설정 | REQ-062 | 서명 설정(비밀값은 저장소 밖) | TASK-001 | 미정 | 0.5일 | `apksigner verify`로 릴리즈 APK가 그 키로 서명됨. 키·비밀번호가 Git에 없음 |
+| TASK-001 | 패키지 이름(`applicationId`)을 정해 빌드 설정에 넣기 | REQ-061 | `androidApp/build.gradle.kts` | 결정 Q9 (2026-11-12 정함) | Claude ([PR #4](https://github.com/judangbang-ops/pillbadeum_release/pull/4) 진행 중) | 0.5일 | 정한 이름이 빌드 설정·README에 있고 디버그 APK가 그 이름으로 설치됨 |
+| TASK-002 | 앱 서명 키를 만들어 저장소 밖 두 곳에 보관하고 릴리즈 서명 설정 | REQ-062 | 서명 설정(비밀값은 저장소 밖) | TASK-001 | Claude·동희님 (진행 중, 아래 메모) | 0.5일 | `apksigner verify`로 릴리즈 APK가 그 키로 서명됨. 키·비밀번호가 Git에 없음 |
 | TASK-003 | Room 스키마 2: 알림 규칙 저장 자리 추가와 1→2 마이그레이션 | REQ-041, REQ-042, REQ-072 | `reminder_rule`, `setting`, `shared/schemas` | 없음 | 미정 | 1일 | 스키마 2 JSON이 생기고, 1→2 마이그레이션 테스트가 기존 판정 행을 그대로 남김 |
 | TASK-004 | `LatePolicy` 기본값을 `KEEP`으로 바꾸기 | REQ-010 | `ManageIntakes`, `schedule_version` | 요구 4장 1번 결정 | 미정 | 0.5일 | 새 항목의 `late_policy` = KEEP. 기존 테스트 통과 |
+
+진행 메모 (2026-11-12)
+
+- TASK-001: 결정 Q9로 `com.judangbang.pillbadeum`을 정함. `applicationId`·`namespace`·Kotlin 패키지·Room 스키마 폴더·README를 바꾸는 초안 PR #4가 올라옴(PR #2 위에 쌓음, 합치기 전)
+- TASK-002: 서명 키(PKCS12, 별칭 `upload`, RSA 4096)를 저장소 밖 동희님 PC에 만들고, CI용 GitHub Secrets 3개에 등록함(동희님 승인). 인증서 SHA-256(공개값)은 `7D:23:C2:A8:C9:1B:96:4A:08:14:D5:70:12:CB:38:93:CF:25:BF:68:E7:A9:B3:43:6E:AA:87:FA:D5:2D:39:BB`. 남은 것: 저장소 밖 두 번째 사본, 릴리즈 서명 설정, `apksigner verify`
+- 요구 4장 2번(확정 전)대로 이 키를 앱 서명 키로도 쓴다면, 개인 APK를 이 키로 서명하고 Play에는 첫 업로드 때 이 키 사본을 넘김. Play 도움말([Use Play App Signing](https://support.google.com/googleplay/android-developer/answer/9842756), 2026-11-12 요약본으로 읽음)에 따르면 새 앱은 Google이 만든 키로 자동 등록되고, 공개 테스트나 프로덕션에 나가기 전에 'Change key'로 우리 키 사본을 넘길 수 있음. 같은 도움말은 업로드 키와 앱 서명 키를 다르게 두길 권하고, 다른 길로 Google이 만든 키를 쓰고 Play Console에서 서명된 유니버설 APK를 받아 배포하는 방법도 적음. 어느 길이든 TASK-038 전에 정함
+- 그래서 Play에 사본을 넘기기 전에 이 키를 잃으면 개인 APK를 쓰던 폰은 Play 버전으로 덮어 깔 수 없고, 지우고 다시 깔면 기록을 잃음(REQ-062). 두 번째 사본은 개인 APK를 나눠 주기 전에 둠
 
 ### 1.2 공통 기록 규칙 (shared)
 
@@ -112,7 +119,7 @@ flowchart LR
     G --> H["Play 비공개 테스트<br/>TASK-035~039"]
 ```
 
-- 결정이 먼저 필요한 작업: TASK-001(Q9), TASK-004(요구 4장 1번), TASK-013·TASK-014·TASK-022(화면 5장), TASK-036(Q11, 개발자 계정)
+- 결정이 먼저 필요한 작업: TASK-004(요구 4장 1번), TASK-013·TASK-014·TASK-022(화면 5장), TASK-036(Q11, 개발자 계정). TASK-001의 Q9는 2026-11-12에 정함
 - TASK-033(테스트 자동 실행)은 다른 작업과 상관없이 먼저 하면 이후 PR이 편해짐
 
 ## 3. 검사 결과 (2026-11-11, Claude)

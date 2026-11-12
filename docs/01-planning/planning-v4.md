@@ -13,6 +13,7 @@
 3. 배포: APK 다음은 Google Play 비공개 테스트, iOS는 그 뒤 (결정 Q13)
 4. 요구 ID·합격 기준, 화면 ID·상태, 작업 분해를 따로 둠
 5. 저장소: 우리 설계 문서와 앱 코드는 릴리즈 저장소에 두고, DidITake는 가쟈누님이 기획을 올리는 곳으로 둠 (결정 Q10). v3와 DidITake README는 앱 소스·문서를 DidITake 루트에 둔다고 적음
+6. 패키지 이름: `com.judangbang.pillbadeum` (결정 Q9, 2026-11-12). 프로토타입의 `com.zmanlab.diditake`를 바꿈
 
 결정마다의 선택지와 출처는 [requirements 0장](requirements.md#0-v3-뒤에-정한-결정)에 있음.
 
@@ -54,4 +55,4 @@
 | 범위 확정 때 정할 것 10개 | [requirements 4장](requirements.md#4-범위-확정-때-정할-것-claude-추천-기본값) |
 | 화면에서 정할 것 7개 | [screens 5장](../05-ui/screens.md#5-화면에서-정할-것-claude-추천) |
 | 작업 담당 (가쟈누님·동희님·Claude) | WBS 합의 때 |
-| 패키지 이름(Q9), 개발자 계정(Q11) 등 결정 전 질문 | Notion '결정할 것' 표 |
+| 개발자 계정(Q11) 등 결정 전 질문 (패키지 이름 Q9는 2026-11-12에 정함) | Notion '결정할 것' 표 |

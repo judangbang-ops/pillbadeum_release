@@ -17,6 +17,8 @@ kotlinx-coroutines = "1.11.0"
 kotlinx-datetime = "0.8.0"
 androidx-activity = "1.13.0"
 androidx-glance = "1.2.0"
+# Glance 1.2.0이 런타임에 가져오는 WorkManager와 같은 판. 디버그 위젯 시험(TASK-042)에서만 컴파일에 씀
+androidx-work = "2.7.1"
 
 [libraries]
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose-multiplatform" }
@@ -35,6 +37,7 @@ kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotl
 
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }
 androidx-glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "androidx-glance" }
+androidx-work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "androidx-work" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

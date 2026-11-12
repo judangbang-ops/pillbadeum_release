@@ -23,6 +23,8 @@ import com.judangbang.pillbadeum.widget.DidITakeWidgetReceiver
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -35,6 +37,7 @@ import kotlinx.coroutines.withContext
  * - `w`, `h`: widget size in dp (default 250 x 110, the declared 4x2 minimum)
  * - `seed`: make sure at least this many active items exist (`Test1`, `Test2`, ...), created through
  *   the shared SaveIntake use case like the app's [저장]
+ * - `keepwork`: enqueue [KeepWork] (the WorkManager experiment of the launcher case)
  *
  * Binding needs `adb shell appwidget grantbind --package com.judangbang.pillbadeum` first; without it
  * the system bind dialog opens and the script taps its button.
@@ -67,6 +70,7 @@ class WidgetHostActivity : Activity() {
 
         val layout = if (intent.getStringExtra("layout") == "list") ProbeLayout.LIST else ProbeLayout.GRID
         ProbeLayout.set(this, layout)
+        if (intent.getBooleanExtra("keepwork", false)) KeepWork.enqueue(applicationContext)
         val seed = intent.getIntExtra("seed", 0)
         val app = applicationContext
         app.container.appScope.launch {
@@ -80,14 +84,17 @@ class WidgetHostActivity : Activity() {
         }
     }
 
-    private suspend fun seedItems(count: Int) {
+    /** Creates the missing `Test1`..`Test<count>` by name, one seeding at a time (a host restarted
+     * while the first was seeding made every name twice, API 34, 2026-11-12). */
+    private suspend fun seedItems(count: Int) = seedLock.withLock {
         val core = applicationContext.container.core()
         val person = core.people.list().first()
-        val existing = core.loadStatusBoard().items.size
-        for (i in existing + 1..count) {
-            core.saveIntake.create(IntakeDraft(personId = person.id, name = "Test$i", rule = ScheduleRule.Daily))
+        val existing = core.loadStatusBoard().items.map { it.name }.toSet()
+        val missing = (1..count).map { "Test$it" }.filter { it !in existing }
+        missing.forEach { name ->
+            core.saveIntake.create(IntakeDraft(personId = person.id, name = name, rule = ScheduleRule.Daily))
         }
-        Log.i(TAG, "seeded ${maxOf(0, count - existing)} items")
+        Log.i(TAG, "seeded ${missing.size} items")
     }
 
     private fun widthDp() = intent.getIntExtra("w", 250)
@@ -189,6 +196,7 @@ class WidgetHostActivity : Activity() {
     }
 
     private companion object {
+        val seedLock = Mutex()
         const val TAG = "WidgetHostActivity"
         const val HOST_ID = 4242
         const val REQUEST_BIND = 7

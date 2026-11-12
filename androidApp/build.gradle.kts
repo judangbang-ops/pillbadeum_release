@@ -73,4 +73,6 @@ dependencies {
     implementation(project(":shared"))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.glance.appwidget)
+    // 디버그 위젯 시험의 WorkManager 대조 실험(KeepWork)만 씀. 같은 판이라 앱이 받는 판은 그대로
+    debugImplementation(libs.androidx.work.runtime)
 }

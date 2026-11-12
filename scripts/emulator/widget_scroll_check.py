@@ -55,6 +55,7 @@ from release_check import drag, go_home, on_screen, screen_size
 
 HOST = f"{PKG}/.debug.WidgetHostActivity"
 DENSITY = {"d": 0.0}
+API = {"n": 0}
 ITEM = re.compile(r"(Test\d+), ")  # Labels.widgetDescription: "나 Test6, 미완료"
 
 
@@ -62,9 +63,13 @@ ITEM = re.compile(r"(Test\d+), ")  # Labels.widgetDescription: "나 Test6, 미�
 # Host and widget
 
 
+KEEP_WORK = {"on": False}
+
+
 def start_host(layout: str, w: int, h: int, seed: int = 12) -> None:
     sh(f"am force-stop {PKG}", check=False)
-    sh(f"am start -n {HOST} --es layout {layout} --ei w {w} --ei h {h} --ei seed {seed}")
+    keep = " --ez keepwork true" if KEEP_WORK["on"] else ""
+    sh(f"am start -n {HOST} --es layout {layout} --ei w {w} --ei h {h} --ei seed {seed}{keep}")
 
 
 def wait_status(timeout: float = 40) -> str:
@@ -177,15 +182,34 @@ def scroll_to(name: str, need: float = 1.0, tries: int = 14) -> Node | None:
             # all of it (fixed steps kept skipping past it, API 26 at 250x110, 2026-11-12).
             missing = (item.bounds[1] - top - 4) if down else (bottom - 4 - item.bounds[3])
             span = max(slop + 6, missing + slop)
-            # Slowly (25dp/s, under the 50dp/s fling threshold), or the list flings on past the item:
-            # a 234px swipe in 0.8s overshot a 205px row (API 34 at 200%, 2026-11-12).
-            duration = max(800, int(span / (25 * d) * 1000))
-        else:
-            duration = 800
         y1, y2 = (bottom - 6, bottom - 6 - span) if down else (top + 6, top + 6 + span)
-        sh(f"input swipe {x} {y1} {x} {y2} {duration}")
+        drag_list(x, y1, y2)
         time.sleep(1.5)
     return None
+
+
+def drag_list(x: int, y1: int, y2: int) -> None:
+    """Moves a finger from y1 to y2 and lifts it without a fling, so the list moves by the distance
+    less the touch slop. API 29+: `input motionevent` - past the slop at once (a slow start was a long
+    press for the Pixel Launcher, which then picked the widget up, 2026-11-12), then still for 0.4s
+    before lifting. Older images have no motionevent: a swipe slow enough not to fling (25dp/s; a 234px
+    swipe in 0.8s overshot a 205px row)."""
+    d = DENSITY["d"] or 2.75
+    if API["n"] >= 29:
+        sign = -1 if y2 < y1 else 1
+        slop = round(8 * d)
+        sh(f"input motionevent DOWN {x} {y1}")
+        y = y1 + sign * min(slop + 12, abs(y2 - y1))
+        sh(f"input motionevent MOVE {x} {y}")
+        step = round(30 * d)
+        while (y2 - y) * sign > 0:
+            y += sign * min(step, abs(y2 - y))
+            sh(f"input motionevent MOVE {x} {y}")
+        time.sleep(0.4)
+        sh(f"input motionevent UP {x} {y2}")
+    else:
+        duration = max(800, int(abs(y2 - y1) / (25 * d) * 1000))
+        sh(f"input swipe {x} {y1} {x} {y2} {duration}")
 
 
 def first_row(items: dict[str, Node], box: Node) -> list[str]:
@@ -371,6 +395,33 @@ def exercise(r: Report, case: str, layout: str, tag: str, target: str | None, no
 PROBE_LABEL = "Scroll probe (debug)"  # android:label of ScrollProbeWidgetReceiver
 
 
+def widget_reload_counts() -> tuple[int, int]:
+    """(PACKAGE_CHANGED for our package, launcher widget views re-created) so far in the logcat.
+    The first is logged by the phone app's CarrierSvcBindHelper on these images; both only count."""
+    out = adb("logcat", "-d", check=False, timeout=90)
+    changed = len(re.findall(rf"onPackageModified: {re.escape(PKG)}\s*$", out, re.M))
+    created = len(re.findall(r"LauncherAppWidgetHostView: App widget created with id: \d+", out))
+    return changed, created
+
+
+def reschedule_receiver_state() -> str:
+    """WorkManager's RescheduleReceiver in `dumpsys package`: listed under enabled or disabled
+    components (set at runtime), or in neither (the manifest default)."""
+    out = sh(f"dumpsys package {PKG}", check=False)
+    section = ""
+    for line in out.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("enabledComponents:"):
+            section = "켜짐"
+        elif stripped.startswith("disabledComponents:"):
+            section = "꺼짐"
+        elif stripped.endswith(":") and not stripped.startswith("androidx"):
+            section = ""
+        if "RescheduleReceiver" in stripped and section:
+            return section
+    return "매니페스트 기본값"
+
+
 def place_probe_in_launcher(r: Report, tag: str) -> str:
     """Home > touch and hold > Widgets > search DidITake > drag the probe's preview (the one above the
     'Scroll probe (debug)' name) to the middle of the home screen. Returns '' or why it did not work."""
@@ -419,18 +470,25 @@ def run_launcher_case(r: Report, case: str, target: str) -> None:
     set_font(1.0)
     start_host("grid", 250, 110)  # sets the probe layout to grid; HOME then sends the host to the back
     wait_status()
+    changed0, created0 = widget_reload_counts()
+    r.note(f"{tag}: WorkManager 빈 작업 {'있음' if KEEP_WORK['on'] else '없음'}, 놓기 전 RescheduleReceiver {reschedule_receiver_state()}")
+    placed_at = time.time()
     why = place_probe_in_launcher(r, tag)
     if why:
         # Launcher steps differ between images: an observation, not a failure of the scroll test.
         r.note(f"{tag}: 런처 경우를 하지 못함 — {why}")
         return
-    nodes = wait_items(45)
+    nodes = wait_items(90)
     r.shot(f"{tag}-before")
     save_ui(r, f"{tag}-before")
     box = list_view(nodes)
+    changed1, created1 = widget_reload_counts()
+    reloads = (f"놓은 뒤 우리 패키지 PACKAGE_CHANGED {changed1 - changed0}번, 런처가 위젯 뷰를 다시 만든 횟수 "
+               f"{created1 - created0}번(놓을 때 1번 포함), RescheduleReceiver {reschedule_receiver_state()}")
     if box is None or not items_on_screen(nodes):
-        r.note(f"{tag}: 런처에 놓은 시험 위젯이 45초 안에 그려지지 않음 (Glance 로딩 화면, 관찰)")
+        r.note(f"{tag}: 런처에 놓은 시험 위젯이 90초 안에 그려지지 않음 (Glance 로딩 화면, 관찰). {reloads}")
         return
+    r.note(f"{tag}: 놓고 {time.time() - placed_at:.0f}초 뒤 항목이 보임. {reloads}")
     d = DENSITY["d"] or 1
     r.note(f"{tag}: 런처가 준 목록 영역 {round((box.bounds[2] - box.bounds[0]) / d)}×"
            f"{round((box.bounds[3] - box.bounds[1]) / d)}dp")
@@ -442,13 +500,17 @@ def main() -> int:
     parser.add_argument("--apk", required=True, type=Path, help="debug APK")
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--commit", default="")
+    parser.add_argument("--keep-work", action="store_true",
+                        help="enqueue the debug KeepWork first (WorkManager experiment of the launcher case)")
     args = parser.parse_args()
+    KEEP_WORK["on"] = args.keep_work
     args.out.mkdir(parents=True, exist_ok=True)
 
     adb("wait-for-device")
     wait_boot()
     become_root()
     api = api_level()
+    API["n"] = api
     r = Report(args.out, api, title=f"위젯 스크롤 기술 시험 API {api}")
     for setting in ("window_animation_scale", "transition_animation_scale", "animator_duration_scale"):
         sh(f"settings put global {setting} 0")

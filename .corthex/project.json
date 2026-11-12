@@ -22,7 +22,7 @@
       "human": "github",
       "source": "docs/01-planning/requirements.md",
       "truth": "source",
-      "note": "요구 ID 원본. 1차 범위 확정 2026-11-12 10:18 KST(동희님). 2026-11-12 15:02 KST 지시로 02를 다시 함: 01 결과로 경계(CTX) 열·용어 맞춤·두 동작 줄 나눔(REQ-084~091)·새 요구 REQ-092·093, 범위 확인 기다림(5.1절). 사람이 읽는 기획은 DidITake 기획 v3와 이 저장소의 기획 v4"
+      "note": "요구 ID 원본. 1차 범위 확정 2026-11-12 10:18 KST(동희님). 2026-11-12 15:02 KST 지시로 02를 다시 함: 01 결과로 경계(CTX) 열·용어 맞춤·두 동작 줄 나눔(REQ-084~091)·새 요구 REQ-092~094. 범위 확인 지남(2026-11-12 16:32 KST, 동희님 '추천 모두 승인', 0장). 사람이 읽는 기획은 DidITake 기획 v3와 이 저장소의 기획 v4"
     },
     "03-user-flow": {
       "human": "github",
@@ -32,9 +32,9 @@
     },
     "04-functional-spec": {
       "human": "github",
-      "source": "diditake:docs/02-design/record-rules.md",
+      "source": "docs/04-functional-spec/spec.md",
       "truth": "source",
-      "note": "SPEC ID를 따로 두지 않음. 합격 기준은 requirements.md의 열, record-rules 9장 반례(RR-1~25), 이 저장소 docs/04-spec/record-rules-supplement.md의 규칙과 반례(RR-26~89). 원본 칸은 한 파일만 받아 보충 문서는 여기 적음"
+      "note": "2026-11-12 15:02 KST 지시('/corthex 첨부터')로 이 저장소에서 새로 씀. 동작마다 SPEC 줄 하나(REQ·FL 링크, 전제, 예외, 합격 기준). 규칙 문장과 반례 RR-26~89는 docs/04-spec/record-rules-supplement.md에 그대로 두고, RR-1~25는 가쟈누님 DidITake 기록 규칙(7a800ac, 시안). 확인(명세 고정) 전"
     },
     "05-erd": {
       "human": "github",

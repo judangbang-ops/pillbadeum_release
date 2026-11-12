@@ -1,6 +1,6 @@
 # 사용자 흐름 (CORTHEX 03)
 
-- 상태: **초안, 확인 전** (2026-11-12, Claude). 02 요구 다시 하기(범위 확인 기다림)를 입력으로 씀
+- 상태: **초안, 확인 전** (2026-11-12, Claude). 02 요구 다시 하기(범위 확인 2026-11-12 16:32 KST 지남)를 입력으로 씀
 - 입력: [요구사항](../01-planning/requirements.md) REQ-001~093, [도메인 설계](../01-domain/domain.md)의 경계 CTX-001~005와 용어집 TERM-001~031, [화면 목록](../05-ui/sitemap.yaml)의 SCR ID
 - 시안: 가쟈누님 DidITake [플로우 초안](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/04-flow/flows.md)은 참고만 함. 그 초안의 위젯 탭 판단(3장)과 반복 알림(4장)은 FL-002·003에 들어왔고, 그 초안에 없던 지난 기록 보기(FL-005)와 복원(FL-009)을 더함
 

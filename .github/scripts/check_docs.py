@@ -4,7 +4,7 @@
 Usage: python3 .github/scripts/check_docs.py [repository root]
 
 Reads docs/01-planning/requirements.md, docs/01-domain/domain.md (context IDs), docs/03-user-flow/FL-*.md
-(flows), docs/04-spec/record-rules-supplement.md,
+(flows), docs/04-functional-spec/spec.md, docs/04-spec/record-rules-supplement.md,
 docs/05-ui/sitemap.yaml, docs/05-ui/screens.md, docs/08-wbs/wbs.md and every Markdown file
 under docs/ plus README.md. Standard library only. Prints the counts, then every problem it
 found, and exits with 1 when there is a problem. It changes nothing.
@@ -279,6 +279,55 @@ if flow_files:
     if flow_scr - set(scr):
         problem(f"flows: unknown screen ids {sorted(flow_scr - set(scr))}")
 
+# --- functional spec (stage 04) -------------------------------------------------------------
+spec_path = root / "docs/04-functional-spec/spec.md"
+spec_text = ""
+if spec_path.exists():
+    spec_text = spec_path.read_text(encoding="utf-8")
+    specs = {}
+    for line in spec_text.splitlines():
+        m = re.match(r"\|\s*(SPEC-\d{3})\s*\|", line)
+        if not m:
+            continue
+        c = cells(line)
+        if m.group(1) in specs:
+            problem(f"spec: duplicate {m.group(1)}")
+        if len(c) != 8:
+            problem(f"spec: {m.group(1)} has {len(c)} cells, expected 8")
+            continue
+        specs[m.group(1)] = c
+    snums = sorted(int(s[5:]) for s in specs)
+    smissing = sorted(set(range(1, snums[-1] + 1)) - set(snums)) if snums else []
+    print(f"spec: {len(specs)} rows" + (f", SPEC-{snums[0]:03d}..SPEC-{snums[-1]:03d}" if snums else "")
+          + f", missing numbers: {smissing or 'none'}")
+    if smissing:
+        problem(f"spec: missing numbers {smissing}")
+    spec_reqs = set()
+    for sid, c in specs.items():
+        reqs_here = set(re.findall(r"REQ-\d{3}", c[2]))
+        flows_here = set(re.findall(r"FL-\d{3}", c[2]))
+        if not reqs_here or not flows_here:
+            problem(f"spec: {sid} needs at least one REQ and one FL in its source cell")
+        if reqs_here - set(rows):
+            problem(f"spec: {sid} names unknown requirements {sorted(reqs_here - set(rows))}")
+        if flows_here - set(flow_ids):
+            problem(f"spec: {sid} names unknown flows {sorted(flows_here - set(flow_ids))}")
+        if not c[5] or not c[6]:
+            problem(f"spec: {sid} has no exceptions or no acceptance criteria")
+        if c[7] not in {"초안", "고정", "제외"}:
+            problem(f"spec: {sid} status '{c[7]}'")
+        bad_rr = sorted(n for n in rr_refs(c[6]) if n > 25 and n not in defined_rr)
+        if bad_rr:
+            problem(f"spec: {sid} names counterexamples that do not exist {bad_rr}")
+        spec_reqs |= reqs_here
+    fn_must = {k for k, c in rows.items() if c[2] == "기능" and c[3].startswith("Must")}
+    no_spec = sorted(fn_must - spec_reqs)
+    print(f"  functional Must requirements without a SPEC row: {no_spec or 'none'}")
+    if no_spec:
+        problem(f"spec: functional Must requirements without a SPEC row {no_spec}")
+    fn_other = sorted({k for k, c in rows.items() if c[2] == "기능"} - fn_must - spec_reqs)
+    print(f"  other functional requirements without a SPEC row: {fn_other or 'none'}")
+
 # --- work breakdown -------------------------------------------------------------------------
 wbs = read("docs/08-wbs/wbs.md")
 tasks = {}
@@ -317,7 +366,7 @@ print(f"  RR-26..{defined_rr[-1]} not named by any task: {untested or 'none'}")
 if untested:
     problem(f"wbs: counterexamples no task tests {untested}")
 state_refs = set()
-for text in (wbs, req_md, screens, supplement, flow_text):
+for text in (wbs, req_md, screens, supplement, flow_text, spec_text):
     state_refs |= set(re.findall(r"(SCR-\d{3})#([a-z]+)", text))
 unknown_states = sorted(f"{s}#{x}" for s, x in state_refs if x not in states.get(s, []))
 print(f"  state references that screens.md does not define: {unknown_states or 'none'}")

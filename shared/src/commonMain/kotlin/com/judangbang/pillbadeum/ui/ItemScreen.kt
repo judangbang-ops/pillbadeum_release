@@ -310,7 +310,7 @@ internal fun <T> PickGrid(items: List<T>, columns: Int, cell: @Composable (T, Mo
 
 /** One choice (box.css `.pick .c`): ink when chosen; a person's cell in their tint, their color when chosen. */
 @Composable
-private fun PickCell(
+internal fun PickCell(
     label: String,
     selected: Boolean,
     modifier: Modifier,

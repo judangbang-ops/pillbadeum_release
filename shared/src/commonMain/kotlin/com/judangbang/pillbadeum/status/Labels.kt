@@ -532,6 +532,61 @@ object Labels {
     fun voided(name: String, skip: Boolean): String =
         "$name ${if (skip) "건너뜀을" else "기록을"} 취소했어요. 기록은 무효로 남아요"
 
+    /** SCR-008's month (09 History): `2026년 11월`. */
+    fun monthTitle(month: LocalDate): String = "${month.year}년 ${month.month.ordinal + 1}월"
+
+    /** What TalkBack reads for a month button: the month it opens (09 History `10월`), with its year when that changes. */
+    fun monthButton(target: LocalDate, shown: LocalDate): String =
+        if (target.year == shown.year) "${target.month.ordinal + 1}월" else monthTitle(target)
+
+    /** SCR-008#empty */
+    const val HISTORY_EMPTY: String = "이 달에는 기록할 항목이 없었어요"
+
+    /** A window that ended without an active judgment (REQ-038, 09 History). */
+    const val MISSED: String = "빠짐"
+
+    /** The current window, not judged yet (09 History). */
+    const val PENDING: String = "아직"
+
+    /** The base date's line in SCR-008 (09 History). */
+    const val TODAY: String = "오늘"
+
+    /** A weekly cell's days (REQ-039): `11/09~11/15`. */
+    fun weekRange(cell: HistoryCell): String = cellDay(cell).let { "${monthDay(it)}~${monthDay(it.plus(6, DateTimeUnit.DAY))}" }
+
+    /**
+     * A history cell's judgment (09 History, S-5): the time of a dose, `08:02` on the window's first day and with its date
+     * on another (`11/12 01:30`, the day start is 04:00 or the phone is in another zone), a weekly dose always with its
+     * date (`11/10(화) 08:30`); `건너뜀`, `빠짐`, `아직`. A skip shows no time, as 09 draws it.
+     */
+    fun historyStatus(cell: HistoryCell, zone: TimeZone): String = when (cell.state) {
+        CellState.TAKEN -> cell.judgment?.let { historyTime(cell, it.takenAt, zone) }.orEmpty()
+        CellState.SKIPPED -> SKIPPED
+        CellState.MISSED -> MISSED
+        CellState.OPEN -> PENDING
+    }
+
+    /**
+     * What TalkBack reads for a history cell (09 History): `엄마 혈압약, 21:40 먹음`, `비타민D, 건너뜀`, `혈압약, 빠짐`, a dose on
+     * another day `아침약, 11월 12일 목요일 01:30 먹음`, weekly `엄마 골다공증약, 11월 9일부터 15일까지, 아직`. [withPerson] puts
+     * the person first. An open clock warning ends it with `시계 확인 필요` (C-2), as the first screen's tiles do.
+     */
+    fun historySpoken(cell: HistoryCell, withPerson: Boolean, zone: TimeZone): String {
+        val who = if (withPerson) "${cell.person.name} ${cell.intakeName}" else cell.intakeName
+        val state = when (cell.state) {
+            CellState.TAKEN -> cell.judgment?.let { "${spokenHistoryTime(cell, it.takenAt, zone)} 먹음" } ?: "먹음"
+            CellState.SKIPPED -> SKIPPED
+            CellState.MISSED -> MISSED
+            CellState.OPEN -> PENDING
+        }
+        val days = if (cell.rule is ScheduleRule.Weekly) spokenWeekRange(cellDay(cell)) else null
+        val sentence = listOfNotNull(who, days, state).joinToString(", ")
+        return if (cell.clockWarning) "$sentence, 시계 확인 필요" else sentence
+    }
+
+    /** What TalkBack reads for a history line's date: `11월 12일 목요일`, the base date's `11월 12일 목요일, 오늘`. */
+    fun historyDay(date: LocalDate, today: LocalDate): String = if (date == today) "${longDate(date)}, $TODAY" else longDate(date)
+
     /** `11/11 (수)` with a no-break space before the weekday. */
     private fun dateKept(date: LocalDate): String = "${monthDay(date)}$NBSP(${weekday(date.dayOfWeek)})"
 
@@ -556,6 +611,31 @@ object Labels {
         "${local.hour.toString().padStart(2, '0')}:${local.minute.toString().padStart(2, '0')}"
 
     private fun monthDay(date: LocalDate): String = "${date.month.ordinal + 1}/${date.day.toString().padStart(2, '0')}"
+
+    /** A history cell's line: its window's first day, the period key (P-8). */
+    private fun cellDay(cell: HistoryCell): LocalDate = LocalDate.parse(cell.window.periodKey)
+
+    private fun historyTime(cell: HistoryCell, takenAt: Long, zone: TimeZone): String {
+        val local = Instant.fromEpochMilliseconds(takenAt).toLocalDateTime(zone)
+        return when {
+            cell.rule is ScheduleRule.Weekly -> shortDate(local.date) + NBSP + hhmm(local)
+            local.date == cell.window.start.toLocalDateTime(zone).date -> hhmm(local)
+            else -> "${monthDay(local.date)} ${hhmm(local)}"
+        }
+    }
+
+    private fun spokenHistoryTime(cell: HistoryCell, takenAt: Long, zone: TimeZone): String {
+        val local = Instant.fromEpochMilliseconds(takenAt).toLocalDateTime(zone)
+        val firstDay = cell.rule is ScheduleRule.Daily && local.date == cell.window.start.toLocalDateTime(zone).date
+        return if (firstDay) hhmm(local) else "${longDate(local.date)} ${hhmm(local)}"
+    }
+
+    /** `11월 9일부터 15일까지`, across months `10월 26일부터 11월 1일까지`. */
+    private fun spokenWeekRange(start: LocalDate): String {
+        val end = start.plus(6, DateTimeUnit.DAY)
+        val until = if (end.month == start.month) "${end.day}일" else "${end.month.ordinal + 1}월 ${end.day}일"
+        return "${start.month.ordinal + 1}월 ${start.day}일부터 ${until}까지"
+    }
 
     /** The skipped window's first day: its period key (P-8), or null for a key that is not a date. */
     private fun skipDay(skip: DoseRecordEntity): LocalDate? = runCatching { LocalDate.parse(skip.periodKey) }.getOrNull()

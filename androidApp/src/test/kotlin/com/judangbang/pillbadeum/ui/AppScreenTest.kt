@@ -313,7 +313,7 @@ class AppScreenTest {
         assertTrue("nothing saved", runBlocking { core.loadStatusBoard().items.isEmpty() })
 
         compose.onNodeWithText("지난 기록").performClick()
-        compose.waitUntil(10_000) { compose.onAllNodesWithText("준비 중인 화면이에요.").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText(Labels.HISTORY_EMPTY).fetchSemanticsNodes().isNotEmpty() }
         activity.onBackPressedDispatcher.onBackPressed()
         compose.waitUntil(10_000) { compose.onAllNodesWithText("아직 복용 항목이 없어요.").fetchSemanticsNodes().isNotEmpty() }
 

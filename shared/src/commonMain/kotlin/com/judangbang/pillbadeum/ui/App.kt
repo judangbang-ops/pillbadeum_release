@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -24,10 +25,12 @@ import com.judangbang.pillbadeum.DidITakeCore
 import com.judangbang.pillbadeum.data.PersonEntity
 import com.judangbang.pillbadeum.domain.DoseKind
 import com.judangbang.pillbadeum.domain.DoseSource
+import com.judangbang.pillbadeum.status.HistoryMonth
 import com.judangbang.pillbadeum.status.JudgeCell
 import com.judangbang.pillbadeum.status.JudgeLoad
 import com.judangbang.pillbadeum.status.Labels
 import com.judangbang.pillbadeum.status.StatusBoard
+import com.judangbang.pillbadeum.status.showsPeople
 import com.judangbang.pillbadeum.usecase.ClockFlagResult
 import com.judangbang.pillbadeum.usecase.RecordResult
 import com.judangbang.pillbadeum.usecase.SaveIntakeResult
@@ -39,12 +42,13 @@ import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 
 /**
  * The app's screens, one at a time (07 sitemap). [key] is what is saved when the screen is recreated (BUG-003).
  * [back] is where system back goes (REQ-094, SPEC-021): every screen to the first, the people screen to settings,
- * and null on the first screen, where back closes the app.
+ * SCR-007 opened from SCR-008 back to that month (TASK-019), and null on the first screen, where back closes the app.
  */
 internal sealed interface Route {
     val key: String
@@ -62,16 +66,19 @@ internal sealed interface Route {
         override val back: Route get() = Home
     }
 
-    /** SCR-007 for one cell: a schedule version's window with its period key (supplement P-1, TASK-018). */
-    data class Judge(val intakeId: String, val versionId: String, val periodKey: String) : Route {
-        override val key get() = "judge:$intakeId:$versionId:$periodKey"
-        override val back: Route get() = Home
+    /**
+     * SCR-007 for one cell: a schedule version's window with its period key (supplement P-1, TASK-018). [from] is the
+     * SCR-008 month it was opened from: back returns there, to the same person and line (Claude's choice, TASK-019).
+     */
+    data class Judge(val intakeId: String, val versionId: String, val periodKey: String, val from: History? = null) : Route {
+        override val key get() = "judge:$intakeId:$versionId:$periodKey" + (from?.let { "@${it.key}" } ?: "")
+        override val back: Route get() = from ?: Home
     }
 
-    /** SCR-008 (TASK-019) */
-    data object History : Route {
-        override val key = "history"
-        override val back: Route = Home
+    /** SCR-008 for the month of [month] (its first day) and one person, or everyone with [personId] null (TASK-019). */
+    data class History(val month: LocalDate, val personId: String?) : Route {
+        override val key get() = "history:$month:${personId ?: ""}"
+        override val back: Route get() = Home
     }
 
     /** SCR-009 (TASK-020) */
@@ -88,11 +95,20 @@ internal sealed interface Route {
 
     companion object {
         fun parse(key: String): Route {
+            if ('@' in key) {
+                val from = parse(key.substringAfter('@')) as? History
+                return when (val route = parse(key.substringBefore('@'))) {
+                    is Judge -> route.copy(from = from)
+                    else -> route
+                }
+            }
             val parts = key.split(':')
             return when (parts[0]) {
                 "item" -> Item(parts.getOrNull(1)?.takeIf { it.isNotEmpty() })
                 "judge" -> if (parts.size == 4) Judge(parts[1], parts[2], parts[3]) else Home
-                "history" -> History
+                "history" -> parts.getOrNull(1)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+                    ?.let { History(LocalDate(it.year, it.month, 1), parts.getOrNull(2)?.takeIf(String::isNotEmpty)) }
+                    ?: Home
                 "settings" -> Settings
                 "people" -> People
                 else -> Home
@@ -130,8 +146,14 @@ fun App(
     var message by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var route by rememberSaveable(stateSaver = Route.Saver) { mutableStateOf<Route>(Route.Home) }
-    // Counts the reads, so a screen with data of its own (SCR-007) reads it again after every read of the board.
+    // Counts the reads, so a screen with data of its own (SCR-007, SCR-008) reads it again after every read of the board.
     var reads by remember { mutableIntStateOf(0) }
+    // SCR-008 (TASK-019): the last month read, with the screen it was read for, and where its list was. Both stay while
+    // SCR-007 is open on top, so back shows the same lines at the same place at once (and reads them again).
+    var history by remember { mutableStateOf<Pair<Route.History, HistoryMonth>?>(null) }
+    var historyFailed by remember { mutableStateOf(false) }
+    var historyAttempts by remember { mutableIntStateOf(0) }
+    var historyList by rememberSaveable(stateSaver = ListPlace) { mutableStateOf(LazyListState()) }
     val zone = TimeZone.currentSystemDefault()
 
     suspend fun reload() {
@@ -187,6 +209,14 @@ fun App(
         route = to
     }
 
+    /** SCR-008 from the first line: opened from the first screen, or another month or person. */
+    fun openHistory(to: Route.History) {
+        history = null
+        historyFailed = false
+        historyList = LazyListState()
+        go(to)
+    }
+
     LaunchedEffect(refreshKey, retries) {
         message = null
         reloadOrFail()
@@ -224,7 +254,9 @@ fun App(
                         board = null
                         retries++
                     },
-                    history = { go(Route.History) },
+                    history = {
+                        board?.baseDate?.let { today -> openHistory(Route.History(LocalDate(today.year, today.month, 1), null)) }
+                    },
                     settings = { go(Route.Settings) },
                     add = { go(Route.Item(null)) },
                     edit = { go(Route.Item(it.intakeId)) },
@@ -364,16 +396,16 @@ fun App(
                     cellFailed = false
                     when (result) {
                         JudgeLoad.Gone -> {
-                            go(Route.Home)
+                            go(current.back)
                             message = Labels.GONE
                         }
                         // A schedule change gave the window to another version (P-8): nothing left to fix here.
-                        JudgeLoad.Missing -> go(Route.Home)
+                        JudgeLoad.Missing -> go(current.back)
                         is JudgeLoad.Ready -> {
                             val read = result.cell
                             if (openedAt == null) openedAt = read.now.toEpochMilliseconds()
                             if (openedCurrent(read) && !read.current) {
-                                go(Route.Home)
+                                go(current.back)
                                 message = Labels.DAY_CHANGED
                             } else {
                                 cell = read
@@ -391,17 +423,17 @@ fun App(
                         }
                         is JudgeAfter.Move -> {
                             message = after.message
-                            route = Route.Judge(shown.intakeId, after.versionId, after.periodKey)
+                            route = Route.Judge(shown.intakeId, after.versionId, after.periodKey, from = current.from)
                             afterWrite()
                         }
                         is JudgeAfter.Home -> {
-                            go(Route.Home)
+                            go(current.back)
                             message = after.message
                             afterWrite()
                         }
                         JudgeAfter.Stale -> {
                             if (openedCurrent(shown) && c.clock.now() >= shown.window.end) {
-                                go(Route.Home)
+                                go(current.back)
                                 message = Labels.STALE
                             } else {
                                 message = Labels.RELOADED
@@ -431,7 +463,7 @@ fun App(
                     zone = zone,
                     clock = { (core?.clock ?: Clock.System).now() },
                     actions = JudgeActions(
-                        back = { go(Route.Home) },
+                        back = { go(current.back) },
                         retry = {
                             failed = false
                             retries++
@@ -480,13 +512,67 @@ fun App(
                 )
             }
 
-            // Filled by TASK-019 (SCR-008), TASK-020 (SCR-009) and TASK-021 (SCR-010).
-            Route.History -> NotYet("지난 기록") { go(Route.Home) }
+            is Route.History -> {
+                // The chosen person while the picker is shown, else everyone (REQ-018, REQ-040).
+                val chosen = current.personId?.takeIf { id -> showsPeople(people.size) && people.any { it.id == id } }
+                LaunchedEffect(core, reads, historyAttempts, current) {
+                    val c = core ?: return@LaunchedEffect
+                    try {
+                        history = current to c.loadHistory(current.month, chosen)
+                        historyFailed = false
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        historyFailed = true
+                    }
+                }
+                val shown = history?.takeIf { it.first == current }?.second
+                HistoryScreen(
+                    state = when {
+                        shown != null -> HistoryState.Ready(shown)
+                        historyFailed || (failed && core == null) -> HistoryState.Failed
+                        else -> HistoryState.Loading
+                    },
+                    month = current.month,
+                    personId = chosen,
+                    people = people,
+                    message = message,
+                    zone = zone,
+                    list = historyList,
+                    actions = HistoryActions(
+                        back = { go(Route.Home) },
+                        retry = {
+                            failed = false
+                            historyFailed = false
+                            retries++
+                            historyAttempts++
+                        },
+                        month = { openHistory(current.copy(month = it)) },
+                        person = { openHistory(current.copy(personId = it)) },
+                        open = { cell ->
+                            if (cell.archived) {
+                                // SCR-007#gone at once: an archived item's past judgments are not changed (REQ-014).
+                                message = Labels.GONE
+                            } else {
+                                go(Route.Judge(cell.intakeId, cell.scheduleVersionId, cell.window.periodKey, from = current))
+                            }
+                        },
+                    ),
+                )
+            }
+
+            // Filled by TASK-020 (SCR-009) and TASK-021 (SCR-010).
             Route.Settings -> NotYet("설정") { go(Route.Home) }
             Route.People -> NotYet("대상자") { go(Route.Settings) }
         }
     }
 }
+
+/** Where SCR-008's list was (first line and offset), kept when the activity is recreated (BUG-003). */
+private val ListPlace: Saver<LazyListState, List<Int>> = Saver(
+    save = { listOf(it.firstVisibleItemIndex, it.firstVisibleItemScrollOffset) },
+    restore = { LazyListState(it[0], it[1]) },
+)
 
 /** Actions for SCR-004#error shown on another screen: only `[다시 시도]` does something. */
 private fun homeOnlyRetry(retry: () -> Unit) = HomeActions(

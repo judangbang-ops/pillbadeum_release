@@ -44,8 +44,8 @@ import java.util.TimeZone as JavaTimeZone
 /**
  * SCR-007 판정 고치기 (TASK-018) in the real app, the way [AppScreenTest] runs it: opened from a tile's `[⋯]` on Thursday
  * 11/12 at 09:30 in Seoul, every judgment's buttons, the picker, the results and the rows they leave (REQ-006, REQ-029~034).
- * Past windows are reached the way a user reaches them before SCR-008 exists: a time edit moves the dose to yesterday and
- * the screen follows it. Each case is saved as `build/app-render/judge-*.png` with its semantics tree.
+ * Past windows are reached here by a time edit that moves the dose to yesterday, which the screen follows; opening one
+ * from SCR-008 is in [HistoryScreenTest]. Each case is saved as `build/app-render/judge-*.png` with its semantics tree.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = TestApp::class, qualifiers = "ko-rKR-w360dp-h800dp-xxhdpi")

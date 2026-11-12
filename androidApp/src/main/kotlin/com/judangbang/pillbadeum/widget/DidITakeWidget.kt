@@ -34,6 +34,7 @@ import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.appwidget.lazy.itemsIndexed
 import androidx.glance.appwidget.provideContent
@@ -72,8 +73,11 @@ import com.judangbang.pillbadeum.domain.DoseSource
 import com.judangbang.pillbadeum.status.Labels
 import com.judangbang.pillbadeum.status.TileState
 import com.judangbang.pillbadeum.status.WidgetButton
+import com.judangbang.pillbadeum.status.WidgetChoice
 import com.judangbang.pillbadeum.status.WidgetLayout
 import com.judangbang.pillbadeum.status.WidgetModel
+import com.judangbang.pillbadeum.status.WidgetView
+import com.judangbang.pillbadeum.status.view
 import com.judangbang.pillbadeum.usecase.RecordResult
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -111,13 +115,20 @@ class DidITakeWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val container = context.container
-        val initial = loadOrNull { container.widgetModel() }
+        // The board first: opening the core fills in the choice of widgets placed before the picker (RR-74).
+        val initial = loadOrNull { container.statusBoard() }
+        // Read here as well as from the session's state, which may have been read before that fill.
+        val savedChoice = loadOrNull { WidgetChoices.read(context, id) }
+        val setUp = actionStartActivity(WidgetPickActivity.intentFor(context, GlanceAppWidgetManager(context).getAppWidgetId(id)))
         provideContent {
             val prefs = currentState<Preferences>()
             val refreshAt = prefs[WidgetState.REFRESH] ?: 0L
-            var model by remember { mutableStateOf(initial) }
+            var board by remember { mutableStateOf(initial) }
             // update()/updateAll() on a live session only recomposes; reload from DB explicitly.
-            LaunchedEffect(refreshAt) { loadOrNull { container.widgetModel() }?.let { model = it } }
+            LaunchedEffect(refreshAt) { loadOrNull { container.statusBoard() }?.let { board = it } }
+            val choice = WidgetChoice.decode(prefs[WidgetChoices.KEY]) ?: savedChoice
+            // Times in the phone's own zone, windows in the base zone (REQ-082, TASK-043).
+            val model = board?.let { WidgetModel.from(it, TimeZone.currentSystemDefault(), choice) }
 
             val message = prefs[WidgetState.MESSAGE]
             val messageAt = prefs[WidgetState.MESSAGE_AT] ?: 0L
@@ -131,7 +142,7 @@ class DidITakeWidget : GlanceAppWidget() {
                 }
             }
             val visible = message?.takeIf { wallClock - messageAt in 0 until WidgetState.MESSAGE_TTL_MS }
-            WidgetContent(model, visible)
+            WidgetContent(model, visible, setUp)
         }
     }
 
@@ -151,6 +162,18 @@ class DidITakeWidgetReceiver : GlanceAppWidgetReceiver() {
         // First widget placed: make sure the day-boundary refresh is armed.
         context.container.appScope.launch { DayBoundaryAlarm.scheduleNext(context) }
     }
+
+    /**
+     * TASK-012 experiment (supplement R-3 proposal): when the launcher restores widgets from a backup, the platform
+     * says here which old widget id became which new one, and then asks for an update of the new ones. The choice is
+     * not backed up, so nothing is carried over: the restored widgets have no choice and ask to be set up again from
+     * two people on (REQ-079). The line in the log is what the device check reads to see whether this call comes;
+     * if it does, keeping the choice in a backed-up table keyed by widget id becomes possible.
+     */
+    override fun onRestored(context: Context, oldWidgetIds: IntArray, newWidgetIds: IntArray) {
+        super.onRestored(context, oldWidgetIds, newWidgetIds)
+        Log.i("DidITakeWidget", "onRestored: old ${oldWidgetIds.joinToString()} -> new ${newWidgetIds.joinToString()}")
+    }
 }
 
 /** Widget tap: RecordDose with the rendered period key, then message + refresh. */
@@ -159,6 +182,11 @@ class RecordFromWidget : ActionCallback {
         val intakeId = parameters[WidgetParams.INTAKE_ID] ?: return
         val container = context.container
         val core = container.core()
+        // SPEC-009: a widget that has to be set up again records nothing, even from a tile drawn before (REQ-079).
+        if (WidgetChoices.read(context, glanceId).view(core.people.list()) is WidgetView.Reconfigure) {
+            container.afterWrite()
+            return
+        }
         val result = core.record(intakeId, DoseSource.WIDGET, parameters[WidgetParams.PERIOD_KEY])
         val text = Labels.recordMessage(
             result = result,
@@ -214,9 +242,12 @@ private fun widgetFonts(context: Context): WidgetLayout.Fonts {
 
 private fun visibleIf(shown: Boolean): Visibility = if (shown) Visibility.Visible else Visibility.Gone
 
-/** The whole widget for one size. Internal for WidgetRenderTest, which draws it with fixed content. */
+/**
+ * The whole widget for one size. [setUp] opens the person picker from the `#reconfigure` line (SCR-002). Internal for
+ * WidgetRenderTest, which draws it with fixed content.
+ */
 @Composable
-internal fun WidgetContent(model: WidgetModel?, message: String?) {
+internal fun WidgetContent(model: WidgetModel?, message: String?, setUp: Action) {
     val size = LocalSize.current
     val plan = model?.let { WidgetLayout.plan(it, size.width.value, size.height.value, widgetFonts(LocalContext.current), message) }
     val openApp = actionStartActivity<MainActivity>()
@@ -239,7 +270,7 @@ internal fun WidgetContent(model: WidgetModel?, message: String?) {
                 Band(model?.restoreLine.orEmpty(), openApp)
             }
             Spacer(GlanceModifier.height(WidgetLayout.GAP.dp))
-            Body(model, plan, openApp, GlanceModifier.fillMaxWidth().defaultWeight())
+            Body(model, plan, openApp, setUp, GlanceModifier.fillMaxWidth().defaultWeight())
         }
         // SCR-001#overflow (REQ-078): no text, read as '더 있음'. A list never reports its scroll position, so the
         // arrow stays while the rows are estimated taller than the list (PR #16 report 3.5).
@@ -264,12 +295,13 @@ private fun Header(model: WidgetModel?, wraps: Boolean, openApp: Action) {
             Spacer(GlanceModifier.width(0.dp).height(WidgetLayout.CHIP_MIN.dp))
             Words(Labels.APP_NAME, style = date)
         }
-        !wraps -> Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        // SCR-001#reconfigure: no count, since the widget does not know whose items to count.
+        !wraps || model.reconfigure != null -> Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
             DayChip(model.weekday)
             Spacer(GlanceModifier.width(WidgetLayout.HEADER_GAP.dp))
             Words(model.headerDate, style = date)
             Spacer(GlanceModifier.defaultWeight())
-            Count(model)
+            if (model.reconfigure == null) Count(model)
         }
         // Large fonts: the count goes under the date, at the right (TASK-044 drawing, 200%).
         else -> Column(modifier = modifier) {
@@ -307,26 +339,28 @@ private fun Count(model: WidgetModel) {
     Words(" " + model.countRest, style = TextStyle(color = color(Tokens.INK_MUTED), fontSize = 14.sp))
 }
 
-/** Notice band: the tap message and the restore line (`color.surface.notice`). A tap opens the app. */
+/** Notice band: the tap message, the restore line and the reconfigure line (`color.surface.notice`). */
 @Composable
-private fun Band(text: String, openApp: Action) {
+private fun Band(text: String, onTap: Action) {
     Words(
         text,
         modifier = GlanceModifier.fillMaxWidth()
             .background(ImageProvider(R.drawable.widget_notice))
-            .clickable(openApp, rippleOverride = R.drawable.widget_notice_ripple)
+            .clickable(onTap, rippleOverride = R.drawable.widget_notice_ripple)
             .padding(horizontal = WidgetLayout.BAND_PAD_H.dp, vertical = WidgetLayout.BAND_PAD_V.dp),
         style = TextStyle(color = color(Tokens.INK_NOTICE), fontSize = 14.sp, fontWeight = FontWeight.Medium),
     )
 }
 
 @Composable
-private fun Body(model: WidgetModel?, plan: WidgetLayout.Plan?, openApp: Action, modifier: GlanceModifier) {
+private fun Body(model: WidgetModel?, plan: WidgetLayout.Plan?, openApp: Action, setUp: Action, modifier: GlanceModifier) {
     val quiet = TextStyle(color = color(Tokens.INK_MUTED), fontSize = 14.sp)
     when {
         model == null -> Words(Labels.LOADING, modifier = modifier.padding(horizontal = WidgetLayout.HEADER_PAD_H.dp), style = quiet)
+        // SCR-001#reconfigure (REQ-079): no tiles; the line opens the person picker.
+        model.reconfigure != null -> Column(modifier = modifier) { Band(model.reconfigure.orEmpty(), setUp) }
         model.buttons.isEmpty() || plan == null -> Words(
-            Labels.EMPTY_WIDGET,
+            model.emptyText,
             modifier = modifier.clickable(openApp).padding(horizontal = WidgetLayout.HEADER_PAD_H.dp),
             style = quiet,
         )

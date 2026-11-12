@@ -17,11 +17,13 @@ import android.widget.TextView
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.glance.GlanceId
+import androidx.glance.action.actionStartActivity
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.compose
 import androidx.glance.appwidget.provideContent
 import androidx.test.core.app.ApplicationProvider
+import com.judangbang.pillbadeum.MainActivity
 import com.judangbang.pillbadeum.R
 import com.judangbang.pillbadeum.design.Tokens
 import com.judangbang.pillbadeum.status.Labels
@@ -66,7 +68,7 @@ class WidgetRenderTest {
         override val sizeMode: SizeMode = SizeMode.Exact
 
         override suspend fun provideGlance(context: Context, id: GlanceId) {
-            provideContent { WidgetContent(model, message) }
+            provideContent { WidgetContent(model, message, actionStartActivity<MainActivity>()) }
         }
     }
 
@@ -93,17 +95,28 @@ class WidgetRenderTest {
         description = title,
     )
 
-    private fun model(buttons: List<WidgetButton>, restore: String? = null) = WidgetModel(
+    private fun model(
+        buttons: List<WidgetButton>,
+        restore: String? = null,
+        reconfigure: String? = null,
+        empty: String = Labels.EMPTY_WIDGET,
+    ) = WidgetModel(
         title = Labels.APP_NAME,
         dateLabel = "11/12 (목)",
         countLabel = "",
         weekday = "목",
         headerDate = "${Labels.APP_NAME} · 11/12",
-        countDone = "${buttons.count { it.state == TileState.TAKEN }} / ${buttons.size}",
-        countRest = if (buttons.any { it.state == TileState.SKIPPED }) "완료 · 건너뜀 1" else "완료",
+        countDone = if (reconfigure != null) "" else "${buttons.count { it.state == TileState.TAKEN }} / ${buttons.size}",
+        countRest = when {
+            reconfigure != null -> ""
+            buttons.any { it.state == TileState.SKIPPED } -> "완료 · 건너뜀 1"
+            else -> "완료"
+        },
         buttons = buttons,
         restoreLine = restore,
         showPeople = buttons.any { it.who != null },
+        reconfigure = reconfigure,
+        emptyText = empty,
     )
 
     /** The TASK-044 drawing's four items with the longest copy (docs/05-ui/states/README.md section 2). */
@@ -184,6 +197,42 @@ class WidgetRenderTest {
     }
 
     @Test
+    fun the_reconfigure_line_instead_of_tiles_and_count() {
+        // SCR-001#reconfigure (TASK-012, REQ-079): the line alone, no count; with a restore both lines show.
+        val restoreLine = "복원됨 · 마지막 기록 11/09${nb}21:40 · 앱에서 확인"
+        for ((name, root) in listOf(
+            "reconfigure-100" to checkView("reconfigure-100", model(emptyList(), reconfigure = Labels.RECONFIGURE), arrow = false),
+            "reconfigure-archived-200" to checkView(
+                "reconfigure-archived-200",
+                model(emptyList(), reconfigure = Labels.RECONFIGURE_ARCHIVED),
+                fontScale = 2f,
+                arrow = false,
+            ),
+            "reconfigure-restored-100" to checkView(
+                "reconfigure-restored-100",
+                model(emptyList(), restore = restoreLine, reconfigure = Labels.RECONFIGURE),
+                arrow = false,
+            ),
+        )) {
+            val texts = shownTexts(root)
+            assertTrue("$name: the line is shown", texts.any { it.endsWith(Labels.RECONFIGURE) })
+            assertTrue("$name: no count", texts.none { it.contains("완료") || it.contains(" / ") })
+            assertTrue("$name: no empty line", texts.none { it == Labels.EMPTY_WIDGET })
+        }
+    }
+
+    @Test
+    fun a_widget_for_mom_and_her_empty_line() {
+        // SPEC-005: only 엄마's tiles; with two people her name stays on them (REQ-018).
+        val moms = drawing.filter { it.who == "엄마" }
+        val root = checkView("mom-100", model(moms), arrow = false)
+        assertTrue(shownTexts(root).none { it == "아침약" || it == "비타민D" })
+        // SCR-001#empty for her (proposal).
+        val empty = checkView("mom-empty-100", model(emptyList(), empty = Labels.emptyFor("엄마")), arrow = false)
+        assertTrue(shownTexts(empty).contains("엄마 항목이 없어요"))
+    }
+
+    @Test
     fun the_pending_ring_stays_hollow_when_tinted() {
         // A stroked oval shape fills its inside once tinted (GradientDrawable paints the fill through the color
         // filter when it has no solid color): the ring came out as a disc before it became a vector.
@@ -200,6 +249,15 @@ class WidgetRenderTest {
 
     // ---------------------------------------------------------------------------------------------
 
+    /** The plain text of every shown text view under [root]. */
+    private fun shownTexts(root: View): List<String> = buildList {
+        fun walk(v: View) {
+            if (v is TextView && shown(v)) add(v.text.toString().replace(WidgetLayout.WORD_JOINER.toString(), ""))
+            if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
+        }
+        walk(root)
+    }
+
     private fun check(
         name: String,
         model: WidgetModel?,
@@ -208,6 +266,18 @@ class WidgetRenderTest {
         fontScale: Float = 1f,
         arrow: Boolean,
     ) {
+        checkView(name, model, message, size, fontScale, arrow)
+    }
+
+    /** [check], returning the laid-out widget for more assertions. */
+    private fun checkView(
+        name: String,
+        model: WidgetModel?,
+        message: String? = null,
+        size: DpSize = portrait,
+        fontScale: Float = 1f,
+        arrow: Boolean,
+    ): View {
         val root = render(name, model, message, size, fontScale)
         val views = buildList {
             fun walk(v: View) {
@@ -233,6 +303,7 @@ class WidgetRenderTest {
                 assertEquals("$name: line ${line + 1} of '$plain' starts inside a word", ' ', before)
             }
         }
+        return root
     }
 
     /** Some rows are not laid out, or the last one goes past the bottom of the list. */

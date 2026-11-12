@@ -29,6 +29,24 @@
             </intent-filter>
         </activity>
 
+        <!--
+            SCR-002, the widget's person picker (TASK-012). The launcher starts it when the widget is placed and, on
+            Android 12+, from the widget's Reconfigure button (res/xml/diditake_widget_info.xml), so it is exported with
+            the APPWIDGET_CONFIGURE filter. It only acts on this app's own widget ids. Translucent so that nothing shows
+            while it decides; with one person it never draws (REQ-018). Its own task affinity sends a pick started
+            from the widget back to the home screen, not into the app.
+        -->
+        <activity
+            android:name=".widget.WidgetPickActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
         <receiver
             android:name=".widget.DidITakeWidgetReceiver"
             android:exported="true"

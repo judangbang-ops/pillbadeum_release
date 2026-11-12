@@ -11,8 +11,13 @@
     row (WidgetLayout).
     updatePeriodMillis is 0: periodic updates are at least 30 minutes apart and not exact, so day
     boundary refresh will use its own alarm instead (docs/02-design/architecture.md section 6).
+    configure: the person picker SCR-002 opens when the widget is placed (TASK-012). widgetFeatures reconfigurable
+    adds a Reconfigure button on touch and hold, from Android 12 (official Glance configuration guide, read
+    2026-11-13); older versions ignore it. configuration_optional is not set: it would skip the picker on placement,
+    which SPEC-005 asks for from two people on.
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:configure="com.judangbang.pillbadeum.widget.WidgetPickActivity"
     android:initialLayout="@layout/glance_default_loading_layout"
     android:minWidth="270dp"
     android:minHeight="110dp"
@@ -22,4 +27,5 @@
     android:targetCellWidth="4"
     android:targetCellHeight="2"
     android:updatePeriodMillis="0"
-    android:widgetCategory="home_screen" />
+    android:widgetCategory="home_screen"
+    android:widgetFeatures="reconfigurable" />

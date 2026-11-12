@@ -34,6 +34,31 @@ object Labels {
     /** What TalkBack reads for the widget's down arrow while its list overflows; the arrow has no text (REQ-078). */
     const val MORE: String = "더 있음"
 
+    /** SCR-001#reconfigure: a widget restored without its choice while two or more people are active (REQ-079). */
+    const val RECONFIGURE: String = "위젯을 다시 설정해 주세요"
+
+    /** SCR-001#reconfigure when the widget's person is archived (SPEC-027). */
+    const val RECONFIGURE_ARCHIVED: String = "대상자가 보관됐어요. 위젯을 다시 설정해 주세요"
+
+    /** SCR-001#empty on a widget that shows one person: `엄마 항목이 없어요` (screens.md, proposal). */
+    fun emptyFor(name: String): String = "$name 항목이 없어요"
+
+    /** SCR-002 (09 WidgetPick). */
+    const val PICK_TITLE: String = "이 위젯에 누구 약을 보일까요?"
+    const val PICK_SUBTITLE: String = "고른 사람의 약만 이 위젯에 보여요."
+    const val PICK_EVERYONE: String = "전체"
+    const val PICK_CANCEL: String = "취소"
+
+    /** SCR-002#error. */
+    const val PICK_SAVE_FAILED: String = "저장하지 못했어요. 다시 골라 주세요"
+
+    /** `나·엄마의 약 4개` under 전체 (09 WidgetPick). */
+    fun pickEveryoneDetail(names: List<String>, count: Int): String =
+        if (names.isEmpty()) "약 ${count}개" else "${names.joinToString("·")}의 약 ${count}개"
+
+    /** `약 2개` under a person (09 WidgetPick). */
+    fun pickPersonDetail(count: Int): String = "약 ${count}개"
+
     /** A cell that ended before the last day-start or base-zone change (supplement P-5, SCR-007#locked). */
     const val LOCKED: String = "설정을 바꾸기 전의 기록은 고칠 수 없어요"
 

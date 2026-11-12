@@ -53,6 +53,9 @@ data class StatusBoard(
      * (REQ-018, supplement S-4). Counted over every active person, also on a widget that shows one person.
      */
     val showPeople: Boolean = true,
+
+    /** People who are not archived, oldest first: the choices of the widget's person picker (SCR-002, TASK-012). */
+    val people: List<PersonEntity> = emptyList(),
 ) {
     /** `n` of `n / m 완료`: doses only, skips are counted apart (supplement S-1, REQ-020). */
     val doneCount: Int get() = items.count { it.isTaken }
@@ -217,6 +220,7 @@ class LoadStatusBoard(
             restoreNotice = db.settingDao().loadRestoreNotice(),
             clockWarnings = clockWarnings,
             showPeople = showsPeople(people.size),
+            people = people.values.toList(),
         )
     }
 

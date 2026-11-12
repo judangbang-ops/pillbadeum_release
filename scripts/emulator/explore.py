@@ -8,10 +8,11 @@ look like is judged by a person, or by Claude from the screenshots, in docs/07-q
 
 Flow (clock set to the run's date in Asia/Seoul, so the screens show Korean dates and times):
    1. First launch at 08:30: the empty home.
-   2. [항목 추가]: the empty form, then a family member "Mom" added with [+ 사람 추가].
+   2. [항목 추가]: the empty form, then a family member "Mom" added with [+ 가족 추가].
    3. Three items: Vitamin (나, 매일 아침), BPpill (Mom, 매일 저녁), Weekly (나, 주 1회 월).
    4. [먹었어] on Vitamin in the app.
-   5. The home-screen widget placed the way a person does it (release_check.place_widget),
+   5. The home-screen widget placed the way a person does it (release_check.place_widget), 전체 picked in
+      the person picker that opens on the drop with two people (TASK-012),
       BPpill tapped on the widget, then tapped again (already recorded).
    6. [기록 취소] on Vitamin, confirmed in the question, then [먹었어] again.
    7. Editing: Vitamin changed to 주 1회, Weekly deleted ([항목 삭제] > confirm).
@@ -61,6 +62,7 @@ from release_check import go_home, place_widget, save_ui, screen_size
 ZONE = ZoneInfo("Asia/Seoul")
 ME = "나"  # ManagePeople.DEFAULT_PERSON_NAME
 MOM = "Mom"
+ADD_FAMILY = "+ 가족 추가"  # the person chip of the item form (App.kt EditScreen, TASK-015)
 VITAMIN = "Vitamin"
 BP = "BPpill"
 WEEKLY = "Weekly"
@@ -354,8 +356,9 @@ def run(r: Report, steps: Steps) -> None:
         tap_exact("항목 추가")
         time.sleep(1)
         r.shot("add-form-empty")
-        chips = [n.text for n in dump_ui() if n.text in (ME, "+ 사람 추가")]
-        tap_exact("+ 사람 추가")
+        # One person: the person field is folded and only [+ 가족 추가] shows (TASK-015, REQ-018).
+        chips = [n.text for n in dump_ui() if n.text in (ME, ADD_FAMILY)]
+        tap_exact(ADD_FAMILY)
         type_into(2, MOM)
         r.shot("add-person-open")
         tap_exact("추가")
@@ -366,7 +369,7 @@ def run(r: Report, steps: Steps) -> None:
         exact("항목 추가", 10)
         return f"폼의 대상자 칩 {chips}, {MOM} 칩 생김"
 
-    steps("2. 항목 추가 화면과 대상자 추가", "빈 폼, 나 칩, 사람 추가 후 새 칩", add_form)
+    steps("2. 항목 추가 화면과 대상자 추가", "빈 폼(대상자 칸 접힘, [+ 가족 추가]), 가족 추가 뒤 나·Mom 칩", add_form)
 
     # 3. three items
     steps("3-1. 매일 아침 항목 (나)", "목록에 생김", lambda: add_item(r, VITAMIN, ME, False, "아침", "form-vitamin"))

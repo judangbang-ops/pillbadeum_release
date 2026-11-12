@@ -28,23 +28,39 @@ data class WidgetModel(
     val restoreLine: String? = null,
     /** Two or more active people: person names are drawn (REQ-018). */
     val showPeople: Boolean = true,
+    /**
+     * `위젯을 다시 설정해 주세요` in place of the tiles and the count while the widget has to be set up again
+     * (SCR-001#reconfigure, REQ-079); null otherwise.
+     */
+    val reconfigure: String? = null,
+    /** What an empty widget says: `앱에서 복용 항목을 추가해 주세요`, or `엄마 항목이 없어요` on 엄마's widget (SCR-001#empty). */
+    val emptyText: String = Labels.EMPTY_WIDGET,
 ) {
     companion object {
         /**
          * [zone] is the display zone, the phone's own (`TimeZone.currentSystemDefault()`): times are shown there,
          * while the board's windows and base date stay in the base zone (REQ-082, TASK-043).
+         *
+         * [choice] is the widget's own (TASK-012): a widget for one person shows only that person's tiles and counts
+         * only them (REQ-025). Person names follow every active person, also on such a widget (REQ-018).
          */
-        fun from(board: StatusBoard, zone: TimeZone): WidgetModel {
-            val (countDone, countRest) = Labels.countParts(board)
+        fun from(board: StatusBoard, zone: TimeZone, choice: WidgetChoice? = WidgetChoice.Everyone): WidgetModel {
+            val view = choice.view(board.people)
+            val person = (view as? WidgetView.Items)?.person
+            val shown = when (view) {
+                is WidgetView.Reconfigure -> board.copy(items = emptyList())
+                is WidgetView.Items -> if (person == null) board else board.copy(items = board.items.filter { it.person.id == person.id })
+            }
+            val (countDone, countRest) = if (view is WidgetView.Reconfigure) "" to "" else Labels.countParts(shown)
             return WidgetModel(
                 title = Labels.APP_NAME,
                 dateLabel = Labels.date(board.baseDate),
-                countLabel = Labels.count(board),
+                countLabel = if (view is WidgetView.Reconfigure) "" else Labels.count(shown),
                 weekday = Labels.weekday(board.baseDate.dayOfWeek),
                 headerDate = Labels.widgetDate(board.baseDate),
                 countDone = countDone,
                 countRest = countRest,
-                buttons = board.items.map { item ->
+                buttons = shown.items.map { item ->
                     WidgetButton(
                         intakeId = item.intakeId,
                         periodKey = item.window.periodKey,
@@ -64,6 +80,10 @@ data class WidgetModel(
                 },
                 restoreLine = board.restoreNotice?.let { Labels.restoreWidgetLine(it, zone) },
                 showPeople = board.showPeople,
+                reconfigure = (view as? WidgetView.Reconfigure)?.let {
+                    if (it.archived) Labels.RECONFIGURE_ARCHIVED else Labels.RECONFIGURE
+                },
+                emptyText = person?.let { Labels.emptyFor(it.name) } ?: Labels.EMPTY_WIDGET,
             )
         }
     }

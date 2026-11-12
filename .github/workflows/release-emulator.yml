@@ -1,0 +1,141 @@
+# 개인 APK를 나눠 주기 전 릴리즈 변형 확인 (TASK-051, REQ-055·REQ-062, 2026-11-12 검토 A3).
+# 같은 커밋의 서명 안 한 릴리즈 APK를 버전 번호 N과 N+1로 두 번 빌드하고, 이 실행에서만 쓰는 임시 키 하나로
+# 개인 APK와 같은 방법(scripts/sign-personal-apk.ps1: zipalign 확인 → apksigner, v4 서명 끔)으로 서명함.
+# 에뮬레이터(API 34)에서 N을 깔고 위젯 탭 기록 → 백업 → 지우고 다시 설치(RR-26) → N+1을 덮어 깔아도 기록이 남는지 봄.
+# 경우와 기대 동작은 scripts/emulator/release_check.py 첫 주석.
+#
+# - 업로드 키·앱 서명 키·Secrets를 쓰지 않음. 임시 키는 서명 단계 안에서만 만들고 지움
+# - 개인 APK를 나눠 주기 전에 main에서 수동 실행함. PR에서는 이 확인의 코드가 바뀔 때만 돎(실행마다 약 25분)
+name: 릴리즈 변형 에뮬레이터 확인
+
+on:
+  pull_request:
+    paths:
+      - androidApp/build.gradle.kts
+      - scripts/emulator/**
+      - .github/actions/android-emulator/**
+      - .github/workflows/release-emulator.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-emulator-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  apks:
+    name: 릴리즈 APK 둘 (N, N+1, 임시 키)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: gradle/actions/wrapper-validation@0723195856401067f7a2779048b490ace7a47d7c # v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      # 버전 번호는 release.yml·ci.yml처럼 빌드한 커밋까지의 커밋 수(N). N+1은 '다음 빌드'를 흉내 냄
+      - name: 서명하지 않은 릴리즈 APK 두 개 (./gradlew :androidApp:assembleRelease)
+        shell: bash
+        run: |
+          test "$(git rev-parse --is-shallow-repository)" = false
+          n="$(git rev-list --count HEAD)"
+          echo "versionCode N = $n, N+1 = $((n + 1)) ($(git rev-parse --short HEAD))"
+          mkdir -p "$RUNNER_TEMP/unsigned"
+          for code in "$n" "$((n + 1))"; do
+            PILLBADEUM_VERSION_CODE="$code" ./gradlew :androidApp:assembleRelease
+            cp androidApp/build/outputs/apk/release/androidApp-release-unsigned.apk "$RUNNER_TEMP/unsigned/release-$code.apk"
+          done
+          echo "VERSION_N=$n" >> "$GITHUB_ENV"
+
+      # 임시 키(RSA 2048, 유효 1일)는 이 단계 안에서만 만들고 끝나면 지움. 비밀번호는 무작위이고 로그에서 가림
+      - name: 임시 키로 두 APK 서명 (zipalign 확인 → apksigner, 개인 APK와 같은 방법)
+        shell: bash
+        run: |
+          umask 077
+          key="$RUNNER_TEMP/release-check.p12"
+          TEST_KEY_PASSWORD="$(openssl rand -hex 24)"
+          export TEST_KEY_PASSWORD
+          echo "::add-mask::$TEST_KEY_PASSWORD"
+          trap 'rm -f "$key"' EXIT
+          keytool -genkeypair -noprompt -storetype PKCS12 -keystore "$key" -storepass:env TEST_KEY_PASSWORD \
+            -alias release-check -keyalg RSA -keysize 2048 -validity 1 -dname "CN=Pillbadeum release check ephemeral key"
+          build_tools="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)"
+          echo "build-tools: $build_tools"
+          mkdir -p "$RUNNER_TEMP/signed"
+          for code in "$VERSION_N" "$((VERSION_N + 1))"; do
+            in="$RUNNER_TEMP/unsigned/release-$code.apk"
+            if ! "$build_tools/zipalign" -c -P 16 4 "$in" > /dev/null; then
+              echo "정렬이 맞지 않아 zipalign으로 맞춘 사본에 서명함"
+              "$build_tools/zipalign" -f -P 16 4 "$in" "$RUNNER_TEMP/unsigned/aligned-$code.apk"
+              in="$RUNNER_TEMP/unsigned/aligned-$code.apk"
+            fi
+            out="$RUNNER_TEMP/signed/release-$code.apk"
+            "$build_tools/apksigner" sign --ks "$key" --ks-type PKCS12 --ks-key-alias release-check \
+              --ks-pass env:TEST_KEY_PASSWORD --key-pass env:TEST_KEY_PASSWORD --v4-signing-enabled false \
+              --out "$out" "$in"
+            "$build_tools/apksigner" verify --print-certs "$out" | grep -E 'certificate (DN|SHA-256)|Number of signers' || true
+            "$build_tools/zipalign" -c -P 16 4 "$out"
+            "$build_tools/aapt2" dump badging "$out" | sed -n 1p
+          done
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: release-check-apks
+          path: ${{ runner.temp }}/signed/
+          retention-days: 1
+          overwrite: true
+          if-no-files-found: error
+
+  release:
+    name: 릴리즈 변형 (API 34)
+    needs: apks
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: release-check-apks
+          path: ${{ runner.temp }}/apk
+
+      - uses: ./.github/actions/android-emulator
+        with:
+          api: "34"
+
+      - name: 릴리즈 변형 확인 (scripts/emulator/release_check.py)
+        shell: bash
+        run: |
+          apks=($(ls "$RUNNER_TEMP"/apk/release-*.apk | sort -V))
+          test "${#apks[@]}" = 2
+          python3 scripts/emulator/release_check.py --apk "${apks[0]}" --next-apk "${apks[1]}" \
+            --out "$RUNNER_TEMP/release-check"
+
+      - name: 결과 표
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          report="$RUNNER_TEMP/release-check/report.md"
+          if [ -f "$report" ]; then cat "$report" >> "$GITHUB_STEP_SUMMARY"; else echo "보고서 없음" >> "$GITHUB_STEP_SUMMARY"; fi
+          cp "$RUNNER_TEMP/emulator.log" "$RUNNER_TEMP/release-check/" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() }}
+        with:
+          name: release-check-api34
+          path: ${{ runner.temp }}/release-check/
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: ignore

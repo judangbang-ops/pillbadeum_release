@@ -174,8 +174,8 @@ def stop_app() -> None:
     sh(f"am force-stop {PKG}")
 
 
-def add_item_and_record(name: str) -> None:
-    """Home > [항목 추가] > name > [저장] > that row's [먹었어]."""
+def add_item(name: str) -> Node:
+    """Home > [항목 추가] > name > [저장]. Returns the new row's name on the home screen."""
     tap_text("항목 추가")
     field_node = next((n for n in dump_ui() if n.cls.endswith("EditText")), None)
     if field_node is None:
@@ -186,6 +186,12 @@ def add_item_and_record(name: str) -> None:
     row = find(name, 20)
     if row is None:
         raise RuntimeError(f"row {name} did not show")
+    return row
+
+
+def add_item_and_record(name: str) -> None:
+    """Home > [항목 추가] > name > [저장] > that row's [먹었어]."""
+    row = add_item(name)
     # The row's button sits at the right edge on the same line as the name.
     buttons = [n for n in dump_ui() if n.text == "먹었어"]
     if not buttons:
@@ -208,6 +214,7 @@ class AppState:
     marker: str | None = None
     files: str = ""
     readable: bool = True
+    sources: list[str] = field(default_factory=list)  # dose_record.source of active rows, oldest first
 
 
 def read_state() -> AppState:
@@ -225,14 +232,14 @@ def read_state() -> AppState:
         con = sqlite3.connect(tmp / DB)
         try:
             records = con.execute("SELECT COUNT(*) FROM dose_record WHERE active = 1").fetchone()[0]
-            ids = [r[0] for r in con.execute("SELECT device_id FROM dose_record WHERE active = 1 ORDER BY recorded_at")]
+            rows = con.execute("SELECT device_id, source FROM dose_record WHERE active = 1 ORDER BY recorded_at").fetchall()
             settings = dict(con.execute("SELECT key, value FROM setting"))
         except sqlite3.DatabaseError:
             # A broken or half-copied database is not "no records": callers see readable = False.
             return AppState(True, -1, [], {}, marker, files, readable=False)
         finally:
             con.close()
-        return AppState(True, records, ids, settings, marker, files)
+        return AppState(True, records, [r[0] for r in rows], settings, marker, files, sources=[str(r[1]) for r in rows])
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -398,9 +405,10 @@ def reinstall(apk: Path) -> str:
 
 
 class Report:
-    def __init__(self, out: Path, api: int) -> None:
+    def __init__(self, out: Path, api: int, title: str | None = None) -> None:
         self.out = out
         self.api = api
+        self.title = title or f"에뮬레이터 확인 API {api}"
         self.rows: list[tuple[str, str, str, bool]] = []
         self.notes: list[str] = []
         self.shots = 0
@@ -425,7 +433,7 @@ class Report:
         return any(not ok for *_, ok in self.rows)
 
     def write(self) -> None:
-        lines = [f"### 에뮬레이터 확인 API {self.api}", "", "| 경우 | 기대 | 결과 | 판정 |", "| --- | --- | --- | --- |"]
+        lines = [f"### {self.title}", "", "| 경우 | 기대 | 결과 | 판정 |", "| --- | --- | --- | --- |"]
         for case, expected, actual, ok in self.rows:
             cell = lambda s: s.replace("|", "\\|").replace("\n", " ")
             lines.append(f"| {cell(case)} | {cell(expected)} | {cell(actual)} | {'통과' if ok else '**실패**'} |")

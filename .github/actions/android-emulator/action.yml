@@ -1,0 +1,58 @@
+# GitHub 호스트 러너에서 Android 에뮬레이터 하나를 켜고 부팅을 기다림 (서드파티 액션 없이).
+# .github/workflows/emulator.yml의 백업·복원(TASK-028·029)과 릴리즈 변형(TASK-051) 작업이 같이 씀.
+# 에뮬레이터 로그는 $RUNNER_TEMP/emulator.log. 함정은 2026-11-12 첫 실행들에서 확인함:
+# - avdmanager가 AVD를 $HOME/.android 밖에 만드는 러너가 있어 ANDROID_AVD_HOME을 정함
+# - API 27은 google_apis x86_64 이미지가 없어 default 이미지로 받음 (둘 다 adb root 가능)
+name: Android 에뮬레이터 켜기
+description: KVM, 시스템 이미지, AVD를 준비하고 에뮬레이터 부팅을 기다림
+inputs:
+  api:
+    description: Android API 수준 (예 34)
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: KVM 켜기
+      shell: bash
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+        ls -l /dev/kvm
+
+    - name: 에뮬레이터와 시스템 이미지 받기
+      shell: bash
+      env:
+        API: ${{ inputs.api }}
+      run: |
+        sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+        yes | "$sdkmanager" --licenses > /dev/null || true
+        "$sdkmanager" --install emulator platform-tools > "$RUNNER_TEMP/sdkmanager.log"
+        for tag in google_apis default; do
+          image="system-images;android-$API;$tag;x86_64"
+          if "$sdkmanager" --install "$image" >> "$RUNNER_TEMP/sdkmanager.log" 2>&1 \
+            && [ -d "$ANDROID_HOME/system-images/android-$API/$tag/x86_64" ]; then
+            echo "SYSTEM_IMAGE=$image" >> "$GITHUB_ENV"
+            echo "시스템 이미지: $image"
+            break
+          fi
+        done
+        tail -n 3 "$RUNNER_TEMP/sdkmanager.log"
+        grep -q '^SYSTEM_IMAGE=' "$GITHUB_ENV" || { echo "시스템 이미지를 받지 못함"; exit 1; }
+        echo "$ANDROID_HOME/emulator" >> "$GITHUB_PATH"
+        echo "$ANDROID_HOME/platform-tools" >> "$GITHUB_PATH"
+
+    - name: AVD 만들고 켜기
+      shell: bash
+      run: |
+        export ANDROID_AVD_HOME="$RUNNER_TEMP/avd"
+        mkdir -p "$ANDROID_AVD_HOME"
+        echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n check -k "$SYSTEM_IMAGE" -d pixel_5 --force
+        # 실제 키보드가 있는 것으로 두어 화면 키보드가 버튼을 가리지 않게 함
+        printf 'hw.keyboard=yes\nhw.ramSize=3072\n' >> "$ANDROID_AVD_HOME/check.avd/config.ini"
+        nohup emulator -avd check -no-window -no-audio -no-boot-anim -no-snapshot \
+          -gpu swiftshader_indirect -camera-back none -camera-front none \
+          > "$RUNNER_TEMP/emulator.log" 2>&1 &
+        adb wait-for-device
+        timeout 600 bash -c 'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = "1" ]; do sleep 3; done'
+        adb shell getprop ro.build.version.release

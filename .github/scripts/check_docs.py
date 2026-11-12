@@ -328,6 +328,58 @@ if spec_path.exists():
     fn_other = sorted({k for k, c in rows.items() if c[2] == "기능"} - fn_must - spec_reqs)
     print(f"  other functional requirements without a SPEC row: {fn_other or 'none'}")
 
+# --- data model (stage 05) ------------------------------------------------------------------
+# db/schema.sql copies the CREATE statements of the newest Room schema export word for word and
+# adds a TBL comment per table; this keeps the two from drifting apart.
+schema_path = root / "db/schema.sql"
+if schema_path.exists():
+    schema_sql = schema_path.read_text(encoding="utf-8")
+    exports = sorted((root / "shared/schemas/com.judangbang.pillbadeum.data.DidITakeDatabase").glob("*.json"),
+                     key=lambda p: int(p.stem))
+    room = json.loads(exports[-1].read_text(encoding="utf-8"))["database"]
+    room_tables = {e["tableName"]: e for e in room["entities"]}
+    for name, e in room_tables.items():
+        for stmt in [e["createSql"]] + [i["createSql"] for i in e.get("indices", [])]:
+            if stmt.replace("${TABLE_NAME}", name) + ";" not in schema_sql:
+                problem(f"schema: {name} differs from {exports[-1].name}: {stmt[:60]}...")
+    sql_tables = re.findall(r"^CREATE TABLE IF NOT EXISTS `(\w+)`", schema_sql, re.M)
+    if sorted(sql_tables) != sorted(room_tables):
+        problem(f"schema: tables {sorted(sql_tables)} differ from {exports[-1].name} {sorted(room_tables)}")
+    domain_terms = set(re.findall(r"^\| (TERM-\d{3}) ", read("docs/01-domain/domain.md"), re.M))
+    tbl_re = re.compile(r"^-- (TBL-\d{3}) (\w+) \(([^)]*)\) ← (.*?) \| terms: (.*)$", re.M)
+    tbls = tbl_re.findall(schema_sql)
+    print(f"schema: {len(tbls)} tables from {exports[-1].name} (version {room['version']})")
+    seen_terms = set()
+    for tid, name, ctx, spec_list, terms in tbls:
+        after = schema_sql[schema_sql.index(f"-- {tid} "):]
+        if not re.search(rf"^CREATE TABLE IF NOT EXISTS `{name}`", after.split("\n\n")[0], re.M):
+            problem(f"schema: {tid} comment is not right above CREATE TABLE `{name}`")
+        if ctx != "2차" and set(re.findall(r"CTX-\d{3}", ctx)) - domain_ctx:
+            problem(f"schema: {tid} names unknown contexts {ctx}")
+        if spec_list != "없음":
+            bad = set(re.findall(r"SPEC-\d{3}", spec_list)) - set(specs)
+            if bad or not re.findall(r"SPEC-\d{3}", spec_list):
+                problem(f"schema: {tid} names unknown or no specs {sorted(bad)}")
+        tt = set(re.findall(r"TERM-\d{3}", terms))
+        if tt - domain_terms or (not tt and terms != "none"):
+            problem(f"schema: {tid} terms '{terms}'")
+        seen_terms |= tt
+    if [t[0] for t in tbls] != [f"TBL-{n:03d}" for n in range(1, len(tbls) + 1)]:
+        problem(f"schema: TBL numbers out of order {[t[0] for t in tbls]}")
+    if sorted(t[1] for t in tbls) != sorted(room_tables):
+        problem("schema: not every table has exactly one TBL comment")
+    without = re.search(r"^-- without a table: (.*?)(?=^--\s*$|^\s*$)", schema_sql, re.M | re.S)
+    without_terms = set(re.findall(r"TERM-\d{3}", without.group(1))) if without else set()
+    no_home = sorted(domain_terms - seen_terms - without_terms)
+    print(f"  glossary terms with neither a table nor a 'without a table' line: {no_home or 'none'}")
+    if no_home:
+        problem(f"schema: terms with no table and no 'without a table' entry {no_home}")
+    if without_terms - domain_terms:
+        problem(f"schema: unknown terms in 'without a table' {sorted(without_terms - domain_terms)}")
+    erd_map = set(re.findall(r"^\| (SPEC-\d{3}) \|", read("docs/05-erd/README.md"), re.M))
+    if set(specs) - erd_map:
+        problem(f"erd: docs/05-erd/README.md 3장 lacks {sorted(set(specs) - erd_map)}")
+
 # --- work breakdown -------------------------------------------------------------------------
 wbs = read("docs/08-wbs/wbs.md")
 tasks = {}

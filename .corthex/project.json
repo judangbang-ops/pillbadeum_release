@@ -38,9 +38,10 @@
     },
     "05-erd": {
       "human": "github",
-      "source": "diditake:docs/02-design/data-model.md",
+      "link": "docs/05-erd/README.md",
+      "source": "db/schema.sql",
       "truth": "source",
-      "note": "실제 스키마는 이 저장소 shared/schemas의 Room 스키마 JSON (DidITake 7a800ac에서 가져옴). TBL ID 없음"
+      "note": "2026-11-12 15:02 KST 지시('/corthex 첨부터')로 이 저장소에서 다시 함. db/schema.sql은 Room 스키마 JSON(shared/schemas, 가장 높은 버전)의 CREATE 문을 그대로 옮기고 TBL-001~011 주석을 단 것이며 check_docs.py가 같은지 봄. 스키마를 바꾸는 순서는 Entities.kt → Room 내보내기 → schema.sql. 사람이 보는 곳은 GitHub의 Mermaid 그림(docs/05-erd/README.md)으로 제안: ERD Editor를 기본값 대신 쓰지 않는 까닭은 SQLite 표 주석(TBL 번호)이 그 도구의 가져오기·내보내기에서 사라지고 원본이 Room 코드이기 때문. 스키마 고정 확인 전"
     },
     "06-api": {
       "skip": true,

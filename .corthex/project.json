@@ -19,7 +19,7 @@
       "human": "github",
       "source": "docs/01-planning/requirements.md",
       "truth": "source",
-      "note": "요구 ID 원본. 사람이 읽는 기획은 DidITake 기획 v3와 이 저장소의 기획 v4 (2026-11-11 Claude 초안, 범위 확정 전)"
+      "note": "요구 ID 원본. 1차 범위 확정 2026-11-12 10:18 KST(동희님). 사람이 읽는 기획은 DidITake 기획 v3와 이 저장소의 기획 v4"
     },
     "03-user-flow": {
       "human": "github",
@@ -31,7 +31,7 @@
       "human": "github",
       "source": "diditake:docs/02-design/record-rules.md",
       "truth": "source",
-      "note": "SPEC ID를 따로 두지 않음. 합격 기준은 requirements.md의 열과 record-rules 9장 반례(RR-n)"
+      "note": "SPEC ID를 따로 두지 않음. 합격 기준은 requirements.md의 열, record-rules 9장 반례(RR-1~25), 이 저장소 docs/04-spec/record-rules-supplement.md의 규칙과 반례(RR-26~67). 원본 칸은 한 파일만 받아 보충 문서는 여기 적음"
     },
     "05-erd": {
       "human": "github",
@@ -53,7 +53,7 @@
       "human": "github",
       "source": "docs/05-ui/screens.md",
       "truth": "source",
-      "note": "화면 정의를 한 파일에 둠. 상태별 와이어프레임은 아직 없음"
+      "note": "화면 정의를 한 파일에 둠. 화면 5장 7개는 2026-11-12 10:18 KST 확정. 상태별 와이어프레임은 아직 없음(TASK-044)"
     },
     "09-mockup": {
       "human": "github",
@@ -64,7 +64,7 @@
       "human": "github",
       "source": "docs/08-wbs/wbs.md",
       "truth": "source",
-      "note": "작업 보드(GitHub Projects 또는 Notion)는 담당을 정할 때 정함"
+      "note": "담당과 R 단계 순서는 Claude 제안(2026-11-12). 작업 보드(GitHub Projects 또는 Notion)는 아직 두지 않고 이 파일이 원본임. 요구·화면·작업 대조는 .github/scripts/check_docs.py"
     },
     "11-development": {
       "human": "github",

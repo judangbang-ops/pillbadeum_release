@@ -83,6 +83,16 @@ object Labels {
     fun weekdayName(day: DayOfWeek): String = weekday(day) + "요일"
 
     /**
+     * [word] with the object particle its last letter takes: `아침약을`, `철분제를`. A name that does not end in a Korean
+     * letter (`Vitamin`, `오메가3`) gets both, `Vitamin을(를)`.
+     */
+    fun withObject(word: String): String {
+        val last = word.lastOrNull()
+        if (last == null || last !in '가'..'힣') return "${word}을(를)"
+        return word + if ((last - '가') % 28 == 0) "를" else "을"
+    }
+
+    /**
      * Joins a date word and its time, so `11/10(화)` and `21:40` never land on two lines (TASK-044 state
      * drawings, screens.md SCR-001).
      */
@@ -168,11 +178,17 @@ object Labels {
     /** `DidITake · 11/12`: app name and base date beside the weekday chip of the widget header (09 BoxWidget). */
     fun widgetDate(date: LocalDate): String = "$APP_NAME · ${monthDay(date)}"
 
-    /** `매일 아침`, `매일`, `주 1회 · 월` */
+    /** `매일 아침`, `매일`, `주 1회 월요일` (09 BoxHome). */
     fun schedule(rule: ScheduleRule, slot: SlotLabel?): String = when (rule) {
         ScheduleRule.Daily -> if (slot != null) "매일 ${slot(slot)}" else "매일"
-        is ScheduleRule.Weekly -> "주 1회 · ${weekday(rule.anchor)}"
+        is ScheduleRule.Weekly -> "주 1회 ${weekdayName(rule.anchor)}"
     }
+
+    /** `11월 12일 목요일`: the base date beside the weekday badge of the app's first screen (09 BoxHome). */
+    fun longDate(date: LocalDate): String = "${date.month.ordinal + 1}월 ${date.day}일 ${weekdayName(date.dayOfWeek)}"
+
+    /** `하루 시작 04:00` (09 BoxHome, HomeEmpty). */
+    fun dayStart(board: StatusBoard): String = "하루 시작 ${board.settings.dayStart}"
 
     /** `08:02` on the same calendar date as [now], else `월 08:30` (the time of an `Already` message). */
     fun stamp(at: Instant, now: Instant, zone: TimeZone): String {
@@ -238,7 +254,14 @@ object Labels {
      * Claude's additions: a later skip is read after the last dose (`…, 어제 건너뜀`), and an open clock
      * warning ends the sentence with `앱에서 확인` (C-2).
      */
-    fun spoken(item: IntakeStatus, now: Instant, zone: TimeZone, withPerson: Boolean, name: String = item.displayName): String {
+    fun spoken(
+        item: IntakeStatus,
+        now: Instant,
+        zone: TimeZone,
+        withPerson: Boolean,
+        name: String = item.displayName,
+        inApp: Boolean = false,
+    ): String {
         val who = if (withPerson) "${item.person.name} $name" else name
         val weekly = item.rule is ScheduleRule.Weekly
         val today = now.toLocalDateTime(zone).date
@@ -254,7 +277,36 @@ object Labels {
             else -> listOf(who, SKIPPED)
         }
         val sentence = parts.joinToString(", ")
-        return if (item.clockWarning) "$sentence, 앱에서 확인" else sentence
+        return when {
+            !item.clockWarning -> sentence
+            inApp -> "$sentence, 시계 확인 필요"
+            else -> "$sentence, 앱에서 확인"
+        }
+    }
+
+    /**
+     * What TalkBack reads for a row of the app's week box (09 BoxHome): `혈압약 이번 주: 월 화 복용, 수 빠짐, 목 아직`.
+     * Days in a row with the same state are read together, in week order; later days and days without a cell of this
+     * item are left out. The person comes first with two or more active people (REQ-018): `엄마 혈압약 이번 주: …`.
+     */
+    fun weekSpoken(item: IntakeStatus, withPerson: Boolean): String {
+        val who = if (withPerson) "${item.person.name} ${item.name}" else item.name
+        val runs = mutableListOf<Pair<MutableList<String>, String>>()
+        for (cell in item.weekCells) {
+            val word = when (cell.state) {
+                DayState.DONE -> "복용"
+                DayState.SKIPPED -> SKIPPED
+                DayState.EMPTY -> "빠짐"
+                DayState.TODAY_PENDING -> "아직"
+                DayState.FUTURE, DayState.NOT_SCHEDULED -> null
+            }
+            if (word == null) continue
+            val last = runs.lastOrNull()
+            if (last != null && last.second == word) last.first += weekday(cell.date.dayOfWeek)
+            else runs += mutableListOf(weekday(cell.date.dayOfWeek)) to word
+        }
+        val days = runs.joinToString(", ") { (names, word) -> names.joinToString(" ") + " " + word }
+        return "$who 이번 주: ${days.ifEmpty { NO_RECORD }}"
     }
 
     /**
@@ -277,6 +329,28 @@ object Labels {
     /** Widget button line for a judgment with a clock warning (SCR-001#clock, supplement C-2). */
     const val CLOCK_CHECK_IN_APP: String = "! 앱에서 확인"
 
+    /** The medical note of the app's first screen (REQ-036). */
+    const val MEDICAL_NOTE: String = "기록 도구이며 복용 방법은 의사·약사와 상의해 주세요."
+
+    /** SCR-004#error, with `[다시 시도]` (screens.md, proposal approved 2026-11-13). */
+    const val LOAD_FAILED: String = "기록을 불러오지 못했어요"
+
+    /** SCR-006#error: the name is empty (09 ItemFormError). */
+    const val NAME_REQUIRED: String = "이름을 입력해 주세요"
+
+    /** The mark on an app tile whose judgment has an open clock warning; the warning band above says more (SCR-004#future). */
+    const val CLOCK_MARK: String = "! 시계 확인"
+
+    /** In-app wording of [RecordResult.Error] (screens.md SCR-004: "기록하지 못했어요. 다시 눌러 주세요"). */
+    const val TRY_AGAIN: String = "기록하지 못했어요. 다시 눌러 주세요"
+
+    /**
+     * The band over two or more clock warnings (SCR-004#future, supplement C-3): `시계가 맞지 않았던 기록이 2개 있어요.`,
+     * and with more than [shown] `… 7개 있어요. 아래에 2개씩 보여요.`
+     */
+    fun clockWarnings(count: Int, shown: Int): String =
+        "시계가 맞지 않았던 기록이 ${count}개 있어요." + if (count > shown) " 아래에 ${shown}개씩 보여요." else ""
+
     /** App warning (SCR-004#future): `기록 시각이 휴대폰 시계와 맞지 않았어요 (금 08:00). 확인해 주세요`. */
     fun clockWarning(judgment: DoseRecordEntity, zone: TimeZone): String {
         val local = Instant.fromEpochMilliseconds(judgment.takenAt).toLocalDateTime(zone)
@@ -284,28 +358,23 @@ object Labels {
     }
 
     /**
-     * Text of an app row under its name (SCR-004, 09 mockup BoxHome): [RowText.detail] `매일 아침 · 오늘 08:02 먹음`,
-     * `매일 · 건너뜀 09:10`, `매일 · 마지막 복용 어제 21:40`. A weekly row also names its windows, as the app's
-     * first screen must (SPEC-015, REQ-028): `주 1회 · 월 · 이번 창 11/09 (월)~ · 다음 창 11/16 (월)` while
-     * pending, with the last dose on [RowText.boldLine] (W-2, REQ-075), else `… 먹음 · 다음 창 11/16 (월)`. The
-     * layout itself comes with the app screen (TASK-016).
+     * Text of an app tile under its name (SCR-004, 09 BoxHome): [RowText.detail] `매일 아침 · 오늘 08:02 먹음`,
+     * `매일 · 건너뜀 09:10`, `매일 · 마지막 복용 어제 21:40`. A pending weekly tile is `주 1회 월요일` with the last
+     * dose on [RowText.boldLine] (W-2, REQ-075). A judged weekly tile names its next window, as the first screen must
+     * (SPEC-015, REQ-028): `주 1회 월요일 · 오늘(월) 08:30 먹음` and [RowText.nextLine] `다음 창 11/16(월)`.
      */
     fun appRow(item: IntakeStatus, board: StatusBoard, zone: TimeZone): RowText {
         val now = board.now
         val weekly = item.rule is ScheduleRule.Weekly
         val judgment = item.judgment
         val schedule = schedule(item.rule, item.slotLabel)
-        val next = if (weekly) " · 다음 창 ${date(item.windowDay.plus(7, DateTimeUnit.DAY))}" else ""
+        val next = if (weekly) "다음 창 ${shortDate(item.windowDay.plus(7, DateTimeUnit.DAY))}" else null
         return when {
             judgment != null && judgment.kind == DoseKind.TAKEN ->
-                RowText("$schedule · ${moment(Instant.fromEpochMilliseconds(judgment.takenAt), now, zone, weekly)} 먹음$next")
+                RowText("$schedule · ${moment(Instant.fromEpochMilliseconds(judgment.takenAt), now, zone, weekly)} 먹음", nextLine = next)
             judgment != null ->
-                RowText("$schedule · $SKIPPED ${stamp(Instant.fromEpochMilliseconds(judgment.takenAt), now, zone)}$next")
-            weekly -> RowText(
-                detail = "$schedule · 이번 창 ${date(item.windowDay)}~$next",
-                boldLine = lastTaken(item, now, zone),
-                skipLine = laterSkip(item, now, zone),
-            )
+                RowText("$schedule · $SKIPPED ${stamp(Instant.fromEpochMilliseconds(judgment.takenAt), now, zone)}", nextLine = next)
+            weekly -> RowText(schedule, boldLine = lastTaken(item, now, zone), skipLine = laterSkip(item, now, zone))
             else -> RowText("$schedule · ${lastTaken(item, now, zone)}", skipLine = laterSkip(item, now, zone))
         }
     }
@@ -360,12 +429,18 @@ object Labels {
     }
 }
 
-/** An app row's text under the item name (SCR-004). */
+/** An app tile's lines under the item name (SCR-004), in this order. */
 data class RowText(
-    /** Schedule and the dose, skip or last dose: `매일 아침 · 오늘 08:02 먹음`. */
+    /** Schedule and the dose, skip or last dose: `매일 아침 · 오늘 08:02 먹음`; a pending weekly item's schedule alone. */
     val detail: String,
     /** A pending weekly item's last dose, drawn bold on its own line (W-2, REQ-075); null otherwise. */
     val boldLine: String? = null,
     /** `어제 건너뜀` when a skip came after the last dose (S-2); null otherwise. */
     val skipLine: String? = null,
-)
+    /** A judged weekly item's next window `다음 창 11/16(월)` (REQ-028); null otherwise. */
+    val nextLine: String? = null,
+) {
+    /** The lines in drawing order, with whether each is bold. */
+    val lines: List<Pair<String, Boolean>>
+        get() = listOfNotNull(detail to false, boldLine?.let { it to true }, skipLine?.let { it to false }, nextLine?.let { it to false })
+}

@@ -130,7 +130,10 @@ class StatusBoardTest {
         assertEquals(seoul("2026-11-16T04:00"), item.nextWindowStart)
         assertEquals(listOf("월\u00a008:30 먹음"), Labels.widgetLines(item, lastMinute.now, SEOUL))
         assertTrue(item.weekCells.isEmpty(), "week grid is for daily items only")
-        assertEquals(RowText("주 1회 · 월 · 11/09(월)\u00a008:30 먹음 · 다음 창 11/16 (월)"), Labels.appRow(item, lastMinute, SEOUL))
+        assertEquals(
+            RowText("주 1회 월요일 · 11/09(월)\u00a008:30 먹음", nextLine = "다음 창 11/16(월)"),
+            Labels.appRow(item, lastMinute, SEOUL),
+        )
 
         fx.at("2026-11-16T04:00")
         val nextWindow = load()
@@ -140,7 +143,7 @@ class StatusBoardTest {
         assertEquals(seoul("2026-11-23T04:00"), pending.nextWindowStart)
         assertEquals(listOf("마지막 복용 11/09(월)\u00a008:30"), Labels.widgetLines(pending, nextWindow.now, SEOUL))
         assertEquals(
-            RowText("주 1회 · 월 · 이번 창 11/16 (월)~ · 다음 창 11/23 (월)", boldLine = "마지막 복용 11/09(월)\u00a008:30"),
+            RowText("주 1회 월요일", boldLine = "마지막 복용 11/09(월)\u00a008:30"),
             Labels.appRow(pending, nextWindow, SEOUL),
         )
     }

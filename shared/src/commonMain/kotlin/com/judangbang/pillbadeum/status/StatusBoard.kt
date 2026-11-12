@@ -118,9 +118,13 @@ data class ClockWarning(
     val person: PersonEntity,
 )
 
+/** A day of a daily item in the app's week box (SCR-004 `이번 주 약통`, 09 BoxHome). */
 enum class DayState {
-    /** An active judgment exists for that day. */
+    /** The day has an active dose: a cell filled with the person's color. */
     DONE,
+
+    /** The day has an active skip: a striped cell, read `건너뜀` (supplement S-1, S-3). */
+    SKIPPED,
 
     /** Past day without a judgment. */
     EMPTY,
@@ -242,6 +246,7 @@ class LoadStatusBoard(
             val state = when {
                 date > today -> DayState.FUTURE
                 cell == null -> DayState.NOT_SCHEDULED
+                cell.judgment?.kind == DoseKind.SKIPPED -> DayState.SKIPPED
                 cell.judgment != null -> DayState.DONE
                 date == today -> DayState.TODAY_PENDING
                 else -> DayState.EMPTY

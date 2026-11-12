@@ -8,6 +8,9 @@ object Tokens {
     /** `color.surface.default`: app and widget background. */
     const val SURFACE: Long = 0xFFFFFFFF
 
+    /** `color.surface.sunken`: a week cell without a judgment yet, the empty box's lids. */
+    const val SURFACE_SUNKEN: Long = 0xFFF2F3F5
+
     /** `color.surface.skip`: a skipped tile. */
     const val SURFACE_SKIP: Long = 0xFFECEDEF
 
@@ -25,6 +28,9 @@ object Tokens {
 
     /** `color.ink.notice`: text on the notice band (8.2:1). */
     const val INK_NOTICE: Long = 0xFF5C4400
+
+    /** `color.ink.danger`: an input error and its message, [보관] of the item form. */
+    const val INK_DANGER: Long = 0xFFB42318
 
     /** `color.line.subtle`: decorative divider, never the only carrier of meaning. */
     const val LINE_SUBTLE: Long = 0xFFE3E5E9

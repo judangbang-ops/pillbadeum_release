@@ -26,7 +26,6 @@ import androidx.glance.Visibility
 import androidx.glance.action.Action
 import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionParametersOf
-import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
@@ -250,7 +249,8 @@ private fun visibleIf(shown: Boolean): Visibility = if (shown) Visibility.Visibl
 internal fun WidgetContent(model: WidgetModel?, message: String?, setUp: Action) {
     val size = LocalSize.current
     val plan = model?.let { WidgetLayout.plan(it, size.width.value, size.height.value, widgetFonts(LocalContext.current), message) }
-    val openApp = actionStartActivity<MainActivity>()
+    // Always the first screen (SCR-004), even when the app was left on another screen.
+    val openApp = actionStartActivity(MainActivity.homeIntent(LocalContext.current))
     Box(modifier = GlanceModifier.fillMaxSize()) {
         Column(
             modifier = GlanceModifier.fillMaxSize()

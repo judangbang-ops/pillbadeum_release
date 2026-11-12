@@ -23,12 +23,14 @@ class TokensTest {
     @Test
     fun base_colors_match_the_token_file() {
         assertEquals(hex("surface", "default"), PersonPalette.hex(Tokens.SURFACE))
+        assertEquals(hex("surface", "sunken"), PersonPalette.hex(Tokens.SURFACE_SUNKEN))
         assertEquals(hex("surface", "skip"), PersonPalette.hex(Tokens.SURFACE_SKIP))
         assertEquals(hex("surface", "notice"), PersonPalette.hex(Tokens.SURFACE_NOTICE))
         assertEquals(hex("ink", "default"), PersonPalette.hex(Tokens.INK))
         assertEquals(hex("ink", "muted"), PersonPalette.hex(Tokens.INK_MUTED))
         assertEquals(hex("ink", "on-solid"), PersonPalette.hex(Tokens.INK_ON_SOLID))
         assertEquals(hex("ink", "notice"), PersonPalette.hex(Tokens.INK_NOTICE))
+        assertEquals(hex("ink", "danger"), PersonPalette.hex(Tokens.INK_DANGER))
         assertEquals(hex("line", "subtle"), PersonPalette.hex(Tokens.LINE_SUBTLE))
         assertEquals(hex("line", "strong"), PersonPalette.hex(Tokens.LINE_STRONG))
     }

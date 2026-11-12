@@ -189,7 +189,8 @@ class LabelsTest {
         assertEquals("골다공증약, 이번 주 미완료, 마지막 복용 어제 일요일 22:00", tile.description)
         val item = load().items.single()
         assertEquals("마지막 복용 어제(일)\u00a022:00", Labels.lastTaken(item, fx.clock.now(), SEOUL), "the reminder body line (W-4)")
-        assertEquals(RowText("주 1회 · 월 · 이번 창 11/09 (월)~ · 다음 창 11/16 (월)", boldLine = "마지막 복용 어제(일)\u00a022:00"), Labels.appRow(item, load(), SEOUL))
+        // The app tile (09 BoxHome): the schedule, then the same line in bold (W-2, REQ-075).
+        assertEquals(RowText("주 1회 월요일", boldLine = "마지막 복용 어제(일)\u00a022:00"), Labels.appRow(item, load(), SEOUL))
     }
 
     @Test
@@ -301,5 +302,62 @@ class LabelsTest {
         assertEquals(listOf("화\u00a008:00 먹음"), tile.lines)
         assertEquals("골다공증약, 복용함, 어제 화요일 08:00", tile.description)
         assertFalse(tile.largeFirstLine)
+    }
+
+    @Test
+    fun the_first_screen_reads_the_date_and_the_day_start_in_words() = runTest {
+        assertEquals("11월 12일 목요일", Labels.longDate(LocalDate(2026, 11, 12)))
+        assertEquals("1월 5일 월요일", Labels.longDate(LocalDate(2026, 1, 5)))
+        mine("아침약")
+        fx.at("2026-11-12T09:30")
+        assertEquals("하루 시작 04:00", Labels.dayStart(load()))
+    }
+
+    /** 09 BoxHome's row labels: days in a row with one state are read together, later days are left out. */
+    @Test
+    fun the_week_box_reads_each_row_as_one_sentence() = runTest {
+        val pressure = mine("혈압약")
+        val vitamin = mine("비타민D")
+        recordAt(pressure, "2026-11-09T21:00")
+        recordAt(pressure, "2026-11-10T21:00")
+        for (day in listOf("09", "10", "11")) recordAt(vitamin, "2026-11-${day}T09:00")
+        recordAt(vitamin, "2026-11-12T09:10", DoseKind.SKIPPED)
+        fx.at("2026-11-12T09:30") // Thursday
+
+        val board = load()
+        val row = { id: String -> board.items.single { it.intakeId == id } }
+        assertEquals(
+            listOf(DayState.DONE, DayState.DONE, DayState.DONE, DayState.SKIPPED, DayState.FUTURE),
+            row(vitamin).weekCells.take(5).map { it.state },
+        )
+        assertEquals("혈압약 이번 주: 월 화 복용, 수 빠짐, 목 아직", Labels.weekSpoken(row(pressure), withPerson = false))
+        assertEquals("비타민D 이번 주: 월 화 수 복용, 목 건너뜀", Labels.weekSpoken(row(vitamin), withPerson = false))
+        assertEquals("나 비타민D 이번 주: 월 화 수 복용, 목 건너뜀", Labels.weekSpoken(row(vitamin), withPerson = true))
+    }
+
+    @Test
+    fun a_clock_warning_is_read_as_a_clock_check_in_the_app() = runTest {
+        val morning = mine("아침약")
+        recordAt(morning, "2026-11-12T09:00")
+        fx.at("2026-11-12T08:00") // the clock went back an hour: the dose is now ahead of it
+        val board = load()
+        val item = board.items.single()
+        assertTrue(item.clockWarning)
+        assertEquals("아침약, 복용함, 오늘 09:00, 앱에서 확인", Labels.spoken(item, board.now, SEOUL, withPerson = false))
+        assertEquals(
+            "아침약, 복용함, 오늘 09:00, 시계 확인 필요",
+            Labels.spoken(item, board.now, SEOUL, withPerson = false, name = item.name, inApp = true),
+        )
+        assertEquals(listOf("아침약"), board.clockWarnings.map { it.intakeName })
+    }
+
+    @Test
+    fun the_archive_question_takes_the_particle_of_the_name() {
+        assertEquals("아침약을", Labels.withObject("아침약"))
+        assertEquals("유산균을", Labels.withObject("유산균"))
+        assertEquals("철분제를", Labels.withObject("철분제"))
+        assertEquals("비타민D을(를)", Labels.withObject("비타민D"))
+        assertEquals("Vitamin을(를)", Labels.withObject("Vitamin"))
+        assertEquals("을(를)", Labels.withObject(""))
     }
 }

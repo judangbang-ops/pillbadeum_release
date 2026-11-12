@@ -91,7 +91,8 @@
 진행 메모 (2026-11-13)
 
 - TASK-013·041·043의 공통 코드: R2 [PR #19](https://github.com/judangbang-ops/pillbadeum_release/pull/19). 건너뜀 따로 세기, 마지막 복용(복용만)과 늦은 건너뜀 줄, 보충 S-2의 날짜 글자, 주 1회 첫 줄 크게, TalkBack 문장, 기기 시간대 표시. jvm `LabelsTest` 15개와 고친 `StatusBoardTest`가 로컬에서 통과(2026-11-13, CI는 Actions가 멈춰 아직). Claude가 정한 세부는 [기록 규칙 보충 3장·6장의 구현](../04-spec/record-rules-supplement.md)
-- 남은 것: 새 위젯 배치와 캡처(TASK-014), 앱 줄 배치(TASK-016), 알림 본문 첫 줄과 알림 시각의 기기 시간대(R3 PR #20이 들어간 뒤 `ReminderLabels`를 바꿈)
+- TASK-014 위젯 새 배치: 같은 PR. 09 토큰(`design/base.tokens.json` → `Tokens`, 대상자 색 여섯과 '나'의 파랑), 요일 칩 머리글, 사람 색 칸, 점선·체크·빼기 원, 목록만 스크롤과 아래 화살표, 안내 줄은 머리글 자리, 가장 작은 크기 270×110dp. 배치는 `WidgetLayout`이 위젯 크기와 글자 배율로 정함(한 줄에 둘·하나, 머리글 두 줄, 이름 위 대상자, 화살표). 글자 배율이 바뀌면 위젯을 다시 그림. 시험: jvm `WidgetLayoutTest`·`TokensTest`, 렌더 `WidgetRenderTest` 12개(로컬, [시험 계획 7장](../12-qa/test-plan.md#7-셈-2026-11-12)). 남은 것: 런처 캡처(4×2에 6개, 글자 115%·130% 문턱)는 Actions가 다시 돌면
+- 남은 것: 앱 줄 배치(TASK-016), 알림 본문 첫 줄과 알림 시각의 기기 시간대(R3 PR #20이 들어간 뒤 `ReminderLabels`를 바꿈)
 
 ### 1.4 앱 화면
 

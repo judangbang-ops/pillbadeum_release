@@ -1,5 +1,6 @@
 package com.judangbang.pillbadeum.status
 
+import com.judangbang.pillbadeum.design.Tokens
 import com.judangbang.pillbadeum.domain.ScheduleRule
 import com.judangbang.pillbadeum.testing.DbFixture
 import com.judangbang.pillbadeum.testing.SEOUL
@@ -35,6 +36,10 @@ class StatusBoardTest {
         val model = WidgetModel.from(board, SEOUL)
         assertEquals("11/11 (수)", model.dateLabel)
         assertEquals("0 / 0 완료", model.countLabel)
+        // 09 BoxWidget header: weekday chip, app name and date, the count in two weights (TASK-014)
+        assertEquals("수", model.weekday)
+        assertEquals("DidITake · 11/11", model.headerDate)
+        assertEquals("0 / 0" to "완료", model.countDone to model.countRest)
         assertTrue(model.buttons.isEmpty())
     }
 
@@ -60,7 +65,7 @@ class StatusBoardTest {
         assertEquals(TileState.TAKEN, done.state)
         assertEquals(listOf("08:02 먹음"), done.lines)
         assertEquals("2026-11-11", done.periodKey)
-        assertEquals("T", done.personInitial)
+        assertEquals("Test person", done.who)
         assertEquals("Test person Morning dose, 복용함, 오늘 08:02", done.description)
         assertEquals(TileState.PENDING, pending.state)
         assertEquals(listOf("마지막 복용 어제\u00a021:40"), pending.lines)
@@ -202,12 +207,12 @@ class StatusBoardTest {
     }
 
     @Test
-    fun alias_is_shown_with_person_badge() = runTest {
+    fun alias_is_shown_in_the_person_palette() = runTest {
         val me = ManagePeople(fx.db, fx.clock, fx.ids, TEST_DEVICE_ID).ensureDefault().first().id
         SaveIntake(fx.db, fx.clock, fx.ids, TEST_DEVICE_ID).create(IntakeDraft(me, "아침에 먹는 약", widgetAlias = "아침약"))
         val button = WidgetModel.from(load(), SEOUL).buttons.single()
         assertEquals("아침약", button.title)
-        assertEquals("나", button.personInitial)
-        assertEquals("#3F7D58", button.personColor)
+        assertNull(button.who, "only 나: no person name on the tile (REQ-018)")
+        assertEquals(Tokens.PEOPLE[0], button.palette, "나 is person 1, blue (09 tokens)")
     }
 }

@@ -1,11 +1,14 @@
 package com.judangbang.pillbadeum.status
 
+import com.judangbang.pillbadeum.design.PersonPalette
 import com.judangbang.pillbadeum.domain.ScheduleRule
+import com.judangbang.pillbadeum.usecase.PersonColors
 import kotlinx.datetime.TimeZone
 
 /**
  * Everything the home widget draws, as plain values. The widget never computes windows or
- * statuses itself; it renders this and sends [WidgetButton.periodKey] back on tap.
+ * statuses itself; it renders this and sends [WidgetButton.periodKey] back on tap. How the tiles are
+ * arranged for a size is [WidgetLayout].
  */
 data class WidgetModel(
     val title: String,
@@ -13,10 +16,17 @@ data class WidgetModel(
     val dateLabel: String,
     /** `1 / 3 완료`, `1 / 3 완료 · 건너뜀 1` (supplement S-1). */
     val countLabel: String,
+    /** `수`: the base date's weekday, in the header's dark chip (09 BoxWidget). */
+    val weekday: String,
+    /** `DidITake · 11/11` beside the chip. */
+    val headerDate: String,
+    /** [countLabel] in the header's two weights: bold `1 / 3`, then `완료 · 건너뜀 1` ([Labels.countParts]). */
+    val countDone: String,
+    val countRest: String,
     val buttons: List<WidgetButton>,
     /** `복원됨 · 마지막 기록 11/09 21:40 · 앱에서 확인` until [확인했어요] (SCR-001#restored), else null. */
     val restoreLine: String? = null,
-    /** Two or more active people: person badges are drawn (REQ-018). */
+    /** Two or more active people: person names are drawn (REQ-018). */
     val showPeople: Boolean = true,
 ) {
     companion object {
@@ -24,43 +34,50 @@ data class WidgetModel(
          * [zone] is the display zone, the phone's own (`TimeZone.currentSystemDefault()`): times are shown there,
          * while the board's windows and base date stay in the base zone (REQ-082, TASK-043).
          */
-        fun from(board: StatusBoard, zone: TimeZone): WidgetModel = WidgetModel(
-            title = Labels.APP_NAME,
-            dateLabel = Labels.date(board.baseDate),
-            countLabel = Labels.count(board),
-            buttons = board.items.map { item ->
-                WidgetButton(
-                    intakeId = item.intakeId,
-                    periodKey = item.window.periodKey,
-                    title = item.displayName,
-                    personInitial = item.person.name.take(1),
-                    personColor = item.person.color,
-                    state = when {
-                        item.isTaken -> TileState.TAKEN
-                        item.isSkipped -> TileState.SKIPPED
-                        else -> TileState.PENDING
-                    },
-                    lines = Labels.widgetLines(item, board.now, zone),
-                    largeFirstLine = item.judgment == null && !item.clockWarning && item.rule is ScheduleRule.Weekly,
-                    description = Labels.spoken(item, board.now, zone, withPerson = board.showPeople),
-                    clockWarning = item.clockWarning,
-                )
-            },
-            restoreLine = board.restoreNotice?.let { Labels.restoreWidgetLine(it, zone) },
-            showPeople = board.showPeople,
-        )
+        fun from(board: StatusBoard, zone: TimeZone): WidgetModel {
+            val (countDone, countRest) = Labels.countParts(board)
+            return WidgetModel(
+                title = Labels.APP_NAME,
+                dateLabel = Labels.date(board.baseDate),
+                countLabel = Labels.count(board),
+                weekday = Labels.weekday(board.baseDate.dayOfWeek),
+                headerDate = Labels.widgetDate(board.baseDate),
+                countDone = countDone,
+                countRest = countRest,
+                buttons = board.items.map { item ->
+                    WidgetButton(
+                        intakeId = item.intakeId,
+                        periodKey = item.window.periodKey,
+                        title = item.displayName,
+                        who = item.person.name.takeIf { board.showPeople },
+                        palette = PersonColors.palette(item.person.color),
+                        state = when {
+                            item.isTaken -> TileState.TAKEN
+                            item.isSkipped -> TileState.SKIPPED
+                            else -> TileState.PENDING
+                        },
+                        lines = Labels.widgetLines(item, board.now, zone),
+                        largeFirstLine = item.judgment == null && !item.clockWarning && item.rule is ScheduleRule.Weekly,
+                        description = Labels.spoken(item, board.now, zone, withPerson = board.showPeople),
+                        clockWarning = item.clockWarning,
+                    )
+                },
+                restoreLine = board.restoreNotice?.let { Labels.restoreWidgetLine(it, zone) },
+                showPeople = board.showPeople,
+            )
+        }
     }
 }
 
-/** What a widget button shows (SCR-001, supplement S-3). */
+/** What a widget tile shows (SCR-001, supplement S-3, 09 BoxWidget). */
 enum class TileState {
-    /** Dashed empty circle. A tap records a dose. */
+    /** Person-tinted tile with a dashed ring. A tap records a dose. */
     PENDING,
 
-    /** Filled circle with a check. A tap changes nothing (`Already`). */
+    /** Tile filled with the person's color and a check. A tap changes nothing (`Already`). */
     TAKEN,
 
-    /** Grey filled circle and `건너뜀`, counted apart (S-1, S-3). A tap changes nothing and says so. */
+    /** Grey tile, grey disc with a minus and `건너뜀`, counted apart (S-1, S-3). A tap changes nothing and says so. */
     SKIPPED,
 }
 
@@ -69,9 +86,10 @@ data class WidgetButton(
     /** Period key of the window this button was rendered for; sent back as renderedPeriodKey. */
     val periodKey: String,
     val title: String,
-    val personInitial: String,
-    /** `#RRGGBB` */
-    val personColor: String,
+    /** The person's name before [title] (`엄마`), or null when only one person is active (REQ-018, TASK-015). */
+    val who: String?,
+    /** The person's token colors: tile tint, text and lid (09 tokens `color.person.n`). */
+    val palette: PersonPalette,
     val state: TileState,
     /**
      * Lines under the name: `08:02 먹음`, `건너뜀`, or the last dose `마지막 복용 어제 22:00` with an optional second

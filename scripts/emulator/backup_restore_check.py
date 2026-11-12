@@ -144,7 +144,8 @@ def dump_ui() -> list[Node]:
             m = BOUNDS.match(el.get("bounds", ""))
             if not m:
                 continue
-            nodes.append(Node(el.get("text", ""), el.get("content-desc", ""), el.get("class", ""),
+            # The widget joins the letters of Korean words with U+2060 (WidgetLayout.keepWords): match the plain text.
+            nodes.append(Node(el.get("text", "").replace("\u2060", ""), el.get("content-desc", ""), el.get("class", ""),
                               tuple(int(v) for v in m.groups()), el.get("resource-id", "")))
         title = next((n.text for n in nodes if ANR_TITLE in n.text), None)
         if title is not None and (APP_LABEL in title or PKG in title):

@@ -1,15 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Default and minimum size 4x2 (250dp x 110dp): at 2x1 the buttons were cut in half on an
-    API 34 emulator (2026-11-11 check), so the widget cannot be shrunk below the size that fits one row.
+    Default and smallest size: the launcher's real 4x2 cells (REQ-026, decided 2026-11-12 19:11 KST). Launchers
+    count the smallest cells from minResizeWidth/minResizeHeight, and cell sizes differ by phone, so these values
+    are chosen to land on 4x2 for the phones we know (TASK-014, Claude calculation, to be checked on the emulator
+    and the Galaxy, TASK-032):
+    - width 270dp: above three cells of a 4-column Pixel portrait grid (about 262dp of 350dp), within four cells of
+      Android's 5-column table (276dp). The old 250dp let a Pixel widget shrink to three cells.
+    - height 110dp: above one portrait row (about 102-107dp), within two landscape rows (about 117dp).
+    A launcher with other cell sizes may still allow 3 or ask for 5 columns; the layout then switches to one tile a
+    row (WidgetLayout).
     updatePeriodMillis is 0: periodic updates are at least 30 minutes apart and not exact, so day
     boundary refresh will use its own alarm instead (docs/02-design/architecture.md section 6).
 -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:initialLayout="@layout/glance_default_loading_layout"
-    android:minWidth="250dp"
+    android:minWidth="270dp"
     android:minHeight="110dp"
-    android:minResizeWidth="250dp"
+    android:minResizeWidth="270dp"
     android:minResizeHeight="110dp"
     android:resizeMode="horizontal|vertical"
     android:targetCellWidth="4"

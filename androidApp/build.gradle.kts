@@ -63,6 +63,16 @@ android {
     buildFeatures {
         compose = true
     }
+
+    testOptions {
+        // 위젯 렌더 시험(WidgetRenderTest, TASK-014)이 앱의 리소스로 위젯을 그림. CI에서는 아직 돌리지 않음:
+        // ./gradlew :androidApp:testDebugUnitTest. -Probolectric.repo=<주소>를 주면 Robolectric이 Android jar를
+        // Maven Central 대신 그 미러에서 받음
+        unitTests.isIncludeAndroidResources = true
+        unitTests.all { test ->
+            providers.gradleProperty("robolectric.repo").orNull?.let { test.systemProperty("robolectric.dependency.repo.url", it) }
+        }
+    }
 }
 
 kotlin {
@@ -75,4 +85,8 @@ dependencies {
     implementation(libs.androidx.glance.appwidget)
     // 앱 시작 때 RescheduleReceiver를 켜 두는 빈 작업(BUG-004). Glance가 이미 가져오는 판이라 APK에 새로 들지 않음
     implementation(libs.androidx.work.runtime)
+
+    testImplementation(libs.robolectric)
+    testImplementation(libs.junit4)
+    testImplementation(libs.androidx.test.core)
 }

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Person badge; tinted with the person's color at render time. -->
+<!-- Taken state: white disc (color.ink.on-solid) under the check drawn in the person's lid color. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <size android:width="24dp" android:height="24dp" />
     <solid android:color="#FFFFFF" />
 </shape>

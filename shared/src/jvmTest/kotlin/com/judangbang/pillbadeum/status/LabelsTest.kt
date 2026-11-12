@@ -62,6 +62,7 @@ class LabelsTest {
 
         val model = WidgetModel.from(load(), SEOUL)
         assertEquals("0 / 1 완료 · 건너뜀 1", model.countLabel)
+        assertEquals("0 / 1" to "완료 · 건너뜀 1", model.countDone to model.countRest, "the header's bold part and the rest")
         val tile = model.buttons.single()
         assertEquals(TileState.SKIPPED, tile.state)
         assertEquals(listOf("건너뜀"), tile.lines)

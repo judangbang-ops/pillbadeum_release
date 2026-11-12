@@ -4,6 +4,8 @@ import androidx.room3.immediateTransaction
 import androidx.room3.useWriterConnection
 import com.judangbang.pillbadeum.data.DidITakeDatabase
 import com.judangbang.pillbadeum.data.PersonEntity
+import com.judangbang.pillbadeum.design.PersonPalette
+import com.judangbang.pillbadeum.design.Tokens
 import com.judangbang.pillbadeum.domain.UuidV7
 import kotlin.time.Clock
 
@@ -133,11 +135,21 @@ class ManagePeople(
     }
 }
 
-/** Badge colors offered in the app (ui-mockup-v3: 나 = green, 가족 = orange). */
+/**
+ * Person colors: the six lids of the 09 tokens (`color.person.1`~`6`, [Tokens.PEOPLE]). A person stores only the
+ * lid color; the tile tint and text color come from the same token (09 mockup README section 7). The first, blue, is
+ * the default "나"; the list before the tokens started with the old Pillbox green.
+ */
 object PersonColors {
-    const val DEFAULT: String = "#3F7D58"
+    val PALETTE: List<String> = Tokens.PEOPLE.map { it.solidHex }
 
-    val PALETTE: List<String> = listOf(DEFAULT, "#B5562B", "#1D4E89", "#7A4E9C", "#A0405E", "#5B6B2E")
+    val DEFAULT: String = PALETTE.first()
+
+    /**
+     * The six colors this list offered before the 09 tokens (`#3F7D58` first). Nothing was released with them, but
+     * test phones may still hold them; each maps to the token at the same place.
+     */
+    private val BEFORE_TOKENS: List<String> = listOf("#3F7D58", "#B5562B", "#1D4E89", "#7A4E9C", "#A0405E", "#5B6B2E")
 
     private val HEX = Regex("^#[0-9A-Fa-f]{6}$")
 
@@ -147,5 +159,12 @@ object PersonColors {
     fun argb(color: String): Int {
         val hex = if (isValid(color)) color else DEFAULT
         return (0xFF000000L or hex.substring(1).toLong(16)).toInt()
+    }
+
+    /** The token palette of a stored color. A color from neither list gets the first palette. */
+    fun palette(color: String): PersonPalette {
+        val index = PALETTE.indexOfFirst { it.equals(color, ignoreCase = true) }
+            .takeIf { it >= 0 } ?: BEFORE_TOKENS.indexOfFirst { it.equals(color, ignoreCase = true) }
+        return Tokens.PEOPLE[index.coerceAtLeast(0)]
     }
 }

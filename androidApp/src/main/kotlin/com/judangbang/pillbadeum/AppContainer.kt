@@ -2,6 +2,7 @@ package com.judangbang.pillbadeum
 
 import android.app.Application
 import android.content.Context
+import android.content.res.Configuration
 import android.util.Log
 import com.judangbang.pillbadeum.boundary.DayBoundaryAlarm
 import com.judangbang.pillbadeum.data.DidITakeDatabase
@@ -25,10 +26,27 @@ class DidITakeApplication : Application() {
     /** One container (and so one database) per process; Glance actions run in this process too. */
     val container: AppContainer by lazy { AppContainer(this, Clock.System) }
 
+    private var fontScale: Float = 0f
+
     override fun onCreate() {
         super.onCreate()
+        fontScale = resources.configuration.fontScale
         // BUG-004: switch WorkManager's RescheduleReceiver on now, not when the first widget is placed.
         RescheduleReceiverKeeper.ensure(this)
+    }
+
+    /**
+     * The widget picks tiles per row and the overflow arrow from the font size (TASK-014), so a font size change
+     * while this process runs redraws it. A process started later reads the new size anyway.
+     */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (newConfig.fontScale == fontScale) return
+        fontScale = newConfig.fontScale
+        container.appScope.launch {
+            runCatching { WidgetUpdater.updateAll(this@DidITakeApplication) }
+                .onFailure { Log.e("DidITakeApplication", "widget refresh after a font size change failed", it) }
+        }
     }
 }
 

@@ -46,6 +46,13 @@
 5. 가장 긴 문구 넷이면 글자 100%에서도 둘째 줄 칸의 아래 8px이 가려져 화살표가 보임. 화살표와 스크롤로 다 볼 수 있으므로 그대로 둠(SCR-001#overflow)
 6. 머리글 수는 S-1대로 `1 / 4 완료 · 건너뜀 1`로 그림. 09 보드의 `2 / 4`는 칸(복용 하나)과 맞지 않았음
 
+**구현 확인 (TASK-014, 2026-11-13)**: 렌더 시험 [`WidgetRenderTest`](../../../androidApp/src/test/kotlin/com/judangbang/pillbadeum/widget/WidgetRenderTest.kt)가 Robolectric(Android 15의 뷰와 글 배치, Roboto·Noto Sans CJK)으로 위 항목을 그린 결과. 런처와 Galaxy 글꼴이 그린 것은 아님
+
+- 한글 한 줄 높이가 1.5em(14sp → 21dp)이라 브라우저 그림보다 칸이 큼. 글자 100%에서 둘째 줄 칸은 8px이 아니라 약 25dp 가려짐(목록 159dp, 내용 176dp). 화살표는 보임(정한 것 5)
+- Android는 한글을 음절 사이에서도 줄을 바꿔 안내 줄이 `바꾸려면 앱에 / 서`로 갈렸음. 위젯 글의 한글 낱말 안에 U+2060(낱말 잇기)을 넣어 띄어쓰기에서만 줄을 바꿈(`WidgetLayout.keepWords`). 위젯 글은 `setLineBreakWordStyle`을 쓸 수 없음
+- 글자 130%에서 한 줄에 하나, 200%에서 머리글 두 줄, 200%에 안내 줄이 있으면 칸 하나만 보임: 정한 것 1·2와 같음
+- 미완료 점선 원을 모양(shape)으로 그리면 색을 입힐 때 안이 채워져 벡터로 바꿈
+
 ## 3. 잠금 화면 여덟 칸 (SCR-003)
 
 ![잠금 화면 여덟 칸](LockSheet.png)

@@ -20,6 +20,10 @@ androidx-glance = "1.2.0"
 # Glance 1.2.0이 런타임에 가져오는 WorkManager와 같은 판. 앱 시작 때 빈 작업을 넣는 데 직접 씀(BUG-004). 판을 올려도
 # RescheduleReceiver를 켜고 끄는 것은 그대로라(PR #16 보고서 3절 7번) Glance가 가져오는 판에 맞춤
 androidx-work = "2.7.1"
+# 위젯 렌더 시험에만 씀(androidApp 단위 시험, TASK-014): Android의 뷰·글 배치·글꼴로 위젯을 그림
+robolectric = "4.17"
+junit4 = "4.13.2"
+androidx-test-core = "1.6.1"
 
 [libraries]
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose-multiplatform" }
@@ -39,6 +43,9 @@ kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotl
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }
 androidx-glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "androidx-glance" }
 androidx-work-runtime = { module = "androidx.work:work-runtime", version.ref = "androidx-work" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+junit4 = { module = "junit:junit", version.ref = "junit4" }
+androidx-test-core = { module = "androidx.test:core", version.ref = "androidx-test-core" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

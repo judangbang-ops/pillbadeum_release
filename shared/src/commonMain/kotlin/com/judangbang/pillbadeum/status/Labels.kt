@@ -29,6 +29,10 @@ object Labels {
     const val STALE: String = "날짜가 바뀌었어요. 다시 눌러 주세요"
     const val ERROR: String = "기록하지 못했어요. 앱에서 확인해 주세요"
     const val EMPTY_WIDGET: String = "앱에서 복용 항목을 추가해 주세요"
+    const val LOADING: String = "불러오는 중…"
+
+    /** What TalkBack reads for the widget's down arrow while its list overflows; the arrow has no text (REQ-078). */
+    const val MORE: String = "더 있음"
 
     /** A cell that ended before the last day-start or base-zone change (supplement P-5, SCR-007#locked). */
     const val LOCKED: String = "설정을 바꾸기 전의 기록은 고칠 수 없어요"
@@ -125,10 +129,19 @@ object Labels {
     }
 
     /** `1 / 3 완료`, with skips counted apart: `1 / 3 완료 · 건너뜀 1` (supplement S-1, REQ-020, RR-35). */
-    fun count(board: StatusBoard): String {
-        val done = "${board.doneCount} / ${board.totalCount} 완료"
-        return if (board.skippedCount > 0) "$done · 건너뜀 ${board.skippedCount}" else done
+    fun count(board: StatusBoard): String = countParts(board).let { (done, rest) -> "$done $rest" }
+
+    /**
+     * [count] cut where the widget header changes weight (09 BoxWidget, TASK-014): the bold `1 / 3`, then `완료` or
+     * `완료 · 건너뜀 1`.
+     */
+    fun countParts(board: StatusBoard): Pair<String, String> {
+        val rest = if (board.skippedCount > 0) "완료 · 건너뜀 ${board.skippedCount}" else "완료"
+        return "${board.doneCount} / ${board.totalCount}" to rest
     }
+
+    /** `DidITake · 11/12`: app name and base date beside the weekday chip of the widget header (09 BoxWidget). */
+    fun widgetDate(date: LocalDate): String = "$APP_NAME · ${monthDay(date)}"
 
     /** `매일 아침`, `매일`, `주 1회 · 월` */
     fun schedule(rule: ScheduleRule, slot: SlotLabel?): String = when (rule) {

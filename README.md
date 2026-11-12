@@ -15,12 +15,16 @@
 
 | 문서 | 내용 | 상태 |
 | --- | --- | --- |
-| [기획 v4](docs/01-planning/planning-v4.md) | DidITake 기획 v3 뒤에 정한 결정(1차 범위, DB만 백업, Play 비공개 테스트)으로 바뀐 점 | 초안 |
-| [요구사항](docs/01-planning/requirements.md) | 요구 REQ-001~072, 합격 기준, 범위 확정 때 정할 것 | 초안 |
-| [기록 규칙 보충](docs/04-spec/record-rules-supplement.md) | 설계 독립 검토(PR #3) A1·A2·A4·A5·A6을 규칙과 반례 RR-26~58로 적음. A3은 결정 Q15 대기 | 초안 |
-| [화면 목록](docs/05-ui/sitemap.yaml) · [화면 상태](docs/05-ui/screens.md) | 화면 SCR-001~010과 화면별 상태 | 초안 |
-| [작업 분해](docs/08-wbs/wbs.md) | 작업 TASK-001~039, 지금 프로토타입에서 Play 비공개 테스트까지 | 초안 |
+| [기획 v4](docs/01-planning/planning-v4.md) | DidITake 기획 v3 뒤에 정한 결정(1차 범위, 백업, Play 비공개 테스트, 범위 확정)으로 바뀐 점 | 범위 확정 반영 (2026-11-12) |
+| [요구사항](docs/01-planning/requirements.md) | 요구 REQ-001~083, 합격 기준, 범위 확정 때 정한 것 | 1차 범위 확정 (2026-11-12 10:18 KST) |
+| [기록 규칙 보충](docs/04-spec/record-rules-supplement.md) | 설계 독립 검토(PR #3)의 A1~A6·B3과 범위 확정 반영 검토(2026-11-12)의 A4·B2~B11을 규칙과 반례 RR-26~89로 적음. 주 1회 약은 결정 Q15의 1차 방식 | 개발 기준 (2026-11-12) |
+| [화면 목록](docs/05-ui/sitemap.yaml) · [화면 상태](docs/05-ui/screens.md) | 화면 SCR-001~010과 화면별 상태, 화면에서 정한 것. 상태별 와이어프레임은 아직 없음(TASK-044) | 범위 확정 반영 (2026-11-12) |
+| [설계 독립 검토](docs/06-review/design-review-2026-11-11.md) | 2026-11-11 독립 검토 의견과 근거 파일 | 끝남 (PR #3) |
+| [범위 확정 반영 검토](docs/06-review/scope-confirm-review-2026-11-12.md) | 2026-11-12 Fable 5.2 독립 검토 의견(조건부 통과). 반영한 곳은 각 문서에 '2026-11-12 검토'로 적음 | 반영함 (PR #5) |
+| [작업 분해](docs/08-wbs/wbs.md) | 작업 TASK-001~052, 담당, 릴리즈 단계 R0~R5와의 대응. 지금 프로토타입에서 Play 비공개 테스트까지 | 범위 확정 반영 (2026-11-12). 담당은 Claude 제안 |
 | [.corthex/project.json](.corthex/project.json) | 단계별 원본 위치 (CORTHEX) | |
+
+문서를 고치면 `python3 .github/scripts/check_docs.py`로 요구·화면·작업 분해·기록 규칙 보충이 서로 맞는지와 문서 안 링크를 대조함. PR마다 CI의 '문서 대조' 작업에서도 돎.
 
 ## 빌드와 실행
 
@@ -57,5 +61,5 @@ adb install -r androidApp/build/outputs/apk/debug/androidApp-debug.apk
 
 ## 작업 규칙
 
-- 작업 브랜치와 PR로 올리고, 동희님이 보고 `main`에 합침
+- 작업 브랜치와 초안 PR로 올리고, CI가 통과하면 Claude가 순서를 확인해 `main`에 합침. 충돌이나 실패가 있으면 멈추고 동희님께 알림 (결정 Q14, 2026-11-12)
 - 건강정보·실사용 기록·인증정보·서명 키를 커밋하지 않음. 문서의 약 이름과 사람 이름은 가상의 예시임

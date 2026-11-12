@@ -13,7 +13,7 @@ Flow (clock set to the run's date in Asia/Seoul, so the screens show Korean date
    4. [먹었어] on Vitamin in the app.
    5. The home-screen widget placed the way a person does it (release_check.place_widget),
       BPpill tapped on the widget, then tapped again (already recorded).
-   6. [기록 취소] on Vitamin, then [먹었어] again.
+   6. [기록 취소] on Vitamin, confirmed in the question, then [먹었어] again.
    7. Editing: Vitamin changed to 주 1회, Weekly deleted ([항목 삭제] > confirm).
    8. Larger text: font scale 1.3 and 2.0, app and widget. Then dark mode.
    9. Reboot: the widget after the phone restarts.
@@ -136,11 +136,6 @@ def ensure_home() -> None:
     if exact("오늘 · 이번 주", 3) is None:
         sh(f"am force-stop {PKG}")
         launch_app()
-
-
-def settle() -> None:
-    """Reads the screen once, which closes a stalled-System-UI dialog before a screenshot."""
-    dump_ui()
 
 
 def scroll_down() -> None:
@@ -437,12 +432,22 @@ def run(r: Report, steps: Steps) -> None:
 
     # 6. void and record again
     def void() -> str:
+        # The app asks first (REQ-029). The sixth run expected no question and failed at 6-2.
         ensure_home()
+        before = read_state().active_records
         tap(row_button(VITAMIN, "기록 취소"))
+        title = exact("기록을 취소할까요?", 10)
+        if title is None:
+            raise RuntimeError("no '기록을 취소할까요?' question after [기록 취소]")
+        r.shot("app-void-confirm")
+        tap_exact("기록 취소", 10, below=title.bounds[1])
         time.sleep(1)
         msg = message_line()
         r.shot("app-voided")
-        return f"메시지 '{msg}', {records()}"
+        after = read_state().active_records
+        if after != before - 1:
+            raise RuntimeError(f"active records {before} -> {after}, expected one fewer")
+        return f"확인 대화상자 뒤 취소, 메시지 '{msg}', {records()}"
 
     def again() -> str:
         ensure_home()
@@ -452,7 +457,7 @@ def run(r: Report, steps: Steps) -> None:
         r.shot("app-recorded-again")
         return f"메시지 '{msg}', {records()}"
 
-    steps("6-1. [기록 취소]", "확인 없이 바로 취소되는지 보기, 활성 판정이 줄어듦", void)
+    steps("6-1. [기록 취소]", "'기록을 취소할까요?' 확인 뒤 활성 판정이 하나 줄어듦", void)
     steps("6-2. 다시 [먹었어]", "다시 기록됨", again)
 
     # 7. edit and delete

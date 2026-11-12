@@ -1,0 +1,84 @@
+{
+  "name": "pillbadeum-release",
+  "title": "필받음 1차 릴리즈",
+  "team": true,
+  "language": "ko",
+  "records": {
+    "kind": "notion",
+    "location": "https://app.notion.com/p/415bf16cc3ec81898818f38c317943e1"
+  },
+  "repos": {
+    "diditake": "https://github.com/judangbang-ops/DidITake"
+  },
+  "stages": {
+    "01-domain": {
+      "skip": true,
+      "note": "도메인 단계 없이 DidITake 기획 v3에서 시작함 (2026-11-11)"
+    },
+    "02-prd": {
+      "human": "github",
+      "source": "docs/01-planning/requirements.md",
+      "truth": "source",
+      "note": "요구 ID 원본. 사람이 읽는 기획은 DidITake 기획 v3와 이 저장소의 기획 v4 (2026-11-11 Claude 초안, 범위 확정 전)"
+    },
+    "03-user-flow": {
+      "human": "github",
+      "source": "diditake:docs/04-flow/flows.md",
+      "truth": "source",
+      "note": "가쟈누님 플로우 문서. FL ID 없이 장 번호로 연결함"
+    },
+    "04-functional-spec": {
+      "human": "github",
+      "source": "diditake:docs/02-design/record-rules.md",
+      "truth": "source",
+      "note": "SPEC ID를 따로 두지 않음. 합격 기준은 requirements.md의 열과 record-rules 9장 반례(RR-n)"
+    },
+    "05-erd": {
+      "human": "github",
+      "source": "diditake:docs/02-design/data-model.md",
+      "truth": "source",
+      "note": "실제 스키마는 이 저장소 shared/schemas의 Room 스키마 JSON (DidITake 7a800ac에서 가져옴). TBL ID 없음"
+    },
+    "06-api": {
+      "skip": true,
+      "note": "1차는 서버가 없음"
+    },
+    "07-sitemap": {
+      "human": "github",
+      "source": "docs/05-ui/sitemap.yaml",
+      "truth": "source",
+      "note": "그림과 표는 docs/05-ui/screens.md 1장 (Mermaid)"
+    },
+    "08-screen-states": {
+      "human": "github",
+      "source": "docs/05-ui/screens.md",
+      "truth": "source",
+      "note": "화면 정의를 한 파일에 둠. 상태별 와이어프레임은 아직 없음"
+    },
+    "09-mockup": {
+      "human": "github",
+      "link": "https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/05-ui/ui-mockup-v3.html",
+      "note": "가쟈누님 시안 v3 (HTML, DidITake). 디자인 토큰 파일은 없음"
+    },
+    "10-wbs": {
+      "human": "github",
+      "source": "docs/08-wbs/wbs.md",
+      "truth": "source",
+      "note": "작업 보드(GitHub Projects 또는 Notion)는 담당을 정할 때 정함"
+    },
+    "11-development": {
+      "human": "github",
+      "truth": "source",
+      "note": "앱 코드는 이 저장소의 shared/·androidApp/. 가쟈누님 프로토타입 DidITake 7a800ac를 이력째 가져옴 (2026-11-11 21:52 동희님 결정)"
+    },
+    "12-qa": {
+      "human": "github",
+      "source": "diditake:docs/07-qa/",
+      "truth": "source",
+      "note": "가쟈누님 QA 보고서 형식 (DidITake). TC·BUG ID 없음"
+    },
+    "13-presentation": {
+      "skip": true
+    }
+  }
+}

@@ -19,8 +19,12 @@ import kotlinx.coroutines.IO
         IntakeMedicationEntity::class,
         DoseVersionEntity::class,
         SettingEntity::class,
+        ReminderRuleEntity::class,
+        ReminderSnoozeEntity::class,
+        ClockFlagEntity::class,
     ],
-    version = 1,
+    // Every version bump adds a Migration in Migrations.kt and a test in MigrationTest (REQ-072).
+    version = 2,
     exportSchema = true,
 )
 @ConstructedBy(DidITakeDatabaseConstructor::class)
@@ -30,6 +34,7 @@ abstract class DidITakeDatabase : RoomDatabase() {
     abstract fun scheduleVersionDao(): ScheduleVersionDao
     abstract fun doseRecordDao(): DoseRecordDao
     abstract fun settingDao(): SettingDao
+    abstract fun intakePurgeDao(): IntakePurgeDao
 
     companion object {
         const val FILE_NAME: String = "diditake.db"
@@ -44,12 +49,15 @@ expect object DidITakeDatabaseConstructor : RoomDatabaseConstructor<DidITakeData
 
 /**
  * Finishes a platform builder (file or in-memory) with the shared configuration:
- * bundled SQLite (same SQLite version on every platform) and a background query context.
+ * bundled SQLite (same SQLite version on every platform), the schema migrations and a background
+ * query context. There is no destructive fallback: a missing migration fails instead of wiping
+ * records (REQ-072).
  */
 fun buildDidITakeDatabase(
     builder: RoomDatabase.Builder<DidITakeDatabase>,
     queryContext: CoroutineContext = Dispatchers.IO,
 ): DidITakeDatabase = builder
     .setDriver(BundledSQLiteDriver())
+    .addMigrations(*Migrations.ALL)
     .setQueryCoroutineContext(queryContext)
     .build()

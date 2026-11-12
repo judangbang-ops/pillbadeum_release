@@ -39,6 +39,8 @@ kotlin {
         jvmTest.dependencies {
             implementation(libs.kotlin.test)
             implementation(libs.kotlinx.coroutines.test)
+            // MigrationTestHelper: opens schemas/<n>.json databases and validates each migration.
+            implementation(libs.androidx.room3.testing)
         }
     }
 }

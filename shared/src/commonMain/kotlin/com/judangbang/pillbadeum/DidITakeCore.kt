@@ -13,9 +13,12 @@ import com.judangbang.pillbadeum.restore.InstallMarker
 import com.judangbang.pillbadeum.restore.InstallState
 import com.judangbang.pillbadeum.status.LoadStatusBoard
 import com.judangbang.pillbadeum.usecase.ArchiveIntake
+import com.judangbang.pillbadeum.usecase.DeleteArchivedIntake
 import com.judangbang.pillbadeum.usecase.ManagePeople
+import com.judangbang.pillbadeum.usecase.ManageSettings
 import com.judangbang.pillbadeum.usecase.RecordCommand
 import com.judangbang.pillbadeum.usecase.RecordDose
+import com.judangbang.pillbadeum.usecase.RecordInWindow
 import com.judangbang.pillbadeum.usecase.RecordResult
 import com.judangbang.pillbadeum.usecase.SaveIntake
 import com.judangbang.pillbadeum.usecase.VoidDose
@@ -45,6 +48,11 @@ class DidITakeCore private constructor(
     val saveIntake: SaveIntake = SaveIntake(db, clock, ids, deviceId)
     val archiveIntake: ArchiveIntake = ArchiveIntake(db, clock)
     val people: ManagePeople = ManagePeople(db, clock, ids, deviceId)
+    val settings: ManageSettings = ManageSettings(db, clock)
+    val deleteArchivedIntake: DeleteArchivedIntake = DeleteArchivedIntake(db)
+
+    /** App-only writes to any started window and time edits (SCR-007, supplement P-1~P-6). */
+    val recordInWindow: RecordInWindow = RecordInWindow(db, clock, ids, deviceId)
     val loadStatusBoard: LoadStatusBoard = LoadStatusBoard(db, clock)
     val acknowledgeRestore: AcknowledgeRestore = AcknowledgeRestore(db)
 

@@ -6,11 +6,14 @@ import com.judangbang.pillbadeum.data.DidITakeDatabase
 import com.judangbang.pillbadeum.data.IntakeEntity
 import com.judangbang.pillbadeum.data.ScheduleParams
 import com.judangbang.pillbadeum.data.ScheduleVersionEntity
+import com.judangbang.pillbadeum.data.loadWindowSettings
 import com.judangbang.pillbadeum.domain.LatePolicy
 import com.judangbang.pillbadeum.domain.ScheduleRule
 import com.judangbang.pillbadeum.domain.SlotLabel
 import com.judangbang.pillbadeum.domain.UuidV7
+import com.judangbang.pillbadeum.domain.firstVersionStart
 import kotlin.time.Clock
+import kotlin.time.Instant
 
 /**
  * What the registration screen submits.
@@ -50,7 +53,9 @@ sealed interface SaveIntakeResult {
 /**
  * Creates or edits an intake (flows.md section 1).
  *
- * - Create: intake row + first schedule_version, effective from now, in one transaction.
+ * - Create: intake row + first schedule_version in one transaction. The first version starts at the
+ *   start of the window that holds the registration moment, so "this morning at 08:00" can still be
+ *   recorded after registering in the afternoon (record-rules-supplement.md P-4, RR-41).
  * - Edit: display fields are updated in place; a changed schedule closes the current version at
  *   now (`effective_to`) and inserts a new one. Versions are never overwritten (data-model.md 2).
  * - Every new version stores `late_policy` = [NEW_VERSION_LATE_POLICY] (KEEP): the 1st release never
@@ -82,7 +87,9 @@ class SaveIntake(
                         deviceId = deviceId,
                     ),
                 )
-                insertVersion(intakeId, d.rule, now)
+                val settings = db.settingDao().loadWindowSettings()
+                val from = firstVersionStart(d.rule, Instant.fromEpochMilliseconds(now), settings).toEpochMilliseconds()
+                insertVersion(intakeId, d.rule, now, effectiveFrom = from)
                 SaveIntakeResult.Saved(intakeId, newScheduleVersion = true)
             }
         }
@@ -99,11 +106,22 @@ class SaveIntake(
                     return@immediateTransaction SaveIntakeResult.Gone
                 }
                 val versions = db.scheduleVersionDao()
-                val current = versions.findEffective(intakeId, now)
+                // The open version, not the one in effect at now: with the clock set back, "now" can
+                // fall inside an older closed version or before the first one (TASK-005).
+                val current = versions.findOpen(intakeId)
                 val changed = current == null || ScheduleParams.toRule(current) != d.rule
                 if (changed) {
-                    if (current != null) versions.close(current.id, effectiveTo = now, now = now)
-                    insertVersion(intakeId, d.rule, now)
+                    // A changed schedule applies from now; the window holding now follows the new
+                    // version (supplement P-8). If the clock is behind the open version's start, the
+                    // change applies from that start instead, which leaves the open version empty
+                    // (from = to) and never two open versions.
+                    val from = maxOf(now, current?.effectiveFrom ?: now)
+                    if (current != null) {
+                        check(versions.close(current.id, effectiveTo = from, now = now) == 1) {
+                            "open schedule version ${current.id} could not be closed"
+                        }
+                    }
+                    insertVersion(intakeId, d.rule, now, effectiveFrom = from)
                 }
                 SaveIntakeResult.Saved(intakeId, newScheduleVersion = changed)
             }
@@ -128,7 +146,7 @@ class SaveIntake(
         val NEW_VERSION_LATE_POLICY: LatePolicy = LatePolicy.KEEP
     }
 
-    private suspend fun insertVersion(intakeId: String, rule: ScheduleRule, now: Long) {
+    private suspend fun insertVersion(intakeId: String, rule: ScheduleRule, now: Long, effectiveFrom: Long) {
         db.scheduleVersionDao().insert(
             ScheduleVersionEntity(
                 id = ids.next(),
@@ -136,7 +154,7 @@ class SaveIntake(
                 type = ScheduleParams.typeOf(rule),
                 paramsJson = ScheduleParams.encode(rule),
                 latePolicy = NEW_VERSION_LATE_POLICY,
-                effectiveFrom = now,
+                effectiveFrom = effectiveFrom,
                 createdAt = now,
                 updatedAt = now,
                 deviceId = deviceId,

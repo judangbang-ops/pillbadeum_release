@@ -216,3 +216,79 @@ data class SettingEntity(
     @PrimaryKey @ColumnInfo(name = "key") val key: String,
     @ColumnInfo(name = "value") val value: String,
 )
+
+// Schema 2 (record-rules-supplement.md N-1, N-2, C-1; TASK-003).
+
+/**
+ * Per-intake reminder switch and first reminder time (supplement N-1). Interval, daily maximum and
+ * quiet hours are common `setting` keys, not per intake (differs from data-model.md section 4).
+ *
+ * One row per intake, keyed by the intake. It is user configuration that a backend would sync, so it
+ * keeps the common metadata except `id` and `archived_at`: it follows its intake's archive state.
+ */
+@Entity(
+    tableName = "reminder_rule",
+    foreignKeys = [
+        ForeignKey(
+            entity = IntakeEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["intake_id"],
+            onDelete = ForeignKey.NO_ACTION,
+        ),
+    ],
+)
+data class ReminderRuleEntity(
+    @PrimaryKey @ColumnInfo(name = "intake_id") val intakeId: String,
+    @ColumnInfo(name = "enabled") val enabled: Boolean,
+    /** `HH:MM`, a wall-clock time in the base zone (supplement N-3, N-4). */
+    @ColumnInfo(name = "start_time") val startTime: String,
+    @ColumnInfo(name = "created_at") val createdAt: Long,
+    @ColumnInfo(name = "updated_at") val updatedAt: Long,
+    @ColumnInfo(name = "version") val version: Int = 1,
+    @ColumnInfo(name = "device_id") val deviceId: String,
+)
+
+/**
+ * A pending "30분 뒤" reminder of one intake (supplement N-2, N-7). Only the last snooze is kept.
+ * Device-local run state like `setting`, so no common metadata.
+ */
+@Entity(
+    tableName = "reminder_snooze",
+    foreignKeys = [
+        ForeignKey(
+            entity = IntakeEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["intake_id"],
+            onDelete = ForeignKey.NO_ACTION,
+        ),
+    ],
+)
+data class ReminderSnoozeEntity(
+    @PrimaryKey @ColumnInfo(name = "intake_id") val intakeId: String,
+    /** Period key of the window the snooze belongs to; a new window drops it. */
+    @ColumnInfo(name = "period_key") val periodKey: String,
+    @ColumnInfo(name = "fire_at") val fireAt: Long,
+)
+
+/**
+ * Marks a judgment whose `taken_at` was more than 5 minutes after the clock at check time
+ * (supplement C-1). Kept apart from `dose_record` so judgments are never rewritten (I-2).
+ * Device-local state like `setting`, so no common metadata.
+ */
+@Entity(
+    tableName = "clock_flag",
+    foreignKeys = [
+        ForeignKey(
+            entity = DoseRecordEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["dose_id"],
+            onDelete = ForeignKey.NO_ACTION,
+        ),
+    ],
+)
+data class ClockFlagEntity(
+    @PrimaryKey @ColumnInfo(name = "dose_id") val doseId: String,
+    @ColumnInfo(name = "flagged_at") val flaggedAt: Long,
+    /** Set by [그대로 두기], [기록 취소] or any other void of the judgment (supplement C-3). */
+    @ColumnInfo(name = "resolved_at") val resolvedAt: Long? = null,
+)

@@ -3,6 +3,7 @@ package com.judangbang.pillbadeum.usecase
 import com.judangbang.pillbadeum.domain.ScheduleRule
 import com.judangbang.pillbadeum.domain.ScheduleType
 import com.judangbang.pillbadeum.domain.SlotLabel
+import com.judangbang.pillbadeum.status.DayState
 import com.judangbang.pillbadeum.status.LoadStatusBoard
 import com.judangbang.pillbadeum.testing.DbFixture
 import com.judangbang.pillbadeum.testing.TEST_DEVICE_ID
@@ -13,6 +14,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
@@ -62,8 +64,26 @@ class ManageIntakesTest {
 
         val version = fx.db.scheduleVersionDao().listByIntake(saved.intakeId).single()
         assertEquals(ScheduleType.DAILY, version.type)
-        assertEquals(seoul("2026-11-11T08:00").toEpochMilliseconds(), version.effectiveFrom)
+        // Registered 08:00: the first version starts at that window's start, 04:00 (supplement P-4).
+        assertEquals(seoul("2026-11-11T04:00").toEpochMilliseconds(), version.effectiveFrom)
+        assertEquals(seoul("2026-11-11T08:00").toEpochMilliseconds(), intake.createdAt)
         assertNull(version.effectiveTo)
+    }
+
+    @Test
+    fun rr41_registered_in_the_afternoon_the_morning_belongs_to_the_first_version() = runTest {
+        fx.at("2026-11-11T15:00")
+        val daily = assertIs<SaveIntakeResult.Saved>(saveIntake.create(IntakeDraft(me(), "아침약"))).intakeId
+        val weekly = assertIs<SaveIntakeResult.Saved>(
+            saveIntake.create(IntakeDraft(me(), "주사제 A", rule = ScheduleRule.Weekly(DayOfWeek.MONDAY))),
+        ).intakeId
+        val versions = fx.db.scheduleVersionDao()
+        assertEquals(seoul("2026-11-11T04:00").toEpochMilliseconds(), versions.listByIntake(daily).single().effectiveFrom)
+        assertEquals(seoul("2026-11-09T04:00").toEpochMilliseconds(), versions.listByIntake(weekly).single().effectiveFrom)
+        assertNotNull(versions.findEffective(daily, seoul("2026-11-11T08:00").toEpochMilliseconds()))
+        assertNull(versions.findEffective(daily, seoul("2026-11-11T03:59").toEpochMilliseconds()), "nothing before it")
+        // The week grid counts the registration day as scheduled, not as "before registration".
+        assertEquals(DayState.TODAY_PENDING, board().items.single { it.intakeId == daily }.weekCells.single { it.isToday }.state)
     }
 
     @Test

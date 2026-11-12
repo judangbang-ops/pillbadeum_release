@@ -1,0 +1,16 @@
+11-12 04:20:44.723  4756  4869 V BackupXmlParserLogging: android:fullBackupContent - found xml resource
+11-12 04:20:44.724  4756  4869 V BackupXmlParserLogging: 
+11-12 04:20:44.724  4756  4869 V BackupXmlParserLogging: ====================================================
+11-12 04:20:44.724  4756  4869 V BackupXmlParserLogging: Found valid fullBackupContent; parsing xml resource.
+11-12 04:20:44.724  4756  4869 V BackupXmlParserLogging: ====================================================
+11-12 04:20:44.724  4756  4869 V BackupXmlParserLogging: 
+11-12 04:20:44.724  4756  4869 V BackupXmlParserLogging: Exception trying to parse fullBackupContent xml file! Aborting full backup.
+11-12 04:20:44.724  4756  4869 V BackupXmlParserLogging: org.xmlpull.v1.XmlPullParserException: At most 2 tag attributes allowed for "include" tag ("domain" & "path".
+11-12 04:20:44.724  4756  4869 V BackupXmlParserLogging: 	at android.app.backup.FullBackup$BackupScheme.validateInnerTagContents(FullBackup.java:656)
+11-12 04:20:44.724  4756  4869 V BackupXmlParserLogging: 	at android.app.backup.FullBackup$BackupScheme.parseBackupSchemeFromXmlLocked(FullBackup.java:442)
+11-12 04:20:44.724  4756  4869 V BackupXmlParserLogging: 	at android.app.backup.FullBackup$BackupScheme.maybeParseBackupSchemeLocked(FullBackup.java:404)
+11-12 04:20:44.724  4756  4869 V BackupXmlParserLogging: 	at android.app.backup.FullBackup$BackupScheme.maybeParseAndGetCanonicalIncludePaths(FullBackup.java:367)
+11-12 04:20:44.724  4756  4869 V BackupXmlParserLogging: 	at android.app.backup.BackupAgent.onFullBackup(BackupAgent.java:297)
+11-12 04:20:44.724  4756  4869 V BackupXmlParserLogging: 	at android.app.backup.BackupAgent$BackupServiceBinder.doMeasureFullBackup(BackupAgent.java:1026)
+11-12 04:20:44.724  4756  4869 V BackupXmlParserLogging: 	at android.app.IBackupAgent$Stub.onTransact(IBackupAgent.java:139)
+11-12 04:20:44.724  4756  4869 V BackupXmlParserLogging: 	at android.os.Binder.execTransact(Binder.java:674)

@@ -1,0 +1,52 @@
+11-12 04:20:06.071  6111  6127 V BackupXmlParserLogging: android:fullBackupContent - found xml resource
+11-12 04:20:06.071  6111  6127 V BackupXmlParserLogging: 
+11-12 04:20:06.071  6111  6127 V BackupXmlParserLogging: ====================================================
+11-12 04:20:06.071  6111  6127 V BackupXmlParserLogging: Found valid fullBackupContent; parsing xml resource.
+11-12 04:20:06.071  6111  6127 V BackupXmlParserLogging: ====================================================
+11-12 04:20:06.071  6111  6127 V BackupXmlParserLogging: 
+11-12 04:20:06.072  6111  6127 V BackupXmlParserLogging: ...parsed /data/data/com.judangbang.pillbadeum/databases/diditake.db for domain "database", requiredFlags + "1"
+11-12 04:20:06.072  6111  6127 V BackupXmlParserLogging: ...automatically generated /data/data/com.judangbang.pillbadeum/databases/diditake.db-journal. Ignore if nonexistent.
+11-12 04:20:06.072  6111  6127 V BackupXmlParserLogging: ...automatically generated /data/data/com.judangbang.pillbadeum/databases/diditake.db-wal. Ignore if nonexistent.
+11-12 04:20:06.072  6111  6127 V BackupXmlParserLogging: ...parsed /data/data/com.judangbang.pillbadeum/databases/diditake.db-wal for domain "database", requiredFlags + "1"
+11-12 04:20:06.072  6111  6127 V BackupXmlParserLogging: ...automatically generated /data/data/com.judangbang.pillbadeum/databases/diditake.db-wal-journal. Ignore if nonexistent.
+11-12 04:20:06.072  6111  6127 V BackupXmlParserLogging: ...automatically generated /data/data/com.judangbang.pillbadeum/databases/diditake.db-wal-wal. Ignore if nonexistent.
+11-12 04:20:06.072  6111  6127 V BackupXmlParserLogging: ...parsed /data/data/com.judangbang.pillbadeum/databases/diditake.db-journal for domain "database", requiredFlags + "1"
+11-12 04:20:06.072  6111  6127 V BackupXmlParserLogging: ...automatically generated /data/data/com.judangbang.pillbadeum/databases/diditake.db-journal-journal. Ignore if nonexistent.
+11-12 04:20:06.072  6111  6127 V BackupXmlParserLogging: ...automatically generated /data/data/com.judangbang.pillbadeum/databases/diditake.db-journal-wal. Ignore if nonexistent.
+11-12 04:20:06.073  6111  6127 V BackupXmlParserLogging: ...parsed /data/data/com.judangbang.pillbadeum/databases/diditake.db for domain "database", requiredFlags + "2"
+11-12 04:20:06.073  6111  6127 V BackupXmlParserLogging: ...automatically generated /data/data/com.judangbang.pillbadeum/databases/diditake.db-journal. Ignore if nonexistent.
+11-12 04:20:06.073  6111  6127 V BackupXmlParserLogging: ...automatically generated /data/data/com.judangbang.pillbadeum/databases/diditake.db-wal. Ignore if nonexistent.
+11-12 04:20:06.073  6111  6127 V BackupXmlParserLogging: ...parsed /data/data/com.judangbang.pillbadeum/databases/diditake.db-wal for domain "database", requiredFlags + "2"
+11-12 04:20:06.073  6111  6127 V BackupXmlParserLogging: ...automatically generated /data/data/com.judangbang.pillbadeum/databases/diditake.db-wal-journal. Ignore if nonexistent.
+11-12 04:20:06.073  6111  6127 V BackupXmlParserLogging: ...automatically generated /data/data/com.judangbang.pillbadeum/databases/diditake.db-wal-wal. Ignore if nonexistent.
+11-12 04:20:06.073  6111  6127 V BackupXmlParserLogging: ...parsed /data/data/com.judangbang.pillbadeum/databases/diditake.db-journal for domain "database", requiredFlags + "2"
+11-12 04:20:06.073  6111  6127 V BackupXmlParserLogging: ...automatically generated /data/data/com.judangbang.pillbadeum/databases/diditake.db-journal-journal. Ignore if nonexistent.
+11-12 04:20:06.073  6111  6127 V BackupXmlParserLogging: ...automatically generated /data/data/com.judangbang.pillbadeum/databases/diditake.db-journal-wal. Ignore if nonexistent.
+11-12 04:20:06.073  6111  6127 V BackupXmlParserLogging: 
+11-12 04:20:06.073  6111  6127 V BackupXmlParserLogging: Xml resource parsing complete.
+11-12 04:20:06.073  6111  6127 V BackupXmlParserLogging: Final tally.
+11-12 04:20:06.073  6111  6127 V BackupXmlParserLogging: Includes:
+11-12 04:20:06.074  6111  6127 V BackupXmlParserLogging:   domain=db
+11-12 04:20:06.074  6111  6127 V BackupXmlParserLogging:  path: /data/data/com.judangbang.pillbadeum/databases/diditake.db-wal requiredFlags: 1
+11-12 04:20:06.074  6111  6127 V BackupXmlParserLogging:  path: /data/data/com.judangbang.pillbadeum/databases/diditake.db-wal requiredFlags: 2
+11-12 04:20:06.074  6111  6127 V BackupXmlParserLogging:  path: /data/data/com.judangbang.pillbadeum/databases/diditake.db-wal-wal requiredFlags: 2
+11-12 04:20:06.074  6111  6127 V BackupXmlParserLogging:  path: /data/data/com.judangbang.pillbadeum/databases/diditake.db-wal-journal requiredFlags: 2
+11-12 04:20:06.074  6111  6127 V BackupXmlParserLogging:  path: /data/data/com.judangbang.pillbadeum/databases/diditake.db-journal requiredFlags: 1
+11-12 04:20:06.074  6111  6127 V BackupXmlParserLogging:  path: /data/data/com.judangbang.pillbadeum/databases/diditake.db-journal requiredFlags: 2
+11-12 04:20:06.074  6111  6127 V BackupXmlParserLogging:  path: /data/data/com.judangbang.pillbadeum/databases/diditake.db-journal-wal requiredFlags: 1
+11-12 04:20:06.074  6111  6127 V BackupXmlParserLogging:  path: /data/data/com.judangbang.pillbadeum/databases/diditake.db-journal-journal requiredFlags: 2
+11-12 04:20:06.074  6111  6127 V BackupXmlParserLogging:  path: /data/data/com.judangbang.pillbadeum/databases/diditake.db-wal requiredFlags: 1
+11-12 04:20:06.074  6111  6127 V BackupXmlParserLogging:  path: /data/data/com.judangbang.pillbadeum/databases/diditake.db-journal-wal requiredFlags: 2
+11-12 04:20:06.074  6111  6127 V BackupXmlParserLogging:  path: /data/data/com.judangbang.pillbadeum/databases/diditake.db-wal-wal requiredFlags: 1
+11-12 04:20:06.074  6111  6127 V BackupXmlParserLogging:  path: /data/data/com.judangbang.pillbadeum/databases/diditake.db-wal requiredFlags: 2
+11-12 04:20:06.074  6111  6127 V BackupXmlParserLogging:  path: /data/data/com.judangbang.pillbadeum/databases/diditake.db-wal-journal requiredFlags: 1
+11-12 04:20:06.074  6111  6127 V BackupXmlParserLogging:  path: /data/data/com.judangbang.pillbadeum/databases/diditake.db requiredFlags: 2
+11-12 04:20:06.074  6111  6127 V BackupXmlParserLogging:  path: /data/data/com.judangbang.pillbadeum/databases/diditake.db requiredFlags: 1
+11-12 04:20:06.074  6111  6127 V BackupXmlParserLogging:  path: /data/data/com.judangbang.pillbadeum/databases/diditake.db-journal requiredFlags: 2
+11-12 04:20:06.074  6111  6127 V BackupXmlParserLogging:  path: /data/data/com.judangbang.pillbadeum/databases/diditake.db-journal-journal requiredFlags: 1
+11-12 04:20:06.074  6111  6127 V BackupXmlParserLogging:  path: /data/data/com.judangbang.pillbadeum/databases/diditake.db-journal requiredFlags: 1
+11-12 04:20:06.074  6111  6127 V BackupXmlParserLogging: Excludes:
+11-12 04:20:06.074  6111  6127 V BackupXmlParserLogging:   ...nothing to exclude.
+11-12 04:20:06.074  6111  6127 V BackupXmlParserLogging:   
+11-12 04:20:06.074  6111  6127 V BackupXmlParserLogging: ====================================================
+11-12 04:20:06.074  6111  6127 V BackupXmlParserLogging: 

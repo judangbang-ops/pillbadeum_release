@@ -36,6 +36,8 @@ ACTIVITY = f"{PKG}/.MainActivity"
 DATA = f"/data/data/{PKG}"
 DB = "diditake.db"
 LOCAL_TRANSPORT = "com.android.localtransport/.LocalTransport"
+CONTROL_PKG = "com.android.providers.settings"
+CONTROL_OK = "Backup finished with result: Success"
 ITEM_A = "TestA"
 ITEM_B = "TestB"
 NOTICE = "백업에서 복원했어요"
@@ -224,9 +226,50 @@ def read_state() -> AppState:
 
 
 def setup_transport() -> None:
+    """Turns backup on and selects the test transport. The transport registers a few seconds after
+    backup is turned on; selecting it before that is refused ("Unknown transport", seen on API 34)
+    and backups then go to another transport."""
     sh("bmgr enable true")
-    sh(f"bmgr transport {LOCAL_TRANSPORT}")
     sh("setprop log.tag.BackupXmlParserLogging VERBOSE", check=False)
+    current = re.compile(r"^\s*\*\s*" + re.escape(LOCAL_TRANSPORT) + r"\s*$", re.M)
+    end = time.time() + 120
+    while True:
+        out = sh(f"bmgr transport {LOCAL_TRANSPORT}", check=False)
+        listed = sh("bmgr list transports", check=False)
+        if current.search(listed):
+            return
+        if time.time() > end:
+            raise RuntimeError(f"could not select {LOCAL_TRANSPORT}: {last_line(out)} / {listed.strip()}")
+        time.sleep(3)
+
+
+def control_backup() -> str:
+    """Backs up a system package that always has data: shows the transport takes backups at all."""
+    return sh(f"bmgr backupnow {CONTROL_PKG}", check=False, timeout=180)
+
+
+def ensure_transport(r: "Report") -> None:
+    """On some images the test transport is bound only at boot, so `bmgr enable true` alone leaves
+    every backup refused ("Unable to run backup"; seen on API 27). Reboot once in that case."""
+    out = control_backup()
+    if CONTROL_OK not in out:
+        r.note(f"대조 백업이 안 돼 다시 켬: {last_line(out)}")
+        adb("reboot", check=False)
+        time.sleep(5)
+        adb("wait-for-device", timeout=300)
+        wait_boot()
+        become_root()
+        setup_transport()
+        out = control_backup()
+    ok = CONTROL_OK in out
+    r.check("대조: 시험 전송이 백업을 받음", f"{CONTROL_PKG} 백업 성공", last_line(out), ok)
+    if not ok:
+        raise RuntimeError("the test transport takes no backup; the cases below would prove nothing")
+
+
+def last_line(out: str) -> str:
+    lines = [line for line in out.strip().splitlines() if line.strip()]
+    return lines[-1] if lines else ""
 
 
 def set_transport_params(params: str) -> None:
@@ -332,7 +375,7 @@ def cases_api31(apk: Path, r: Report) -> None:
     before = fresh_install_with_record(apk, r)
     old_id = before.settings.get("device_id")
     out = backup_now()
-    r.note(f"bmgr backupnow (is_encrypted=true): {out.strip().splitlines()[-1] if out.strip() else ''}")
+    r.note(f"bmgr backupnow (is_encrypted=true): {last_line(out)}")
     reinstall(apk)
     restored = read_state()
     r.check("RR-26·RR-69 백업 → 지우고 다시 설치 (암호화 가능)", "기록 1건이 돌아옴, 표식 없음",
@@ -378,7 +421,7 @@ def cases_api31(apk: Path, r: Report) -> None:
     # RR-71: restore the backup over the installed app (marker stays, ids differ).
     stop_app()
     out = sh(f"bmgr restore {PKG}", check=False, timeout=180)
-    r.note(f"bmgr restore: {out.strip().splitlines()[-1] if out.strip() else ''}")
+    r.note(f"bmgr restore: {last_line(out)}")
     launch_app()
     over = read_state()
     notice = screen_has(NOTICE, 10)
@@ -401,7 +444,7 @@ def cases_api31(apk: Path, r: Report) -> None:
     set_transport_params("is_encrypted=false")
     fresh_install_with_record(apk, r)
     out = backup_now()
-    r.note(f"bmgr backupnow (is_encrypted=false): {out.strip().splitlines()[-1] if out.strip() else ''}")
+    r.note(f"bmgr backupnow (is_encrypted=false): {last_line(out)}")
     reinstall(apk)
     nolock = read_state()
     r.check("RR-68 암호화 없음(화면 잠금 없음)", "기록이 돌아오지 않음", describe(nolock),
@@ -415,7 +458,7 @@ def cases_api31(apk: Path, r: Report) -> None:
     set_transport_params("is_device_transfer=true,is_encrypted=false")
     d2d_before = fresh_install_with_record(apk, r)
     out = backup_now()
-    r.note(f"bmgr backupnow (is_device_transfer=true): {out.strip().splitlines()[-1] if out.strip() else ''}")
+    r.note(f"bmgr backupnow (is_device_transfer=true): {last_line(out)}")
     reinstall(apk)
     d2d = read_state()
     launch_app()
@@ -432,11 +475,13 @@ def cases_no_backup(apk: Path, r: Report, case: str, expected_note: str) -> None
     sh("logcat -c", check=False)
     fresh_install_with_record(apk, r)
     out = backup_now()
-    r.note(f"bmgr backupnow: {out.strip().splitlines()[-1] if out.strip() else ''}")
-    log = sh("logcat -d -s BackupXmlParserLogging:V", check=False)
-    (r.out / f"api{r.api}-backup-xml-parser.log").write_text(log, encoding="utf-8")
-    parse_failed = "Aborting" in log or "XmlPullParserException" in log
-    r.note(f"BackupXmlParserLogging: 파싱 실패 기록 {'있음' if parse_failed else '없음'} (로그 파일 참고)")
+    r.note(f"bmgr backupnow: {' / '.join(line.strip() for line in out.strip().splitlines() if PKG in line or 'finished' in line)}")
+    log = adb("logcat", "-d", check=False, timeout=60)
+    lines = [line for line in log.splitlines()
+             if re.search(r"XmlPullParser|Aborting|BackupXmlParserLogging|FullBackup", line)]
+    (r.out / f"api{r.api}-backup-rules.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    parse_failed = any("XmlPullParserException" in line or "Aborting" in line for line in lines)
+    r.note(f"규칙 파일 파싱 실패 기록 {'있음' if parse_failed else '없음'} (api{r.api}-backup-rules.txt)")
     reinstall(apk)
     state = read_state()
     r.check(case, expected_note, describe(state), state.active_records == 0)
@@ -465,6 +510,7 @@ def main() -> int:
     r.note(f"기기: API {api}, {sh('getprop ro.product.model').strip()}, 전송 {LOCAL_TRANSPORT}")
 
     try:
+        ensure_transport(r)
         if api >= 31:
             cases_api31(args.apk, r)
         elif api >= 28:

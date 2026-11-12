@@ -56,7 +56,7 @@
 | TASK-008 | 대상자 수정·보관·되살리기, 보관한 대상자의 항목 기록 막기 (검토 B5). **끝남** (2026-11-12, [PR #11](https://github.com/judangbang-ops/pillbadeum_release/pull/11)) | REQ-005, REQ-016, REQ-017, REQ-018 | `ManagePeople`, `RecordDose`, `person` | 없음 | Claude | 1일 | JVM 테스트: 마지막 대상자 보관 거절, 보관한 대상자의 항목이 `LoadStatusBoard`에서 빠지고 지난 판정은 남음, 그 항목의 버튼 탭 → `Gone`(RR-14의 대상자 몫) |
 | TASK-009 | 설정 저장과 '바꾼 때부터 적용', 바꾼 시각을 `window_settings_changed_at`에 남기기 (보충 P-5). **끝남** (2026-11-12, [PR #11](https://github.com/judangbang-ops/pillbadeum_release/pull/11)) | REQ-011, REQ-053 | `setting` | 없음 | Claude | 1일 | RR-15 JVM 테스트 통과. 지난 판정의 기간키가 바뀌지 않음. 하루 시작·기준 시간대를 바꾸면 그 시각이 남음 |
 | TASK-010 | 보관된 항목 완전 삭제 (Could). **끝남** (2026-11-12, [PR #11](https://github.com/judangbang-ops/pillbadeum_release/pull/11)) | REQ-015 | `intake`, `dose_record`, `schedule_version` | 없음 | Claude | 0.5일 | JVM 테스트: 항목·판정 행이 없고, 남은 위젯 버튼은 Gone |
-| TASK-011 | 알림 계획 `PlanReminders`: 격자 칸(칸 0은 창 시작 뒤 처음 오는 시작 시각), 방해 금지 [시작, 끝)(첫 칸은 울림), 창 끝, 미루기(방해 금지여도 울림, 창 끝 뒤는 안 씀), 다음 칸 하나, 밀린 칸 모으기, 저장 때 줄어드는 칸 수 (보충 N-3~N-8, N-12) | REQ-041, REQ-042, REQ-043, REQ-044, REQ-045, REQ-077 | `reminder_rule`, `reminder_snooze`, `setting` | TASK-003 | Claude | 2일 | RR-21, RR-22, RR-46~54, RR-79·80, RR-82~85 JVM 테스트 통과 |
+| TASK-011 | 알림 계획 `PlanReminders`: 격자 칸(칸 0은 창 시작 뒤 처음 오는 시작 시각), 방해 금지 [시작, 끝)(첫 칸은 울림), 창 끝, 미루기(방해 금지여도 울림, 창 끝 뒤는 안 씀), 다음 칸 하나, 밀린 칸 모으기, 저장 때 줄어드는 칸 수 (보충 N-3~N-8, N-12). **끝남** (2026-11-12, [PR #13](https://github.com/judangbang-ops/pillbadeum_release/pull/13)) | REQ-041, REQ-042, REQ-043, REQ-044, REQ-045, REQ-077 | `reminder_rule`, `reminder_snooze`, `setting` | TASK-003 | Claude | 2일 | RR-21, RR-22, RR-46~54, RR-79·80, RR-82~85 JVM 테스트 통과 |
 
 진행 메모 (2026-11-12)
 
@@ -67,6 +67,8 @@
 - TASK-006·007: [PR #12](https://github.com/judangbang-ops/pillbadeum_release/pull/12). Claude가 정한 세부는 [기록 규칙 보충](../04-spec/record-rules-supplement.md) C-3과 P-8의 '구현' 줄에 적음
 - TASK-006: 경고의 [기록 취소]도 첫 화면의 취소(`VoidDose`)와 같은 규칙이라, 설정 변경 전에 끝난 칸의 판정이면 `Locked`이고 [그대로 두기]는 늘 됨(P-5). PR #11 독립 검토가 '고치면 좋은 것'으로 남긴 대로 지금 창 판정 바꾸기(`ChangeJudgment`)도 같은 잠금을 봄
 - TASK-007: 항목 10개·1년치(판정 3,640행)에서 한 달 읽기 12.6 ms와 24.1 ms (JVM 테스트 `ten_items_for_a_year_read_one_month_in_time`, 4코어 클라우드 컨테이너, 2026-11-12 두 번). 휴대폰에서 잰 값은 아님
+- TASK-011: [PR #13](https://github.com/judangbang-ops/pillbadeum_release/pull/13). 계산과 저장만 하고, 안드로이드 알람·알림은 TASK-024·025, 다시 계산을 부르는 곳은 TASK-027. Claude가 정한 세부는 [기록 규칙 보충](../04-spec/record-rules-supplement.md) N-13 아래 '구현' 줄에 적음
+- PR #12 재검토의 '고치면 좋은 것'도 PR #13에서 함: 일정을 바꿨다가 같은 창 안에서 되돌리면 지난 기록 한 줄에 같은 판정이 두 번 보이던 것, 보충 P-8의 잘린 칸 설명과 한계 한 줄
 
 ### 1.3 위젯
 
@@ -147,7 +149,7 @@
 flowchart LR
     R0["R0 CI<br/>TASK-033 끝남"] --> R0b["R0b 실사용 전<br/>TASK-001·002·004 끝남, 028, 029, 051"]
     R0b --> P["개인 APK 단계<br/>TASK-047, 7일 이상"]
-    R0b --> R1["R1 공통 규칙<br/>TASK-003·005·008~010 끝남, 006, 007, 011"]
+    R0b --> R1["R1 공통 규칙<br/>TASK-003·005~011 끝남"]
     A["계정·테스터<br/>TASK-048, 지금 시작"] --> K["Play 앱·앱 서명 키<br/>TASK-050"]
     R0b --> K
     K -->|가족 폰| P
@@ -164,7 +166,7 @@ flowchart LR
 | R0 CI | TASK-033 | 끝남 | PR마다 테스트·빌드·권한 비교가 돎 |
 | R0b 실사용 전 | TASK-001(끝남), TASK-002(끝남), TASK-004(끝남), TASK-028, TASK-029, TASK-051 | 진행 중 (2026-11-12) | 개인 APK를 나눠 줘도 키·패키지 이름·버전 번호·빌드 변형·백업 때문에 기록을 잃지 않음 (검토 5.1절, 2026-11-12 검토 A1~A4·C4) |
 | 개인 APK 단계 | TASK-047 | R0b 뒤 동희님 폰부터, 가족 폰은 TASK-050 뒤. R1~R4와 함께 감 | 7일 이상의 실사용 기록. 개인 APK → Play 전환 시험은 TASK-038 |
-| R1 공통 규칙 | TASK-003(끝남), TASK-005~TASK-010(끝남), TASK-011 | 진행 중 (2026-11-12, R0b와 함께) | JVM 테스트로 규칙 보충의 반례가 통과함 |
+| R1 공통 규칙 | TASK-003(끝남), TASK-005~TASK-011(끝남) | 끝남 (2026-11-12, PR #8·#11·#12·#13) | JVM 테스트로 규칙 보충의 반례가 통과함 |
 | R2 위젯·앱 화면 | TASK-044·TASK-042 먼저, TASK-012~TASK-023, TASK-041, TASK-043, TASK-045 | R1 뒤 | 화면별 캡처 |
 | R3 알림·복원 알림 | TASK-024~TASK-027, TASK-040, TASK-052 | R1 뒤, R2와 함께 | 에뮬레이터 확인. 잠금 화면은 실기기(TASK-052) |
 | R4 품질 확인 | TASK-030~TASK-032, TASK-034, TASK-046 | R2·R3 뒤 | QA 보고서 |

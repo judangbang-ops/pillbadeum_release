@@ -39,6 +39,7 @@ import kotlinx.coroutines.withContext
  *   the shared SaveIntake use case like the app's [저장]
  * - `bind`: `false` only seeds and binds nothing, so no Glance session starts (the launcher case
  *   places the first widget itself, as after a fresh install)
+ * - `keepwork`: `true` also enqueues [KeepWork] before any widget exists (case FK)
  *
  * Binding needs `adb shell appwidget grantbind --package com.judangbang.pillbadeum` first; without it
  * the system bind dialog opens and the script taps its button.
@@ -77,9 +78,11 @@ class WidgetHostActivity : Activity() {
         ProbeLayout.set(this, layout)
         val bind = intent.getBooleanExtra("bind", true)
         val seed = intent.getIntExtra("seed", 0)
+        val keepWork = intent.getBooleanExtra("keepwork", false)
         val app = applicationContext
         app.container.appScope.launch {
             try {
+                if (keepWork) KeepWork.enqueue(app)
                 val seeded = if (seed > 0) seedItems(seed) else 0
                 withContext(Dispatchers.Main) {
                     if (bind) {

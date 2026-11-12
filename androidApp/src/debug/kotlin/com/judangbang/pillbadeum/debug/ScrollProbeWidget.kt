@@ -1,9 +1,12 @@
 package com.judangbang.pillbadeum.debug
 
+import android.appwidget.AppWidgetManager
 import android.content.Context
+import android.os.Bundle
 import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -108,8 +111,8 @@ class ScrollProbeWidget : GlanceAppWidget() {
     override val stateDefinition: GlanceStateDefinition<*> = PreferencesGlanceStateDefinition
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val container = context.container
         val layout = ProbeLayout.of(context)
+        Log.i(TAG, "provideGlance $id layout=$layout")
         val initial = load(context)
         provideContent {
             val prefs = currentState<Preferences>()
@@ -117,8 +120,10 @@ class ScrollProbeWidget : GlanceAppWidget() {
             var model by remember { mutableStateOf(initial) }
             LaunchedEffect(refreshAt) { load(context)?.let { model = it } }
             ProbeContent(model, layout, prefs[WidgetState.MESSAGE])
+            // Case F: did an update or an options change make the session compose again? (Glance then
+            // sends the new RemoteViews; the launcher logs "loaded" when a reset widget gets them.)
+            SideEffect { Log.i(TAG, "composed $id items=${model?.buttons?.size}") }
         }
-        Log.i(TAG, "provideGlance layout=$layout items=${initial?.buttons?.size} core=${container.hashCode()}")
     }
 
     private suspend fun load(context: Context): WidgetModel? = try {
@@ -137,6 +142,17 @@ class ScrollProbeWidget : GlanceAppWidget() {
 
 class ScrollProbeWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = ScrollProbeWidget()
+
+    // Case F: when does each broadcast reach the app (BUG-004: no new views after PACKAGE_CHANGED)?
+    override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
+        Log.i(ScrollProbeWidget.TAG, "onUpdate ${appWidgetIds.joinToString()}")
+        super.onUpdate(context, appWidgetManager, appWidgetIds)
+    }
+
+    override fun onAppWidgetOptionsChanged(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int, newOptions: Bundle) {
+        Log.i(ScrollProbeWidget.TAG, "onAppWidgetOptionsChanged $appWidgetId")
+        super.onAppWidgetOptionsChanged(context, appWidgetManager, appWidgetId, newOptions)
+    }
 }
 
 /**

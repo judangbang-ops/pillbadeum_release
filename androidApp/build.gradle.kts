@@ -73,4 +73,6 @@ dependencies {
     implementation(project(":shared"))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.glance.appwidget)
+    // 디버그 위젯 시험의 KeepWork(경우 FK)만 씀. Glance가 이미 가져오는 판이라 앱이 받는 판은 그대로
+    debugImplementation(libs.androidx.work.runtime)
 }

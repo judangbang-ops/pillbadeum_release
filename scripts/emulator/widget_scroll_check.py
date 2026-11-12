@@ -26,6 +26,12 @@ found after the tap is the tap's own):
     it comes back (an observation: the release check's widget stuck on loading, 2026-11-12)
   L (API 31+) the probe placed on the Pixel Launcher home screen: scroll; tap Test11 -> recorded;
     then P again on the launcher's widget (LP)
+  F, FK (API 31+, three times each, after a fresh install every time) the first widget placed on the
+    launcher, watched for 60s. The first Glance session makes WorkManager turn its RescheduleReceiver
+    on (PACKAGE_CHANGED), and the release check once kept that first widget on its loading layout
+    (BUG-004). FK enqueues a 10-year work before placing (debug KeepWork), so the switch happens
+    before the widget exists. The probe logs each update and options broadcast it gets and each
+    composition; the launcher logs when a reset widget gets views again. Observations, not checks.
 "recorded" = an active dose_record row for that item with source WIDGET (DB read as root), and the
 button redrawn as done. The report also lists which buttons were fully visible before scrolling and
 where the list is after the tap redraw (an observation for TASK-014).
@@ -74,9 +80,9 @@ ITEM = re.compile(r"(Test\d+), ")  # Labels.widgetDescription: "나 Test6, 미�
 # Host and widget
 
 
-def start_host(layout: str, w: int, h: int, seed: int = 12, bind: bool = True) -> None:
+def start_host(layout: str, w: int, h: int, seed: int = 12, bind: bool = True, keep_work: bool = False) -> None:
     sh(f"am force-stop {PKG}", check=False)
-    extra = "" if bind else " --ez bind false"
+    extra = ("" if bind else " --ez bind false") + (" --ez keepwork true" if keep_work else "")
     sh(f"am start -n {HOST} --es layout {layout} --ei w {w} --ei h {h} --ei seed {seed}{extra}")
 
 
@@ -586,8 +592,15 @@ def place_probe_in_launcher(r: Report, tag: str) -> str:
 TIMELINE = [
     (re.compile(rf"onPackageModified: {re.escape(PKG)}\s*$"), "PACKAGE_CHANGED(우리 패키지)"),
     (re.compile(r"Bound widget (\d+) to provider .*ScrollProbeWidgetReceiver"), "위젯 {0} 묶임"),
-    (re.compile(r"LauncherAppWidgetHostView: App widget created with id: (\d+)"), "런처가 위젯 {0} 뷰를 만듦"),
-    (re.compile(r"ScrollProbeWidget: provideGlance"), "Glance 그리기 시작"),
+    # Launcher3 logs "created" in setAppWidget (a new view, or a reset after a provider change) and
+    # "loaded" on the first non-null RemoteViews after that.
+    (re.compile(r"LauncherAppWidgetHostView: App widget created with id: (\d+)"), "런처가 위젯 {0} 뷰를 만듦(초기화)"),
+    (re.compile(r"LauncherAppWidgetHostView: App widget with id: (\d+) loaded"), "런처의 위젯 {0}이 화면을 받음"),
+    (re.compile(r"ScrollProbeWidget: provideGlance"), "Glance 세션 시작"),
+    (re.compile(r"ScrollProbeWidget: onUpdate (.*)$"), "앱이 APPWIDGET_UPDATE 받음({0})"),
+    (re.compile(r"ScrollProbeWidget: onAppWidgetOptionsChanged (\d+)"), "앱이 크기 변경 받음({0})"),
+    (re.compile(r"ScrollProbeWidget: composed"), "Glance가 구성함"),
+    (re.compile(r"WidgetHostActivity: keep-work enqueued"), "KeepWork 넣음"),
     (re.compile(r"Closing session (appWidget-\d+)"), "Glance 세션 {0} 닫힘"),
     (re.compile(r"ComponentToggleReceiver: toggled ToggleTarget to (\w+)"), "시험 구성요소 {0}"),
     (re.compile(r"SessionWorker attempted restart but Session is not available for (appWidget-\d+)"),
@@ -719,6 +732,74 @@ def run_launcher_case(r: Report, case: str, target: str) -> None:
         r.note(f"{case}P-grid-launcher-font100: 홈 화면에서 위젯 목록이 안 보여 하지 않음")
 
 
+def run_first_place_trials(r: Report, apk: Path, trials: int = 3) -> None:
+    """Cases F and FK (see the module doc), alternating, each after a fresh install."""
+    results: dict[str, list[str]] = {"F": [], "FK": []}
+    for i in range(1, trials + 1):
+        for case in ("F", "FK"):
+            results[case].append(first_place(r, apk, f"{case}{i}", keep_work=case == "FK"))
+    for case, outcomes in results.items():
+        r.note(f"{case} 요약: " + ", ".join(outcomes))
+
+
+def first_place(r: Report, apk: Path, tag: str, keep_work: bool) -> str:
+    """One trial: install afresh, seed (and KeepWork for FK), place the probe, watch it for 60s."""
+    uninstall()
+    adb("install", "-t", str(apk), timeout=180)
+    set_font(1.0)
+    since = device_time()
+    start_host("grid", 250, 110, bind=False, keep_work=keep_work)
+    status = wait_status()
+    if not status.startswith("probe-seeded"):
+        r.note(f"{tag}: 하지 못함 — 호스트가 항목만 만들지 못함 ({status})")
+        return "못 함"
+    time.sleep(5)  # FK: the PACKAGE_CHANGED of KeepWork comes about 1s after it
+    before = reschedule_receiver_state()
+    why = place_probe_in_launcher(r, tag)
+    if why:
+        r.note(f"{tag}: {why} — 15초 뒤 한 번 더")
+        time.sleep(15)
+        why = place_probe_in_launcher(r, tag)
+    if why:
+        r.note(f"{tag}: 하지 못함 — {why}")
+        return "못 함"
+    dropped = time.time()
+    first_shown = lost = back = None
+    while time.time() - dropped < 60:
+        shown = has_widget_list(dump_ui())
+        t = time.time() - dropped
+        if shown and first_shown is None:
+            first_shown = t
+        elif not shown and first_shown is not None and lost is None:
+            lost = t
+            r.shot(f"{tag}-loading")
+        elif shown and lost is not None and back is None:
+            back = t
+        time.sleep(1)
+    shown_now = has_widget_list(dump_ui())
+    r.shot(f"{tag}-60s")
+    if first_shown is None:
+        seen = "60초 동안 한 번도 항목이 보이지 않음(로딩 화면)"
+        outcome = "멈춤"
+    elif lost is not None and back is None:
+        seen = f"{first_shown:.0f}초에 항목이 보였다가 {lost:.0f}초에 로딩 화면으로 바뀌고 60초까지 돌아오지 않음"
+        outcome = "멈춤"
+    elif lost is not None:
+        seen = f"{first_shown:.0f}초에 보임, {lost:.0f}초에 로딩 화면, {back:.0f}초에 다시 보임"
+        outcome = f"돌아옴({back - lost:.0f}초)"
+    else:
+        seen = f"{first_shown:.0f}초에 보이고 60초까지 그대로"
+        outcome = "정상"
+    if not shown_now and outcome != "멈춤":
+        seen += ", 60초에는 안 보임"
+        outcome = "멈춤"
+    events = launcher_timeline(since)
+    r.note(f"{tag}: 놓기 전 RescheduleReceiver {before} → 놓은 뒤 {seen}. 지금 RescheduleReceiver "
+           f"{reschedule_receiver_state()}")
+    r.note(f"{tag}: 로그 순서 — {'; '.join(events[:30]) or '찾은 줄 없음'}")
+    return outcome
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--apk", required=True, type=Path, help="debug APK")
@@ -765,6 +846,9 @@ def main() -> int:
         # 2026-11-12), and its widget stays on the home screen.
         if api >= 31:
             run_launcher_case(r, "L", "Test11")
+            # BUG-004 (release check, 2026-11-12): the first widget after a fresh install stayed on
+            # its loading layout once. Each trial reinstalls, so this goes last.
+            run_first_place_trials(r, args.apk)
         else:
             r.note("L 런처 경우: API 31 미만 이미지의 런처는 위젯 목록 화면이 달라 하지 않음")
     except Exception as exc:

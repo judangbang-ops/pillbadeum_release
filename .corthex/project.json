@@ -26,9 +26,9 @@
     },
     "03-user-flow": {
       "human": "github",
-      "source": "diditake:docs/04-flow/flows.md",
+      "source": "docs/03-user-flow/",
       "truth": "source",
-      "note": "가쟈누님 플로우 문서. FL ID 없이 장 번호로 연결함"
+      "note": "2026-11-12 15:02 KST 지시('/corthex 첨부터')로 이 저장소에서 새로 씀. 흐름 하나에 파일 하나(FL-001~), Mermaid 그림은 GitHub에서 그림으로 보임. 가쟈누님 DidITake 플로우 초안(7a800ac)은 시안으로만 참고. 확인 전"
     },
     "04-functional-spec": {
       "human": "github",

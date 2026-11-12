@@ -3,7 +3,8 @@
 
 Usage: python3 .github/scripts/check_docs.py [repository root]
 
-Reads docs/01-planning/requirements.md, docs/01-domain/domain.md (context IDs), docs/04-spec/record-rules-supplement.md,
+Reads docs/01-planning/requirements.md, docs/01-domain/domain.md (context IDs), docs/03-user-flow/FL-*.md
+(flows), docs/04-spec/record-rules-supplement.md,
 docs/05-ui/sitemap.yaml, docs/05-ui/screens.md, docs/08-wbs/wbs.md and every Markdown file
 under docs/ plus README.md. Standard library only. Prints the counts, then every problem it
 found, and exits with 1 when there is a problem. It changes nothing.
@@ -211,6 +212,73 @@ dupe_states = {s: [x for x, n in Counter(v).items() if n > 1] for s, v in states
 if any(dupe_states.values()):
     problem(f"screens: duplicate states {dupe_states}")
 
+# --- user flows (stage 03) ------------------------------------------------------------------
+flow_dir = root / "docs/03-user-flow"
+flow_files = sorted(flow_dir.glob("FL-*.md"))
+flow_reqs, flow_text, flow_ids = {}, "", []
+for path in flow_files:
+    text = path.read_text(encoding="utf-8")
+    flow_text += text + "\n"
+    rel = path.relative_to(root)
+    title = re.match(r"# (FL-\d{3}) ", text)
+    if not title or not path.name.startswith(title.group(1) + "-"):
+        problem(f"flows: {rel} title does not start with the FL id in its file name")
+        continue
+    fid = title.group(1)
+    flow_ids.append(fid)
+    blocks = re.findall(r"```mermaid\n(.*?)```", text, re.S)
+    if len(blocks) != 1:
+        problem(f"flows: {fid} has {len(blocks)} mermaid blocks, expected 1")
+        continue
+    diagram = blocks[0]
+    in_diagram = set(re.findall(r"REQ-\d{3}", diagram))
+    head = re.search(r"^- 쓰는 요구: (.*)$", text, re.M)
+    listed = set(re.findall(r"REQ-\d{3}", head.group(1))) if head else set()
+    if in_diagram != listed:
+        problem(f"flows: {fid} header and diagram name different requirements "
+                f"(diagram only {sorted(in_diagram - listed)}, header only {sorted(listed - in_diagram)})")
+    flow_reqs[fid] = in_diagram
+    # nodes and edges: A[...], B{...}, C([...]); edges 'X --> Y' or 'X -- label --> Y'
+    kinds_of = {}
+    for m in re.finditer(r"\b([A-Z][A-Z0-9]*)(\(\[|\[|\{)", diagram):
+        kinds_of.setdefault(m.group(1), {"([": "end", "[": "step", "{": "decision"}[m.group(2)])
+    out = Counter()
+    for line in diagram.splitlines():
+        m = re.match(r"\s*([A-Z][A-Z0-9]*)\b.*?(?:-->|-- .*? -->)\s*([A-Z][A-Z0-9]*)\b", line)
+        if m:
+            out[m.group(1)] += 1
+    for node, kind in kinds_of.items():
+        if kind == "decision" and out[node] < 2:
+            problem(f"flows: {fid} decision {node} has {out[node]} branch(es)")
+        if kind != "end" and out[node] == 0:
+            problem(f"flows: {fid} step {node} leads nowhere and is not an end")
+    if not any(k == "end" and out[n] == 0 for n, k in kinds_of.items()):
+        problem(f"flows: {fid} has no end")
+fnums = sorted(int(f[3:]) for f in flow_ids)
+print(f"flows: {len(flow_ids)} files" + (f", FL-{fnums[0]:03d}..FL-{fnums[-1]:03d}" if fnums else ""))
+if flow_files:
+    in_flows = set().union(*flow_reqs.values())
+    if in_flows - set(rows):
+        problem(f"flows: unknown requirement ids {sorted(in_flows - set(rows))}")
+    functional = {k for k, c in rows.items() if c[2] == "기능"}
+    no_flow_fn = sorted(functional - in_flows)
+    print(f"  functional requirements in no flow: {no_flow_fn or 'none'}")
+    if no_flow_fn:
+        problem(f"flows: functional requirements in no flow {no_flow_fn}")
+    readme = (flow_dir / "README.md").read_text(encoding="utf-8") if (flow_dir / "README.md").exists() else ""
+    outside = set(re.findall(r"REQ-\d{3}", readme.split("## 흐름 밖", 1)[1])) if "## 흐름 밖" in readme else set()
+    no_flow = sorted(set(rows) - in_flows)
+    unexplained = sorted(set(no_flow) - outside)
+    print(f"  requirements in no flow: {len(no_flow)}, not listed under '흐름 밖' in the README: {unexplained or 'none'}")
+    if unexplained:
+        problem(f"flows: requirements in no flow and not listed as outside {unexplained}")
+    wrongly_outside = sorted(outside & in_flows)
+    if wrongly_outside:
+        problem(f"flows: listed as outside but used by a flow {wrongly_outside}")
+    flow_scr = set(re.findall(r"SCR-\d{3}", flow_text))
+    if flow_scr - set(scr):
+        problem(f"flows: unknown screen ids {sorted(flow_scr - set(scr))}")
+
 # --- work breakdown -------------------------------------------------------------------------
 wbs = read("docs/08-wbs/wbs.md")
 tasks = {}
@@ -249,7 +317,7 @@ print(f"  RR-26..{defined_rr[-1]} not named by any task: {untested or 'none'}")
 if untested:
     problem(f"wbs: counterexamples no task tests {untested}")
 state_refs = set()
-for text in (wbs, req_md, screens, supplement):
+for text in (wbs, req_md, screens, supplement, flow_text):
     state_refs |= set(re.findall(r"(SCR-\d{3})#([a-z]+)", text))
 unknown_states = sorted(f"{s}#{x}" for s, x in state_refs if x not in states.get(s, []))
 print(f"  state references that screens.md does not define: {unknown_states or 'none'}")

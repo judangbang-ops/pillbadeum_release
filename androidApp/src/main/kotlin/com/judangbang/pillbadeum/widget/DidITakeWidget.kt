@@ -67,7 +67,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Per-widget Glance state (Preferences). */
-private object WidgetState {
+internal object WidgetState {
     /** Bumped by [WidgetUpdater]: a running session reloads its model when this changes. */
     val REFRESH = longPreferencesKey("refresh_at")
     val MESSAGE = stringPreferencesKey("message")
@@ -79,13 +79,13 @@ private object WidgetState {
 }
 
 /** Action parameters a button is rendered with (sequences.md section 1). */
-private object WidgetParams {
+internal object WidgetParams {
     val INTAKE_ID = ActionParameters.Key<String>("intake_id")
     val PERIOD_KEY = ActionParameters.Key<String>("rendered_period_key")
     val NAME = ActionParameters.Key<String>("name")
 }
 
-private object WidgetColors {
+internal object WidgetColors {
     val Ink = Color(0xFF1C2129)
     val Muted = Color(0xFF5A6372)
     val Primary = Color(0xFF1D4E89)

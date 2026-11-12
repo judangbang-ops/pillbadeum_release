@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Debug builds only (TASK-042 widget scroll test). Not in the release APK: the release check
+    (ci.yml, release.yml) compares the release manifest and permissions without these entries.
+
+    - WidgetHostActivity hosts one widget at an exact size in dp, so an emulator script can see how a
+      layout behaves at 4x2 with font 100% and the largest font (adb shell appwidget grantbind first).
+    - ScrollProbeWidget renders the real WidgetModel as a Glance lazy grid or list and records taps
+      through the real RecordFromWidget. The product widget (DidITakeWidget) is unchanged.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <activity
+            android:name=".debug.WidgetHostActivity"
+            android:exported="true"
+            android:label="Widget host (debug)"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+
+        <receiver
+            android:name=".debug.ScrollProbeWidgetReceiver"
+            android:exported="true"
+            android:label="Scroll probe (debug)">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/scroll_probe_widget_info" />
+        </receiver>
+    </application>
+
+</manifest>

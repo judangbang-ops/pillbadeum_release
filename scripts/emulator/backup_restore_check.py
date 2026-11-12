@@ -37,10 +37,15 @@ ACTIVITY = f"{PKG}/.MainActivity"
 DATA = f"/data/data/{PKG}"
 DB = "diditake.db"
 DB_DOMAIN = "db"  # tar folder of the `database` backup domain
-LOCAL_TRANSPORT = "com.android.localtransport/.LocalTransport"
+LOCAL_TRANSPORT = "com.android.localtransport/.LocalTransport"  # its name from Android 9 on
+transport = LOCAL_TRANSPORT  # the name setup_transport() selected on this device
 CONTROL_PKG = "com.android.providers.settings"
 CONTROL_OK = "Backup finished with result: Success"
-BACKUP_RAN = "with result: Success"  # the app's own line: its backup ran (it may hold no files)
+# The app's own `bmgr backupnow` line when its backup ran. "Transport rejected package" is the
+# test transport declining a backup whose preflight measured zero bytes: LocalTransport
+# .checkFullBackupSize() returns TRANSPORT_PACKAGE_REJECTED only for size <= 0 while backing up
+# (AOSP android-11.0.0_r1, packages/LocalTransport), so it means the rules let no file out.
+BACKUP_RAN = ("with result: Success", "Transport rejected package")
 ITEM_A = "TestA"
 ITEM_B = "TestB"
 NOTICE = "백업에서 복원했어요"
@@ -231,21 +236,26 @@ def read_state() -> AppState:
 
 
 def setup_transport() -> None:
-    """Turns backup on and selects the test transport. The transport registers a few seconds after
-    backup is turned on; selecting it before that is refused ("Unknown transport", seen on API 34)
-    and backups then go to another transport."""
+    """Turns backup on and selects the test transport by the name `bmgr list transports` shows.
+    - API 34: the transport registers a few seconds after backup is turned on; selecting it before
+      that is refused ("Unknown transport") and backups go to another transport. So wait for it.
+    - Android 8.x: the test transport is the framework's own, named
+      `android/com.android.internal.backup.LocalTransport`. Selecting the Android 9+ name there is
+      accepted but nothing is bound to it ("Unable to run backup")."""
+    global transport
     sh("bmgr enable true")
     sh("setprop log.tag.BackupXmlParserLogging VERBOSE", check=False)
     end = time.time() + 120
     while True:
-        out = sh(f"bmgr transport {LOCAL_TRANSPORT}", check=False)
         listed = sh("bmgr list transports", check=False)
-        # "Selected transport X (formerly Y)" on every version; "Unknown transport" before it registers.
-        # (Android 8.x lists transport names, not components, so the list cannot be matched.)
-        if "Selected transport" in out:
-            return
+        names = [line.strip().lstrip("*").strip() for line in listed.splitlines() if "LocalTransport" in line]
+        if names:
+            transport = LOCAL_TRANSPORT if LOCAL_TRANSPORT in names else names[0]
+            out = sh(f"bmgr transport {transport}", check=False)
+            if "Selected transport" in out:
+                return
         if time.time() > end:
-            raise RuntimeError(f"could not select {LOCAL_TRANSPORT}: {last_line(out)} / {listed.strip()}")
+            raise RuntimeError(f"could not select a LocalTransport: {listed.strip()}")
         time.sleep(3)
 
 
@@ -330,7 +340,7 @@ def set_transport_params(params: str) -> None:
 
 
 def wipe_backup() -> None:
-    sh(f"bmgr wipe {LOCAL_TRANSPORT} {PKG}", check=False)
+    sh(f"bmgr wipe {transport} {PKG}", check=False)
 
 
 def backup_now() -> str:
@@ -559,7 +569,7 @@ def cases_no_backup(apk: Path, r: Report, case: str, expected_note: str, needs_p
     state = read_state()
     evidence = (f"{result or last_line(out)}; 규칙 파일 파싱 실패 기록 {'있음' if parse_failed else '없음'}; "
                 f"{show_entries(entries)}; 다시 설치 뒤 {describe(state)}")
-    ok = BACKUP_RAN in result and not db_entries(entries) and not state.exists
+    ok = any(text in result for text in BACKUP_RAN) and not db_entries(entries) and not state.exists
     if needs_parse_failure:
         ok = ok and parse_failed
     r.check(case, expected_note, evidence, ok)
@@ -585,7 +595,7 @@ def main() -> int:
         sh(f"settings put global {setting} 0")
     sh("settings put secure show_ime_with_hard_keyboard 0", check=False)
     setup_transport()
-    r.note(f"기기: API {api}, {sh('getprop ro.product.model').strip()}, 전송 {LOCAL_TRANSPORT}")
+    r.note(f"기기: API {api}, {sh('getprop ro.product.model').strip()}, 전송 {transport}")
 
     try:
         ensure_transport(r)
@@ -593,11 +603,11 @@ def main() -> int:
             cases_api31(args.apk, r)
         elif api >= 28:
             cases_no_backup(args.apk, r, "Android 9~11, 시험 전송(암호화 플래그 없음)",
-                            "앱 백업은 돌지만 DB가 들지 않음, 다시 설치하면 DB 없음 (이 전송은 clientSideEncryption을 켤 수 없음)",
+                            "앱 백업은 돌지만 DB가 들지 않음(0바이트면 시험 전송이 거절), 다시 설치하면 DB 없음 (이 전송은 clientSideEncryption을 켤 수 없음)",
                             needs_parse_failure=False)
         else:
             cases_no_backup(args.apk, r, "RR-70 Android 8.x",
-                            "규칙 파일 파싱 실패로 앱 전체 백업을 건너뜀, 백업에 DB 없음, 다시 설치하면 DB 없음",
+                            "규칙 파일 파싱 실패로 앱 전체 백업이 빈 채로 끝남(0바이트면 시험 전송이 거절), 백업에 DB 없음, 다시 설치하면 DB 없음",
                             needs_parse_failure=True)
     except Exception as exc:  # report what happened, then fail
         r.check("스크립트", "끝까지 돎", f"{type(exc).__name__}: {exc}", False)

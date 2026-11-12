@@ -6,6 +6,7 @@ import com.judangbang.pillbadeum.data.DidITakeDatabase
 import com.judangbang.pillbadeum.data.SettingEntity
 import com.judangbang.pillbadeum.data.SettingKeys
 import com.judangbang.pillbadeum.data.loadWindowSettings
+import com.judangbang.pillbadeum.data.loadWindowSettingsChangedAt
 import com.judangbang.pillbadeum.domain.WindowSettings
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -36,8 +37,7 @@ class ManageSettings(
     suspend fun windowSettings(): WindowSettings = db.settingDao().loadWindowSettings()
 
     /** When the day start or base zone last changed, or null if never (supplement P-5). */
-    suspend fun windowSettingsChangedAt(): Instant? =
-        db.settingDao().get(SettingKeys.WINDOW_SETTINGS_CHANGED_AT)?.toLongOrNull()?.let(Instant::fromEpochMilliseconds)
+    suspend fun windowSettingsChangedAt(): Instant? = db.settingDao().loadWindowSettingsChangedAt()
 
     /** Day start must be a whole minute (stored as `HH:MM`). */
     suspend fun saveWindowSettings(new: WindowSettings): SaveSettingsResult {

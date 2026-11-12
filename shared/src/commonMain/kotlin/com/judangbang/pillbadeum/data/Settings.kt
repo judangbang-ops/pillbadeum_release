@@ -2,6 +2,7 @@ package com.judangbang.pillbadeum.data
 
 import com.judangbang.pillbadeum.domain.UuidV7
 import com.judangbang.pillbadeum.domain.WindowSettings
+import kotlin.time.Instant
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 
@@ -30,6 +31,10 @@ object SettingKeys {
  */
 suspend fun SettingDao.loadWindowSettings(): WindowSettings =
     parseWindowSettings(dayStart = get(SettingKeys.DAY_START), baseZone = get(SettingKeys.BASE_ZONE))
+
+/** When the day start or base zone last changed, or null if never (supplement P-5). */
+suspend fun SettingDao.loadWindowSettingsChangedAt(): Instant? =
+    get(SettingKeys.WINDOW_SETTINGS_CHANGED_AT)?.toLongOrNull()?.let(Instant::fromEpochMilliseconds)
 
 /**
  * Window settings from the stored `day_start` and `base_zone` values; null means "not stored yet"

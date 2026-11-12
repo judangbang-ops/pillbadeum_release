@@ -125,6 +125,20 @@ interface ScheduleVersionDao {
     )
     suspend fun close(id: String, effectiveTo: Long, now: Long): Int
 
+    /**
+     * The open-ended (latest) version, whatever the clock says. Schedule edits start from this one so
+     * a clock set back can never leave two open versions (TASK-005).
+     */
+    @Query(
+        """
+        SELECT * FROM schedule_version
+        WHERE intake_id = :intakeId AND archived_at IS NULL AND effective_to IS NULL
+        ORDER BY effective_from DESC, id DESC
+        LIMIT 1
+        """,
+    )
+    suspend fun findOpen(intakeId: String): ScheduleVersionEntity?
+
     /** Every version of one intake, oldest first (history and tests). */
     @Query("SELECT * FROM schedule_version WHERE intake_id = :intakeId ORDER BY effective_from, id")
     suspend fun listByIntake(intakeId: String): List<ScheduleVersionEntity>
@@ -161,6 +175,26 @@ interface DoseRecordDao {
         windowStart: Long,
         windowEnd: Long,
     ): DoseRecordEntity?
+
+    /**
+     * Every active judgment that [findActiveJudgment] would match for one window. Writers that replace
+     * one of them (time edit, kind change) must see the others too (supplement P-6).
+     */
+    @Query(
+        """
+        SELECT * FROM dose_record
+        WHERE intake_id = :intakeId
+          AND active = 1
+          AND (period_key = :periodKey OR (taken_at >= :windowStart AND taken_at < :windowEnd))
+        ORDER BY taken_at, id
+        """,
+    )
+    suspend fun findActiveJudgments(
+        intakeId: String,
+        periodKey: String,
+        windowStart: Long,
+        windowEnd: Long,
+    ): List<DoseRecordEntity>
 
     /** Void (cancel) an active judgment (record-rules.md section 6.1). Returns rows changed. */
     @Query(

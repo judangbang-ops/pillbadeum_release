@@ -1,11 +1,11 @@
-# 디버그 APK의 권한 목록 기준 (aapt2 dump permissions 형식, package 줄 제외).
-# CI(.github/workflows/ci.yml)가 PR마다 실제 APK와 비교해, 한 줄이라도 늘거나 줄면 실패함.
+# 디버그·릴리즈 APK의 권한 목록 기준 (aapt2 dump permissions 형식, package 줄 제외).
+# CI(.github/workflows/ci.yml의 디버그·릴리즈 APK, release.yml의 릴리즈 APK)가 실제 APK와 비교해, 한 줄이라도 늘거나 줄면 실패함.
 # 의도한 변경이면 이 파일을 같은 PR에서 고치고, 그 권한을 어디서 넣는지 주석으로 적음.
 # android.permission.INTERNET은 이 파일과 상관없이 항상 실패로 봄 (REQ-057).
 # 패키지 이름은 ${applicationId}로 적음. 패키지 이름(Q9, TASK-001)이 바뀌어도 그대로 쓰려는 것임.
 # 출처: 설계 독립 검토 B8 (브랜치 claude/project-thread-j7y084 fca62ce,
 #       docs/06-review/evidence-2026-11-11/build-and-apk-check.txt, 7b8d9df 빌드 기준).
-# 릴리즈 변형은 아직 빌드하지 않아 비교하지 않음.
+# 릴리즈 APK도 같은 기준과 비교함 (TASK-002, 2026-11-12). 두 변형의 권한이 달라지면 이 파일을 변형별로 나눔.
 
 # 앱 매니페스트: 재부팅 뒤 하루 경계 갱신을 다시 걺
 uses-permission: name='android.permission.RECEIVE_BOOT_COMPLETED'

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """APK의 권한 목록(aapt2 dump permissions 출력)을 저장소의 기준 목록과 비교함.
 
-쓰는 법: python3 check_permissions.py <aapt2 출력 파일> <기준 목록 파일>
+쓰는 법: python3 check_permissions.py <aapt2 출력 파일> <기준 목록 파일> [제목에 붙일 이름, 예: 릴리즈 APK]
 - 표준 출력에 Markdown을 씀 (워크플로에서 $GITHUB_STEP_SUMMARY로도 보냄)
 - android.permission.INTERNET이 있으면 기준 목록과 상관없이 실패함 (REQ-057)
 - 기준 목록과 한 줄이라도 다르면(늘거나 줄면) 실패함. 의도한 변경이면 기준 목록을 같은 PR에서 고침
@@ -46,14 +46,15 @@ def read_expected(path: Path) -> set[str]:
 
 
 def main() -> int:
-    if len(sys.argv) != 3:
-        print("usage: check_permissions.py <aapt2-permissions-output> <expected-list>", file=sys.stderr)
+    if len(sys.argv) not in (3, 4):
+        print("usage: check_permissions.py <aapt2-permissions-output> <expected-list> [label]", file=sys.stderr)
         return 2
 
     package, actual = read_actual(Path(sys.argv[1]))
     expected = read_expected(Path(sys.argv[2]))
+    label = f"{esc(sys.argv[3])} " if len(sys.argv) == 4 else ""
 
-    print(f"### 권한 목록 (`{esc(package or '패키지 이름 없음')}`)")
+    print(f"### {label}권한 목록 (`{esc(package or '패키지 이름 없음')}`)")
     print()
     if not package:
         print("aapt2 출력에 package 줄이 없음. APK나 aapt2 실행을 확인하세요.")

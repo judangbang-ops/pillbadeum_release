@@ -9,9 +9,9 @@ Takes two release APKs of one commit signed with one test key, the way personal 
   2. Add an item in the app, place the home-screen widget, tap the item on the widget:
      one record with source WIDGET.
   3. RR-26: back up with the local test transport (encryption on), uninstall, install N again:
-     the widget-tapped record comes back. First start shows the restore notice; [확인했어요].
-  4. Add a second item, place the widget, install N+1 over N: version N+1, the record stays,
-     same device_id and marker, no restore notice.
+     the widget-tapped record comes back. First start shows the restore notice. Add a second item and
+     place the widget again: it shows the restore line (supplement R-3) until [확인했어요] in the app.
+  4. Install N+1 over N: version N+1, the record stays, same device_id and marker, no restore notice.
   5. Tap the second item on the widget the launcher kept: the new build records it.
 
 The widget is placed the way a person does it: touch and hold the app icon > Widgets > drag the
@@ -63,6 +63,7 @@ from backup_restore_check import (
 )
 
 WIDGET_LABEL = "DidITake"  # app_name / widget_label in androidApp/src/main/res/values/strings.xml
+RESTORED_LINE = "복원됨"  # Labels.restoreWidgetLine (supplement R-3)
 
 
 # ------------------------------------------------------------------------------------------------
@@ -308,14 +309,31 @@ def run_flow(apk: Path, next_apk: Path, r: Report) -> None:
     r.check("복원 뒤 첫 실행 (릴리즈 N)", "복원 안내, restored_from = 옛 device_id",
             f"안내 {'보임' if notice else '없음'}; {describe(after)}",
             notice and after.settings.get("restored_from_device_id") == old_id)
+
+    # Supplement R-3, widget part: uninstalling took the first widget off the home screen. Add the second
+    # item and place a widget again while the notice is pending: the widget shows the short restore line
+    # until [확인했어요] in the app.
+    add_item(ITEM_B)
+    widget = try_place_widget(r, "n-again")
+    if widget:
+        go_home()
+        line = find(RESTORED_LINE, 15)
+        r.shot("widget-restored")
+        r.check("복원 뒤 위젯 (보충 R-3)", f"머리글 아래 '{RESTORED_LINE} · … · 앱에서 확인' 줄",
+                line.text if line else "줄 없음", line is not None and "앱에서 확인" in line.text)
+    launch_app()
     tap_text("확인했어요")
     time.sleep(2)
+    if widget:
+        go_home()
+        end = time.time() + 15
+        while screen_has(RESTORED_LINE) and time.time() < end:
+            time.sleep(1)
+        gone = not screen_has(RESTORED_LINE)
+        r.check("[확인했어요] 뒤 위젯 (RR-33 위젯 몫)", "복원 줄이 사라짐", "사라짐" if gone else "남아 있음", gone)
     set_transport_params("")
 
     # 4. N+1 over N
-    add_item(ITEM_B)
-    # Uninstalling in step 3 took the first widget off the home screen: place one again.
-    widget = try_place_widget(r, "n-again")
     before_update = read_state()
     adb("install", "-r", str(next_apk), timeout=180)
     info2 = package_info()

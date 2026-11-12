@@ -1,6 +1,7 @@
 package com.judangbang.pillbadeum.usecase
 
 import com.judangbang.pillbadeum.data.SettingKeys
+import com.judangbang.pillbadeum.data.saveReminderLastRunAt
 import com.judangbang.pillbadeum.domain.QuietNotice
 import com.judangbang.pillbadeum.domain.ReminderSettings
 import com.judangbang.pillbadeum.domain.ScheduleRule
@@ -57,14 +58,17 @@ class PlanRemindersTest {
 
     private fun ReminderNotice.label(): String = "${local(dueAt)} ${names[intakeId]}" + if (snoozed) " (snoozed)" else ""
 
-    /** Lets the alarm ring at each planned time up to [until]; returns what was shown. The clock ends at [until]. */
+    /**
+     * Lets the alarm ring at each planned time up to [until]; returns what was shown. An alarm already past
+     * rings at once. The clock ends at [until].
+     */
     private suspend fun ringUntil(until: String): List<String> {
         val end = seoul(until)
         val shown = mutableListOf<String>()
         while (true) {
             val at = alarm ?: break
             if (at > end) break
-            fx.clock.now = at
+            if (at > fx.clock.now) fx.clock.now = at
             val run = plan.fire()
             shown += run.notices.map { it.label() }.sorted()
             alarm = run.nextAlarmAt
@@ -188,6 +192,72 @@ class PlanRemindersTest {
     }
 
     @Test
+    fun a_late_alarm_survives_a_replan_before_it_is_collected() = runTest {
+        manage.saveSettings(ReminderSettings(maxPerDay = 1))
+        item("C", "08:00")
+        val a = item("A", "09:00")
+        item("B", "09:00")
+        replan()
+        assertEquals(listOf("11-11T08:00 C"), ringUntil("2026-11-11T08:00"))
+        assertEquals(seoul("2026-11-11T09:00"), alarm, "planned by the 08:00 run")
+        // Doze holds the 09:00 alarm; A is recorded at 09:02 before it rings, which re-plans (N-9).
+        fx.at("2026-11-11T09:02")
+        assertIs<RecordResult.Recorded>(fx.record(a, renderedKey = "2026-11-11"))
+        replan()
+        assertEquals(seoul("2026-11-11T09:00"), alarm, "the planned alarm is kept, so it rings at once")
+        assertEquals(listOf("11-11T09:00 B"), ringUntil("2026-11-11T20:00"))
+        assertEquals(seoul("2026-11-12T08:00"), alarm)
+        replan()
+        assertEquals(seoul("2026-11-12T08:00"), alarm, "once collected, a re-plan looks ahead again")
+    }
+
+    @Test
+    fun a_late_snooze_survives_a_replan_before_it_is_collected() = runTest {
+        val a = item("A", "10:00")
+        val b = item("B", "10:00")
+        replan()
+        assertEquals(listOf("11-11T10:00 A", "11-11T10:00 B"), ringUntil("2026-11-11T10:10"))
+        assertEquals(SnoozeResult.Snoozed(seoul("2026-11-11T10:40")), manage.snooze(a, "2026-11-11"))
+        replan()
+        fx.at("2026-11-11T10:41") // the 10:40 alarm is late; B is recorded first
+        assertIs<RecordResult.Recorded>(fx.record(b, renderedKey = "2026-11-11"))
+        replan()
+        assertEquals(
+            listOf("11-11T10:40 A (snoozed)", "11-11T11:00 A", "11-11T12:00 A"),
+            ringUntil("2026-11-11T20:00"),
+        )
+    }
+
+    @Test
+    fun an_alarm_planned_before_the_last_run_is_not_kept() = runTest {
+        item("A", "08:00")
+        replan()
+        ringUntil("2026-11-11T08:00")
+        assertEquals(seoul("2026-11-11T09:00"), alarm)
+        // As after confirming a restore (R-3): the last run is set to now, after the planned alarm.
+        fx.at("2026-11-11T09:30")
+        fx.db.settingDao().saveReminderLastRunAt(seoul("2026-11-11T09:30"))
+        replan()
+        assertEquals(seoul("2026-11-11T10:00"), alarm, "09:00 does not ring at 09:30")
+    }
+
+    @Test
+    fun a_snooze_of_an_ended_window_is_dropped_not_shown() = runTest {
+        manage.saveSettings(ReminderSettings(quietStart = LocalTime(0, 0), quietEnd = LocalTime(0, 0)))
+        fx.at("2026-11-11T02:00") // the 11-10 window, which ends at 04:00
+        val a = item("A", "02:30")
+        replan()
+        assertEquals(listOf("11-11T02:30 A"), ringUntil("2026-11-11T03:20"))
+        assertEquals(SnoozeResult.Snoozed(seoul("2026-11-11T03:50")), manage.snooze(a, "2026-11-10"))
+        replan()
+        assertEquals(seoul("2026-11-11T03:50"), alarm)
+        // The alarm comes after the window changed: the old window's snooze is not shown in the new one.
+        fx.at("2026-11-11T04:10")
+        assertEquals(emptyList(), plan.fire().notices)
+        assertNull(fx.db.reminderDao().findSnooze(a))
+    }
+
+    @Test
     fun rr53_weekly_items_ring_on_the_anchor_day_only() = runTest {
         fx.at("2026-11-09T07:00") // Monday
         item("W", "08:00", ScheduleRule.Weekly(DayOfWeek.MONDAY))
@@ -254,6 +324,28 @@ class PlanRemindersTest {
         replan()
         assertEquals(seoul("2026-11-11T10:00"), alarm)
         assertEquals(listOf("11-11T10:00 A"), ringUntil("2026-11-11T11:00"))
+    }
+
+    @Test
+    fun rr79_another_items_alarm_does_not_bring_back_slots_before_switching_on() = runTest {
+        item("B", "07:30")
+        replan()
+        ringUntil("2026-11-11T09:20")
+        val a = fx.newIntake().also { names[it] = "A" }
+        manage.saveRule(a, enabled = true, start = LocalTime(8, 0))
+        replan()
+        assertEquals(seoul("2026-11-11T09:30"), alarm)
+        // B's 09:30 alarm does not show A's 09:00, which was before A's reminders were switched on.
+        assertEquals(listOf("11-11T09:30 B", "11-11T10:00 A"), ringUntil("2026-11-11T11:00"))
+    }
+
+    @Test
+    fun a_rule_saved_with_the_clock_ahead_does_not_hide_slots() = runTest {
+        fx.at("2026-11-11T12:00") // the clock is wrong when the rule is saved
+        item("A", "08:00")
+        fx.at("2026-11-11T07:00")
+        replan()
+        assertEquals(listOf("11-11T08:00 A", "11-11T09:00 A", "11-11T10:00 A"), ringUntil("2026-11-11T20:00"))
     }
 
     @Test
@@ -324,6 +416,7 @@ class PlanRemindersTest {
         fx.record(a, renderedKey = "2026-11-11")
         manage.saveRule(b, enabled = false, start = LocalTime(8, 0))
         assertNull(fx.db.reminderDao().findSnooze(b), "switching off drops it at once")
+        assertEquals(SnoozeResult.NotNeeded, manage.snooze(b, "2026-11-11"), "no snooze while reminders are off")
         replan()
         assertNull(fx.db.reminderDao().findSnooze(a), "a judged window drops it on the next plan")
         assertEquals(seoul("2026-11-12T08:00"), alarm)
@@ -356,6 +449,10 @@ class PlanRemindersTest {
         assertEquals(seoul("2026-11-11T07:10").toEpochMilliseconds(), row.updatedAt)
         assertEquals(2, row.version)
         assertEquals(TEST_DEVICE_ID, row.deviceId)
+
+        fx.at("2026-11-11T07:20")
+        manage.saveRule(a, enabled = true, start = LocalTime(7, 45))
+        assertEquals(row, fx.db.reminderDao().findRule(a), "saving the same values writes nothing")
     }
 
     @Test

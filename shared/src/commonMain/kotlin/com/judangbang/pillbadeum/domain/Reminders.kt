@@ -62,8 +62,9 @@ data class ReminderSlot(val at: Instant, val index: Int)
 /**
  * The reminder grid of [window] (supplement N-4, N-5): on the window's first logical day D, slot 0 is the
  * first [start] after D's day start (a start before the day start falls on the next date), and slot k is
- * slot 0 + k × interval for k < maxPerDay. Slots at or after the window end are dropped, and so are slots
- * in quiet hours except slot 0. Weekly windows ring only on their first day, which is D. All in the base zone.
+ * slot 0 + k × interval for k < maxPerDay. Slots at or after the end of D are dropped (for a daily window
+ * that is the window end; a weekly window rings on its first day D only), and so are slots in quiet hours
+ * except slot 0. All in the base zone.
  */
 fun reminderSlots(
     window: Window,
@@ -72,12 +73,13 @@ fun reminderSlots(
     reminders: ReminderSettings,
 ): List<ReminderSlot> {
     val day = LocalDate.parse(window.periodKey)
+    val firstDay = dailyWindowOn(day, settings)
     val date = if (start >= settings.dayStart) day else day.plus(1, DateTimeUnit.DAY)
     val first = LocalDateTime(date, start).toInstant(settings.baseZone)
     return (0 until reminders.maxPerDay).mapNotNull { k ->
         val at = first + reminders.interval * k
         val quiet = reminders.isQuiet(at.toLocalDateTime(settings.baseZone).time)
-        ReminderSlot(at, k).takeIf { at in window && (k == 0 || !quiet) }
+        ReminderSlot(at, k).takeIf { at in window && at in firstDay && (k == 0 || !quiet) }
     }
 }
 
@@ -92,12 +94,11 @@ sealed interface QuietNotice {
 
 /**
  * The save-time notice of supplement N-4 for an item starting at [start], or null when quiet hours drop
- * nothing. Counted on wall-clock minutes of one logical day (a daily window ends at the next day start, a
- * weekly one does not end within the grid), so it does not depend on today's date or DST.
+ * nothing. Counted on wall-clock minutes of one logical day, the day [reminderSlots] rings on for daily and
+ * weekly items alike; slots past that day are not counted as quiet. So it does not depend on today's date or DST.
  */
 fun quietNotice(
     start: LocalTime,
-    rule: ScheduleRule,
     settings: WindowSettings,
     reminders: ReminderSettings,
 ): QuietNotice? {
@@ -109,7 +110,7 @@ fun quietNotice(
     var kept = 0
     for (k in 1 until reminders.maxPerDay) {
         val offset = offset0 + k * step
-        if (rule == ScheduleRule.Daily && offset >= day) break
+        if (offset >= day) break
         val minute = (dayStart + offset) % day
         if (reminders.isQuiet(LocalTime(minute / 60, minute % 60))) dropped++ else kept++
     }

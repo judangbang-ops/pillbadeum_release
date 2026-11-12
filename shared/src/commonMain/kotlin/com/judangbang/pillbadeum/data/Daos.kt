@@ -264,6 +264,9 @@ interface SettingDao {
 
     @Upsert
     suspend fun upsert(setting: SettingEntity)
+
+    @Query("DELETE FROM setting WHERE `key` = :key")
+    suspend fun delete(key: String): Int
 }
 
 /**

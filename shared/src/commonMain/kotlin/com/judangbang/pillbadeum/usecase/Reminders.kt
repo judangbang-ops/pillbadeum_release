@@ -8,15 +8,16 @@ import com.judangbang.pillbadeum.data.PersonEntity
 import com.judangbang.pillbadeum.data.ReminderRuleEntity
 import com.judangbang.pillbadeum.data.ReminderSnoozeEntity
 import com.judangbang.pillbadeum.data.ScheduleParams
+import com.judangbang.pillbadeum.data.loadReminderAlarmAt
 import com.judangbang.pillbadeum.data.loadReminderLastRunAt
 import com.judangbang.pillbadeum.data.loadReminderSettings
 import com.judangbang.pillbadeum.data.loadWindowSettings
+import com.judangbang.pillbadeum.data.saveReminderAlarmAt
 import com.judangbang.pillbadeum.data.saveReminderLastRunAt
 import com.judangbang.pillbadeum.data.saveReminderSettings
 import com.judangbang.pillbadeum.domain.QuietNotice
 import com.judangbang.pillbadeum.domain.ReminderSettings
 import com.judangbang.pillbadeum.domain.ReminderSlot
-import com.judangbang.pillbadeum.domain.ScheduleRule
 import com.judangbang.pillbadeum.domain.Window
 import com.judangbang.pillbadeum.domain.WindowSettings
 import com.judangbang.pillbadeum.domain.defaultReminderStart
@@ -52,13 +53,20 @@ data class ReminderRun(val notices: List<ReminderNotice>, val nextAlarmAt: Insta
  * the clock alone: no reminder count is stored. One alarm serves every item (N-8).
  *
  * - [nextAlarm]: after any change of N-9. Only finds the next alarm; overdue slots are not shown and
- *   `reminder_last_run_at` is only repaired when missing or in the future (N-12).
+ *   `reminder_last_run_at` is only repaired when missing or in the future (N-12). The one exception keeps
+ *   an alarm from being lost: when the alarm planned last (`reminder_alarm_at`) is already due but [fire]
+ *   has not run since, that time is returned as it is, at or before now, so the app rings at once.
  * - [fire]: when the alarm rings, and on the first run after boot, clock or time-zone change (N-10). Shows,
  *   per item, the latest slot due in (`reminder_last_run_at`, now] unless it is more than one interval old,
  *   then sets `reminder_last_run_at` to now and finds the next alarm.
  *
+ * The app arms its one alarm with whatever either call returns, even a time already past, and cancels it on
+ * null. Every call also stores that time in `reminder_alarm_at`. The first call ever sets
+ * `reminder_last_run_at` to now, so nothing before it is shown.
+ *
  * An item is reminded only while its current window has no active judgment (N-6), checked here, at the
- * moment of showing. Snoozes that no longer apply (judged window, new period key, item or person archived,
+ * moment of showing. Slots before the item's reminders were switched on or its start time changed are not
+ * shown (RR-79). Snoozes that no longer apply (judged window, new period key, item or person archived,
  * reminders switched off) are deleted on the way (N-7).
  */
 class PlanReminders(
@@ -69,8 +77,12 @@ class PlanReminders(
         db.useWriterConnection { transactor ->
             transactor.immediateTransaction {
                 val now = clock.now()
-                db.settingDao().loadReminderLastRunAt(now)
-                nextAlarmAt(loadItems(now), now)
+                val settings = db.settingDao()
+                val lastRun = settings.loadReminderLastRunAt(now)
+                // The planned alarm is late (Doze) or its receiver has not run yet: keep it so fire() collects it.
+                val planned = settings.loadReminderAlarmAt()
+                if (planned != null && planned > lastRun && planned <= now) return@immediateTransaction planned
+                nextAlarmAt(loadItems(now), now).also { settings.saveReminderAlarmAt(it) }
             }
         }
 
@@ -88,7 +100,9 @@ class PlanReminders(
                 }
                 settings.saveReminderLastRunAt(now)
                 // A snooze that was just shown is at or before now, so it is no longer a next time.
-                ReminderRun(notices, nextAlarmAt(items, now))
+                val next = nextAlarmAt(items, now)
+                settings.saveReminderAlarmAt(next)
+                ReminderRun(notices, next)
             }
         }
 
@@ -126,11 +140,14 @@ class PlanReminders(
         val nextRule = versions.findEffective(intake.id, window.end.toEpochMilliseconds())
             ?.let(ScheduleParams::toRule) ?: ScheduleParams.toRule(version)
         val nextWindow = windowOf(nextRule, window.end, settings)
+        // A rule saved with the clock ahead does not hide slots (Claude's choice, like reminder_last_run_at).
+        val since = Instant.fromEpochMilliseconds(rule.updatedAt).takeIf { it <= now }
         return Item(
             intake = intake,
             person = person,
             window = window,
             judged = judged,
+            since = since,
             snooze = snooze,
             slots = reminderSlots(window, start, settings, reminders),
             nextWindowSlots = reminderSlots(nextWindow, start, settings, reminders),
@@ -143,6 +160,8 @@ class PlanReminders(
         val person: PersonEntity,
         val window: Window,
         val judged: Boolean,
+        /** When the item's reminders were switched on or its start time changed; slots before it are not shown. */
+        val since: Instant?,
         val snooze: ReminderSnoozeEntity?,
         val slots: List<ReminderSlot>,
         val nextWindowSlots: List<ReminderSlot>,
@@ -156,7 +175,7 @@ class PlanReminders(
         /** N-12: the latest due time in (lastRun, now], shown only when at most one interval old. */
         fun due(lastRun: Instant, now: Instant): ReminderNotice? {
             if (judged) return null
-            val grid = gridTimes.filter { it > lastRun && it <= now }
+            val grid = gridTimes.filter { it > lastRun && it <= now && (since == null || it > since) }
             val snoozed = snoozeAt?.takeIf { it <= now }
             val latest = (grid + listOfNotNull(snoozed)).maxOrNull() ?: return null
             if (latest < now - interval) return null
@@ -259,22 +278,23 @@ class ManageReminders(
                 val dao = db.reminderDao()
                 val old = dao.findRule(intakeId)
                 val nowMillis = now.toEpochMilliseconds()
-                dao.upsertRule(
-                    ReminderRuleEntity(
-                        intakeId = intakeId,
-                        enabled = enabled,
-                        startTime = start.toString(),
-                        createdAt = old?.createdAt ?: nowMillis,
-                        updatedAt = nowMillis,
-                        version = (old?.version ?: 0) + 1,
-                        deviceId = deviceId,
-                    ),
-                )
+                // Saving the same values writes nothing, so updated_at keeps when the rule last really changed.
+                if (old == null || old.enabled != enabled || old.startTime != start.toString()) {
+                    dao.upsertRule(
+                        ReminderRuleEntity(
+                            intakeId = intakeId,
+                            enabled = enabled,
+                            startTime = start.toString(),
+                            createdAt = old?.createdAt ?: nowMillis,
+                            updatedAt = nowMillis,
+                            version = (old?.version ?: 0) + 1,
+                            deviceId = deviceId,
+                        ),
+                    )
+                }
                 if (!enabled) dao.deleteSnooze(intakeId)
                 val notice = if (enabled) {
-                    ruleOf(intakeId, now)?.let { rule ->
-                        quietNotice(start, rule, db.settingDao().loadWindowSettings(), db.settingDao().loadReminderSettings())
-                    }
+                    quietNotice(start, db.settingDao().loadWindowSettings(), db.settingDao().loadReminderSettings())
                 } else {
                     null
                 }
@@ -289,12 +309,10 @@ class ManageReminders(
         db.useWriterConnection { transactor ->
             transactor.immediateTransaction {
                 if (!settings.isValid) return@immediateTransaction SaveReminderSettingsResult.Invalid
-                val now = clock.now()
                 db.settingDao().saveReminderSettings(settings)
                 val windowSettings = db.settingDao().loadWindowSettings()
                 val notices = db.reminderDao().listEnabledRules().mapNotNull { row ->
-                    val rule = ruleOf(row.intakeId, now) ?: return@mapNotNull null
-                    quietNotice(LocalTime.parse(row.startTime), rule, windowSettings, settings)?.let { row.intakeId to it }
+                    quietNotice(LocalTime.parse(row.startTime), windowSettings, settings)?.let { row.intakeId to it }
                 }.toMap()
                 SaveReminderSettingsResult.Saved(notices)
             }
@@ -324,7 +342,4 @@ class ManageReminders(
                 SnoozeResult.Snoozed(fireAt)
             }
         }
-
-    private suspend fun ruleOf(intakeId: String, now: Instant): ScheduleRule? =
-        db.scheduleVersionDao().findEffective(intakeId, now.toEpochMilliseconds())?.let(ScheduleParams::toRule)
 }

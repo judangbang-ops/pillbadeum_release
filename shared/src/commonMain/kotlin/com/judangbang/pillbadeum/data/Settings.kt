@@ -32,6 +32,12 @@ object SettingKeys {
 
     /** When overdue reminders were last collected and shown (UTC epoch ms, supplement N-8, N-12). */
     const val REMINDER_LAST_RUN_AT: String = "reminder_last_run_at"
+
+    /**
+     * The time the one reminder alarm was last planned for (UTC epoch ms, supplement N-8, N-12), absent
+     * when no alarm is needed. Kept so a re-plan does not lose an alarm that is late and not yet collected.
+     */
+    const val REMINDER_ALARM_AT: String = "reminder_alarm_at"
 }
 
 /**
@@ -93,4 +99,11 @@ suspend fun SettingDao.loadReminderLastRunAt(now: Instant): Instant {
 
 suspend fun SettingDao.saveReminderLastRunAt(at: Instant) {
     upsert(SettingEntity(SettingKeys.REMINDER_LAST_RUN_AT, at.toEpochMilliseconds().toString()))
+}
+
+suspend fun SettingDao.loadReminderAlarmAt(): Instant? =
+    get(SettingKeys.REMINDER_ALARM_AT)?.toLongOrNull()?.let(Instant::fromEpochMilliseconds)
+
+suspend fun SettingDao.saveReminderAlarmAt(at: Instant?) {
+    if (at == null) delete(SettingKeys.REMINDER_ALARM_AT) else upsert(SettingEntity(SettingKeys.REMINDER_ALARM_AT, at.toEpochMilliseconds().toString()))
 }

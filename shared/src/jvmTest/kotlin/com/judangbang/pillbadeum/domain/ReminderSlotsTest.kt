@@ -40,13 +40,13 @@ class ReminderSlotsTest {
     @Test
     fun rr49_quiet_hours_drop_the_repeats_and_the_save_notice_counts_them() {
         assertEquals(listOf("2026-11-11T21:00"), slots(dailyWindow("2026-11-11T12:00"), "21:00"))
-        assertEquals(QuietNotice.Reduced(2), quietNotice(LocalTime(21, 0), ScheduleRule.Daily, settings, reminders))
+        assertEquals(QuietNotice.Reduced(2), quietNotice(LocalTime(21, 0), settings, reminders))
     }
 
     @Test
     fun rr50_a_start_in_quiet_hours_rings_once() {
         assertEquals(listOf("2026-11-11T22:30"), slots(dailyWindow("2026-11-11T12:00"), "22:30"))
-        assertEquals(QuietNotice.FirstOnly, quietNotice(LocalTime(22, 30), ScheduleRule.Daily, settings, reminders))
+        assertEquals(QuietNotice.FirstOnly, quietNotice(LocalTime(22, 30), settings, reminders))
     }
 
     @Test
@@ -68,15 +68,18 @@ class ReminderSlotsTest {
             listOf("2026-11-11T06:00", "2026-11-11T07:00", "2026-11-11T08:00"),
             slots(dailyWindow("2026-11-11T12:00"), "06:00"),
         )
-        assertNull(quietNotice(LocalTime(7, 0), ScheduleRule.Daily, settings, reminders))
-        assertNull(quietNotice(LocalTime(6, 0), ScheduleRule.Daily, settings, reminders), "06:00 in quiet but no repeat is lost")
+        assertNull(quietNotice(LocalTime(7, 0), settings, reminders))
+        assertNull(quietNotice(LocalTime(6, 0), settings, reminders), "06:00 in quiet but no repeat is lost")
     }
 
     @Test
     fun slots_at_or_after_the_window_end_are_dropped_and_not_counted_as_quiet() {
         // Window 11-11 04:00 ~ 11-12 04:00; a 03:00 start is 11-12 03:00, so 04:00 and 05:00 fall in the next window.
         assertEquals(listOf("2026-11-12T03:00"), slots(dailyWindow("2026-11-11T12:00"), "03:00", noQuiet))
-        assertNull(quietNotice(LocalTime(3, 0), ScheduleRule.Daily, settings, noQuiet))
+        assertNull(quietNotice(LocalTime(3, 0), settings, noQuiet))
+        // 04:00 and 05:00 would be quiet too, but they are past the window, so quiet hours drop nothing.
+        assertEquals(listOf("2026-11-12T03:00"), slots(dailyWindow("2026-11-11T12:00"), "03:00"))
+        assertNull(quietNotice(LocalTime(3, 0), settings, reminders))
     }
 
     @Test
@@ -87,11 +90,16 @@ class ReminderSlotsTest {
             listOf("2026-11-09T08:00", "2026-11-09T09:00", "2026-11-09T10:00"),
             slots(window, "08:00"),
         )
-        // A late start runs past midnight inside the 7-day window.
+        // A late start runs past midnight but stops at the next day start: Tuesday 07:00 does not ring.
+        val late = reminders.copy(interval = 120.minutes, maxPerDay = 6)
+        assertEquals(listOf("2026-11-09T21:00"), slots(window, "21:00", late))
         assertEquals(
-            listOf("2026-11-09T21:00", "2026-11-10T07:00"),
-            slots(window, "21:00", reminders.copy(interval = 120.minutes, maxPerDay = 6)),
+            listOf("2026-11-09T21:00", "2026-11-09T23:00", "2026-11-10T01:00", "2026-11-10T03:00"),
+            slots(window, "21:00", noQuiet.copy(interval = 120.minutes, maxPerDay = 6)),
         )
+        // The save notice counts the same day: 23:00, 01:00, 03:00 are quiet, 05:00 and 07:00 are Tuesday.
+        assertEquals(QuietNotice.Reduced(3), quietNotice(LocalTime(21, 0), settings, late))
+        assertEquals(QuietNotice.FirstOnly, quietNotice(LocalTime(23, 0), settings, reminders.copy(interval = 120.minutes, maxPerDay = 5)))
     }
 
     @Test
@@ -99,7 +107,7 @@ class ReminderSlotsTest {
         // 20:00, 21:30, 23:00, 00:30, 02:00: the last three are quiet and are not moved later.
         val r = reminders.copy(interval = 90.minutes, maxPerDay = 5)
         assertEquals(listOf("2026-11-11T20:00", "2026-11-11T21:30"), slots(dailyWindow("2026-11-11T12:00"), "20:00", r))
-        assertEquals(QuietNotice.Reduced(3), quietNotice(LocalTime(20, 0), ScheduleRule.Daily, settings, r))
+        assertEquals(QuietNotice.Reduced(3), quietNotice(LocalTime(20, 0), settings, r))
     }
 
     @Test

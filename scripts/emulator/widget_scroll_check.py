@@ -18,10 +18,14 @@ found after the tap is the tap's own):
   C list 276x220 largest font: scroll; tap Test5 -> recorded
   D list 250x110 largest font: scroll; tap Test4 -> recorded
   E grid 276x220 largest font: screenshot only (does the grid still fit?)
+  R rows 276x220 font 100%: a LazyColumn with four buttons a row (the grid's look on a list);
+    scroll; tap Test12 -> recorded; then tap it again (C too): the 'already recorded' line appears
+    above the list - does the list keep its place?
   P grid 276x220 font 100%: turn a debug component on (PACKAGE_CHANGED for the package, what
     WorkManager's first work does) and watch whether the widget drops to its loading layout and when
     it comes back (an observation: the release check's widget stuck on loading, 2026-11-12)
-  L (API 31+) the probe placed on the Pixel Launcher home screen: scroll; tap Test11 -> recorded
+  L (API 31+) the probe placed on the Pixel Launcher home screen: scroll; tap Test11 -> recorded;
+    then P again on the launcher's widget (LP)
 "recorded" = an active dose_record row for that item with source WIDGET (DB read as root), and the
 button redrawn as done. The report also lists which buttons were fully visible before scrolling and
 where the list is after the tap redraw (an observation for TASK-014).
@@ -207,7 +211,7 @@ def scroll_offset(items: dict[str, Node], box: Node, layout: str) -> int | None:
     full = FULL_HEIGHT.get(CURRENT["key"], 0)
     if not items or not full:
         return None
-    per_row = 4 if layout == "grid" else 1
+    per_row = 1 if layout == "list" else 4
     top, bottom = box.bounds[1], box.bounds[3]
     # An item whose top shows gives its true top; one cut off only at the top gives it from its
     # bottom. One cut off at both edges (taller than the list) gives neither.
@@ -262,6 +266,18 @@ def first_row(items: dict[str, Node], box: Node) -> list[str]:
 
 def widget_records() -> dict[str, str]:
     """Active judgments by item name -> source, read from the app database as root."""
+    rows = query_db("SELECT i.name, d.source FROM dose_record d JOIN intake i ON i.id = d.intake_id WHERE d.active = 1")
+    return {str(name): str(source) for name, source in rows}
+
+
+def active_count(name: str) -> int:
+    rows = query_db("SELECT COUNT(*) FROM dose_record d JOIN intake i ON i.id = d.intake_id "
+                    "WHERE d.active = 1 AND i.name = ?", (name,))
+    return int(rows[0][0]) if rows else 0
+
+
+def query_db(sql: str, params: tuple = ()) -> list[tuple]:
+    """Runs a query on a copy of the app database pulled as root ([] when there is no database yet)."""
     tmp = Path(tempfile.mkdtemp())
     try:
         for suffix in ("", "-wal", "-journal"):
@@ -269,15 +285,12 @@ def widget_records() -> dict[str, str]:
             if sh(f"ls {remote} 2>/dev/null", check=False).strip():
                 adb("pull", remote, str(tmp / f"{DB}{suffix}"))
         if not (tmp / DB).exists():
-            return {}
+            return []
         con = sqlite3.connect(tmp / DB)
         try:
-            rows = con.execute(
-                "SELECT i.name, d.source FROM dose_record d JOIN intake i ON i.id = d.intake_id WHERE d.active = 1"
-            ).fetchall()
+            return con.execute(sql, params).fetchall()
         finally:
             con.close()
-        return {str(name): str(source) for name, source in rows}
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -306,7 +319,8 @@ def save_ui(r: Report, name: str) -> None:
     (r.out / f"api{r.api}-{name}.xml").write_text(xml, encoding="utf-8")
 
 
-def run_case(r: Report, case: str, layout: str, w: int, h: int, font: float, target: str | None) -> None:
+def run_case(r: Report, case: str, layout: str, w: int, h: int, font: float, target: str | None,
+             again: bool = False) -> None:
     tag = f"{case}-{layout}-{w}x{h}-font{int(font * 100)}"
     CURRENT["key"] = f"{layout}-{font}"
     set_font(font)
@@ -335,7 +349,7 @@ def run_case(r: Report, case: str, layout: str, w: int, h: int, font: float, tar
         wait_status()
         return wait_items(45)
 
-    exercise(r, case, layout, tag, target, nodes, host=True, restart=restart)
+    exercise(r, case, layout, tag, target, nodes, host=True, restart=restart, again=again)
 
 
 def header_above(box: Node) -> Node | None:
@@ -353,7 +367,7 @@ def host_events() -> list[str]:
 
 
 def exercise(r: Report, case: str, layout: str, tag: str, target: str | None, nodes: list[Node], host: bool,
-             restart: Callable[[], list[Node]] | None = None) -> None:
+             restart: Callable[[], list[Node]] | None = None, again: bool = False) -> None:
     """Scroll to [target], tap it, check the record and the redraw. Shared by the debug host and the
     launcher case. [restart] shows the widget again in the debug host."""
     box = list_view(nodes)
@@ -363,7 +377,7 @@ def exercise(r: Report, case: str, layout: str, tag: str, target: str | None, no
     r.note(f"{tag}: 스크롤 전 다 보인 항목 {', '.join(visible) or '없음'}; 첫 줄 {', '.join(row) or '없음'}; "
            f"목록 영역 {box.bounds}, 높이 {box.bounds[3] - box.bounds[1]}px; 항목 한 칸의 온전한 높이 "
            f"{FULL_HEIGHT.get(CURRENT['key'], 0)}px (px = dp × {DENSITY['d']})")
-    if layout == "grid" and case == "A":
+    if layout in ("grid", "rows") and case in ("A", "R"):
         r.check(f"{case} 가로 4개", "첫 줄에 Test1~Test4가 나란히", ", ".join(row) or "없음",
                 row == ["Test1", "Test2", "Test3", "Test4"])
     if target is None:
@@ -466,6 +480,37 @@ def exercise(r: Report, case: str, layout: str, tag: str, target: str | None, no
         r.note(f"{tag}: {target}가 화면 밖이라 다시 스크롤해 다시 그린 문장을 읽음")
     r.check(f"{case} 탭 뒤 다시 그림", f"{target} 버튼이 완료로 바뀜(TalkBack 문장에 '기록됨', 화면 밖이면 다시 스크롤해 봄)",
             redrawn.desc if redrawn else (node.desc if node else "찾지 못함"), redrawn is not None)
+    if again and redrawn is not None:
+        tap_again(r, tag, layout, target, need)
+
+
+def tap_again(r: Report, tag: str, layout: str, target: str, need: float) -> None:
+    """Observation: a second tap on a recorded button shows the 'already recorded' line above the
+    list (RecordFromWidget). Does that line, which changes the widget's layout, move the list?"""
+    item = items_on_screen(dump_ui()).get(target) or scroll_to(target, need)
+    if item is None:
+        r.note(f"{tag}: 다시 누르기 — {target}를 찾지 못해 하지 않음")
+        return
+    nodes = dump_ui()
+    box = list_view(nodes)
+    before = scroll_offset(items_on_screen(nodes), box, layout) if box else None
+    tap(item)
+    message = None
+    end = time.time() + 15
+    while time.time() < end and message is None:
+        time.sleep(1)
+        nodes = dump_ui()
+        message = next((n for n in nodes if "이미 기록됨" in n.text), None)
+    time.sleep(1)
+    nodes = dump_ui()
+    r.shot(f"{tag}-tap-again")
+    save_ui(r, f"{tag}-tap-again")
+    box = list_view(nodes)
+    after = scroll_offset(items_on_screen(nodes), box, layout) if box else None
+    shown = ", ".join(sorted(items_on_screen(nodes), key=lambda k: int(k[4:]))) or "없음"
+    line = f"안내 줄 보임 ('{message.text}')" if message else "15초 안에 안내 줄 안 보임"
+    r.note(f"{tag}: 기록된 {target}를 다시 누름 → {line}; 스크롤 {before}px → {after}px, 보이는 항목 {shown}, "
+           f"{target}의 활성 판정 {active_count(target)}건(1건이어야 함)")
 
 
 PROBE_LABEL = "Scroll probe (debug)"  # android:label of ScrollProbeWidgetReceiver
@@ -584,6 +629,11 @@ def run_reset_case(r: Report, case: str) -> None:
         r.note(f"{tag}: 위젯이 45초 안에 그려지지 않아 하지 못함")
         return
     time.sleep(3)
+    watch_after_toggle(r, tag)
+
+
+def watch_after_toggle(r: Report, tag: str) -> None:
+    """Turns the debug component on or off and watches the widget on screen for 75s at most."""
     since = device_time()
     started = time.time()
     sh(f"am broadcast -n {PKG}/.debug.ComponentToggleReceiver", check=False)
@@ -659,6 +709,14 @@ def run_launcher_case(r: Report, case: str, target: str) -> None:
     r.note(f"{tag}: 런처가 준 목록 영역 {round((box.bounds[2] - box.bounds[0]) / d)}×"
            f"{round((box.bounds[3] - box.bounds[1]) / d)}dp")
     exercise(r, case, "grid", tag, target, nodes, host=False)
+    # Case P on the launcher's widget: a launcher answers a provider change itself (it may build the
+    # widget's view again), unlike the debug host.
+    go_home()
+    time.sleep(2)
+    if has_widget_list(dump_ui()):
+        watch_after_toggle(r, f"{case}P-grid-launcher-font100")
+    else:
+        r.note(f"{case}P-grid-launcher-font100: 홈 화면에서 위젯 목록이 안 보여 하지 않음")
 
 
 def main() -> int:
@@ -696,9 +754,12 @@ def main() -> int:
         # Every case taps another item (C tapped B's Test7 once and found B's record).
         run_case(r, "A", "grid", 276, 220, 1.0, "Test10")
         run_case(r, "B", "grid", 250, 110, 1.0, "Test7")
-        run_case(r, "C", "list", 276, 220, largest, "Test5")
+        run_case(r, "C", "list", 276, 220, largest, "Test5", again=True)
         run_case(r, "D", "list", 250, 110, largest, "Test4")
         run_case(r, "E", "grid", 276, 220, largest, None)
+        # The grid's look on a LazyColumn (rows of four): does it keep its place after a tap like
+        # the list, unlike the grid (runs 6 and 7, 2026-11-12)?
+        run_case(r, "R", "rows", 276, 220, 1.0, "Test12", again=True)
         run_reset_case(r, "P")
         # The launcher last: right after boot the Pixel Launcher's menu was not ready (API 34 and 36,
         # 2026-11-12), and its widget stays on the home screen.

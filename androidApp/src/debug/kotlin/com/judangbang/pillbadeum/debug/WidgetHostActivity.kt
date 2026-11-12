@@ -33,7 +33,7 @@ import kotlinx.coroutines.withContext
  *
  * Extras (all optional):
  * - `provider`: `probe` (default, [ScrollProbeWidget]) or `main` (the product widget)
- * - `layout`: `grid` (default) or `list`, for the probe
+ * - `layout`: `grid` (default), `list` or `rows`, for the probe
  * - `w`, `h`: widget size in dp (default 250 x 110, the declared 4x2 minimum)
  * - `seed`: make sure at least this many active items exist (`Test1`, `Test2`, ...), created through
  *   the shared SaveIntake use case like the app's [저장]
@@ -69,7 +69,11 @@ class WidgetHostActivity : Activity() {
         }
         setContentView(root)
 
-        val layout = if (intent.getStringExtra("layout") == "list") ProbeLayout.LIST else ProbeLayout.GRID
+        val layout = when (intent.getStringExtra("layout")) {
+            "list" -> ProbeLayout.LIST
+            "rows" -> ProbeLayout.ROWS
+            else -> ProbeLayout.GRID
+        }
         ProbeLayout.set(this, layout)
         val bind = intent.getBooleanExtra("bind", true)
         val seed = intent.getIntExtra("seed", 0)

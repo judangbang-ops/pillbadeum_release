@@ -73,6 +73,12 @@ enum class ProbeLayout {
 
     /** `LazyColumn`: one item a row (circle, name, last dose), the layout for large fonts (TASK-044). */
     LIST,
+
+    /**
+     * `LazyColumn` whose rows hold four buttons each: the grid's look on a list. Glance draws it as a
+     * ListView; the grid (a GridView) jumped back to the top after every tap redraw (2026-11-12).
+     */
+    ROWS,
     ;
 
     companion object {
@@ -185,6 +191,14 @@ private fun ProbeContent(model: WidgetModel?, layout: ProbeLayout, message: Stri
             layout == ProbeLayout.GRID -> LazyVerticalGrid(gridCells = GridCells.Fixed(4), modifier = body) {
                 items(buttons) { button -> GridPill(button) }
             }
+            layout == ProbeLayout.ROWS -> LazyColumn(modifier = body) {
+                items(buttons.chunked(4)) { row ->
+                    Row(modifier = GlanceModifier.fillMaxWidth()) {
+                        row.forEach { button -> GridPill(button, GlanceModifier.defaultWeight()) }
+                        repeat(4 - row.size) { Spacer(GlanceModifier.defaultWeight()) }
+                    }
+                }
+            }
             else -> LazyColumn(modifier = body) {
                 items(buttons) { button -> ListRow(button) }
             }
@@ -202,9 +216,9 @@ private fun recordAction(button: WidgetButton) = actionRunCallback<ProbeRecord>(
 
 /** One grid cell: circle, name, subtitle. The whole cell is the touch target. */
 @Composable
-private fun GridPill(button: WidgetButton) {
+private fun GridPill(button: WidgetButton, modifier: GlanceModifier = GlanceModifier.fillMaxWidth()) {
     Column(
-        modifier = GlanceModifier.fillMaxWidth().padding(vertical = 2.dp)
+        modifier = modifier.padding(vertical = 2.dp)
             .clickable(recordAction(button)).semantics { contentDescription = button.description },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {

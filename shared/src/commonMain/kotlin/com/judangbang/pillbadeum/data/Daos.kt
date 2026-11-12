@@ -15,8 +15,41 @@ interface PersonDao {
     @Query("SELECT * FROM person WHERE archived_at IS NULL ORDER BY created_at, id")
     suspend fun listActive(): List<PersonEntity>
 
+    /** Archived people, most recently archived first (SCR-010 "되살리기"). */
+    @Query("SELECT * FROM person WHERE archived_at IS NOT NULL ORDER BY archived_at DESC, id")
+    suspend fun listArchived(): List<PersonEntity>
+
+    @Query("SELECT COUNT(*) FROM person WHERE archived_at IS NULL")
+    suspend fun countActive(): Int
+
     @Query("SELECT * FROM person WHERE id = :id")
     suspend fun findById(id: String): PersonEntity?
+
+    /** Edits an active person. Returns the number of rows changed (0 or 1). */
+    @Query(
+        """
+        UPDATE person SET name = :name, color = :color, updated_at = :now, version = version + 1
+        WHERE id = :id AND archived_at IS NULL
+        """,
+    )
+    suspend fun updateDetails(id: String, name: String, color: String, now: Long): Int
+
+    /** Soft delete (data-model.md section 3). Intakes and judgments are kept. */
+    @Query(
+        """
+        UPDATE person SET archived_at = :now, updated_at = :now, version = version + 1
+        WHERE id = :id AND archived_at IS NULL
+        """,
+    )
+    suspend fun archive(id: String, now: Long): Int
+
+    @Query(
+        """
+        UPDATE person SET archived_at = NULL, updated_at = :now, version = version + 1
+        WHERE id = :id AND archived_at IS NOT NULL
+        """,
+    )
+    suspend fun restore(id: String, now: Long): Int
 }
 
 @Dao
@@ -166,4 +199,33 @@ interface SettingDao {
 
     @Upsert
     suspend fun upsert(setting: SettingEntity)
+}
+
+/**
+ * Hard delete of one archived intake and everything that points at it (REQ-015, TASK-010). Foreign
+ * keys are NO ACTION, so children go first; callers run these in one transaction.
+ */
+@Dao
+interface IntakePurgeDao {
+    @Query("DELETE FROM clock_flag WHERE dose_id IN (SELECT id FROM dose_record WHERE intake_id = :intakeId)")
+    suspend fun deleteClockFlags(intakeId: String): Int
+
+    @Query("DELETE FROM dose_record WHERE intake_id = :intakeId")
+    suspend fun deleteJudgments(intakeId: String): Int
+
+    @Query("DELETE FROM reminder_snooze WHERE intake_id = :intakeId")
+    suspend fun deleteSnooze(intakeId: String): Int
+
+    @Query("DELETE FROM reminder_rule WHERE intake_id = :intakeId")
+    suspend fun deleteReminderRule(intakeId: String): Int
+
+    @Query("DELETE FROM intake_medication WHERE intake_id = :intakeId")
+    suspend fun deleteIntakeMedications(intakeId: String): Int
+
+    @Query("DELETE FROM schedule_version WHERE intake_id = :intakeId")
+    suspend fun deleteScheduleVersions(intakeId: String): Int
+
+    /** Deletes the intake only when it is archived. Returns the number of rows deleted (0 or 1). */
+    @Query("DELETE FROM intake WHERE id = :intakeId AND archived_at IS NOT NULL")
+    suspend fun deleteArchivedIntake(intakeId: String): Int
 }

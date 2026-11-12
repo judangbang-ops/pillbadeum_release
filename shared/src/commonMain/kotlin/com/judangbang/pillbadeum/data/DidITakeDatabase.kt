@@ -34,6 +34,7 @@ abstract class DidITakeDatabase : RoomDatabase() {
     abstract fun scheduleVersionDao(): ScheduleVersionDao
     abstract fun doseRecordDao(): DoseRecordDao
     abstract fun settingDao(): SettingDao
+    abstract fun intakePurgeDao(): IntakePurgeDao
 
     companion object {
         const val FILE_NAME: String = "diditake.db"

@@ -1,11 +1,28 @@
 package com.judangbang.pillbadeum.usecase
 
+import androidx.room3.immediateTransaction
+import androidx.room3.useWriterConnection
 import com.judangbang.pillbadeum.data.DidITakeDatabase
 import com.judangbang.pillbadeum.data.PersonEntity
 import com.judangbang.pillbadeum.domain.UuidV7
 import kotlin.time.Clock
 
-/** Person (대상자) registration: the default "나" on first launch, plus family members. */
+/** Outcome of editing, archiving or restoring a person. Only [Saved] changed a row. */
+sealed interface PersonChange {
+    data object Saved : PersonChange
+
+    /** No such person in the state the call needs (active for edit/archive, archived for restore). */
+    data object Gone : PersonChange
+
+    /** Archiving would leave no active person; nothing changed (TASK-008). */
+    data object LastPerson : PersonChange
+}
+
+/**
+ * Person (대상자) management: the default "나" on first launch, family members, edit, archive and
+ * restore (REQ-016, REQ-017). Archiving keeps the person's intakes and judgments; their buttons and
+ * reminders disappear because every reader and writer skips intakes of archived people (REQ-005).
+ */
 class ManagePeople(
     private val db: DidITakeDatabase,
     private val clock: Clock,
@@ -38,6 +55,38 @@ class ManagePeople(
         )
         db.personDao().insert(person)
         return person
+    }
+
+    /** Archived people for SCR-010 "되살리기", most recently archived first. */
+    suspend fun listArchived(): List<PersonEntity> = db.personDao().listArchived()
+
+    /** @throws IllegalArgumentException on a blank name or a color outside `#RRGGBB`. */
+    suspend fun update(personId: String, name: String, color: String): PersonChange {
+        val trimmed = name.trim()
+        require(trimmed.isNotEmpty()) { "person name is blank" }
+        require(PersonColors.isValid(color)) { "color must be #RRGGBB: $color" }
+        val changed = db.personDao().updateDetails(personId, trimmed, color, clock.now().toEpochMilliseconds())
+        return if (changed == 1) PersonChange.Saved else PersonChange.Gone
+    }
+
+    /** Archives an active person unless it is the last one (checked in the same write transaction). */
+    suspend fun archive(personId: String): PersonChange = db.useWriterConnection { transactor ->
+        transactor.immediateTransaction {
+            val dao = db.personDao()
+            val person = dao.findById(personId)
+            when {
+                person == null || person.archivedAt != null -> PersonChange.Gone
+                dao.countActive() <= 1 -> PersonChange.LastPerson
+                dao.archive(personId, clock.now().toEpochMilliseconds()) == 1 -> PersonChange.Saved
+                else -> PersonChange.Gone
+            }
+        }
+    }
+
+    /** Brings an archived person back; their intakes show again with their past judgments. */
+    suspend fun restore(personId: String): PersonChange {
+        val changed = db.personDao().restore(personId, clock.now().toEpochMilliseconds())
+        return if (changed == 1) PersonChange.Saved else PersonChange.Gone
     }
 
     companion object {

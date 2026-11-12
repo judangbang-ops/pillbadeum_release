@@ -34,6 +34,9 @@ internal suspend fun DidITakeDatabase.lookUpWindow(
 ): WindowLookup {
     val intake = intakeDao().findById(intakeId)
     if (intake == null || intake.archivedAt != null) return WindowLookup.Rejected(RecordResult.Gone)
+    // An archived person's intakes are gone from the widget too (REQ-005, review B5).
+    val person = personDao().findById(intake.personId)
+    if (person == null || person.archivedAt != null) return WindowLookup.Rejected(RecordResult.Gone)
 
     val schedule = scheduleVersionDao().findEffective(intake.id, now.toEpochMilliseconds())
         ?: return WindowLookup.Rejected(RecordResult.Error("no schedule version in effect for intake ${intake.id}"))

@@ -14,6 +14,12 @@ object SettingKeys {
 
     /** This installation's id, written once on first launch (data-model.md section 0, device_id). */
     const val DEVICE_ID: String = "device_id"
+
+    /**
+     * When `day_start` or `base_zone` last changed (UTC epoch ms). Windows that ended before it cannot
+     * be edited, since past windows are computed with the current settings (supplement P-5).
+     */
+    const val WINDOW_SETTINGS_CHANGED_AT: String = "window_settings_changed_at"
 }
 
 /**

@@ -332,3 +332,38 @@ interface ClockFlagDao {
     @Query("UPDATE clock_flag SET resolved_at = :now WHERE dose_id = :doseId AND resolved_at IS NULL")
     suspend fun resolve(doseId: String, now: Long): Int
 }
+
+/** Reminder rules and snoozes (record-rules-supplement.md N-1, N-2, N-7; TASK-011). */
+@Dao
+interface ReminderDao {
+    @Query("SELECT * FROM reminder_rule WHERE intake_id = :intakeId")
+    suspend fun findRule(intakeId: String): ReminderRuleEntity?
+
+    @Upsert
+    suspend fun upsertRule(rule: ReminderRuleEntity)
+
+    /** Rules switched on, of items and people that are not archived. */
+    @Query(
+        """
+        SELECT r.* FROM reminder_rule r
+        JOIN intake i ON i.id = r.intake_id
+        JOIN person p ON p.id = i.person_id
+        WHERE r.enabled = 1 AND i.archived_at IS NULL AND p.archived_at IS NULL
+        ORDER BY i.sort_order, i.created_at, i.id
+        """,
+    )
+    suspend fun listEnabledRules(): List<ReminderRuleEntity>
+
+    @Query("SELECT * FROM reminder_snooze")
+    suspend fun listSnoozes(): List<ReminderSnoozeEntity>
+
+    @Query("SELECT * FROM reminder_snooze WHERE intake_id = :intakeId")
+    suspend fun findSnooze(intakeId: String): ReminderSnoozeEntity?
+
+    /** Only the last snooze of an item is kept (supplement N-7). */
+    @Upsert
+    suspend fun upsertSnooze(snooze: ReminderSnoozeEntity)
+
+    @Query("DELETE FROM reminder_snooze WHERE intake_id = :intakeId")
+    suspend fun deleteSnooze(intakeId: String): Int
+}

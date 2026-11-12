@@ -202,6 +202,23 @@ class LoadHistoryTest {
     }
 
     @Test
+    fun a_schedule_changed_and_changed_back_shows_the_judgment_once() = runTest {
+        // PR #12 re-review: daily, weekly at 10:00, daily again at 10:05, after an 08:00 dose.
+        val intake = fx.newIntake(effectiveFrom = seoul("2026-11-01T04:00"))
+        val dose = recordAt(intake, "2026-11-11T08:00")
+        fx.changeSchedule(intake, ScheduleRule.Weekly(DayOfWeek.MONDAY), at = seoul("2026-11-11T10:00"))
+        fx.changeSchedule(intake, ScheduleRule.Daily, at = seoul("2026-11-11T10:05"))
+        val last = fx.db.scheduleVersionDao().listByIntake(intake).last().id
+        fx.at("2026-11-11T12:00")
+
+        val month = history(november)
+        val wednesday = month.cellsOn("2026-11-11", intake).single()
+        assertEquals(last, wednesday.scheduleVersionId)
+        assertEquals(dose.id, wednesday.judgment?.id)
+        assertTrue(month.cellsOn("2026-11-09", intake).all { it.rule == ScheduleRule.Daily }, "no weekly cell on Monday")
+    }
+
+    @Test
     fun a_new_versions_judgment_is_not_matched_by_key_in_an_old_versions_cell() = runTest {
         // Daily, then weekly (Monday) from Wednesday 10:00; the weekly dose on Thursday has period key 11-09.
         val intake = fx.newIntake(effectiveFrom = seoul("2026-11-01T04:00"))

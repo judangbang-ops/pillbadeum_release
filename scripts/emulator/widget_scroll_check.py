@@ -159,13 +159,24 @@ def scroll_to(name: str, need: float = 1.0, tries: int = 14) -> Node | None:
             return None
         x = (box.bounds[0] + box.bounds[2]) // 2
         top, bottom = box.bounds[1], box.bounds[3]
-        span = max(10, (bottom - top) * 2 // 5)
+        # The list starts scrolling only after the touch slop (8dp), so every swipe adds it. A step is
+        # 40% of the list or 70dp, whichever is more: in a 39dp list 40% minus the slop moved about
+        # 8dp a swipe and never reached Test4 (API 34 at 200%, 2026-11-12). The finger may leave the
+        # list; the list keeps the gesture.
+        d = DENSITY["d"] or 2.75
+        slop = round(8 * d)
+        span = max((bottom - top) * 2 // 5, round(70 * d)) + slop
         shown = [int(k[4:]) for k in items]
         down = not shown or int(name[4:]) > min(shown) or (item is not None and item.bounds[3] >= bottom - 2)
         if item is not None and item.bounds[1] <= top + 2 and item.bounds[3] < bottom - 2:
             down = False  # cut off at the top: scroll back up a little
+        if item is not None and item.bounds[3] > item.bounds[1]:
+            # Partly visible: move by what is missing, so a list about one item high can still show
+            # all of it (fixed steps kept skipping past it, API 26 at 250x110, 2026-11-12).
+            missing = (item.bounds[1] - top - 4) if down else (bottom - 4 - item.bounds[3])
+            span = max(slop + 6, missing + slop)
         y1, y2 = (bottom - 6, bottom - 6 - span) if down else (top + 6, top + 6 + span)
-        sh(f"input swipe {x} {y1} {x} {y2} 600")
+        sh(f"input swipe {x} {y1} {x} {y2} 800")
         time.sleep(1.5)
     return None
 
@@ -291,14 +302,20 @@ def run_case(r: Report, case: str, layout: str, w: int, h: int, font: float, tar
     # widget redraws after the tap, or jump back to the top?
     after = items_on_screen(dump_ui())
     node = after.get(target)
-    if node is not None:
-        kept = f"그대로 ({target}가 같은 자리 근처, y {before_y} → {node.bounds[1]})"
+    shown = ", ".join(sorted(after, key=lambda s: int(s[4:]))) or "없음"
+    if node is not None and abs(node.bounds[1] - before_y) <= 12:
+        kept = f"그대로 ({target} y {before_y} → {node.bounds[1]})"
+    elif node is not None:
+        kept = f"조금 움직임 ({target}는 보이지만 y {before_y} → {node.bounds[1]})"
+    elif "Test1" in after:
+        kept = f"맨 위로 돌아감 ({target}가 화면 밖, 보이는 항목 {shown})"
     else:
-        kept = f"바뀜 ({target}가 화면 밖, 보이는 항목 {', '.join(sorted(after, key=lambda s: int(s[4:]))) or '없음'})"
+        kept = f"바뀜 ({target}가 화면 밖, 보이는 항목 {shown})"
     r.note(f"{tag}: 탭 뒤 다시 그릴 때 스크롤 위치 {kept}")
     # The redraw check reads the button's TalkBack sentence. It looks where the button is now and
     # scrolls only when it is off screen; half of it showing is enough to read it.
     started = time.time()
+    on_screen = target in after
     node = after.get(target) or scroll_to(target, min(need, 0.5))
     redrawn = node if node is not None and "기록됨" in node.desc else None
     end = time.time() + 15
@@ -307,8 +324,10 @@ def run_case(r: Report, case: str, layout: str, w: int, h: int, font: float, tar
         again = items_on_screen(dump_ui()).get(target) or scroll_to(target, min(need, 0.5))
         node = again or node
         redrawn = again if again is not None and "기록됨" in again.desc else None
-    if redrawn is not None:
-        r.note(f"{tag}: 다시 그린 문장을 읽기까지 탭 3초 뒤부터 {time.time() - started:.0f}초")
+    if redrawn is not None and on_screen:
+        r.note(f"{tag}: 다시 그린 문장이 보이기까지 탭 3초 뒤부터 {time.time() - started:.0f}초 더")
+    elif redrawn is not None:
+        r.note(f"{tag}: {target}가 화면 밖이라 다시 스크롤해 다시 그린 문장을 읽음")
     r.check(f"{case} 탭 뒤 다시 그림", f"{target} 버튼이 완료로 바뀜(TalkBack 문장에 '기록됨', 화면 밖이면 다시 스크롤해 봄)",
             redrawn.desc if redrawn else (node.desc if node else "찾지 못함"), redrawn is not None)
 

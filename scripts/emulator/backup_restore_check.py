@@ -56,7 +56,7 @@ NOTICE = "백업에서 복원했어요"
 
 
 def run(args: list[str], check: bool = True, timeout: int = 120) -> str:
-    proc = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+    proc = subprocess.run(args, capture_output=True, text=True, errors="replace", timeout=timeout)
     out = (proc.stdout or "") + (proc.stderr or "")
     if check and proc.returncode != 0:
         raise RuntimeError(f"{' '.join(args)} -> {proc.returncode}\n{out}")
@@ -75,13 +75,19 @@ def api_level() -> int:
     return int(sh("getprop ro.build.version.sdk").strip())
 
 
-def become_root() -> None:
+def become_root(timeout: int = 60) -> None:
+    # `adb root` restarts adbd. `wait-for-device` can return while the old connection is still listed,
+    # and the next shell then fails with exit 255 (seen on API 27, 2026-11-12), so ask again until root answers.
     adb("root", check=False)
-    time.sleep(2)
-    adb("wait-for-device")
-    who = sh("id -u").strip()
-    if who != "0":
-        raise RuntimeError(f"adb root failed (id -u = {who}); use a google_apis image")
+    who = ""
+    end = time.time() + timeout
+    while time.time() < end:
+        time.sleep(2)
+        adb("wait-for-device", check=False, timeout=60)
+        who = sh("id -u", check=False).strip()
+        if who == "0":
+            return
+    raise RuntimeError(f"adb root failed (id -u = {who!r}); use a google_apis or default image")
 
 
 def wait_boot(timeout: int = 300) -> None:
@@ -103,6 +109,7 @@ class Node:
     desc: str
     cls: str
     bounds: tuple[int, int, int, int]
+    rid: str = ""  # resource-id, e.g. "com.android.launcher3:id/widget_preview"
 
     @property
     def center(self) -> tuple[int, int]:
@@ -113,20 +120,41 @@ class Node:
 BOUNDS = re.compile(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]")
 
 
+# A system app that stalls on a slow emulator (seen: "System UI isn't responding" on API 34, 2026-11-12)
+# puts an ANR dialog over every app, so the screen below cannot be read. Such a dialog is closed with [Wait]
+# and listed in the report. Our own app not responding is a failure, never closed.
+ANR_TITLE = "isn't responding"
+APP_LABEL = "DidITake"  # app_name in androidApp/src/main/res/values/strings.xml
+CLOSED_DIALOGS: list[str] = []
+
+
 def dump_ui() -> list[Node]:
-    for _ in range(5):
+    out = ""
+    nodes: list[Node] = []
+    for _ in range(8):
         out = sh("uiautomator dump /sdcard/ui.xml", check=False)
-        if "dumped" in out:
-            xml = adb("exec-out", "cat", "/sdcard/ui.xml")
-            nodes = []
-            for el in ET.fromstring(xml).iter("node"):
-                m = BOUNDS.match(el.get("bounds", ""))
-                if not m:
-                    continue
-                nodes.append(Node(el.get("text", ""), el.get("content-desc", ""), el.get("class", ""),
-                                  tuple(int(v) for v in m.groups())))
+        if "dumped" not in out:
+            time.sleep(1)
+            continue
+        xml = adb("exec-out", "cat", "/sdcard/ui.xml")
+        nodes = []
+        for el in ET.fromstring(xml).iter("node"):
+            m = BOUNDS.match(el.get("bounds", ""))
+            if not m:
+                continue
+            nodes.append(Node(el.get("text", ""), el.get("content-desc", ""), el.get("class", ""),
+                              tuple(int(v) for v in m.groups()), el.get("resource-id", "")))
+        title = next((n.text for n in nodes if ANR_TITLE in n.text), None)
+        if title is not None and (APP_LABEL in title or PKG in title):
+            raise RuntimeError(f"the app is not responding (ANR dialog): {title}")
+        wait = next((n for n in nodes if n.text == "Wait"), None)
+        if title is None or wait is None:
             return nodes
-        time.sleep(1)
+        CLOSED_DIALOGS.append(title)
+        print(f"[note] closed a system dialog with [Wait]: {title}", flush=True)
+        tap(wait)
+    if nodes:
+        return nodes
     raise RuntimeError(f"uiautomator dump failed: {out}")
 
 
@@ -174,8 +202,8 @@ def stop_app() -> None:
     sh(f"am force-stop {PKG}")
 
 
-def add_item_and_record(name: str) -> None:
-    """Home > [항목 추가] > name > [저장] > that row's [먹었어]."""
+def add_item(name: str) -> Node:
+    """Home > [항목 추가] > name > [저장]. Returns the new row's name on the home screen."""
     tap_text("항목 추가")
     field_node = next((n for n in dump_ui() if n.cls.endswith("EditText")), None)
     if field_node is None:
@@ -186,6 +214,12 @@ def add_item_and_record(name: str) -> None:
     row = find(name, 20)
     if row is None:
         raise RuntimeError(f"row {name} did not show")
+    return row
+
+
+def add_item_and_record(name: str) -> None:
+    """Home > [항목 추가] > name > [저장] > that row's [먹었어]."""
+    row = add_item(name)
     # The row's button sits at the right edge on the same line as the name.
     buttons = [n for n in dump_ui() if n.text == "먹었어"]
     if not buttons:
@@ -208,6 +242,7 @@ class AppState:
     marker: str | None = None
     files: str = ""
     readable: bool = True
+    sources: list[str] = field(default_factory=list)  # dose_record.source of active rows, oldest first
 
 
 def read_state() -> AppState:
@@ -225,14 +260,14 @@ def read_state() -> AppState:
         con = sqlite3.connect(tmp / DB)
         try:
             records = con.execute("SELECT COUNT(*) FROM dose_record WHERE active = 1").fetchone()[0]
-            ids = [r[0] for r in con.execute("SELECT device_id FROM dose_record WHERE active = 1 ORDER BY recorded_at")]
+            rows = con.execute("SELECT device_id, source FROM dose_record WHERE active = 1 ORDER BY recorded_at").fetchall()
             settings = dict(con.execute("SELECT key, value FROM setting"))
         except sqlite3.DatabaseError:
             # A broken or half-copied database is not "no records": callers see readable = False.
             return AppState(True, -1, [], {}, marker, files, readable=False)
         finally:
             con.close()
-        return AppState(True, records, ids, settings, marker, files)
+        return AppState(True, records, [r[0] for r in rows], settings, marker, files, sources=[str(r[1]) for r in rows])
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -398,9 +433,10 @@ def reinstall(apk: Path) -> str:
 
 
 class Report:
-    def __init__(self, out: Path, api: int) -> None:
+    def __init__(self, out: Path, api: int, title: str | None = None) -> None:
         self.out = out
         self.api = api
+        self.title = title or f"에뮬레이터 확인 API {api}"
         self.rows: list[tuple[str, str, str, bool]] = []
         self.notes: list[str] = []
         self.shots = 0
@@ -425,12 +461,15 @@ class Report:
         return any(not ok for *_, ok in self.rows)
 
     def write(self) -> None:
-        lines = [f"### 에뮬레이터 확인 API {self.api}", "", "| 경우 | 기대 | 결과 | 판정 |", "| --- | --- | --- | --- |"]
+        lines = [f"### {self.title}", "", "| 경우 | 기대 | 결과 | 판정 |", "| --- | --- | --- | --- |"]
         for case, expected, actual, ok in self.rows:
             cell = lambda s: s.replace("|", "\\|").replace("\n", " ")
             lines.append(f"| {cell(case)} | {cell(expected)} | {cell(actual)} | {'통과' if ok else '**실패**'} |")
-        if self.notes:
-            lines += ["", *[f"- {n}" for n in self.notes]]
+        notes = list(self.notes)
+        if CLOSED_DIALOGS:
+            notes.append(f"[Wait]로 닫은 시스템 ANR 대화상자 {len(CLOSED_DIALOGS)}번: {', '.join(sorted(set(CLOSED_DIALOGS)))}")
+        if notes:
+            lines += ["", *[f"- {n}" for n in notes]]
         (self.out / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -645,8 +684,11 @@ def main() -> int:
         except Exception:
             pass
     finally:
-        (args.out / f"api{api}-logcat.txt").write_text(adb("logcat", "-d", check=False, timeout=60), encoding="utf-8")
         r.write()
+        try:
+            (args.out / f"api{api}-logcat.txt").write_text(adb("logcat", "-d", check=False, timeout=60), encoding="utf-8")
+        except Exception as exc:  # the report is already written; a missing logcat must not hide it
+            print(f"[note] logcat not saved: {exc}", flush=True)
     return 1 if r.failed else 0
 
 

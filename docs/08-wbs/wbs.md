@@ -36,6 +36,7 @@
 - TASK-001: 결정 Q9의 `com.judangbang.pillbadeum`을 PR #4로 main에 합침(2026-11-12 10:19 KST, `843a737`). CI의 APK 정보에서 패키지 이름을 확인함. 기기 설치는 아직 하지 않음(TASK-047)
 - TASK-033: PR #2로 main에 합침(`da916c6`). PR마다 JVM 테스트, 디버그 APK 빌드, 권한 목록 비교(`androidApp/expected-permissions.txt`, `INTERNET`이 있으면 실패)를 함. 릴리즈 변형의 권한 비교는 TASK-002에서 더함(검토 A3)
 - TASK-028·TASK-029: [PR #9](https://github.com/judangbang-ops/pillbadeum_release/pull/9). 백업 규칙 두 파일(`data_extraction_rules.xml`, `backup_rules.xml`)과 복원 감지(`restore.CheckInstall`, `FileInstallMarker`), 앱 첫 화면·위젯의 복원 안내와 [확인했어요], 복원 뒤 위젯·경계 알람 다시 만들기. 에뮬레이터 API 34·30·27·26에서 B-1·B-3, RR-26·RR-30~34·RR-68~71을 확인함([QA 보고서](../07-qa/2026-11-12-backup-restore/report.md)). 끝난 조건과 다른 점: RR-27(400건)은 기록이 칸마다 한 번이라 에뮬레이터에서 앱 경로로 400건을 쌓을 수 없어, 같은 Room·SQLite로 400건을 쓴 JVM 테스트(`BackupFileSetTest`)로만 봄. Android 9~11에서 암호화 조건이 있을 때의 실제 백업과 기기 간 이전은 시험 전송이 그 조건을 줄 수 없어 TASK-032에 남김. 위젯을 놓고 누르는 확인은 TASK-051, 복원 안내 알림은 TASK-040. 독립 검토(Fable 5.2)의 고칠 것 3건과 제안 4건을 반영함
+- TASK-051: [PR #14](https://github.com/judangbang-ops/pillbadeum_release/pull/14). `release-emulator.yml`이 같은 커밋의 릴리즈 APK를 버전 번호 N과 N+1로 빌드해 실행마다 만드는 임시 키로 개인 APK와 같은 방법(`zipalign` 확인 → `apksigner`, v4 끔)으로 서명하고, 에뮬레이터 API 34에서 홈 화면 위젯을 놓고 탭해 기록(`source` = `WIDGET`) → 백업 → 지우고 다시 설치(RR-26) → 복원 안내·위젯 복원 줄(보충 R-3)과 [확인했어요] 뒤 사라짐 → N+1 덮어 설치 뒤에도 기록·`device_id`·표식이 남고 남은 위젯으로 다시 기록됨을 봄 (11개 경우 통과, [실행 43160759272](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43160759272), [QA 보고서](../07-qa/2026-11-12-release-variant/report.md)). 끝난 조건과 다른 점: 키가 앱 서명 키가 아닌 임시 키임(앱 서명 키는 동희님 PC에만 있음, 끝난 조건이 허용함). main에서 앱 빌드 경로가 바뀐 푸시마다 이 확인이 돌아, 개인 APK로 서명할 main 커밋에 결과가 남음. 독립 검토(Fable 5.2)의 고칠 것 6건과 제안 5건을 반영함
 - TASK-002: 요구 4장 2번 확정(10:18)에 따라 키를 둘로 나눔 (릴리즈 서명 키 스레드, 동희님 PC에서 만듦)
   - 앱 서명 키 `pillbadeum-app-signing.p12`(별칭 `app-signing`, RSA 4096): Play 앱 서명과 개인 APK 서명에 씀. 잃으면 되살릴 수 없음. GitHub에는 올리지 않고 동희님 PC와 Google Drive 폴더 두 곳에 둠. 인증서 SHA-256(공개값) `35:64:B6:82:4B:1E:3D:A0:74:7A:2E:97:96:6E:F5:5D:B9:CC:93:C5:E8:8A:7D:45:24:64:2F:E6:2A:32:95:36`
   - 업로드 키 `pillbadeum-upload.p12`(별칭 `upload`, RSA 4096): CI가 Play에 올릴 AAB에 서명함. GitHub Secrets `ANDROID_UPLOAD_KEYSTORE_BASE64`, `ANDROID_UPLOAD_KEYSTORE_PASSWORD`에 있음. 별칭은 공개값이라 `release.yml`에 적고, 같이 등록한 `ANDROID_UPLOAD_KEY_ALIAS`는 읽지 않음(비밀값으로 넘기면 로그의 'upload'가 모두 가려짐, PR #6). 잃으면 Play에서 재설정할 수 있음. 인증서 SHA-256 `7D:23:C2:A8:C9:1B:96:4A:08:14:D5:70:12:CB:38:93:CF:25:BF:68:E7:A9:B3:43:6E:AA:87:FA:D5:2D:39:BB`
@@ -140,7 +141,7 @@
 | TASK-039 | 테스터 12명 이상이 14일 연속 참여 (새 개인 계정일 때) | REQ-065 | Play Console | TASK-038, TASK-048 | 동희님 | 14일 이상 | Play Console의 참여 기록 |
 | TASK-049 | 릴리즈 자동 업로드 (제안): 태그를 달면 CI가 업로드 키로 서명한 번들을 비공개 테스트 트랙에 올림. Play 서비스 계정 키를 Secrets에 넣는 것은 동희님 승인. 서비스 계정 권한은 테스트 트랙 릴리즈로만 좁힘. 지금 저장소 설정으로는 이 키를 브랜치·태그로 막을 수 없어(검토 B1), 할지는 2장 결정 목록대로 정함 | REQ-060 | `.github/workflows`, Play Console | TASK-038 | Claude | 1일 | 태그 하나로 올린 버전이 Play Console 비공개 테스트 트랙에 보임. 키가 저장소·로그에 없음 |
 | TASK-050 | Play Console에 앱을 만들고 앱 서명 키 넘기기: 동희님이 앱을 만들고, Play 앱 서명에서 직접 관리하는 키로 바꾸기를 고름. 키 내보내기(Play Console이 안내하는 도구)와 올릴 파일 준비는 Claude가 동희님 PC에서 함. 넘길 때 Play 도움말을 다시 읽음 (2026-11-12 검토 A1) | REQ-062 | Play Console, 동희님 PC | TASK-002, TASK-048 | 동희님 | 0.5일 | Play Console의 앱 서명 인증서 SHA-256 = 앱 서명 키 지문 (캡처). 키·비밀번호가 Git·로그·채팅에 없음 |
-| TASK-051 | 개인 APK를 나눠 주기 전 에뮬레이터 확인: TASK-002의 release 변형 APK(같은 빌드를 시험 키로 서명해도 됨)를 깔고 위젯 탭 기록 → 백업·복원 → 버전 번호가 큰 다음 빌드를 덮어 깔아도 기록이 남는지 봄 (2026-11-12 검토 A3) | REQ-055, REQ-062 | 에뮬레이터, `docs/07-qa/` | TASK-002, TASK-004, TASK-028, TASK-029 | Claude | 0.5일 | `docs/07-qa/`에 로그와 캡처: release 변형이고 디버그 불가, 위젯 탭 기록, 백업 → 지우고 다시 설치 → 기록이 돌아옴(RR-26), 다음 빌드를 덮어 깐 뒤 기록이 남음 |
+| TASK-051 | 개인 APK를 나눠 주기 전 에뮬레이터 확인: TASK-002의 release 변형 APK(같은 빌드를 시험 키로 서명해도 됨)를 깔고 위젯 탭 기록 → 백업·복원 → 버전 번호가 큰 다음 빌드를 덮어 깔아도 기록이 남는지 봄 (2026-11-12 검토 A3). **끝남** (2026-11-12, [PR #14](https://github.com/judangbang-ops/pillbadeum_release/pull/14)) | REQ-055, REQ-062 | 에뮬레이터, `docs/07-qa/` | TASK-002, TASK-004, TASK-028, TASK-029 | Claude | 0.5일 | `docs/07-qa/`에 로그와 캡처: release 변형이고 디버그 불가, 위젯 탭 기록, 백업 → 지우고 다시 설치 → 기록이 돌아옴(RR-26), 다음 빌드를 덮어 깐 뒤 기록이 남음 |
 
 ## 2. 순서
 
@@ -148,7 +149,7 @@
 
 ```mermaid
 flowchart LR
-    R0["R0 CI<br/>TASK-033 끝남"] --> R0b["R0b 실사용 전<br/>TASK-001·002·004·028·029 끝남, 051"]
+    R0["R0 CI<br/>TASK-033 끝남"] --> R0b["R0b 실사용 전<br/>TASK-001·002·004·028·029·051 끝남"]
     R0b --> P["개인 APK 단계<br/>TASK-047, 7일 이상"]
     R0b --> R1["R1 공통 규칙<br/>TASK-003·005~011 끝남"]
     A["계정·테스터<br/>TASK-048, 지금 시작"] --> K["Play 앱·앱 서명 키<br/>TASK-050"]
@@ -165,7 +166,7 @@ flowchart LR
 | 단계 | 작업 | 지금 (2026-11-12) | 끝나는 때 |
 | --- | --- | --- | --- |
 | R0 CI | TASK-033 | 끝남 | PR마다 테스트·빌드·권한 비교가 돎 |
-| R0b 실사용 전 | TASK-001(끝남), TASK-002(끝남), TASK-004(끝남), TASK-028(끝남), TASK-029(끝남), TASK-051 | 진행 중 (2026-11-12) | 개인 APK를 나눠 줘도 키·패키지 이름·버전 번호·빌드 변형·백업 때문에 기록을 잃지 않음 (검토 5.1절, 2026-11-12 검토 A1~A4·C4) |
+| R0b 실사용 전 | TASK-001(끝남), TASK-002(끝남), TASK-004(끝남), TASK-028(끝남), TASK-029(끝남), TASK-051(끝남) | 끝남 (2026-11-12, PR #6·#7·#9·#10·#14) | 개인 APK를 나눠 줘도 키·패키지 이름·버전 번호·빌드 변형·백업 때문에 기록을 잃지 않음 (검토 5.1절, 2026-11-12 검토 A1~A4·C4) |
 | 개인 APK 단계 | TASK-047 | R0b 뒤 동희님 폰부터, 가족 폰은 TASK-050 뒤. R1~R4와 함께 감 | 7일 이상의 실사용 기록. 개인 APK → Play 전환 시험은 TASK-038 |
 | R1 공통 규칙 | TASK-003(끝남), TASK-005~TASK-011(끝남) | 끝남 (2026-11-12, PR #8·#11·#12·#13) | JVM 테스트로 규칙 보충의 반례가 통과함 |
 | R2 위젯·앱 화면 | TASK-044·TASK-042 먼저, TASK-012~TASK-023, TASK-041, TASK-043, TASK-045 | R1 뒤 | 화면별 캡처 |
@@ -192,7 +193,7 @@ flowchart LR
 - 요구 83개가 모두 작업 하나 이상의 '근거'에 있음. 작업이 없는 Must 요구도 없음 (스크립트)
 - [기록 규칙 보충](../04-spec/record-rules-supplement.md)의 반례 RR-26~89가 모두 어느 작업의 작업 칸이나 끝난 조건에 있음 (스크립트)
 - '먼저 할 것'에 순환이 없고, 가리키는 작업이 모두 표에 있음 (스크립트)
-- 크기 합은 '이상'이 붙은 TASK-039(14일 이상)와 TASK-047(7일 이상)을 빼고 53.0일이고, 그중 끝난 TASK-001~TASK-010·TASK-028·TASK-029·TASK-033이 14.5일임 (스크립트, TASK-004는 2026-11-12 PR #7, TASK-002는 같은 날 PR #6 결과 기록, TASK-003은 같은 날 PR #8, TASK-005·008·009·010은 같은 날 PR #11, TASK-006·007은 같은 날 PR #12, TASK-028·029는 같은 날 PR #9에서 더함). 2026-11-11 초안의 35.5일에서 새 작업 TASK-040~049가 8.0일, 범위 확정과 규칙 보충으로 기존 작업 15개를 0.5일씩 늘린 것이 7.5일, 2026-11-12 검토로 새 작업 TASK-050~052가 1.5일, TASK-002를 0.5일 늘린 것이 0.5일임
+- 크기 합은 '이상'이 붙은 TASK-039(14일 이상)와 TASK-047(7일 이상)을 빼고 53.0일이고, 그중 끝난 TASK-001~TASK-011·TASK-028·TASK-029·TASK-033·TASK-051이 17.0일임 (스크립트, TASK-004는 2026-11-12 PR #7, TASK-002는 같은 날 PR #6 결과 기록, TASK-003은 같은 날 PR #8, TASK-005·008·009·010은 같은 날 PR #11, TASK-006·007은 같은 날 PR #12, TASK-028·029는 같은 날 PR #9, TASK-011은 같은 날 PR #13, TASK-051은 같은 날 PR #14에서 더함). 2026-11-11 초안의 35.5일에서 새 작업 TASK-040~049가 8.0일, 범위 확정과 규칙 보충으로 기존 작업 15개를 0.5일씩 늘린 것이 7.5일, 2026-11-12 검토로 새 작업 TASK-050~052가 1.5일, TASK-002를 0.5일 늘린 것이 0.5일임
 - 가장 긴 사슬은 TASK-038까지 12.0일임: TASK-003 > TASK-011 > TASK-024 > TASK-025 > TASK-041 > TASK-046 > TASK-032 > TASK-038 ('이상' 작업은 0으로 셈, 스크립트). 달력으로는 TASK-047(7일 이상)과 TASK-048의 계정·테스터 모집, TASK-032의 하룻밤 측정 두 번이 더 길 수 있음
 - API가 없어 '응답마다 테스트' 검사는 해당 없음. 대신 공통 함수의 결과(`RecordResult` 등)마다 화면 상태가 [screens.md](../05-ui/screens.md)에 있음
 - 사람 확인: 담당과 R 단계 순서는 Claude 제안이고 동희님이 아직 보지 않음. 2026-11-12 지시("범위 확정 후 Fable 5.2 독립검토를 거쳐 Opus 5.5 xhigh로 개발 구현 및 배포 파이프라인을 완결하세요")에 따라 독립 검토 뒤 R0b·R1을 이 순서로 시작하고, 바꾸라고 하시면 이 표를 고침. 2026-11-12 검토 반영으로 TASK-004를 R0b로 당기고 TASK-050~052를 더한 것도 Claude 제안임

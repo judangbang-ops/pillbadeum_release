@@ -30,6 +30,7 @@ Exits 1 when a step could not be done. Standard library only. Not product code.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 import time
 import traceback
@@ -101,11 +102,23 @@ def type_into(index: int, text: str) -> None:
     hide_keyboard()
 
 
+IME_VISIBLE = re.compile(r"type=ime\b[^\n]*visible=true", re.IGNORECASE)
+
+
+def keyboard_shown() -> bool:
+    """mInputShown alone stays true while the hardware-keyboard setting keeps the soft keyboard off
+    (third run, 2026-11-12: BACK then closed the dialog and the app), so also ask the window insets."""
+    if "mInputShown=true" not in sh("dumpsys input_method", check=False):
+        return False
+    return IME_VISIBLE.search(sh("dumpsys window", check=False)) is not None
+
+
 def hide_keyboard() -> None:
-    """The on-screen keyboard covers [저장] (first run, 2026-11-12), so close it after typing."""
-    for _ in range(2):
-        if "mInputShown=true" not in sh("dumpsys input_method", check=False):
-            return
+    """The on-screen keyboard covers [저장] (first run, 2026-11-12), so close it after typing.
+
+    One BACK at most: a second one, or one while no keyboard shows, closes the screen instead.
+    """
+    if keyboard_shown():
         sh("input keyevent KEYCODE_BACK")
         time.sleep(1)
 
@@ -215,9 +228,12 @@ class Steps:
     def __init__(self, r: Report) -> None:
         self.r = r
 
-    def __call__(self, title: str, expected: str, fn) -> bool:
+    def __call__(self, title: str, expected: str, fn, look: bool = False) -> bool:
+        """look=True: the step only takes screenshots, so a pass means it ran, not that the screen is right."""
         try:
             actual = fn() or "됨"
+            if look:
+                actual += " (캡처만, 화면은 사람이 봄)"
             self.r.check(title, expected, actual, True)
             return True
         except Exception as exc:  # exploration: record and go on
@@ -312,6 +328,9 @@ def run(r: Report, steps: Steps) -> None:
         ensure_home()
         time.sleep(1)
         r.shot("home-three-items")
+        shown = [n for n in (VITAMIN, BP, WEEKLY) if exact(n, 3) is not None]
+        if len(shown) != 3:
+            raise RuntimeError(f"home shows {shown}")
         return "항목 3개"
 
     steps("3-4. 항목 3개인 홈", "오늘·이번 주 구역", home_three)
@@ -375,7 +394,10 @@ def run(r: Report, steps: Steps) -> None:
         launch_app()
         time.sleep(2)
         r.shot("app-after-widget")
-        return f"{records()}"
+        state = records()
+        if "WIDGET" not in state:
+            raise RuntimeError(f"no widget record: {state}")
+        return state
 
     steps("5-4. 위젯 기록 뒤 앱", "BPpill이 완료로 보임", app_after_widget)
 
@@ -447,8 +469,8 @@ def run(r: Report, steps: Steps) -> None:
             r.shot(f"widget-font-{scale}")
         return f"글자 크기 {scale}"
 
-    steps("8-1. 글자 크기 1.3", "잘리거나 겹치지 않음", lambda: bigger("1.3"))
-    steps("8-2. 글자 크기 2.0", "잘리거나 겹치지 않음", lambda: bigger("2.0"))
+    steps("8-1. 글자 크기 1.3", "잘리거나 겹치지 않음", lambda: bigger("1.3"), look=True)
+    steps("8-2. 글자 크기 2.0", "잘리거나 겹치지 않음", lambda: bigger("2.0"), look=True)
 
     def dark() -> str:
         font_scale("1.0")
@@ -463,7 +485,7 @@ def run(r: Report, steps: Steps) -> None:
         night(False)
         return "어두운 화면"
 
-    steps("8-3. 어두운 화면", "글자가 보임", dark)
+    steps("8-3. 어두운 화면", "글자가 보임", dark, look=True)
 
     # 9. reboot
     def restart() -> str:
@@ -476,7 +498,7 @@ def run(r: Report, steps: Steps) -> None:
         r.shot("widget-after-reboot")
         return f"다시 켠 뒤 시계 {clock}"
 
-    steps("9. 폰 다시 켜기", "위젯이 다시 그려짐", restart)
+    steps("9. 폰 다시 켜기", "위젯이 다시 그려짐", restart, look=True)
 
     # 10. the next morning
     def next_morning() -> str:
@@ -490,7 +512,7 @@ def run(r: Report, steps: Steps) -> None:
         r.shot("app-next-morning")
         return f"시계 {clock}"
 
-    steps("10. 다음 날 08:30", "위젯·앱이 새 날로 바뀜(매일 항목이 안 먹음으로)", next_morning)
+    steps("10. 다음 날 08:30", "위젯·앱이 새 날로 바뀜(매일 항목이 안 먹음으로)", next_morning, look=True)
 
     # 11. before the day start
     def before_day_start() -> str:
@@ -504,7 +526,7 @@ def run(r: Report, steps: Steps) -> None:
         r.shot("app-0200")
         return f"시계 {clock}"
 
-    steps("11. 그다음 날 02:00", "하루 시작 04:00 전이라 앞날로 셈", before_day_start)
+    steps("11. 그다음 날 02:00", "하루 시작 04:00 전이라 앞날로 셈", before_day_start, look=True)
 
 
 def main() -> int:

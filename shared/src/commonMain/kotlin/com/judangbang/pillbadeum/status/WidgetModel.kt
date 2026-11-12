@@ -11,6 +11,8 @@ data class WidgetModel(
     /** `n / m 완료` */
     val countLabel: String,
     val buttons: List<WidgetButton>,
+    /** `복원됨 · 마지막 기록 11/09 21:40 · 앱에서 확인` until [확인했어요] (SCR-001#restored), else null. */
+    val restoreLine: String? = null,
 ) {
     companion object {
         fun from(board: StatusBoard): WidgetModel {
@@ -32,6 +34,7 @@ data class WidgetModel(
                         clockWarning = item.clockWarning,
                     )
                 },
+                restoreLine = board.restoreNotice?.let { Labels.restoreWidgetLine(it, zone) },
             )
         }
     }

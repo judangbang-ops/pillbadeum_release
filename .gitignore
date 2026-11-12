@@ -42,3 +42,7 @@ local.properties
 .idea/
 *.iml
 .DS_Store
+
+# Python bytecode (scripts/emulator, .github/scripts)
+__pycache__/
+*.pyc

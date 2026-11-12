@@ -207,6 +207,17 @@ private fun WidgetContent(model: WidgetModel?, message: String?, warn: Boolean) 
             Spacer(GlanceModifier.defaultWeight())
             Text(model?.countLabel.orEmpty(), style = TextStyle(color = ColorProvider(WidgetColors.Muted), fontSize = 12.sp))
         }
+        // SCR-001#restored (supplement R-3): short line only, the full notice is in the app. Taps on
+        // the buttons below still record.
+        model?.restoreLine?.let { line ->
+            Spacer(GlanceModifier.height(4.dp))
+            Text(
+                line,
+                maxLines = 2,
+                modifier = GlanceModifier.fillMaxWidth().clickable(actionStartActivity<MainActivity>()),
+                style = TextStyle(color = ColorProvider(WidgetColors.WarnInk), fontSize = 12.sp, fontWeight = FontWeight.Bold),
+            )
+        }
         Spacer(GlanceModifier.height(10.dp))
 
         when {

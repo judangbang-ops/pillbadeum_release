@@ -122,6 +122,14 @@ fun App(core: DidITakeCore, onDataChanged: suspend () -> Unit, refreshKey: Int =
                         reload()
                     }
                 },
+                onAcknowledgeRestore = {
+                    scope.launch {
+                        // SCR-004 [확인했어요]: a failed save keeps the notice (screens.md 4장).
+                        message = if (runCatching { core.acknowledgeRestore() }.isSuccess) null else "저장하지 못했어요. 다시 눌러 주세요"
+                        onDataChanged()
+                        reload()
+                    }
+                },
                 onVoid = { item ->
                     val judgment = item.judgment ?: return@HomeScreen
                     scope.launch {
@@ -186,6 +194,7 @@ private fun HomeScreen(
     onAdd: () -> Unit,
     onEdit: (IntakeStatus) -> Unit,
     onRecord: (IntakeStatus) -> Unit,
+    onAcknowledgeRestore: () -> Unit,
     onVoid: (IntakeStatus) -> Unit,
 ) {
     var confirmVoid by remember { mutableStateOf<IntakeStatus?>(null) }
@@ -201,6 +210,10 @@ private fun HomeScreen(
         if (board == null) {
             Text("불러오는 중…", color = Palette.Muted)
             return@Column
+        }
+        board.restoreNotice?.let { notice ->
+            // SCR-004#restored (supplement R-3, REQ-073, REQ-074): at the very top until confirmed.
+            RestoreNoticeCard(Labels.restoreAppNotice(notice, board.settings.baseZone), onAcknowledgeRestore)
         }
         Text("${Labels.date(board.baseDate)} 기준 · ${Labels.count(board)}", color = Palette.Primary, bold = true)
         message?.let { Notice(it) }
@@ -496,6 +509,17 @@ private fun Card(content: @Composable () -> Unit) {
 private fun Notice(text: String) {
     Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Palette.Warn).padding(12.dp)) {
         Text(text, color = Palette.WarnInk, size = 13)
+    }
+}
+
+@Composable
+private fun RestoreNoticeCard(text: String, onAcknowledge: () -> Unit) {
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Palette.Warn).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(text, color = Palette.WarnInk, size = 15, bold = true)
+        DarkButton("확인했어요", onAcknowledge)
     }
 }
 

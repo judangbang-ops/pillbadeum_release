@@ -38,6 +38,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from backup_restore_check import (
+    PKG,
     Node,
     Report,
     api_level,
@@ -97,6 +98,28 @@ def type_into(index: int, text: str) -> None:
     tap(boxes[index])
     sh(f"input text {text}")
     time.sleep(1)
+    hide_keyboard()
+
+
+def hide_keyboard() -> None:
+    """The on-screen keyboard covers [저장] (first run, 2026-11-12), so close it after typing."""
+    for _ in range(2):
+        if "mInputShown=true" not in sh("dumpsys input_method", check=False):
+            return
+        sh("input keyevent KEYCODE_BACK")
+        time.sleep(1)
+
+
+def ensure_home() -> None:
+    """The app's home ("오늘 · 이번 주"), starting the app again when another screen is open."""
+    if exact("오늘 · 이번 주", 3) is None:
+        sh(f"am force-stop {PKG}")
+        launch_app()
+
+
+def settle() -> None:
+    """Reads the screen once, which closes a stalled-System-UI dialog before a screenshot."""
+    dump_ui()
 
 
 def scroll_down() -> None:
@@ -204,6 +227,9 @@ class Steps:
             try:
                 self.r.shot(tag)
                 save_ui(self.r, tag)
+                # Back to a known place so one failed step does not break the next ones
+                hide_keyboard()
+                sh(f"am force-stop {PKG}")
             except Exception:
                 pass
             return False
@@ -211,6 +237,7 @@ class Steps:
 
 def add_item(r: Report, name: str, person: str, weekly: bool, choice: str, shot: str | None = None) -> str:
     """Home > [항목 추가] > name > person chip > 매일 + time of day, or 주 1회 + weekday > [저장]."""
+    ensure_home()
     tap_exact("항목 추가")
     type_into(0, name)
     tap_exact(person)
@@ -240,6 +267,7 @@ def run(r: Report, steps: Steps) -> None:
         clock = set_clock(at(0, 8, 30))
         font_scale("1.0")
         night(False)
+        sh("settings put secure show_ime_with_hard_keyboard 0", check=False)
         return f"시간대 {zone}, 시계 {clock}"
 
     steps("준비: 서울 시간대, 오늘 08:30", "시간대·시계가 바뀜", setup)
@@ -281,6 +309,7 @@ def run(r: Report, steps: Steps) -> None:
     steps("3-3. 주 1회 월요일 항목 (나)", "목록에 생김", lambda: add_item(r, WEEKLY, ME, True, "월", "form-weekly"))
 
     def home_three() -> str:
+        ensure_home()
         time.sleep(1)
         r.shot("home-three-items")
         return "항목 3개"
@@ -289,6 +318,7 @@ def run(r: Report, steps: Steps) -> None:
 
     # 4. record in the app
     def record_app() -> str:
+        ensure_home()
         tap(row_button(VITAMIN, "먹었어"))
         time.sleep(1)
         msg = message_line()
@@ -301,7 +331,14 @@ def run(r: Report, steps: Steps) -> None:
     placed = {"ok": False}
 
     def widget() -> str:
-        place_widget(r, "widget")  # raises when the launcher cannot be driven
+        try:
+            place_widget(r, "widget")  # raises when the launcher cannot be driven
+        except RuntimeError as exc:
+            # First run: the home menu did not open once. One more try from a fresh home screen.
+            r.note(f"위젯 놓기 첫 시도 실패, 한 번 더: {exc}")
+            go_home()
+            time.sleep(3)
+            place_widget(r, "widget-retry")
         placed["ok"] = True
         time.sleep(3)
         r.shot("widget-home")
@@ -344,6 +381,7 @@ def run(r: Report, steps: Steps) -> None:
 
     # 6. void and record again
     def void() -> str:
+        ensure_home()
         tap(row_button(VITAMIN, "기록 취소"))
         time.sleep(1)
         msg = message_line()
@@ -351,6 +389,7 @@ def run(r: Report, steps: Steps) -> None:
         return f"메시지 '{msg}', {records()}"
 
     def again() -> str:
+        ensure_home()
         tap(row_button(VITAMIN, "먹었어"))
         time.sleep(1)
         msg = message_line()
@@ -362,6 +401,7 @@ def run(r: Report, steps: Steps) -> None:
 
     # 7. edit and delete
     def edit() -> str:
+        ensure_home()
         tap(exact(VITAMIN, 15))
         time.sleep(1)
         r.shot("edit-form")
@@ -374,6 +414,7 @@ def run(r: Report, steps: Steps) -> None:
         return f"{records()}"
 
     def delete() -> str:
+        ensure_home()
         tap(exact(WEEKLY, 15))
         time.sleep(1)
         scroll_down()
@@ -431,6 +472,7 @@ def run(r: Report, steps: Steps) -> None:
         clock = set_clock(at(0, 20, 0))
         go_home()
         time.sleep(5)
+        settle()
         r.shot("widget-after-reboot")
         return f"다시 켠 뒤 시계 {clock}"
 
@@ -441,6 +483,7 @@ def run(r: Report, steps: Steps) -> None:
         clock = set_clock(at(1, 8, 30))
         go_home()
         time.sleep(8)
+        settle()
         r.shot("widget-next-morning")
         launch_app()
         time.sleep(2)
@@ -454,6 +497,7 @@ def run(r: Report, steps: Steps) -> None:
         clock = set_clock(at(2, 2, 0))
         go_home()
         time.sleep(8)
+        settle()
         r.shot("widget-0200")
         launch_app()
         time.sleep(2)

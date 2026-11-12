@@ -266,7 +266,10 @@ if flow_files:
     if no_flow_fn:
         problem(f"flows: functional requirements in no flow {no_flow_fn}")
     readme = (flow_dir / "README.md").read_text(encoding="utf-8") if (flow_dir / "README.md").exists() else ""
-    outside = set(re.findall(r"REQ-\d{3}", readme.split("## 흐름 밖", 1)[1])) if "## 흐름 밖" in readme else set()
+    # Only the "흐름 밖" section itself, up to the next "## " heading, lists outside requirements;
+    # later sections such as the confirmation record may name flow requirements.
+    outside_section = re.split(r"\n## ", readme.split("## 흐름 밖", 1)[1], maxsplit=1)[0] if "## 흐름 밖" in readme else ""
+    outside = set(re.findall(r"REQ-\d{3}", outside_section))
     no_flow = sorted(set(rows) - in_flows)
     unexplained = sorted(set(no_flow) - outside)
     print(f"  requirements in no flow: {len(no_flow)}, not listed under '흐름 밖' in the README: {unexplained or 'none'}")

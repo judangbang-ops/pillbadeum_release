@@ -28,7 +28,7 @@
       "human": "github",
       "source": "docs/03-user-flow/",
       "truth": "source",
-      "note": "2026-11-12 15:02 KST 지시('/corthex 첨부터')로 이 저장소에서 새로 씀. 흐름 하나에 파일 하나(FL-001~), Mermaid 그림은 GitHub에서 그림으로 보임. 가쟈누님 DidITake 플로우 초안(7a800ac)은 시안으로만 참고. 확인 전"
+      "note": "2026-11-12 15:02 KST 지시('/corthex 첨부터')로 이 저장소에서 새로 씀. 흐름 하나에 파일 하나(FL-001~), Mermaid 그림은 GitHub에서 그림으로 보임. 가쟈누님 DidITake 플로우 초안(7a800ac)은 시안으로만 참고. 확인 끝(2026-11-12 23:50 KST, 동희님 '추천 모두 승인', 프로젝트 스레드 '약봉이 1차 릴리즈 이어 가기'). 16:40에 처음 여쭌 세 가지(목적 10개 충분, 첫 실행 순서, 흐름 밖 17개는 12 QA)를 23:12에 다시 여쭘. FL-002 위젯 버튼 확인 순서도 함께 확정. 기록은 docs/03-user-flow/README.md '확인 기록'"
     },
     "04-functional-spec": {
       "human": "github",

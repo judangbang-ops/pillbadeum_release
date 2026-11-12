@@ -1,6 +1,6 @@
 # 05 ERD: 필받음 1차 데이터
 
-- 상태: 초안 (2026-11-12, Claude). 03 흐름 확인과 04 명세 고정 뒤에 스키마 고정을 여쭘.
+- 상태: 초안 (2026-11-12, Claude). 03 흐름 확인(2026-11-12 23:50 KST 끝)과 04 명세 고정 뒤에 스키마 고정을 여쭘.
 - 원본: [`db/schema.sql`](../../db/schema.sql) (TBL-001~011). 그 파일은 Room이 내보낸 [스키마 2](../../shared/schemas/com.judangbang.pillbadeum.data.DidITakeDatabase/2.json)의 CREATE 문을 그대로 옮기고 표마다 TBL 번호·맥락(CTX)·명세(SPEC)·용어(TERM)를 단 것. `check_docs.py`가 두 쪽이 같은지 봄.
 - 입력: [04 기능 명세](../04-functional-spec/spec.md) SPEC-001~043, [01 도메인](../01-domain/domain.md) CTX-001~005·TERM-001~031.
 - 이전 시안: 가쟈누님 DidITake `docs/02-design/data-model.md`. 표 구조는 그 시안으로 이미 만들어져 앱에 들어가 있음. 이번 단계는 표를 새로 짜지 않고, 01~04에서 다시 정한 말과 동작에 비춰 빠진 것·남는 것을 찾음.

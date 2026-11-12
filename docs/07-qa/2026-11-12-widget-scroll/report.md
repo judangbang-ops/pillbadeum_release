@@ -17,6 +17,7 @@
   - 빌드한 커밋은 PR 머리 `36e36e7`을 main과 합친 `6b55413`
   - 결과 표 그대로는 [evidence/api26.md](evidence/api26.md), [api34.md](evidence/api34.md), [api36.md](evidence/api36.md)
   - 로그캣·화면 덤프·전체 화면은 실행의 아티팩트(7일 보관)
+  - 설치 뒤 처음 놓은 위젯(F·FK, 1.5)은 [43199992534](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43199992534)(커밋 `a329cd2`)에서 봄. 이 실행에서도 1.1의 판정은 모두 통과함(API 34·36 32개씩)
   - 같은 질문을 앞선 실행에서도 봄. 실행 [43174217907](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43174217907)·[43177220819](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43177220819)·[43179018774](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43179018774)의 결과는 아래 결론과 같고, 실패는 모두 확인 절차의 결함이었음(5절)
 
 ## 1. 결과 요약
@@ -83,6 +84,28 @@
 - 8회차에서는 디버그 호스트(P)가 세 API 모두 20초 동안 그대로였음
 - Glance 1.2.0은 세션을 시작할 때 10년 뒤 작업(`sessionWorkerKeepEnabled`)을 넣음. 그래서 WorkManager가 RescheduleReceiver를 켰다 껐다 하는 것은 첫 한 번뿐임. 라이브러리 클래스 `SessionManagerImpl`에서 확인함
 
+### 1.5 관찰: 설치 뒤 처음 놓은 위젯 (F·FK, BUG-004)
+
+릴리즈 확인에서 설치 직후 처음 놓은 제품 위젯이 로딩 화면에 머문 일이 한 번 있었음(PR #17의 BUG-004, 실행 [43195651489](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43195651489)). 그 로그캣과 라이브러리 소스를 대조한 결과는 이렇다.
+
+- 첫 Glance 세션이 작업을 넣으면 WorkManager(2.7.1)가 `RescheduleReceiver`를 켬. 이 켜짐이 우리 패키지의 PACKAGE_CHANGED가 됨. Glance 1.2.0은 10년 뒤 작업(`sessionWorkerKeepEnabled`)을 함께 넣어 그 뒤로는 켜고 끄지 않게 하지만, 첫 위젯의 첫 세션 때 한 번은 켜짐
+- PACKAGE_CHANGED를 받으면 `AppWidgetServiceImpl`(AOSP 14 `updateProvidersForPackageLocked`)이 그 패키지 위젯의 화면을 비우고, 호스트에 알리고, `APPWIDGET_UPDATE`를 보냄. 런처는 위젯을 초기 화면(Glance 로딩 화면)으로 되돌림
+- Launcher3는 `setAppWidget`에서 `App widget created`를, 그 뒤 처음 받은 화면에서 `App widget with id: N loaded`를 남김. BUG-004에서는 10:01:48 첫 화면을 받고, 10:01:50 초기화된 뒤 10:03:00까지 `loaded`가 없었음. 그 사이 앱이 새 화면을 보내지 않았다는 뜻임. 원인은 아직 모름
+
+같은 조건을 시험 위젯으로 만들어 봄. 경우마다 앱을 지우고 다시 설치한 뒤, 항목만 만들고 Pixel Launcher에 시험 위젯을 처음 놓고 60초 지켜봄. 시험 위젯은 받은 `APPWIDGET_UPDATE`·크기 변경과 다시 구성한 때를 로그로 남김.
+
+- F: 그대로 놓음
+- FK: 놓기 전에 디버그 `KeepWork`(3650일 뒤, 충전 중 조건의 빈 작업)를 넣음. 앱이 시작할 때 할 수 있는 일임
+
+| 경우 | API 34 (3번) | API 36 (3번) |
+| --- | --- | --- |
+| F | 3번 모두 첫 구성 뒤 1초 안에 PACKAGE_CHANGED. F1·F2는 런처가 첫 화면을 받은 뒤 초기화했고, 앱이 0.5초 안에 `APPWIDGET_UPDATE`를 받아 초기화 2.3초·0.4초 뒤 다시 그려짐. F3은 첫 화면이 런처에 닿기 전에 PACKAGE_CHANGED가 나서 런처가 두 번째 화면을 처음 받음(그 사이 초기화 여부는 로그로 가릴 수 없음). 60초에 3번 모두 보임 | 이 이미지에서는 PACKAGE_CHANGED 로그 줄이 남지 않았지만, `RescheduleReceiver`가 놓기 전 기본값에서 놓은 뒤 켜짐으로 바뀜. 3번 모두 앱이 첫 구성 직후 `APPWIDGET_UPDATE`를 한 번 더 받았고, 런처는 그 뒤에 처음 화면을 받아 초기화 줄이 없음. 60초에 3번 모두 보임 |
+| FK | 3번 모두 놓은 뒤 PACKAGE_CHANGED가 없고, 런처가 위젯을 초기화하지 않음 | 3번 모두 같음 |
+
+- 예(API 34 F1): 12.478 런처가 첫 화면 받음 → 12.579 PACKAGE_CHANGED → 12.669 런처가 위젯 초기화 → 13.107 앱이 `APPWIDGET_UPDATE` 받음 → 15.012 런처가 화면 다시 받음
+- 그러니 보통은 초기화되더라도 3초 안에 돌아옴. BUG-004는 이 회복이 일어나지 않은 경우이고, 그때 에뮬레이터는 부팅 직후로 시스템이 매우 바빴음(시스템 서버의 잠금 경합 경고가 이어짐). 바쁨 때문이라는 것은 추정임
+- FK처럼 위젯이 생기기 전에 켜 두면 첫 위젯 때 PACKAGE_CHANGED 자체가 없음. 3절 7번의 추천 근거
+
 ## 2. 화면
 
 API 34, 위젯 부분만 잘라 절반 크기로 줄임.
@@ -132,6 +155,11 @@ API 34, 위젯 부분만 잘라 절반 크기로 줄임.
    - 후보 ①: 낮은 높이에서는 머리글을 줄이고 칸을 작게 함(원 36dp, 이름 한 줄)
    - 후보 ②: 선언한 최소 높이를 올림
    - 둘 다 TASK-044에서 그려 보고 고름. **설계 결정이 필요함**
+7. **앱이 시작할 때 WorkManager의 `RescheduleReceiver`를 켜 둠** (BUG-004)
+   - 앱 시작(`Application.onCreate`)에 이름을 정한 빈 작업 하나를 3650일 뒤·충전 중 조건으로 넣음(`ExistingWorkPolicy.KEEP`, Glance가 첫 세션 때 넣는 작업과 같은 종류). 1.5의 FK처럼 첫 위젯을 놓을 때 PACKAGE_CHANGED가 나지 않음
+   - 항목을 앱에서 먼저 만들어야 위젯이 쓸모 있으므로, 보통은 위젯보다 앱이 먼저 열림. 앱을 한 번도 열지 않고 위젯부터 놓는 경우는 지금과 같음(F에서는 3초 안에 돌아옴)
+   - WorkManager를 2.11로 올려도 이 켜고 끄기는 그대로임(`UnfinishedWorkListener`가 남은 작업이 있을 때 켬). 그래서 판 올리기로는 막지 못함
+   - 제품 코드 변경이므로 TASK-014(또는 따로 정한 작업)에서 함. 릴리즈 확인에서 같은 위젯 첫 놓기가 다시 멈추지 않는지 봄
 
 ## 4. 확인하지 못한 것
 
@@ -141,7 +169,7 @@ API 34, 위젯 부분만 잘라 절반 크기로 줄임.
 - **TalkBack으로 목록 스크롤하기**(접근성 스크롤 동작)
 - **3절 4번의 방법이 목록 위치를 지키는지**: 가설
 - **제품 위젯 배치 그대로의 결과**: 시험 위젯은 같은 모델·같은 탭 경로를 쓰지만, 칸 크기(원 48dp 등)는 시험용임. TASK-014가 실제 배치로 같은 스크립트를 다시 돌림
-- **릴리즈 확인에서 본 '위젯이 50초 넘게 로딩 화면에 머묾'의 원인**: P·LP에서는 패키지 변경 뒤 로딩 화면이 10~14초 안에 돌아왔음. 50초를 넘긴 경우는 이 시험에서 다시 만들지 못함
+- **BUG-004에서 앱이 새 화면을 보내지 않은 원인**: P·LP·F에서는 패키지 변경 뒤 위젯이 2~14초 안에 돌아왔음. 돌아오지 않은 경우는 F 6번에서도 다시 만들지 못함. `APPWIDGET_UPDATE`가 늦게 닿았는지, 닿았는데 세션이 다시 보내지 않았는지는 릴리즈 확인이 실패할 때 `dumpsys activity broadcasts`를 남기면 가릴 수 있음
 
 ## 5. 발견한 결함과 조치
 

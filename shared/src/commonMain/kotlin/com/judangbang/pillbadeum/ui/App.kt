@@ -60,6 +60,7 @@ import com.judangbang.pillbadeum.usecase.VoidResult
 import kotlin.time.Instant
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.TimeZone
 
 private object Palette {
     val Background = Color(0xFFEEF1F4)
@@ -117,7 +118,7 @@ fun App(core: DidITakeCore, onDataChanged: suspend () -> Unit, refreshKey: Int =
                     scope.launch {
                         val result = core.record(item.intakeId, DoseSource.APP, item.window.periodKey)
                         val b = board
-                        message = if (b == null) null else Labels.recordMessage(result, item.name, core.clock.now(), b.settings.baseZone)
+                        message = if (b == null) null else Labels.recordMessage(result, item.name, core.clock.now(), TimeZone.currentSystemDefault())
                         onDataChanged()
                         reload()
                     }
@@ -213,7 +214,7 @@ private fun HomeScreen(
         }
         board.restoreNotice?.let { notice ->
             // SCR-004#restored (supplement R-3, REQ-073, REQ-074): at the very top until confirmed.
-            RestoreNoticeCard(Labels.restoreAppNotice(notice, board.settings.baseZone), onAcknowledgeRestore)
+            RestoreNoticeCard(Labels.restoreAppNotice(notice, TimeZone.currentSystemDefault()), onAcknowledgeRestore)
         }
         Text("${Labels.date(board.baseDate)} 기준 · ${Labels.count(board)}", color = Palette.Primary, bold = true)
         message?.let { Notice(it) }
@@ -225,7 +226,9 @@ private fun HomeScreen(
         board.items.forEach { item ->
             IntakeRow(
                 item = item,
-                detail = Labels.appDetail(item, board),
+                // The row layout of the 09 mockup comes with TASK-016; until then the parts are joined.
+                detail = Labels.appRow(item, board, TimeZone.currentSystemDefault())
+                    .let { row -> listOfNotNull(row.detail, row.boldLine, row.skipLine).joinToString(" · ") },
                 onClick = { onEdit(item) },
                 onRecord = { onRecord(item) },
                 onVoid = { confirmVoid = item },
@@ -267,7 +270,7 @@ private fun HomeScreen(
 private fun stampOf(item: IntakeStatus, board: StatusBoard?): String {
     val judgment = item.judgment ?: return ""
     if (board == null) return ""
-    return Labels.stamp(Instant.fromEpochMilliseconds(judgment.takenAt), board.now, board.settings.baseZone)
+    return Labels.stamp(Instant.fromEpochMilliseconds(judgment.takenAt), board.now, TimeZone.currentSystemDefault())
 }
 
 @Composable

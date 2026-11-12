@@ -19,6 +19,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.datetime.TimeZone
 
 class DidITakeApplication : Application() {
     /** One container (and so one database) per process; Glance actions run in this process too. */
@@ -84,7 +85,8 @@ class AppContainer(private val context: Context, private val clock: Clock) {
         }
     }
 
-    suspend fun widgetModel(): WidgetModel = WidgetModel.from(core().loadStatusBoard())
+    /** Times in the phone's own zone, windows in the base zone (REQ-082, TASK-043). */
+    suspend fun widgetModel(): WidgetModel = WidgetModel.from(core().loadStatusBoard(), TimeZone.currentSystemDefault())
 
     /** Called after every write so every widget re-renders from the database. */
     suspend fun afterWrite() {

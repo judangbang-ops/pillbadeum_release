@@ -8,6 +8,7 @@ import com.judangbang.pillbadeum.data.ScheduleParams
 import com.judangbang.pillbadeum.data.SettingDao
 import com.judangbang.pillbadeum.data.SettingKeys
 import com.judangbang.pillbadeum.data.loadWindowSettings
+import com.judangbang.pillbadeum.domain.DoseKind
 import com.judangbang.pillbadeum.domain.ScheduleRule
 import com.judangbang.pillbadeum.domain.SlotLabel
 import com.judangbang.pillbadeum.domain.Window
@@ -39,8 +40,18 @@ data class StatusBoard(
      * supplement C-2). The app shows each one until [그대로 두기] or [기록 취소], even after its day comes.
      */
     val clockWarnings: List<ClockWarning> = emptyList(),
+
+    /**
+     * Two or more people are not archived: badges are shown and TalkBack reads the person before the item
+     * (REQ-018, supplement S-4). Counted over every active person, also on a widget that shows one person.
+     */
+    val showPeople: Boolean = true,
 ) {
-    val doneCount: Int get() = items.count { it.isDone }
+    /** `n` of `n / m 완료`: doses only, skips are counted apart (supplement S-1, REQ-020). */
+    val doneCount: Int get() = items.count { it.isTaken }
+
+    /** `k` of `· 건너뜀 k` (S-1). */
+    val skippedCount: Int get() = items.count { it.isSkipped }
     val totalCount: Int get() = items.size
 }
 
@@ -55,7 +66,7 @@ data class IntakeStatus(
     val window: Window,
     /** Active judgment of [window], null while pending. */
     val judgment: DoseRecordEntity?,
-    /** Latest active judgment taken before [window] started ("마지막 ..."). */
+    /** Latest active judgment of either kind taken before [window] started. */
     val lastBefore: DoseRecordEntity?,
     /** Mon..Sun cells for daily items; empty for weekly items. */
     val weekCells: List<DayCell>,
@@ -64,14 +75,30 @@ data class IntakeStatus(
      * a tap still changes nothing (`Already`). Only the current window's judgment can set it (C-2).
      */
     val clockWarning: Boolean = false,
+    /** Latest active dose (not a skip) taken before [window] started: "마지막 복용" (supplement S-2, W-2). */
+    val lastTaken: DoseRecordEntity? = lastBefore?.takeIf { it.kind == DoseKind.TAKEN },
 ) {
+    /** The window has an active judgment, a dose or a skip; a widget tap then changes nothing (`Already`). */
     val isDone: Boolean get() = judgment != null
+
+    /** The window's judgment is a dose (S-1: counted as 완료). */
+    val isTaken: Boolean get() = judgment?.kind == DoseKind.TAKEN
+
+    /** The window's judgment is a skip (S-3: grey filled circle and `건너뜀`, counted apart). */
+    val isSkipped: Boolean get() = judgment?.kind == DoseKind.SKIPPED
+
+    /** [lastBefore] when it is a skip later than [lastTaken]: the `어제 건너뜀` line (S-2, W-2). */
+    val laterSkip: DoseRecordEntity?
+        get() = lastBefore?.takeIf { it.kind == DoseKind.SKIPPED && (lastTaken == null || it.takenAt > lastTaken.takenAt) }
 
     /** Short name for the widget: the alias when set. */
     val displayName: String get() = widgetAlias ?: name
 
     /** When the next window opens (weekly: the next anchor day at the day start). */
     val nextWindowStart: Instant get() = window.end
+
+    /** The window's first day, its period key: the base date of a daily item, the anchor day of a weekly one. */
+    val windowDay: LocalDate get() = LocalDate.parse(window.periodKey)
 }
 
 /** One unanswered clock warning (supplement C-2, SCR-004#future). */
@@ -163,6 +190,7 @@ class LoadStatusBoard(
                 window = window,
                 judgment = judgment,
                 lastBefore = records.findLastActiveBefore(intake.id, window.start.toEpochMilliseconds()),
+                lastTaken = records.findLastActiveTakenBefore(intake.id, window.start.toEpochMilliseconds()),
                 weekCells = if (rule is ScheduleRule.Daily) weekCells(cells, intake, person, week, baseDate, flaggedIds) else emptyList(),
                 clockWarning = judgment != null && judgment.id in flaggedIds,
             )
@@ -173,7 +201,16 @@ class LoadStatusBoard(
             val person = people[intake.personId] ?: return@mapNotNull null
             ClockWarning(judgment = record, intakeName = intake.name, person = person)
         }
-        return StatusBoard(now, settings, baseDate, week, items, db.settingDao().loadRestoreNotice(), clockWarnings)
+        return StatusBoard(
+            now = now,
+            settings = settings,
+            baseDate = baseDate,
+            week = week,
+            items = items,
+            restoreNotice = db.settingDao().loadRestoreNotice(),
+            clockWarnings = clockWarnings,
+            showPeople = people.size >= 2,
+        )
     }
 
     /**

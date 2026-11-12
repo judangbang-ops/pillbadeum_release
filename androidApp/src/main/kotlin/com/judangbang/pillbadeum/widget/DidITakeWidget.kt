@@ -59,12 +59,14 @@ import com.judangbang.pillbadeum.boundary.DayBoundaryAlarm
 import com.judangbang.pillbadeum.container
 import com.judangbang.pillbadeum.domain.DoseSource
 import com.judangbang.pillbadeum.status.Labels
+import com.judangbang.pillbadeum.status.TileState
 import com.judangbang.pillbadeum.status.WidgetButton
 import com.judangbang.pillbadeum.status.WidgetModel
 import com.judangbang.pillbadeum.usecase.PersonColors
 import com.judangbang.pillbadeum.usecase.RecordResult
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.datetime.TimeZone
 
 /** Per-widget Glance state (Preferences). */
 private object WidgetState {
@@ -157,7 +159,8 @@ class RecordFromWidget : ActionCallback {
             result = result,
             name = parameters[WidgetParams.NAME].orEmpty(),
             now = core.clock.now(),
-            zone = core.windowSettings().baseZone,
+            // Times in the phone's own zone (REQ-082, TASK-043).
+            zone = TimeZone.currentSystemDefault(),
         )
         if (result is RecordResult.Error) Log.e("DidITakeWidget", "record failed: ${result.message}")
         updateAppWidgetState(context, glanceId) { prefs ->
@@ -271,11 +274,17 @@ private fun Pill(button: WidgetButton, modifier: GlanceModifier) {
         Box(modifier = GlanceModifier.size(60.dp), contentAlignment = Alignment.Center) {
             Box(
                 modifier = GlanceModifier.size(54.dp).background(
-                    ImageProvider(if (button.done) R.drawable.widget_circle_done else R.drawable.widget_circle_pending),
+                    ImageProvider(
+                        when (button.state) {
+                            TileState.TAKEN -> R.drawable.widget_circle_done
+                            TileState.SKIPPED -> R.drawable.widget_circle_skipped
+                            TileState.PENDING -> R.drawable.widget_circle_pending
+                        },
+                    ),
                 ),
                 contentAlignment = Alignment.Center,
             ) {
-                if (button.done) {
+                if (button.state == TileState.TAKEN) {
                     Image(
                         provider = ImageProvider(R.drawable.ic_widget_check),
                         contentDescription = null,
@@ -308,11 +317,21 @@ private fun Pill(button: WidgetButton, modifier: GlanceModifier) {
                 textAlign = TextAlign.Center,
             ),
         )
-        Text(
-            button.subtitle,
-            maxLines = 2,
-            style = TextStyle(color = ColorProvider(WidgetColors.Muted), fontSize = 10.sp, textAlign = TextAlign.Center),
-        )
+        // The 09 mockup layout and sizes come with TASK-014; a pending weekly item's last dose is already
+        // drawn at the name's size (W-2).
+        button.lines.forEachIndexed { index, line ->
+            val large = index == 0 && button.largeFirstLine
+            Text(
+                line,
+                maxLines = 2,
+                style = TextStyle(
+                    color = ColorProvider(if (large) WidgetColors.Ink else WidgetColors.Muted),
+                    fontSize = if (large) 12.sp else 10.sp,
+                    fontWeight = if (large) FontWeight.Bold else FontWeight.Normal,
+                    textAlign = TextAlign.Center,
+                ),
+            )
+        }
     }
 }
 

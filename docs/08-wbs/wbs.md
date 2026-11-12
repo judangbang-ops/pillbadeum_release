@@ -88,6 +88,11 @@
 | TASK-042 | 위젯 스크롤 기술 시험: Glance 목록 안 버튼의 탭 기록과 가로 4개 배치가 되는지 (화면 5장 1번, 검토 4.2절) | REQ-078 | SCR-001#overflow | 없음 | Claude | 0.5일 | 에뮬레이터(API 26·34·36) 결과와 TASK-014에서 쓸 방법을 PR에 적음 |
 | TASK-054 | BUG-004 수정: 앱 시작 때(`Application.onCreate`) 이름을 정한 빈 작업 하나를 3650일 뒤·충전 중 조건·`KEEP`으로 넣어 WorkManager의 `RescheduleReceiver`를 미리 켜 둠. 처음 위젯을 놓을 때 구성요소가 켜지며 나는 `PACKAGE_CHANGED`로 위젯이 로딩 표시에 멈추는 것을 막음. `setComponentEnabledSetting`으로 켜고 끄지 않음(위젯이 약 10초 로딩됨). 근거는 PR #16(`e423d6e`) 보고서 1.5절·3절 7번. 2026-11-13 10 계획 확인에서 R2 맨 앞으로 더함 | REQ-019 | `androidApp` Application, WorkManager, SCR-001#loading | 없음 | Claude | 0.5일 | 릴리즈 변형 확인(`release_check.py`, API 34)에서 설치 직후 처음 놓은 위젯이 몇 초 안에 항목을 그림(캡처)이고, 위젯을 놓을 때 우리 패키지의 `PACKAGE_CHANGED`가 없음(logcat). 다시 나면 `dumpsys activity broadcasts`를 남김. BUG-004를 닫음 |
 
+진행 메모 (2026-11-13)
+
+- TASK-013·041·043의 공통 코드: R2 [PR #19](https://github.com/judangbang-ops/pillbadeum_release/pull/19). 건너뜀 따로 세기, 마지막 복용(복용만)과 늦은 건너뜀 줄, 보충 S-2의 날짜 글자, 주 1회 첫 줄 크게, TalkBack 문장, 기기 시간대 표시. jvm `LabelsTest` 15개와 고친 `StatusBoardTest`가 로컬에서 통과(2026-11-13, CI는 Actions가 멈춰 아직). Claude가 정한 세부는 [기록 규칙 보충 3장·6장의 구현](../04-spec/record-rules-supplement.md)
+- 남은 것: 새 위젯 배치와 캡처(TASK-014), 앱 줄 배치(TASK-016), 알림 본문 첫 줄과 알림 시각의 기기 시간대(R3 PR #20이 들어간 뒤 `ReminderLabels`를 바꿈)
+
 ### 1.4 앱 화면
 
 | ID | 작업 | 근거 | 닿는 곳 | 먼저 할 것 | 담당 | 크기 | 끝난 조건 |

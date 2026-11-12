@@ -233,6 +233,17 @@ interface DoseRecordDao {
     )
     suspend fun findLastActiveBefore(intakeId: String, before: Long): DoseRecordEntity?
 
+    /** Latest active dose (kind TAKEN, skips left out) taken before [before]: "마지막 복용" (supplement S-2, W-2). */
+    @Query(
+        """
+        SELECT * FROM dose_record
+        WHERE intake_id = :intakeId AND active = 1 AND kind = 'TAKEN' AND taken_at < :before
+        ORDER BY taken_at DESC
+        LIMIT 1
+        """,
+    )
+    suspend fun findLastActiveTakenBefore(intakeId: String, before: Long): DoseRecordEntity?
+
     /**
      * `taken_at` of the latest active judgment of any intake taken before [before], or null.
      * Restore notice "마지막 기록" (supplement R-2): judgments a wrong clock put in the future are left out.

@@ -60,7 +60,7 @@ class ClockFlagsTest {
             "기록 시각이 휴대폰 시계와 맞지 않았어요 (금 08:00). 확인해 주세요",
             Labels.clockWarning(wednesday.clockWarnings.single().judgment, SEOUL),
         )
-        assertFalse(WidgetModel.from(wednesday).buttons.single().clockWarning)
+        assertFalse(WidgetModel.from(wednesday, SEOUL).buttons.single().clockWarning)
         // The Wednesday button records as usual.
         assertIs<RecordResult.Recorded>(fx.record(intake, renderedKey = "2026-11-11"))
 
@@ -74,9 +74,9 @@ class ClockFlagsTest {
         val fridayBoard = board()
         assertTrue(fridayBoard.items.single().clockWarning)
         assertEquals(listOf(friday), fridayBoard.clockWarnings.map { it.judgment.id })
-        val button = WidgetModel.from(fridayBoard).buttons.single()
+        val button = WidgetModel.from(fridayBoard, SEOUL).buttons.single()
         assertTrue(button.clockWarning)
-        assertEquals(Labels.CLOCK_CHECK_IN_APP, button.subtitle)
+        assertEquals(listOf(Labels.CLOCK_CHECK_IN_APP), button.lines)
         // A tap changes nothing.
         assertIs<RecordResult.Already>(fx.record(intake, renderedKey = "2026-11-13"))
     }

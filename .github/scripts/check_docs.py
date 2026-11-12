@@ -11,7 +11,8 @@ found, and exits with 1 when there is a problem. It changes nothing.
 Starts from docs/06-review/evidence-2026-11-11/check-docs.py (design review, 2026-11-11) and
 adds what the 2026-11-12 scope confirmation needs: counterexamples RR-26 onward, one owner per
 task, the six standard states per screen, state references, relative links and anchors, and
-table shapes.
+table shapes. The rule-id check (P-1, N-4 and so on named in other documents must exist in the
+supplement) was added after the 2026-11-12 review of the scope confirmation (C8).
 """
 import json
 import re
@@ -122,6 +123,34 @@ if unknown_rr:
     problem(f"requirements: unknown counterexamples {unknown_rr}")
 rule_ids = set(re.findall(r"\*\*([A-Z]-\d+)", supplement))
 print(f"  rule ids: {len(rule_ids)} ({', '.join(sorted(rule_ids, key=lambda s: (s[0], int(s[2:]))))})")
+
+
+def rule_refs(text):
+    """Rule ids in a text: 'P-1', 'P-1~P-6', 'N-4~N-11', 'N-1·N-2', 'S-4·W-3'. Skips RR-, SCR- and the like."""
+    found = set()
+    for m in re.finditer(r"(?<![\w-])([BCINPRSW])-(\d+)((?:\s*[~·]\s*(?:[BCINPRSW]-)?\d+)*)", text):
+        letter, prev = m.group(1), int(m.group(2))
+        found.add(f"{letter}-{prev}")
+        for sep, other, n in re.findall(r"\s*([~·])\s*(?:([BCINPRSW])-)?(\d+)", m.group(3)):
+            n = int(n)
+            if other and other != letter:
+                letter, prev = other, n
+                found.add(f"{letter}-{n}")
+                continue
+            found.update(f"{letter}-{k}" for k in (range(prev, n + 1) if sep == "~" else [n]))
+            prev = n
+    return found
+
+
+rule_sources = ["docs/01-planning/requirements.md", "docs/01-planning/planning-v4.md",
+                "docs/04-spec/record-rules-supplement.md", "docs/05-ui/screens.md",
+                "docs/05-ui/sitemap.yaml", "docs/08-wbs/wbs.md", "README.md"]
+referenced_rules = set().union(*(rule_refs(read(rel)) for rel in rule_sources))
+unknown_rules = sorted(referenced_rules - rule_ids, key=lambda s: (s[0], int(s[2:])))
+print(f"  rule ids named in other documents: {len(referenced_rules)}, not defined in the supplement: "
+      f"{unknown_rules or 'none'}")
+if unknown_rules:
+    problem(f"rule ids named but not defined in the supplement {unknown_rules}")
 
 # --- sitemap and screens --------------------------------------------------------------------
 sitemap = read("docs/05-ui/sitemap.yaml")

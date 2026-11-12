@@ -17,10 +17,11 @@
 | --- | --- | --- |
 | [기획 v4](docs/01-planning/planning-v4.md) | DidITake 기획 v3 뒤에 정한 결정(1차 범위, 백업, Play 비공개 테스트, 범위 확정)으로 바뀐 점 | 범위 확정 반영 (2026-11-12) |
 | [요구사항](docs/01-planning/requirements.md) | 요구 REQ-001~083, 합격 기준, 범위 확정 때 정한 것 | 1차 범위 확정 (2026-11-12 10:18 KST) |
-| [기록 규칙 보충](docs/04-spec/record-rules-supplement.md) | 설계 독립 검토(PR #3)의 A1~A6과 B3을 규칙과 반례 RR-26~67로 적음. 주 1회 약은 결정 Q15의 1차 방식 | 개발 기준 (2026-11-12) |
+| [기록 규칙 보충](docs/04-spec/record-rules-supplement.md) | 설계 독립 검토(PR #3)의 A1~A6·B3과 범위 확정 반영 검토(2026-11-12)의 A4·B2~B11을 규칙과 반례 RR-26~89로 적음. 주 1회 약은 결정 Q15의 1차 방식 | 개발 기준 (2026-11-12) |
 | [화면 목록](docs/05-ui/sitemap.yaml) · [화면 상태](docs/05-ui/screens.md) | 화면 SCR-001~010과 화면별 상태, 화면에서 정한 것. 상태별 와이어프레임은 아직 없음(TASK-044) | 범위 확정 반영 (2026-11-12) |
 | [설계 독립 검토](docs/06-review/design-review-2026-11-11.md) | 2026-11-11 독립 검토 의견과 근거 파일 | 끝남 (PR #3) |
-| [작업 분해](docs/08-wbs/wbs.md) | 작업 TASK-001~049, 담당, 릴리즈 단계 R0~R5와의 대응. 지금 프로토타입에서 Play 비공개 테스트까지 | 범위 확정 반영 (2026-11-12). 담당은 Claude 제안 |
+| [범위 확정 반영 검토](docs/06-review/scope-confirm-review-2026-11-12.md) | 2026-11-12 Fable 5.2 독립 검토 의견(조건부 통과). 반영한 곳은 각 문서에 '2026-11-12 검토'로 적음 | 반영함 (PR #5) |
+| [작업 분해](docs/08-wbs/wbs.md) | 작업 TASK-001~052, 담당, 릴리즈 단계 R0~R5와의 대응. 지금 프로토타입에서 Play 비공개 테스트까지 | 범위 확정 반영 (2026-11-12). 담당은 Claude 제안 |
 | [.corthex/project.json](.corthex/project.json) | 단계별 원본 위치 (CORTHEX) | |
 
 문서를 고치면 `python3 .github/scripts/check_docs.py`로 요구·화면·작업 분해·기록 규칙 보충이 서로 맞는지와 문서 안 링크를 대조함. PR마다 CI의 '문서 대조' 작업에서도 돎.

@@ -31,7 +31,7 @@
       "human": "github",
       "source": "diditake:docs/02-design/record-rules.md",
       "truth": "source",
-      "note": "SPEC ID를 따로 두지 않음. 합격 기준은 requirements.md의 열, record-rules 9장 반례(RR-1~25), 이 저장소 docs/04-spec/record-rules-supplement.md의 규칙과 반례(RR-26~67). 원본 칸은 한 파일만 받아 보충 문서는 여기 적음"
+      "note": "SPEC ID를 따로 두지 않음. 합격 기준은 requirements.md의 열, record-rules 9장 반례(RR-1~25), 이 저장소 docs/04-spec/record-rules-supplement.md의 규칙과 반례(RR-26~89). 원본 칸은 한 파일만 받아 보충 문서는 여기 적음"
     },
     "05-erd": {
       "human": "github",

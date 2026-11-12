@@ -70,12 +70,12 @@
       terms: none
     - id: SCR-007
       name: 판정 고치기
-      path: app:/judgment/:intakeId/:periodKey
+      path: app:/judgment/:intakeId/:scheduleVersionId/:periodKey
       access: 기기 사용자
       status: active
       code: 일부 (기록·취소만 첫 화면 버튼으로 있음)
       flows: [플로우 2]
-      reqs: [REQ-003, REQ-006, REQ-029, REQ-030, REQ-031, REQ-032, REQ-033, REQ-034, REQ-043, REQ-044, REQ-082]
+      reqs: [REQ-003, REQ-006, REQ-009, REQ-029, REQ-030, REQ-031, REQ-032, REQ-033, REQ-034, REQ-043, REQ-044, REQ-082]
       terms: none
     - id: SCR-008
       name: 지난 기록

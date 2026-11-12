@@ -68,7 +68,7 @@
       "human": "github",
       "source": "docs/08-wbs/wbs.md",
       "truth": "source",
-      "note": "담당과 R 단계 순서는 Claude 제안(2026-11-12). 작업 보드(GitHub Projects 또는 Notion)는 아직 두지 않고 이 파일이 원본임. 요구·화면·작업 대조는 .github/scripts/check_docs.py"
+      "note": "담당과 R 단계 순서는 Claude 제안(2026-11-12). 작업 보드(GitHub Projects 또는 Notion)는 아직 두지 않고 이 파일이 원본임. 요구·화면·작업 대조는 .github/scripts/check_docs.py 2026-11-12 10 다시 하기: wbs.md 2장 '명세와 작업'이 SPEC마다 작업을 잇고 check_docs.py가 봄. 다음 묶음 계획 확인 전"
     },
     "11-development": {
       "human": "github",

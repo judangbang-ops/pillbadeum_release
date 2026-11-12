@@ -474,6 +474,20 @@ untested = sorted(set(defined_rr) - rr_in_wbs)
 print(f"  RR-26..{defined_rr[-1]} not named by any task: {untested or 'none'}")
 if untested:
     problem(f"wbs: counterexamples no task tests {untested}")
+# Stage 10: wbs.md section 2 maps every SPEC row to the tasks that build or check it
+if spec_text:
+    spec_task = {}
+    for line in wbs.splitlines():
+        m = re.match(r"\|\s*(SPEC-\d{3})\s*\|(.*)\|\s*$", line)
+        if m:
+            spec_task[m.group(1)] = set(re.findall(r"TASK-\d{3}", m.group(2)))
+    no_task_spec = sorted(s for s in specs if not spec_task.get(s))
+    print(f"  spec rows without a task in wbs.md section 2: {no_task_spec or 'none'}")
+    if no_task_spec:
+        problem(f"wbs: spec rows without a task {no_task_spec}")
+    for s, named in spec_task.items():
+        if s not in specs or named - set(tasks):
+            problem(f"wbs: section 2 row {s} names unknown ids {sorted(named - set(tasks))}")
 state_refs = set()
 for text in (wbs, req_md, screens, supplement, flow_text, spec_text):
     state_refs |= set(re.findall(r"(SCR-\d{3})#([a-z]+)", text))

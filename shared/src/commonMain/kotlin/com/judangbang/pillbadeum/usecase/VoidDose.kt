@@ -8,6 +8,7 @@ import kotlin.time.Clock
 /**
  * Cancels an active judgment, app only, after the user confirmed (record-rules.md section 6.1).
  * The row is kept with `active = NULL` so history survives and the window can be recorded again.
+ * Its clock flag, if any, is resolved in the same transaction (supplement C-3, RR-89).
  */
 class VoidDose(
     private val db: DidITakeDatabase,
@@ -22,7 +23,7 @@ class VoidDose(
                     record == null || !record.isActive -> VoidResult.NotActive
                     // A cell that ended before the last settings change cannot be changed (supplement P-5).
                     db.isLockedJudgment(record, now) -> VoidResult.Locked
-                    db.doseRecordDao().voidActive(recordId, now.toEpochMilliseconds(), reason) == 1 -> VoidResult.Voided
+                    db.voidJudgment(recordId, now, reason) == 1 -> VoidResult.Voided
                     else -> VoidResult.NotActive
                 }
             }

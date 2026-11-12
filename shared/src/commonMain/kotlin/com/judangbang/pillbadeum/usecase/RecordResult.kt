@@ -34,6 +34,12 @@ sealed interface RecordResult {
     /** The intake is missing or archived; nothing written, caller must refresh. */
     data object Gone : RecordResult
 
+    /**
+     * App only ([ChangeJudgment]): the window's judgment belongs to a cell that ended before the last day-start
+     * or base-zone change (supplement P-5); nothing changed. [RecordDose] never returns it.
+     */
+    data object Locked : RecordResult
+
     /** Inconsistent state. Reported as an error, never disguised as a duplicate. */
     data class Error(val message: String) : RecordResult
 }

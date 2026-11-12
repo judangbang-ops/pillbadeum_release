@@ -69,6 +69,9 @@ from backup_restore_check import (
 
 WIDGET_LABEL = "DidITake"  # app_name / widget_label in androidApp/src/main/res/values/strings.xml
 RESTORED_LINE = "복원됨"  # Labels.restoreWidgetLine (supplement R-3)
+# BUG-004: the app switches this WorkManager receiver on when it starts (RescheduleReceiverKeeper), so
+# placing the first widget no longer causes a PACKAGE_CHANGED that resets it to the loading view.
+RESCHEDULE_RECEIVER = "androidx.work.impl.background.systemalarm.RescheduleReceiver"
 
 
 # ------------------------------------------------------------------------------------------------
@@ -89,6 +92,22 @@ def package_info() -> dict[str, str]:
 
 # ------------------------------------------------------------------------------------------------
 # Home screen and widget
+
+
+def reschedule_receiver_enabled() -> bool:
+    """True when `dumpsys package` lists WorkManager's RescheduleReceiver under enabledComponents
+    (it is declared disabled; WorkManager switches it on with the first unfinished work)."""
+    lines = sh(f"dumpsys package {PKG}", check=False).splitlines()
+    for i, line in enumerate(lines):
+        if line.strip() != "enabledComponents:":
+            continue
+        indent = len(line) - len(line.lstrip())
+        for item in lines[i + 1:]:
+            if not item.strip() or len(item) - len(item.lstrip()) <= indent:
+                break
+            if item.strip() == RESCHEDULE_RECEIVER:
+                return True
+    return False
 
 
 def screen_size() -> tuple[int, int]:
@@ -275,6 +294,10 @@ def run_flow(apk: Path, next_apk: Path, r: Report) -> None:
     # 2. widget tap records
     launch_app()
     add_item(ITEM_A)
+    # BUG-004: the receiver is already on before the first widget, so placing it switches nothing.
+    keeper = reschedule_receiver_enabled()
+    r.check("BUG-004 첫 위젯 전 RescheduleReceiver", "앱을 연 뒤 켜져 있음 (첫 위젯 때 PACKAGE_CHANGED 없음)",
+            "켜짐" if keeper else "꺼짐", keeper)
     widget = try_place_widget(r, "n")
     shown, source = record(r, ITEM_A, widget)
     tapped = read_state()

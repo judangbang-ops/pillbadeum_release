@@ -10,6 +10,7 @@ import com.judangbang.pillbadeum.data.didITakeDatabaseBuilder
 import com.judangbang.pillbadeum.restore.FileInstallMarker
 import com.judangbang.pillbadeum.restore.InstallState
 import com.judangbang.pillbadeum.status.WidgetModel
+import com.judangbang.pillbadeum.widget.RescheduleReceiverKeeper
 import com.judangbang.pillbadeum.widget.WidgetUpdater
 import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineScope
@@ -22,6 +23,12 @@ import kotlinx.coroutines.sync.withLock
 class DidITakeApplication : Application() {
     /** One container (and so one database) per process; Glance actions run in this process too. */
     val container: AppContainer by lazy { AppContainer(this, Clock.System) }
+
+    override fun onCreate() {
+        super.onCreate()
+        // BUG-004: switch WorkManager's RescheduleReceiver on now, not when the first widget is placed.
+        RescheduleReceiverKeeper.ensure(this)
+    }
 }
 
 /** The app-level container of [context]'s process. */

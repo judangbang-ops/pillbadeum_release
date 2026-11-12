@@ -26,6 +26,8 @@
 
 [DidITake README의 빌드와 실행](https://github.com/judangbang-ops/DidITake/blob/7a800ac/README.md#빌드와-실행)(`7a800ac`)과 같음. 앱 소스는 `shared/`(공통 규칙·DB·앱 화면)와 `androidApp/`(Android 앱·위젯)에 있음.
 
+패키지 이름(`applicationId`)은 `com.judangbang.pillbadeum`임 (결정 Q9, 2026-11-12 동희님). Play에 한 번 올리면 바꿀 수 없음. 코드 패키지와 `namespace`도 같은 이름을 씀(`shared`는 `com.judangbang.pillbadeum.shared`).
+
 준비: JDK 17, Android SDK(platform 36). 저장소 루트에 `local.properties`를 만들고 `sdk.dir=<Android SDK 경로>`를 적음 (커밋하지 않음).
 
 ```bash
@@ -35,6 +37,8 @@ adb install -r androidApp/build/outputs/apk/debug/androidApp-debug.apk
 ```
 
 - 디버그 서명 APK임. 정식 서명 키로 바꾸면 한 번 지우고 다시 설치해야 하고, 기기에 저장된 기록은 사라짐 (REQ-062, TASK-002)
+- 2026-11-12 전에 빌드한 APK의 패키지 이름은 `com.zmanlab.diditake`임. 지금 APK와 다른 앱으로 깔리고 기록도 옮겨 오지 않으니, 시험하던 폰에서는 따로 지움
+- 릴리즈 서명용 업로드 키와 비밀번호는 저장소 밖에 둠. CI에는 GitHub Secrets `ANDROID_UPLOAD_KEYSTORE_BASE64`·`ANDROID_UPLOAD_KEYSTORE_PASSWORD`·`ANDROID_UPLOAD_KEY_ALIAS`로만 넣음(2026-11-12 등록). 릴리즈 서명 설정과 CI 검증은 아직 없음 (TASK-002)
 - PR마다 GitHub Actions([`.github/workflows/ci.yml`](.github/workflows/ci.yml))가 위 두 명령을 돌리고, 디버그 APK의 권한 목록을 [`androidApp/expected-permissions.txt`](androidApp/expected-permissions.txt)와 비교함. `INTERNET` 권한이 있으면 실패함(REQ-057). 결과 표는 실행 요약에, 디버그 APK는 7일 보관 아티팩트에 있음. 2026-11-12 첫 실행(PR #2)에서 JVM 테스트 71개 통과, 디버그 APK 빌드됨
 
 ## 작업 규칙

@@ -16,7 +16,7 @@ kotlin {
     }
 
     android {
-        namespace = "com.zmanlab.diditake.shared"
+        namespace = "com.judangbang.pillbadeum.shared"
         compileSdk = libs.versions.android.compileSdk.get().toInt()
         minSdk = libs.versions.android.minSdk.get().toInt()
     }

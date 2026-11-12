@@ -13,14 +13,15 @@ and 250x110dp (the declared minimum), at font 100% and at the largest font the S
 
 Cases (12 daily items Test1..Test12, one person; every case taps a different item, so a record
 found after the tap is the tap's own):
-  L (API 31+, first) the probe placed on the Pixel Launcher home screen right after install, before
-    any widget session ran (the first placement of a fresh install): time to draw, PACKAGE_CHANGED
-    and widget view re-creations around it; then scroll; tap Test12 -> recorded
   A grid 276x220 font 100%: four buttons in the first row; scroll the grid; tap Test10 -> recorded
   B grid 250x110 font 100%: scroll; tap Test7 -> recorded
   C list 276x220 largest font: scroll; tap Test5 -> recorded
   D list 250x110 largest font: scroll; tap Test4 -> recorded
   E grid 276x220 largest font: screenshot only (does the grid still fit?)
+  P grid 276x220 font 100%: turn a debug component on (PACKAGE_CHANGED for the package, what
+    WorkManager's first work does) and watch whether the widget drops to its loading layout and when
+    it comes back (an observation: the release check's widget stuck on loading, 2026-11-12)
+  L (API 31+) the probe placed on the Pixel Launcher home screen: scroll; tap Test11 -> recorded
 "recorded" = an active dose_record row for that item with source WIDGET (DB read as root), and the
 button redrawn as done. The report also lists which buttons were fully visible before scrolling and
 where the list is after the tap redraw (an observation for TASK-014).
@@ -38,6 +39,7 @@ import sqlite3
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from backup_restore_check import (
@@ -328,7 +330,12 @@ def run_case(r: Report, case: str, layout: str, w: int, h: int, font: float, tar
                    "호스트 준비, 목록(GridView/ListView)과 항목이 보임",
                    f"{status}; 목록 {box.cls.rsplit('.', 1)[-1] if box else '없음'}; 보인 항목 {len(items)}", ok_ready):
         return
-    exercise(r, case, layout, tag, target, nodes, host=True)
+    def restart() -> list[Node]:
+        start_host(layout, w, h)
+        wait_status()
+        return wait_items(45)
+
+    exercise(r, case, layout, tag, target, nodes, host=True, restart=restart)
 
 
 def header_above(box: Node) -> Node | None:
@@ -345,9 +352,10 @@ def host_events() -> list[str]:
     return re.findall(r"host (onStop|onStart)", out)
 
 
-def exercise(r: Report, case: str, layout: str, tag: str, target: str | None, nodes: list[Node], host: bool) -> None:
+def exercise(r: Report, case: str, layout: str, tag: str, target: str | None, nodes: list[Node], host: bool,
+             restart: Callable[[], list[Node]] | None = None) -> None:
     """Scroll to [target], tap it, check the record and the redraw. Shared by the debug host and the
-    launcher case."""
+    launcher case. [restart] shows the widget again in the debug host."""
     box = list_view(nodes)
     items = items_on_screen(nodes)
     visible = sorted((name for name, n in items.items() if fully_inside(n, box)), key=lambda s: int(s[4:]))
@@ -368,6 +376,13 @@ def exercise(r: Report, case: str, layout: str, tag: str, target: str | None, no
                f"항목 높이의 {int(need * 100)}% 이상 보이면 닿은 것으로 보고, 보이는 부분을 누름")
     want = "다 보임" if need >= 1.0 else f"{int(need * 100)}% 이상 보임"
     item = scroll_to(target, need)
+    if item is None and restart is not None and not has_widget_list(dump_ui()):
+        # Drawn, then back on its loading layout before the first drag (API 34 and 36, 2026-11-12,
+        # see case P): an observation; show it again once and scroll then.
+        r.shot(f"{tag}-lost")
+        r.note(f"{tag}: 스크롤 전에 위젯이 로딩 화면으로 돌아감(관찰) — 호스트를 한 번 다시 띄움")
+        if has_widget_list(restart()):
+            item = scroll_to(target, need)
     r.shot(f"{tag}-scrolled")
     save_ui(r, f"{tag}-scrolled")
     if not r.check(f"{case} 스크롤로 {target}에 닿음", f"목록만 스크롤되어 {target}가 {want}",
@@ -529,6 +544,9 @@ TIMELINE = [
     (re.compile(r"LauncherAppWidgetHostView: App widget created with id: (\d+)"), "런처가 위젯 {0} 뷰를 만듦"),
     (re.compile(r"ScrollProbeWidget: provideGlance"), "Glance 그리기 시작"),
     (re.compile(r"Closing session (appWidget-\d+)"), "Glance 세션 {0} 닫힘"),
+    (re.compile(r"ComponentToggleReceiver: toggled ToggleTarget to (\w+)"), "시험 구성요소 {0}"),
+    (re.compile(r"SessionWorker attempted restart but Session is not available for (appWidget-\d+)"),
+     "Glance 세션 {0} 다시 시작 못 함"),
 ]
 
 
@@ -537,7 +555,7 @@ def device_time() -> str:
 
 
 def launcher_timeline(since: str) -> list[str]:
-    """What happened to our widget since [since] (device time), from the logcat, in order."""
+    """What happened to our widgets since [since] (device time), from the logcat, in order."""
     out = adb("logcat", "-d", "-T", since, check=False, timeout=90) if since else ""
     events = []
     for line in out.splitlines():
@@ -549,14 +567,54 @@ def launcher_timeline(since: str) -> list[str]:
     return events
 
 
+def has_widget_list(nodes: list[Node]) -> bool:
+    return list_view(nodes) is not None and bool(items_on_screen(nodes))
+
+
+def run_reset_case(r: Report, case: str) -> None:
+    """PACKAGE_CHANGED for our package while a probe is drawn in the debug host (see the module doc).
+    An observation for TASK-014 and the release check, not a pass/fail of the scroll test."""
+    tag = f"{case}-grid-276x220-font100"
+    CURRENT["key"] = "grid-1.0"
+    set_font(1.0)
+    start_host("grid", 276, 220)
+    wait_status()
+    nodes = wait_items(45)
+    if not has_widget_list(nodes):
+        r.note(f"{tag}: 위젯이 45초 안에 그려지지 않아 하지 못함")
+        return
+    time.sleep(3)
+    since = device_time()
+    started = time.time()
+    sh(f"am broadcast -n {PKG}/.debug.ComponentToggleReceiver", check=False)
+    lost_at = back_at = None
+    while time.time() - started < 75:
+        shown = has_widget_list(dump_ui())
+        if not shown and lost_at is None:
+            lost_at = time.time() - started
+            r.shot(f"{tag}-loading")
+        elif shown and lost_at is not None:
+            back_at = time.time() - started
+            break
+        elif shown and time.time() - started > 20:
+            break  # no drop in 20s
+        time.sleep(1)
+    events = launcher_timeline(since)
+    if lost_at is None:
+        seen = "20초 동안 위젯이 그대로 보임"
+    elif back_at is None:
+        seen = f"{lost_at:.0f}초 뒤 위젯이 로딩 화면으로 바뀌고, 75초 안에 돌아오지 않음"
+    else:
+        seen = f"{lost_at:.0f}초 뒤 위젯이 로딩 화면으로 바뀌고, {back_at:.0f}초 뒤 항목이 다시 보임"
+    r.note(f"{tag}: 시험 구성요소를 켜서 우리 패키지에 PACKAGE_CHANGED를 보냄 → {seen}")
+    r.note(f"{tag}: 로그 순서 — {'; '.join(events[:14]) or '찾은 줄 없음'}")
+    r.shot(f"{tag}-after")
+
+
 def run_launcher_case(r: Report, case: str, target: str) -> None:
     """The same flow on a real home screen (Pixel Launcher, API 31+), at the size the launcher gives a
-    4x2 widget. Runs first, right after install: the host only seeds the items and binds nothing, so
-    the launcher's widget starts the app's first Glance session (and first WorkManager work), as when a
-    user places the widget after installing. Glance keeps a long-delayed work so WorkManager never
-    disables its RescheduleReceiver again, but the first enable still sends PACKAGE_CHANGED, and a
-    launcher re-creates its widget views on that (the suspected cause of the release check's widget
-    stuck on its loading layout, 2026-11-12). The timeline from the logcat shows the order."""
+    4x2 widget. The host only sets the probe layout and binds nothing, so no other probe session runs
+    while the launcher places its widget. The timeline from the logcat shows what happened to it."""
     tag = f"{case}-grid-launcher-font100"
     CURRENT["key"] = "grid-1.0"
     set_font(1.0)
@@ -567,9 +625,14 @@ def run_launcher_case(r: Report, case: str, target: str) -> None:
         return
     since = device_time()
     changed0, created0 = widget_reload_counts()
-    r.note(f"{tag}: 설치 뒤 처음 놓는 위젯(그 전에 Glance 세션 없음). 놓기 전 RescheduleReceiver {reschedule_receiver_state()}")
+    r.note(f"{tag}: 놓기 전 WorkManager RescheduleReceiver {reschedule_receiver_state()}")
     placed_at = time.time()
     why = place_probe_in_launcher(r, tag)
+    if "Widgets" in why:
+        # The launcher's touch-and-hold menu was not ready once (right after boot): one more try.
+        r.note(f"{tag}: {why} — 20초 뒤 한 번 더")
+        time.sleep(20)
+        why = place_probe_in_launcher(r, tag)
     if why:
         # Launcher steps differ between images: an observation, not a failure of the scroll test.
         r.note(f"{tag}: 런처 경우를 하지 못함 — {why}")
@@ -628,11 +691,6 @@ def main() -> int:
         adb("install", "-t", str(args.apk), timeout=180)
         grant = sh(f"appwidget grantbind --package {PKG}", check=False).strip()
         r.note(f"appwidget grantbind: {grant or '출력 없음'}")
-        # The launcher case first: it needs the app before its first Glance session.
-        if api >= 31:
-            run_launcher_case(r, "L", "Test12")
-        else:
-            r.note("L 런처 경우: API 31 미만 이미지의 런처는 위젯 목록 화면이 달라 하지 않음")
         # 12 items: at 276x220 two grid rows (8 items) show, so Test10 needs a real scroll and the
         # scroll position after the tap redraw means something (2026-11-12 run: 6 items all fit).
         # Every case taps another item (C tapped B's Test7 once and found B's record).
@@ -641,6 +699,13 @@ def main() -> int:
         run_case(r, "C", "list", 276, 220, largest, "Test5")
         run_case(r, "D", "list", 250, 110, largest, "Test4")
         run_case(r, "E", "grid", 276, 220, largest, None)
+        run_reset_case(r, "P")
+        # The launcher last: right after boot the Pixel Launcher's menu was not ready (API 34 and 36,
+        # 2026-11-12), and its widget stays on the home screen.
+        if api >= 31:
+            run_launcher_case(r, "L", "Test11")
+        else:
+            r.note("L 런처 경우: API 31 미만 이미지의 런처는 위젯 목록 화면이 달라 하지 않음")
     except Exception as exc:
         r.check("스크립트", "끝까지 돎", f"{type(exc).__name__}: {exc}", False)
         try:

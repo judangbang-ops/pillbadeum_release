@@ -28,6 +28,15 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/scroll_probe_widget_info" />
         </receiver>
+
+        <!-- Case P: turning a component on sends PACKAGE_CHANGED (what WorkManager's first work does). -->
+        <receiver
+            android:name=".debug.ComponentToggleReceiver"
+            android:exported="true" />
+        <receiver
+            android:name=".debug.ToggleTarget"
+            android:enabled="false"
+            android:exported="false" />
     </application>
 
 </manifest>

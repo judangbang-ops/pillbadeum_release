@@ -56,6 +56,12 @@ data class HistoryCell(
     val judgment: DoseRecordEntity?,
     /** [judgment] has an unanswered clock warning (SCR-008#future, supplement C-2). */
     val clockWarning: Boolean = false,
+    /**
+     * The old version's window that a schedule change cut short, kept only to show that version's own
+     * judgment (supplement P-8). SCR-007 offers only [기록 취소] here: [RecordInWindow] treats the window
+     * as the new version's and refuses other writes as stale.
+     */
+    val cutByScheduleChange: Boolean = false,
 )
 
 enum class CellState {
@@ -76,7 +82,9 @@ enum class CellState {
  * screen's week grid so both draw the same cells:
  *
  * - a schedule version has the windows that end after it starts and, once closed, the windows that ended
- *   by its end ([ScheduleSpan.owns]); the window holding a schedule change is the new version's;
+ *   by its end ([ScheduleSpan.owns]); the window holding a schedule change is the new version's. The old
+ *   version keeps a cell for that cut window only when it holds the old version's own judgment, so a judgment
+ *   written before the change never drops out of history (Claude's choice, same idea as archiving below);
  * - windows that have not started yet have no cell;
  * - after the item or its person was archived there are no cells. The window holding that moment keeps
  *   its cell only when it has a judgment (Claude's choice: what was recorded before archiving stays visible,
@@ -132,8 +140,11 @@ internal class ItemCells(
         flagged: Set<String>,
     ): HistoryCell? {
         val window = windowWithKey(span.rule, date.toString(), settings) ?: return null
-        if (!span.owns(window) || window.start > now) return null
-        val judgment = pick(span, window, records)
+        if (window.start > now) return null
+        val cut = !span.owns(window) && span.to != null && window.start < span.to && window.end > span.to &&
+            window.end > span.from
+        if (!span.owns(window) && !cut) return null
+        val judgment = if (cut) ownJudgment(span, window, records) ?: return null else pick(span, window, records)
         if (cutoff != null && window.end > cutoff && (window.start >= cutoff || judgment == null)) return null
         val state = when {
             judgment?.kind == DoseKind.TAKEN -> CellState.TAKEN
@@ -151,11 +162,15 @@ internal class ItemCells(
             state = state,
             judgment = judgment,
             clockWarning = judgment != null && judgment.id in flagged,
+            cutByScheduleChange = cut,
         )
     }
 
-    private fun pick(span: ScheduleSpan, window: Window, records: List<DoseRecordEntity>): DoseRecordEntity? =
+    private fun ownJudgment(span: ScheduleSpan, window: Window, records: List<DoseRecordEntity>): DoseRecordEntity? =
         records.firstOrNull { it.scheduleVersionId == span.versionId && it.periodKey == window.periodKey }
+
+    private fun pick(span: ScheduleSpan, window: Window, records: List<DoseRecordEntity>): DoseRecordEntity? =
+        ownJudgment(span, window, records)
             ?: records.firstOrNull { it.scheduleVersionId != span.versionId && Instant.fromEpochMilliseconds(it.takenAt) in window }
 }
 

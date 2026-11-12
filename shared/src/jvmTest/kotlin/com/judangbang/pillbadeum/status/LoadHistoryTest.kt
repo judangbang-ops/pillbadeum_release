@@ -175,6 +175,71 @@ class LoadHistoryTest {
     }
 
     @Test
+    fun in_the_week_weekly_became_daily_the_weekly_judgment_stays_visible() = runTest {
+        // PR #12 review: a weekly (Monday) dose, then daily from Wednesday 10:00.
+        val intake = fx.newIntake(ScheduleRule.Weekly(DayOfWeek.MONDAY), effectiveFrom = seoul("2026-10-26T04:00"))
+        val unrecorded = fx.newIntake(ScheduleRule.Weekly(DayOfWeek.MONDAY), effectiveFrom = seoul("2026-10-26T04:00"))
+        val monday = recordAt(intake, "2026-11-09T08:00")
+        fx.changeSchedule(intake, ScheduleRule.Daily, at = seoul("2026-11-11T10:00"))
+        fx.changeSchedule(unrecorded, ScheduleRule.Daily, at = seoul("2026-11-11T10:00"))
+        val (weekly, daily) = fx.db.scheduleVersionDao().listByIntake(intake).map { it.id }
+        fx.at("2026-11-12T12:00")
+
+        val month = history(november)
+        // The cut weekly window 11/09~ belongs to the daily version, but keeps a cell for its own judgment.
+        val cut = month.cellsOn("2026-11-09", intake).single()
+        assertEquals(weekly, cut.scheduleVersionId)
+        assertEquals(monday.id, cut.judgment?.id)
+        assertEquals(CellState.TAKEN, cut.state)
+        assertTrue(cut.cutByScheduleChange)
+        assertTrue(month.cellsOn("2026-11-10", intake).isEmpty())
+        assertEquals(listOf(daily), month.cellsOn("2026-11-11", intake).map { it.scheduleVersionId })
+        assertEquals(CellState.MISSED, month.stateOn("2026-11-11", intake))
+        assertEquals(CellState.OPEN, month.stateOn("2026-11-12", intake))
+        assertEquals(CellState.MISSED, month.stateOn("2026-11-02", intake))
+        // Without a judgment the cut window has no cell, not a missed one.
+        assertTrue(month.cellsOn("2026-11-09", unrecorded).isEmpty())
+    }
+
+    @Test
+    fun a_new_versions_judgment_is_not_matched_by_key_in_an_old_versions_cell() = runTest {
+        // Daily, then weekly (Monday) from Wednesday 10:00; the weekly dose on Thursday has period key 11-09.
+        val intake = fx.newIntake(effectiveFrom = seoul("2026-11-01T04:00"))
+        fx.changeSchedule(intake, ScheduleRule.Weekly(DayOfWeek.MONDAY), at = seoul("2026-11-11T10:00"))
+        val thursday = recordAt(intake, "2026-11-12T08:00")
+        assertEquals("2026-11-09", thursday.periodKey)
+        fx.at("2026-11-12T12:00")
+
+        val (dailyCell, weeklyCell) = history(november).cellsOn("2026-11-09", intake)
+        assertEquals(CellState.MISSED, dailyCell.state, "Monday's daily window does not hold Thursday 08:00")
+        assertEquals(thursday.id, weeklyCell.judgment?.id)
+    }
+
+    @Test
+    fun a_weekly_window_crossing_the_month_end_shows_a_judgment_of_the_next_month() = runTest {
+        // Daily until Sunday 12-06 10:00, then weekly (Monday): the window 11/30~12/06 is the weekly one's.
+        val intake = fx.newIntake(effectiveFrom = seoul("2026-11-01T04:00"))
+        val december = recordAt(intake, "2026-12-01T08:00")
+        fx.changeSchedule(intake, ScheduleRule.Weekly(DayOfWeek.MONDAY), at = seoul("2026-12-06T10:00"))
+        fx.at("2026-12-08T12:00")
+
+        val weekly = history(november).cellsOn("2026-11-30", intake).single { it.rule is ScheduleRule.Weekly }
+        assertEquals(december.id, weekly.judgment?.id)
+        assertEquals(CellState.TAKEN, weekly.state)
+    }
+
+    @Test
+    fun reading_history_raises_clock_flags_itself() = runTest {
+        val intake = fx.newIntake(effectiveFrom = seoul("2026-11-01T04:00"))
+        val friday = recordAt(intake, "2026-11-13T08:00")
+        fx.at("2026-11-11T09:00")
+
+        assertNull(fx.db.clockFlagDao().find(friday.id))
+        history(november)
+        assertTrue(fx.db.clockFlagDao().find(friday.id) != null, "LoadHistory raises the flag before reading")
+    }
+
+    @Test
     fun person_filter_keeps_one_persons_items() = runTest {
         val mine = fx.newIntake(effectiveFrom = seoul("2026-11-10T04:00"))
         val hers = fx.newIntake(effectiveFrom = seoul("2026-11-10T04:00"))

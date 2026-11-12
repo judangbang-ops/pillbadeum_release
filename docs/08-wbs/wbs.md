@@ -26,7 +26,7 @@
 | ID | 작업 | 근거 | 닿는 곳 | 먼저 할 것 | 담당 | 크기 | 끝난 조건 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | TASK-001 | 패키지 이름(`applicationId`)을 정해 빌드 설정에 넣기. **끝남** (2026-11-12, [PR #4](https://github.com/judangbang-ops/pillbadeum_release/pull/4)) | REQ-061 | `androidApp/build.gradle.kts` | 결정 Q9 (2026-11-12 정함) | Claude | 0.5일 | 정한 이름이 빌드 설정·README에 있고, CI가 만든 디버그 APK의 패키지 이름이 그 이름임 |
-| TASK-002 | 릴리즈 서명과 버전 번호: Gradle `signingConfig`(비밀값은 환경 변수). 서명은 `pull_request`를 받지 않는 `release.yml`에서만 함(main 푸시·`v*` 태그·수동 실행). 그 한 번의 실행에서 업로드 키로 서명한 릴리즈 AAB와 서명하지 않은 개인 APK 원본이 함께 나오고, 개인 APK는 PC 스크립트가 앱 서명 키로 서명함. 개인 APK는 release 변형(디버그 불가)이고 코드 축소(R8)는 1차에 끔. 버전 번호(versionCode)는 빌드한 커밋의 `git rev-list --count HEAD`라 AAB와 개인 APK가 한 수열을 씀. PR에서는 임시 키 서명 시험과 릴리즈 변형 권한 비교를 `ci.yml`에서 함 (검토 A1~A3·B1). 키와 계획은 아래 메모 | REQ-057, REQ-062 | `androidApp/build.gradle.kts`, `.github/workflows/release.yml`(새로)·`ci.yml`, 개인 APK 서명 스크립트(새로) | TASK-001 | Claude | 1.5일 | 두 키의 알고리즘·길이를 `keytool -list -v`로 확인해 아래 메모에 적음(RSA 2048 이상, Play 요건). CI 로그에서 릴리즈 AAB의 인증서 SHA-256 = 업로드 키 지문. 동희님 PC에서 스크립트로 서명한 APK의 `apksigner verify --print-certs` SHA-256 = 앱 서명 키 지문. main의 서로 다른 두 커밋으로 만든 빌드에서 뒤 커밋의 버전 번호가 큼. CI가 개인 APK의 디버그 불가와 릴리즈 변형의 권한 목록을 확인함. 키·비밀번호가 Git과 CI 로그에 없음 |
+| TASK-002 | 릴리즈 서명과 버전 번호: Gradle `signingConfig`(비밀값은 환경 변수). 서명은 `pull_request`를 받지 않는 `release.yml`에서만 함(main 푸시·`v*` 태그·수동 실행). 그 한 번의 실행에서 업로드 키로 서명한 릴리즈 AAB와 서명하지 않은 개인 APK 원본이 함께 나오고, 개인 APK는 PC 스크립트가 앱 서명 키로 서명함. 개인 APK는 release 변형(디버그 불가)이고 코드 축소(R8)는 1차에 끔. 버전 번호(versionCode)는 빌드한 커밋의 `git rev-list --count HEAD`라 AAB와 개인 APK가 한 수열을 씀. PR에서는 임시 키 서명 시험과 릴리즈 변형 권한 비교를 `ci.yml`에서 함 (검토 A1~A3·B1). 키와 계획은 아래 메모. **끝남** (2026-11-12, [PR #6](https://github.com/judangbang-ops/pillbadeum_release/pull/6)) | REQ-057, REQ-062 | `androidApp/build.gradle.kts`, `.github/workflows/release.yml`(새로)·`ci.yml`, 개인 APK 서명 스크립트(새로) | TASK-001 | Claude | 1.5일 | 두 키의 알고리즘·길이를 `keytool -list -v`로 확인해 아래 메모에 적음(RSA 2048 이상, Play 요건). CI 로그에서 릴리즈 AAB의 인증서 SHA-256 = 업로드 키 지문. 동희님 PC에서 스크립트로 서명한 APK의 `apksigner verify --print-certs` SHA-256 = 앱 서명 키 지문. main의 서로 다른 두 커밋으로 만든 빌드에서 뒤 커밋의 버전 번호가 큼. CI가 개인 APK의 디버그 불가와 릴리즈 변형의 권한 목록을 확인함. 키·비밀번호가 Git과 CI 로그에 없음 |
 | TASK-003 | Room 스키마 2: 알림 규칙·미루기·시계 표식 표와 1→2 마이그레이션(첫 일정 버전의 유효 시작을 등록 창 시작으로 앞당김). 설정 키는 key-value라 쓰는 작업에서 더함 (보충 N-1·N-2·C-1·P-4) | REQ-041, REQ-042, REQ-072, REQ-009 | `reminder_rule`, `reminder_snooze`, `clock_flag`, `schedule_version`, `shared/schemas` | 없음 | Claude | 1.5일 | 스키마 2 JSON이 생기고, 1→2 마이그레이션 테스트가 기존 판정 행을 그대로 남기고 첫 일정 버전의 유효 시작을 옮김 |
 | TASK-004 | 새 일정 버전의 `late_policy`를 `KEEP`으로 저장 (보충 W-1, 요구 4장 1번). 개인 APK를 나눠 주기 전에 넣음(R0b). 그 사이에 만든 일정 버전이 `ASK`로 남지 않게 하기 위함 (검토 C4). **끝남** (2026-11-12, [PR #7](https://github.com/judangbang-ops/pillbadeum_release/pull/7)) | REQ-010 | `ManageIntakes`, `schedule_version` | 없음 (2026-11-12 확정) | Claude | 0.5일 | 새 항목·주기 변경의 `late_policy` = KEEP. RR-60·RR-62(기준 요일 그대로) JVM 테스트. 기존 테스트 통과 |
 
@@ -36,12 +36,13 @@
 - TASK-033: PR #2로 main에 합침(`da916c6`). PR마다 JVM 테스트, 디버그 APK 빌드, 권한 목록 비교(`androidApp/expected-permissions.txt`, `INTERNET`이 있으면 실패)를 함. 릴리즈 변형의 권한 비교는 TASK-002에서 더함(검토 A3)
 - TASK-002: 요구 4장 2번 확정(10:18)에 따라 키를 둘로 나눔 (릴리즈 서명 키 스레드, 동희님 PC에서 만듦)
   - 앱 서명 키 `pillbadeum-app-signing.p12`(별칭 `app-signing`, RSA 4096): Play 앱 서명과 개인 APK 서명에 씀. 잃으면 되살릴 수 없음. GitHub에는 올리지 않고 동희님 PC와 Google Drive 폴더 두 곳에 둠. 인증서 SHA-256(공개값) `35:64:B6:82:4B:1E:3D:A0:74:7A:2E:97:96:6E:F5:5D:B9:CC:93:C5:E8:8A:7D:45:24:64:2F:E6:2A:32:95:36`
-  - 업로드 키 `pillbadeum-upload.p12`(별칭 `upload`, RSA 4096): CI가 Play에 올릴 AAB에 서명함. GitHub Secrets 3개(`ANDROID_UPLOAD_KEYSTORE_BASE64`, `ANDROID_UPLOAD_KEYSTORE_PASSWORD`, `ANDROID_UPLOAD_KEY_ALIAS`)에 있음. 잃으면 Play에서 재설정할 수 있음. 인증서 SHA-256 `7D:23:C2:A8:C9:1B:96:4A:08:14:D5:70:12:CB:38:93:CF:25:BF:68:E7:A9:B3:43:6E:AA:87:FA:D5:2D:39:BB`
-  - 확인한 것: Drive 사본의 SHA-256이 원본과 같음, 두 비밀번호가 서로 다름. 11:33 KST에 동희님 PC에서 `keytool -list -v`로 두 키 모두 PKCS12, 개인 키 하나, RSA 4096, SHA384withRSA, 유효 기간 2026-11-12~2054-03-30이고 지문이 위와 같음을 봄(Play 요건 RSA 2048 이상을 넘음, 검토 A1). 확인 전: Drive 동기화 완료, 실제 APK 서명
-  - 비밀번호의 PC 밖 사본: 위 11:05 말씀에 따라 서명 키 스레드가 직접 만듦(11:11). 앱 서명 키 비밀번호는 업로드 키 비밀번호로 암호화해 Drive 폴더에 두고, 업로드 키 비밀번호는 GitHub Secrets에 있음. Secrets는 다시 읽을 수 없어서, PC 없이 되찾는 경로가 실제로 되는지는 TASK-002에서 확인함
+  - 업로드 키 `pillbadeum-upload.p12`(별칭 `upload`, RSA 4096): CI가 Play에 올릴 AAB에 서명함. GitHub Secrets `ANDROID_UPLOAD_KEYSTORE_BASE64`, `ANDROID_UPLOAD_KEYSTORE_PASSWORD`에 있음. 별칭은 공개값이라 `release.yml`에 적고, 같이 등록한 `ANDROID_UPLOAD_KEY_ALIAS`는 읽지 않음(비밀값으로 넘기면 로그의 'upload'가 모두 가려짐, PR #6). 잃으면 Play에서 재설정할 수 있음. 인증서 SHA-256 `7D:23:C2:A8:C9:1B:96:4A:08:14:D5:70:12:CB:38:93:CF:25:BF:68:E7:A9:B3:43:6E:AA:87:FA:D5:2D:39:BB`
+  - 확인한 것: Drive 사본의 SHA-256이 원본과 같음, 두 비밀번호가 서로 다름. 11:33 KST에 동희님 PC에서 `keytool -list -v`로 두 키 모두 PKCS12, 개인 키 하나, RSA 4096, SHA384withRSA, 유효 기간 2026-11-12~2054-03-30이고 지문이 위와 같음을 봄(Play 요건 RSA 2048 이상을 넘음, 검토 A1). Drive 동기화: 12:15 KST쯤 Drive API로 클라우드의 두 키 파일·암호화한 비밀번호·안내 파일이 PC 원본과 같은 크기로 있음을 봄(G: 사본은 MD5까지 같음). 실제 APK 서명: 아래 결과
+  - 비밀번호의 PC 밖 사본: 위 11:05 말씀에 따라 서명 키 스레드가 직접 만듦(11:11). 앱 서명 키 비밀번호는 업로드 키 비밀번호로 암호화해 Drive 폴더에 두고, 업로드 키 비밀번호는 GitHub Secrets에 있음. Secrets는 다시 읽을 수 없어서, PC 없이 되찾는 경로가 실제로 되는지는 TASK-002에서 확인함. 확인한 것(2026-11-12): Drive 클라우드 사본이 있음(위), Secrets의 업로드 키 비밀번호가 맞음(main 실행에서 업로드 키로 서명함). 확인 못 한 것: Secrets에서 값을 꺼내는 비상 워크플로는 미리 만들지 않음. 자동 안전 검사가 '비밀값을 내보내는 코드'로 막았고, PC를 잃으면 동희님 허락을 받아 그때 만들어 시험함
   - 계획 (서명 키 스레드, 11:33): 버전 번호는 빌드한 커밋의 `git rev-list --count HEAD`이고 CI가 전체 이력을 받아 Gradle에 넘김. 같은 커밋을 다시 빌드하면 같은 번호이고, 환경 변수가 없는 로컬·디버그 빌드는 1임. 나눠 주거나 올리는 빌드는 main의 커밋에서 만든 것만 씀. release 변형은 `isMinifyEnabled = false`를 적어 둠
   - 공식 문서: Android는 깔린 것보다 낮은 versionCode의 APK 설치를 막고, Play가 받는 최대값은 2100000000임 ([Version your app](https://developer.android.com/studio/publish/versioning), 2025-08-20 갱신, 2026-11-12 읽음)
-  - 저장소 설정의 한계 (검토 B1): 비공개 저장소의 무료 요금제라 브랜치 보호·규칙 모음·환경 비밀값이 없음(API 403). 그래서 '서명은 main·태그에서만'은 워크플로 파일의 조건일 뿐이고, 저장소에 쓸 수 있는 사람은 어느 브랜치에서든 워크플로를 고쳐 Secrets를 쓸 수 있음. 업로드 키는 Play에서 다시 만들 수 있고 앱 서명 키는 GitHub에 없어 지금 피해는 한정됨. TASK-049를 할지는 2장 결정 목록에서 정함
+  - 저장소 설정의 한계 (검토 B1): 비공개 저장소의 무료 요금제라 브랜치 보호·규칙 모음·환경 비밀값이 없음(API 403). 그래서 '서명은 main·태그에서만'은 워크플로 파일의 조건일 뿐이고, 저장소에 쓸 수 있는 사람은 어느 브랜치에서든 워크플로를 고쳐 Secrets를 쓸 수 있음. 업로드 키는 Play에서 다시 만들 수 있고 앱 서명 키는 GitHub에 없어 지금 피해는 한정됨. TASK-049를 할지는 2장 결정 목록에서 정함. PR #6의 `release.yml`은 빌드할 커밋이 main 이력 안에 있는지도 확인함(다른 브랜치 수동 실행·main 밖 태그를 막는 실수 방지, 2026-11-12 독립 검토)
+  - 결과 ([PR #6](https://github.com/judangbang-ops/pillbadeum_release/pull/6), main `72de947`에 2026-11-12 12:09 KST 합침): main 첫 `release.yml` [실행 43146283311](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43146283311)에서 업로드 키로 서명한 AAB의 인증서 SHA-256 = 업로드 키 지문, versionCode 33 = 커밋 수, 릴리즈 APK가 debuggable 아님·정렬 맞음·권한 6줄이 기준과 같음(`INTERNET` 없음). 동희님 PC(build-tools 37.0.0)에서 `scripts/sign-personal-apk.ps1` 기본 실행이 이 실행의 APK를 받아 앱 서명 키로 서명함: `apksigner verify --print-certs` SHA-256 = 앱 서명 키 지문(versionCode 33, v2·v3 서명). PR 빌드는 `-Test` 없이 주면 거절함. 같은 PC에서 Git 전체(가지 8개·PR 참조 11개)와 이 실행 로그에 두 비밀번호와 두 키 파일(base64 조각 포함)이 없음을 확인함. 버전 번호가 커지는지는 이 기록을 합친 다음 main 커밋의 빌드로 확인함(진행 기록은 Notion). 독립 검토(Fable 5.2, 174dbf1)의 고칠 것 2건(main 밖 커밋 서명, PC 스크립트의 실행 확인)과 제안 5건을 반영함
 - Play 쪽: Play 도움말([Use Play App Signing](https://support.google.com/googleplay/android-developer/answer/9842756), 2026-11-12 요약본으로 읽음)에 따르면 새 앱은 Google이 만든 키로 자동 등록되고, 공개 테스트나 프로덕션에 나가기 전에 'Change key'로 우리 키를 넘길 수 있음. 직접 넣는 키는 RSA 2048비트 이상이어야 함(검토 A1이 2026-11-12에 읽음). 개인 APK 위에 Play 버전을 덮어 깔아야 하므로(REQ-062), 계정이 생기면 바로 앱을 만들어 앱 서명 키를 넘기고(TASK-050) 그 뒤에 가족 폰에 개인 APK를 깖. 넘길 때 도움말을 다시 읽고 절차를 확인함
 
 ### 1.2 공통 기록 규칙 (shared)
@@ -133,7 +134,7 @@
 
 ```mermaid
 flowchart LR
-    R0["R0 CI<br/>TASK-033 끝남"] --> R0b["R0b 실사용 전<br/>TASK-001·004 끝남, 002, 028, 029, 051"]
+    R0["R0 CI<br/>TASK-033 끝남"] --> R0b["R0b 실사용 전<br/>TASK-001·002·004 끝남, 028, 029, 051"]
     R0b --> P["개인 APK 단계<br/>TASK-047, 7일 이상"]
     R0b --> R1["R1 공통 규칙<br/>TASK-003, 005~011"]
     A["계정·테스터<br/>TASK-048, 지금 시작"] --> K["Play 앱·앱 서명 키<br/>TASK-050"]
@@ -150,7 +151,7 @@ flowchart LR
 | 단계 | 작업 | 지금 (2026-11-12) | 끝나는 때 |
 | --- | --- | --- | --- |
 | R0 CI | TASK-033 | 끝남 | PR마다 테스트·빌드·권한 비교가 돎 |
-| R0b 실사용 전 | TASK-001(끝남), TASK-002, TASK-004(끝남), TASK-028, TASK-029, TASK-051 | 진행 중 (2026-11-12) | 개인 APK를 나눠 줘도 키·패키지 이름·버전 번호·빌드 변형·백업 때문에 기록을 잃지 않음 (검토 5.1절, 2026-11-12 검토 A1~A4·C4) |
+| R0b 실사용 전 | TASK-001(끝남), TASK-002(끝남), TASK-004(끝남), TASK-028, TASK-029, TASK-051 | 진행 중 (2026-11-12) | 개인 APK를 나눠 줘도 키·패키지 이름·버전 번호·빌드 변형·백업 때문에 기록을 잃지 않음 (검토 5.1절, 2026-11-12 검토 A1~A4·C4) |
 | 개인 APK 단계 | TASK-047 | R0b 뒤 동희님 폰부터, 가족 폰은 TASK-050 뒤. R1~R4와 함께 감 | 7일 이상의 실사용 기록. 개인 APK → Play 전환 시험은 TASK-038 |
 | R1 공통 규칙 | TASK-003, TASK-005~TASK-011 | R0b 다음 | JVM 테스트로 규칙 보충의 반례가 통과함 |
 | R2 위젯·앱 화면 | TASK-044·TASK-042 먼저, TASK-012~TASK-023, TASK-041, TASK-043, TASK-045 | R1 뒤 | 화면별 캡처 |
@@ -177,7 +178,7 @@ flowchart LR
 - 요구 83개가 모두 작업 하나 이상의 '근거'에 있음. 작업이 없는 Must 요구도 없음 (스크립트)
 - [기록 규칙 보충](../04-spec/record-rules-supplement.md)의 반례 RR-26~89가 모두 어느 작업의 작업 칸이나 끝난 조건에 있음 (스크립트)
 - '먼저 할 것'에 순환이 없고, 가리키는 작업이 모두 표에 있음 (스크립트)
-- 크기 합은 '이상'이 붙은 TASK-039(14일 이상)와 TASK-047(7일 이상)을 빼고 53.0일이고, 그중 끝난 TASK-001·TASK-004·TASK-033이 1.5일임 (스크립트, TASK-004는 2026-11-12 PR #7에서 더함). 2026-11-11 초안의 35.5일에서 새 작업 TASK-040~049가 8.0일, 범위 확정과 규칙 보충으로 기존 작업 15개를 0.5일씩 늘린 것이 7.5일, 2026-11-12 검토로 새 작업 TASK-050~052가 1.5일, TASK-002를 0.5일 늘린 것이 0.5일임
+- 크기 합은 '이상'이 붙은 TASK-039(14일 이상)와 TASK-047(7일 이상)을 빼고 53.0일이고, 그중 끝난 TASK-001·TASK-002·TASK-004·TASK-033이 3.0일임 (스크립트, TASK-004는 2026-11-12 PR #7, TASK-002는 같은 날 PR #6 결과 기록에서 더함). 2026-11-11 초안의 35.5일에서 새 작업 TASK-040~049가 8.0일, 범위 확정과 규칙 보충으로 기존 작업 15개를 0.5일씩 늘린 것이 7.5일, 2026-11-12 검토로 새 작업 TASK-050~052가 1.5일, TASK-002를 0.5일 늘린 것이 0.5일임
 - 가장 긴 사슬은 TASK-038까지 12.0일임: TASK-003 > TASK-011 > TASK-024 > TASK-025 > TASK-041 > TASK-046 > TASK-032 > TASK-038 ('이상' 작업은 0으로 셈, 스크립트). 달력으로는 TASK-047(7일 이상)과 TASK-048의 계정·테스터 모집, TASK-032의 하룻밤 측정 두 번이 더 길 수 있음
 - API가 없어 '응답마다 테스트' 검사는 해당 없음. 대신 공통 함수의 결과(`RecordResult` 등)마다 화면 상태가 [screens.md](../05-ui/screens.md)에 있음
 - 사람 확인: 담당과 R 단계 순서는 Claude 제안이고 동희님이 아직 보지 않음. 2026-11-12 지시("범위 확정 후 Fable 5.2 독립검토를 거쳐 Opus 5.5 xhigh로 개발 구현 및 배포 파이프라인을 완결하세요")에 따라 독립 검토 뒤 R0b·R1을 이 순서로 시작하고, 바꾸라고 하시면 이 표를 고침. 2026-11-12 검토 반영으로 TASK-004를 R0b로 당기고 TASK-050~052를 더한 것도 Claude 제안임

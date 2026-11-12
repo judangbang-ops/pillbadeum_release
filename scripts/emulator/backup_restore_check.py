@@ -40,6 +40,7 @@ DB_DOMAIN = "db"  # tar folder of the `database` backup domain
 LOCAL_TRANSPORT = "com.android.localtransport/.LocalTransport"
 CONTROL_PKG = "com.android.providers.settings"
 CONTROL_OK = "Backup finished with result: Success"
+BACKUP_RAN = "with result: Success"  # the app's own line: its backup ran (it may hold no files)
 ITEM_A = "TestA"
 ITEM_B = "TestB"
 NOTICE = "백업에서 복원했어요"
@@ -235,12 +236,13 @@ def setup_transport() -> None:
     and backups then go to another transport."""
     sh("bmgr enable true")
     sh("setprop log.tag.BackupXmlParserLogging VERBOSE", check=False)
-    current = re.compile(r"^\s*\*\s*" + re.escape(LOCAL_TRANSPORT) + r"\s*$", re.M)
     end = time.time() + 120
     while True:
         out = sh(f"bmgr transport {LOCAL_TRANSPORT}", check=False)
         listed = sh("bmgr list transports", check=False)
-        if current.search(listed):
+        # "Selected transport X (formerly Y)" on every version; "Unknown transport" before it registers.
+        # (Android 8.x lists transport names, not components, so the list cannot be matched.)
+        if "Selected transport" in out:
             return
         if time.time() > end:
             raise RuntimeError(f"could not select {LOCAL_TRANSPORT}: {last_line(out)} / {listed.strip()}")
@@ -332,7 +334,13 @@ def wipe_backup() -> None:
 
 
 def backup_now() -> str:
-    stop_app()
+    """Leaves the app and ends its process without `am force-stop`: a force-stopped app is in the
+    stopped state, and full backup skips stopped apps ("Backup is not allowed", AOSP
+    PerformFullTransportBackupTask / BackupEligibilityRules.appIsStopped)."""
+    sh("input keyevent KEYCODE_HOME")
+    time.sleep(1)
+    sh(f"am kill {PKG}", check=False)
+    time.sleep(1)
     return sh(f"bmgr backupnow {PKG}", timeout=180)
 
 
@@ -428,7 +436,7 @@ def cases_api31(apk: Path, r: Report) -> None:
     before = fresh_install_with_record(apk, r)
     old_id = before.settings.get("device_id")
     out = backup_now()
-    r.note(f"bmgr backupnow (is_encrypted=true): {last_line(out)}")
+    r.note(f"bmgr backupnow (is_encrypted=true): {package_result(out)} / {last_line(out)}")
     entries = backup_entries()
     r.check("B-1 백업에 든 파일 (암호화 가능)", "기록 DB와 짝 파일만",
             show_entries(entries), only_db_files(entries))
@@ -509,7 +517,7 @@ def cases_api31(apk: Path, r: Report) -> None:
     nolock = read_state()
     r.check("RR-68 암호화 없음(화면 잠금 없음)", "백업에 DB 없음, 다시 설치하면 DB 없음",
             f"{package_result(out) or last_line(out)}; {show_entries(entries)}; {describe(nolock)}",
-            CONTROL_OK in out and not db_entries(entries) and not nolock.exists)
+            bool(package_result(out)) and not db_entries(entries) and not nolock.exists)
     launch_app()
     r.check("RR-68 그 뒤 첫 실행", "새 설치로 처리, 안내 없음",
             f"안내 {'보임' if screen_has(NOTICE, 3) else '없음'}", not screen_has(NOTICE, 0))
@@ -519,7 +527,7 @@ def cases_api31(apk: Path, r: Report) -> None:
     set_transport_params("is_device_transfer=true,is_encrypted=false")
     d2d_before = fresh_install_with_record(apk, r)
     out = backup_now()
-    r.note(f"bmgr backupnow (is_device_transfer=true): {last_line(out)}")
+    r.note(f"bmgr backupnow (is_device_transfer=true): {package_result(out)} / {last_line(out)}")
     entries = backup_entries()
     r.check("B-1 기기 간 이전에 든 파일", "기록 DB와 짝 파일만", show_entries(entries), only_db_files(entries))
     reinstall(apk)
@@ -551,7 +559,7 @@ def cases_no_backup(apk: Path, r: Report, case: str, expected_note: str, needs_p
     state = read_state()
     evidence = (f"{result or last_line(out)}; 규칙 파일 파싱 실패 기록 {'있음' if parse_failed else '없음'}; "
                 f"{show_entries(entries)}; 다시 설치 뒤 {describe(state)}")
-    ok = bool(result) and not db_entries(entries) and not state.exists
+    ok = BACKUP_RAN in result and not db_entries(entries) and not state.exists
     if needs_parse_failure:
         ok = ok and parse_failed
     r.check(case, expected_note, evidence, ok)

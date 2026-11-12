@@ -62,6 +62,8 @@ flowchart TD
 
 명세: SPEC-005, SPEC-006, SPEC-007, SPEC-008, SPEC-009, SPEC-020, SPEC-024, SPEC-027, SPEC-039, SPEC-040, SPEC-042, SPEC-043
 
+목업 (09, 2안 요일 약통): [캔버스](https://claude.ai/artifact/QW5JRsx1Zpz5ekeqHmjpKC)의 보드 [`BoxWidget`](../09-mockup/boards/BoxWidget.dc.html), [`BoxWidget200`](../09-mockup/boards/BoxWidget200.dc.html)
+
 | 보여 주는 것 | 출처 |
 | --- | --- |
 | 머리글: 앱 이름, 기준 날짜 `11/11 (수)`, `n / m 완료`, 건너뜀이 있으면 `· 건너뜀 k` (REQ-020) | `LoadStatusBoard` → `WidgetModel` |
@@ -115,6 +117,8 @@ flowchart TD
 
 명세: SPEC-005, SPEC-027
 
+목업 (09, 2안 요일 약통): [캔버스](https://claude.ai/artifact/QW5JRsx1Zpz5ekeqHmjpKC)의 보드 [`WidgetPick`](../09-mockup/boards/WidgetPick.dc.html)
+
 | 보여 주는 것 | 출처 |
 | --- | --- |
 | '전체'와 보관되지 않은 대상자 목록(이름, 색) | `ManagePeople.list` |
@@ -144,6 +148,8 @@ flowchart TD
 목적: 위젯을 보지 못한 날에도 먹을 때를 알려 주고, 알림에서 바로 기록하거나 건너뜀. (FL-003, FL-009)
 
 명세: SPEC-010, SPEC-011, SPEC-012, SPEC-013, SPEC-014, SPEC-039, SPEC-042, SPEC-043
+
+목업 (09, 2안 요일 약통): [캔버스](https://claude.ai/artifact/QW5JRsx1Zpz5ekeqHmjpKC)의 보드 [`Notif`](../09-mockup/boards/Notif.dc.html)
 
 | 보여 주는 것 | 출처 |
 | --- | --- |
@@ -198,9 +204,11 @@ flowchart TD
 
 명세: SPEC-015, SPEC-016, SPEC-018, SPEC-020, SPEC-028, SPEC-029, SPEC-039, SPEC-040, SPEC-042, SPEC-043
 
+목업 (09, 2안 요일 약통): [캔버스](https://claude.ai/artifact/QW5JRsx1Zpz5ekeqHmjpKC)의 보드 [`BoxHome`](../09-mockup/boards/BoxHome.dc.html), [`HomeEmpty`](../09-mockup/boards/HomeEmpty.dc.html), [`HomeRestored`](../09-mockup/boards/HomeRestored.dc.html)
+
 | 보여 주는 것 | 출처 |
 | --- | --- |
-| 머리글: "기록", [항목 추가], 그리고 [지난 기록]·[설정] (새로 만듦) | 없음 |
+| 머리글: "기록"과 [지난 기록]·[설정] (새로 만듦). [항목 추가]는 목록 아래 큰 버튼 (09 목업, 2026-11-12) | 없음 |
 | 복원 안내(복원 뒤 확인 전): "백업에서 복원했어요. 마지막 기록은 11/09 21:40이에요. 그 뒤의 기록은 없을 수 있어요. 한 약은 한 휴대폰에서 기록해 주세요" + [확인했어요] (REQ-073, REQ-074) | 설정 `restore_notice_pending`, `restore_notice_last_record_at` (새로 만듦) |
 | 기준 날짜와 완료 수 `11/11 (수) 기준 · 2 / 3 완료`, 건너뜀이 있으면 `· 건너뜀 1` (보충 S-1) | `LoadStatusBoard` |
 | 항목 줄: 상태 원, 대상자 배지, 이름, 보조 줄(주기, 기록 시각 또는 마지막 복용, 주 1회 약의 이번·다음 창) (REQ-028). 주 1회 미완료는 둘째 줄 `마지막 복용 어제(일) 22:00`을 굵게 (REQ-075). 시각은 기기 시간대 (REQ-082) | `LoadStatusBoard`, `Labels.appDetail` |
@@ -246,6 +254,8 @@ flowchart TD
 
 명세: SPEC-002, SPEC-005, SPEC-036
 
+목업 (09, 2안 요일 약통): [캔버스](https://claude.ai/artifact/QW5JRsx1Zpz5ekeqHmjpKC)의 보드 [`Welcome1`](../09-mockup/boards/Welcome1.dc.html), [`Welcome2`](../09-mockup/boards/Welcome2.dc.html)
+
 | 보여 주는 것 | 출처 |
 | --- | --- |
 | 1쪽: "먹었는지 헷갈릴 때, 위젯 한 번이면 돼요" + 기록 도구 안내 (REQ-036, REQ-080) + "한 약은 한 휴대폰에서 기록해 주세요" (REQ-074) | 없음 |
@@ -254,6 +264,7 @@ flowchart TD
 | 동작 | 결과 | 실패 |
 | --- | --- | --- |
 | [위젯 추가] | 시스템이 위젯 놓기 확인을 띄움 (Android 8 이상, 런처가 지원할 때) | 지원하지 않으면 버튼 대신 손으로 놓는 법만 보임 |
+| [다음] (1쪽) | 2쪽 | 없음 |
 | [시작하기] / [건너뛰기] | SCR-004. 다시 보이지 않음 | 없음 |
 
 | 상태 | 사용자가 보는 것과 할 수 있는 것 | 생기는 때 |
@@ -275,6 +286,8 @@ flowchart TD
 목적: 복용 항목을 등록·수정·보관하고, 항목의 알림을 켬. (FL-001, FL-006, FL-007)
 
 명세: SPEC-003, SPEC-004, SPEC-010, SPEC-021, SPEC-023, SPEC-024, SPEC-028, SPEC-031
+
+목업 (09, 2안 요일 약통): [캔버스](https://claude.ai/artifact/QW5JRsx1Zpz5ekeqHmjpKC)의 보드 [`ItemForm`](../09-mockup/boards/ItemForm.dc.html), [`ItemFormError`](../09-mockup/boards/ItemFormError.dc.html), [`ItemForm200`](../09-mockup/boards/ItemForm200.dc.html)
 
 | 보여 주는 것 | 출처 |
 | --- | --- |
@@ -314,9 +327,11 @@ flowchart TD
 
 명세: SPEC-016, SPEC-017, SPEC-018, SPEC-019, SPEC-020, SPEC-021, SPEC-042, SPEC-043
 
+목업 (09, 2안 요일 약통): [캔버스](https://claude.ai/artifact/QW5JRsx1Zpz5ekeqHmjpKC)의 보드 [`Judge`](../09-mockup/boards/Judge.dc.html), [`JudgeTaken`](../09-mockup/boards/JudgeTaken.dc.html)
+
 | 보여 주는 것 | 출처 |
 | --- | --- |
-| 항목 이름, 대상자, 창(매일 `11/11 (수)`, 주 1회 `11/09 (월) ~ 11/15 (일)`), 지금 판정과 시각. 지난 창이면 제목을 "11/11 (수) 기록 고치기"로 씀. 시각은 기기 시간대 (REQ-082) | 부르는 화면이 넘김 (`IntakeStatus`, 일정 버전과 기간키, 보충 P-1) |
+| 항목 이름, 대상자, 창(매일 `11/11 (수)`, 주 1회 `11/09 (월) ~ 11/15 (일)`), 지금 판정과 시각. 지금 창이면 제목을 "오늘 기록"(09 목업), 지난 창이면 "11/11 (수) 기록 고치기"로 씀. 시각은 기기 시간대 (REQ-082) | 부르는 화면이 넘김 (`IntakeStatus`, 일정 버전과 기간키, 보충 P-1) |
 
 | 판정 | 동작 | 결과 | 실패 |
 | --- | --- | --- | --- |
@@ -355,6 +370,8 @@ flowchart TD
 
 명세: SPEC-020, SPEC-021, SPEC-022, SPEC-042
 
+목업 (09, 2안 요일 약통): [캔버스](https://claude.ai/artifact/QW5JRsx1Zpz5ekeqHmjpKC)의 보드 [`History`](../09-mockup/boards/History.dc.html)
+
 | 보여 주는 것 | 출처 |
 | --- | --- |
 | 달 바꾸기 `‹ 2026년 11월 ›`, (대상자 둘 이상이면) 대상자 고르기 (REQ-040) | 없음 |
@@ -390,6 +407,8 @@ flowchart TD
 목적: 날짜 계산·알림·잠금 화면 표시를 바꾸고, 알림이 오지 않을 때 고칠 곳으로 안내함. (FL-006, FL-007, FL-008)
 
 명세: SPEC-021, SPEC-025, SPEC-029, SPEC-030, SPEC-031, SPEC-033, SPEC-034, SPEC-035, SPEC-036
+
+목업 (09, 2안 요일 약통): [캔버스](https://claude.ai/artifact/QW5JRsx1Zpz5ekeqHmjpKC)의 보드 [`Settings`](../09-mockup/boards/Settings.dc.html)
 
 | 보여 주는 것 | 출처 |
 | --- | --- |
@@ -430,6 +449,8 @@ flowchart TD
 목적: 가족 대상자를 추가·수정·보관함. (FL-006)
 
 명세: SPEC-004, SPEC-021, SPEC-026, SPEC-027
+
+목업 (09, 2안 요일 약통): [캔버스](https://claude.ai/artifact/QW5JRsx1Zpz5ekeqHmjpKC)의 보드 [`People`](../09-mockup/boards/People.dc.html), [`PersonAdd`](../09-mockup/boards/PersonAdd.dc.html)
 
 | 보여 주는 것 | 출처 |
 | --- | --- |
@@ -484,7 +505,7 @@ flowchart TD
 - 04 명세와 연결: 화면마다 `명세:` 줄에 그 화면에 보이는 SPEC을 적음. 화면 없이 뒤에서 도는 명세는 SPEC-001(첫 실행 준비), SPEC-032(알림 다시 계산), SPEC-037(백업 파일), SPEC-038(복원 감지), SPEC-041(재부팅 뒤 다시 예약)임 (스크립트가 모든 SPEC이 어느 쪽엔가 있는지 봄)
 - 상태: 화면 10개 모두 여섯 기본 상태(normal·loading·empty·error·permission·stale)를 적었고, 생기지 않는 상태는 이유를 적음. 화면에만 있는 상태는 20개임(SCR-001의 gone·already·skipped·overflow·restored·reconfigure·clock 등. 2026-11-12 검토 C2로 SCR-007#future를 더함). 다른 문서가 가리키는 `SCR-xxx#상태`는 모두 이 문서에 있음 (스크립트)
 - 요구와 연결: 기능 요구 62개가 모두 화면 하나 이상에 있고, 화면별 요구 ID가 sitemap.yaml과 같음 (스크립트)
-- **통과하지 못한 것**: 상태별 와이어프레임이 없음. 지금 있는 그림은 [시안 v3](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/05-ui/ui-mockup-v3.html)(SCR-001·SCR-003·SCR-004 일부)뿐임. TASK-044가 위젯 큰 글씨, 알림 잠금 화면 여덟 칸, 지난 창 판정 고치기를 먼저 그리고, 나머지 상태는 그 화면 작업이 시작할 때 그 PR에 그림(2026-11-12 검토 C5). 그래서 화면 단계의 '상태마다 그림' 검사는 화면 작업이 모두 끝나야 통과함. TASK-013·TASK-014·TASK-018·TASK-025·TASK-041은 TASK-044 뒤에 함
+- **통과하지 못한 것**: 상태별 그림이 다 있지 않음. 2026-11-12 09 목업(2안 요일 약통)이 화면 10개의 normal과 몇 상태를 그림([09 목업 3장](../09-mockup/README.md#3-그린-화면과-상태)). 그 전에는 [시안 v3](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/05-ui/ui-mockup-v3.html)(SCR-001·SCR-003·SCR-004 일부)뿐이었음. TASK-044가 위젯 큰 글씨, 알림 잠금 화면 여덟 칸, 지난 창 판정 고치기를 먼저 그리고, 나머지 상태는 그 화면 작업이 시작할 때 그 PR에 그림(2026-11-12 검토 C5). 그래서 화면 단계의 '상태마다 그림' 검사는 화면 작업이 모두 끝나야 통과함. TASK-013·TASK-014·TASK-018·TASK-025·TASK-041은 TASK-044 뒤에 함
 - 하지 않은 것: 폭 360dp·글자 200%로 실제 화면을 보지 않음 (TASK-030)
 
 ## 5. 화면에서 정한 것

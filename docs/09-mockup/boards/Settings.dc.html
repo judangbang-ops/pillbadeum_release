@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>SCR-009 설정</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;600;800&amp;display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="box.css">
+<style>
+
+</style>
+</helmet>
+<div style="height: 1190px" class="s {{fs}}">
+  <div class="bar back"><button class="ib" type="button" aria-label="뒤로"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h1>설정</h1></div>
+  <div class="body">
+    <h2>하루 기준</h2>
+    <div class="li"><span class="k">하루 시작 시각</span><span class="v">04:00</span></div>
+    <div class="li"><span class="k">기준 시간대</span><span class="v">Asia/Seoul</span></div>
+    <h2>알림 (모든 약 같이)</h2>
+    <div class="li"><span class="k">다시 알림 간격</span><span class="v">60분</span></div>
+    <div class="li"><span class="k">하루 최대</span><span class="v">3번</span></div>
+    <div class="li"><span class="k">방해 금지</span><span class="v">22:00 ~ 07:00</span></div>
+    <div class="li"><span class="k">잠금 화면에 약 이름 보이기<small>끄면 '복용 시간이에요'만 보여요.</small></span><span class="tg" role="switch" aria-checked="false"></span></div>
+    <h2>알림이 오지 않을 때</h2>
+    <div class="li"><span class="k">알림 권한</span><span class="v ok">켜짐</span></div>
+    <div class="li"><span class="k">정확한 시각 알람<small>꺼져 있으면 알림이 늦을 수 있어요.</small></span><button class="btn line sm" type="button">허용하기</button></div>
+    <div class="li"><span class="k">배터리 사용 제한</span><button class="btn line sm" type="button">설정 열기</button></div>
+    <h2>가족과 보관</h2>
+    <div class="li"><span class="k">대상자 관리</span><span class="v">2명</span><span class="muted"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+    <div class="li"><span class="k">보관한 항목</span><span class="v">1개</span><span class="muted"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+    <h2>백업</h2>
+    <p class="note" style="padding:0 var(--space-2xs)">화면 잠금과 Google 백업이 켜져 있으면 복용 기록이 백업돼요.</p>
+    <h2>앱 정보</h2>
+    <div class="li"><span class="k">버전</span><span class="v">1.0.0</span></div>
+    <div class="li"><span class="k">개인정보처리방침</span><span class="muted"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+    <p class="note" style="padding:var(--space-sm) var(--space-2xs)">의료기기가 아니며 질병을 진단·치료·예방하지&nbsp;않아요.</p>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"fontScale": {"editor": "enum", "options": ["100", "200"], "default": "100"}, "$preview": {"width": 360, "height": 1190}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { fs: (this.props.fontScale ?? '100') === '200' ? 'fs200' : '' };
+  }
+}
+</script>
+</body>
+</html>

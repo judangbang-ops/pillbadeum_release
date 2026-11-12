@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>SCR-008 지난 기록</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;600;800&amp;display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="box.css">
+<style>
+.mon{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-sm)}
+.mon b{font-size:var(--font-size-title-md);font-weight:var(--font-weight-extrabold)}
+.ib.off{color:var(--color-line-strong)}
+.day{display:flex;gap:var(--space-md);padding:var(--space-md) 0;border-top:var(--border-thin) solid var(--color-line-subtle)}
+.dt{width:44px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;line-height:var(--font-line-height-tight)}
+.dt b{font-size:var(--font-size-title-md);font-weight:var(--font-weight-extrabold)}
+.dt span{font-size:var(--font-size-body-sm);color:var(--color-ink-muted)}
+.dt em{font-style:normal;font-size:var(--font-size-body-sm);font-weight:var(--font-weight-extrabold);margin-top:2px}
+.cps{flex-grow:1;display:grid;grid-template-columns:1fr 1fr;gap:var(--space-xs);min-width:0}
+.cp{min-height:var(--size-target);border-radius:var(--radius-button);border:0;font:inherit;text-align:left;padding:var(--space-xs) var(--space-md);display:flex;flex-direction:column;justify-content:center;line-height:var(--font-line-height-tight);min-width:0}
+.cp b{font-size:var(--font-size-body-sm);font-weight:var(--font-weight-extrabold)}
+.cp span{font-size:var(--font-size-body-sm)}
+.cp.tk{background:var(--p-solid);color:var(--color-ink-on-solid)}
+.cp.td{background:var(--color-surface-default);border:var(--border-focus) dashed var(--p-solid);color:var(--p-ink)}
+.cp.sk{background:var(--color-surface-skip);color:var(--color-ink-muted)}
+.cp.ms{background:var(--color-surface-default);border:var(--border-strong) solid var(--color-line-strong);color:var(--color-ink-muted)}
+.cp.wk{grid-column:1 / -1}
+</style>
+</helmet>
+<div style="height: 880px" class="s {{fs}}">
+  <div class="bar back"><button class="ib" type="button" aria-label="뒤로"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h1>지난 기록</h1></div>
+  <div class="body">
+    <div class="mon"><button class="ib" type="button" aria-label="10월"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><b>2026년 11월</b><button class="ib off" type="button" aria-label="다음 달 없음" disabled><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+    <div class="pick" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:var(--space-md)">
+      <button class="c on" type="button" aria-pressed="true">전체</button><button class="c" type="button">나</button><button class="c" type="button">엄마</button></div>
+    <div class="day"><div class="dt"><b>12</b><span>목</span><em>오늘</em></div><div class="cps"><button class="cp p1 tk" type="button" aria-label="나 아침약 08:02 먹음"><b>아침약</b><span>08:02</span></button><button class="cp sk" type="button" aria-label="나 비타민D 건너뜀"><b>비타민D</b><span>건너뜀</span></button><button class="cp p2 td" type="button" aria-label="엄마 혈압약 아직"><b>혈압약</b><span>아직</span></button></div></div><div class="day"><div class="dt"><b>11</b><span>수</span></div><div class="cps"><button class="cp p1 tk" type="button" aria-label="나 아침약 08:10 먹음"><b>아침약</b><span>08:10</span></button><button class="cp p1 tk" type="button" aria-label="나 비타민D 08:11 먹음"><b>비타민D</b><span>08:11</span></button><button class="cp ms" type="button" aria-label="엄마 혈압약 빠짐"><b>혈압약</b><span>빠짐</span></button></div></div><div class="day"><div class="dt"><b>10</b><span>화</span></div><div class="cps"><button class="cp p1 tk" type="button" aria-label="나 아침약 07:55 먹음"><b>아침약</b><span>07:55</span></button><button class="cp p1 tk" type="button" aria-label="나 비타민D 07:56 먹음"><b>비타민D</b><span>07:56</span></button><button class="cp p2 tk" type="button" aria-label="엄마 혈압약 21:02 먹음"><b>혈압약</b><span>21:02</span></button></div></div><div class="day"><div class="dt"><b>9</b><span>월</span></div><div class="cps"><button class="cp p1 tk" type="button" aria-label="나 아침약 08:30 먹음"><b>아침약</b><span>08:30</span></button><button class="cp p1 tk" type="button" aria-label="나 비타민D 08:31 먹음"><b>비타민D</b><span>08:31</span></button><button class="cp p2 tk" type="button" aria-label="엄마 혈압약 21:40 먹음"><b>혈압약</b><span>21:40</span></button><button class="cp p2 td wk" type="button" aria-label="엄마 골다공증약 이번 주 11월 9일부터 15일 아직"><b>골다공증약</b><span>11/09~11/15 아직</span></button></div></div><div class="day"><div class="dt"><b>8</b><span>일</span></div><div class="cps"><button class="cp p1 tk" type="button" aria-label="나 아침약 09:12 먹음"><b>아침약</b><span>09:12</span></button><button class="cp ms" type="button" aria-label="나 비타민D 빠짐"><b>비타민D</b><span>빠짐</span></button><button class="cp p2 tk" type="button" aria-label="엄마 혈압약 22:05 먹음"><b>혈압약</b><span>22:05</span></button></div></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"fontScale": {"editor": "enum", "options": ["100", "200"], "default": "100"}, "$preview": {"width": 360, "height": 880}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { fs: (this.props.fontScale ?? '100') === '200' ? 'fs200' : '' };
+  }
+}
+</script>
+</body>
+</html>

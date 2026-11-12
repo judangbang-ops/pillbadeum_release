@@ -593,6 +593,57 @@ def slugs(path):
     return found
 
 
+# 09 design tokens (DTCG 2025.10) and the mockup boards that use them
+tokens_path = root / "design" / "base.tokens.json"
+token_vars = set()
+if tokens_path.exists():
+    tokens = json.loads(tokens_path.read_text(encoding="utf-8"))
+
+    def walk_tokens(node, trail, inherited):
+        kind = node.get("$type", inherited)
+        if "$value" in node:
+            name = ".".join(trail)
+            value = node["$value"]
+            if kind is None:
+                problem(f"tokens: {name} has no $type")
+            elif kind == "color":
+                comps = value.get("components") if isinstance(value, dict) else None
+                if not (isinstance(value, dict) and value.get("colorSpace") == "srgb" and isinstance(comps, list)
+                        and len(comps) == 3 and all(isinstance(c, (int, float)) and 0 <= c <= 1 for c in comps)):
+                    problem(f"tokens: {name} is not an srgb colour object")
+            elif kind == "dimension":
+                if not (isinstance(value, dict) and isinstance(value.get("value"), (int, float)) and value.get("unit") in ("px", "rem")):
+                    problem(f"tokens: {name} is not a dimension with value and px/rem unit")
+            token_vars.add("--" + "-".join(trail))
+            for key in node:
+                if not key.startswith("$"):
+                    problem(f"tokens: {name} has $value and also a child '{key}'")
+            return
+        for key, child in node.items():
+            if not key.startswith("$"):
+                if isinstance(child, dict):
+                    walk_tokens(child, trail + [key], kind)
+                else:
+                    problem(f"tokens: {'.'.join(trail + [key])} is neither a group nor a token")
+
+    walk_tokens(tokens, [], None)
+    boards = root / "docs" / "09-mockup" / "boards"
+    if boards.is_dir():
+        css_vars = set(re.findall(r"(--[a-z0-9-]+):", (boards / "tokens.css").read_text(encoding="utf-8")))
+        if css_vars != token_vars:
+            problem(f"tokens: boards/tokens.css is out of date (run gen_css.py): differs in {sorted(css_vars ^ token_vars)[:5]}")
+        # Boards use token names. Local helpers are --p-* (person colour picked per row).
+        # Notif.dc.html draws the system notification shade, whose colours the device sets.
+        for page in sorted(boards.glob("*.dc.html")) + [boards / "box.css"]:
+            text = page.read_text(encoding="utf-8")
+            for used in sorted(set(re.findall(r"var\((--[a-z0-9-]+)\)", text))):
+                if used not in token_vars and not used.startswith("--p-"):
+                    problem(f"tokens: {page.relative_to(root)} uses {used}, which is not a token")
+            if page.name != "Notif.dc.html":
+                for hex_value in sorted(set(re.findall(r"#[0-9A-Fa-f]{6}\b|#[0-9A-Fa-f]{3}\b", re.sub(r"<title>.*?</title>", "", text)))):
+                    problem(f"tokens: {page.relative_to(root)} uses the raw colour {hex_value} instead of a token")
+    print(f"tokens: {len(token_vars)} tokens in design/base.tokens.json, boards checked")
+
 md_files = sorted((root / "docs").rglob("*.md")) + [root / "README.md"]
 link_count, table_count = 0, 0
 for path in md_files:

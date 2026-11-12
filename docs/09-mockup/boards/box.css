@@ -1,0 +1,96 @@
+/* 2안 요일 약통: 화면 공통 조각. 값은 tokens.css(design/base.tokens.json에서 만듦)의 이름만 씀. */
+body{margin:0;background:transparent}
+.s{width:360px;height:800px;overflow:hidden;box-sizing:border-box;background:var(--color-surface-default);
+  font-family:var(--font-family-base);font-size:var(--font-size-body);color:var(--color-ink-default);
+  word-break:keep-all;overflow-wrap:break-word;font-variant-numeric:tabular-nums;display:flex;flex-direction:column;position:relative}
+.s *{box-sizing:border-box}
+.s p{margin:0}
+/* 사람 색: 줄·칸에 붙여 --p-* 를 정함 */
+.p1{--p-solid:var(--color-person-1-solid);--p-tint:var(--color-person-1-tint);--p-ink:var(--color-person-1-ink)}
+.p2{--p-solid:var(--color-person-2-solid);--p-tint:var(--color-person-2-tint);--p-ink:var(--color-person-2-ink)}
+.p3{--p-solid:var(--color-person-3-solid);--p-tint:var(--color-person-3-tint);--p-ink:var(--color-person-3-ink)}
+.p4{--p-solid:var(--color-person-4-solid);--p-tint:var(--color-person-4-tint);--p-ink:var(--color-person-4-ink)}
+.p5{--p-solid:var(--color-person-5-solid);--p-tint:var(--color-person-5-tint);--p-ink:var(--color-person-5-ink)}
+.p6{--p-solid:var(--color-person-6-solid);--p-tint:var(--color-person-6-tint);--p-ink:var(--color-person-6-ink)}
+
+/* 머리 줄 */
+.bar{display:flex;align-items:center;min-height:56px;padding:0 var(--space-sm) 0 var(--space-xl);flex-shrink:0;gap:var(--space-2xs)}
+.bar.back{padding-left:var(--space-2xs)}
+.bar h1{margin:0;font-size:var(--font-size-title-lg);font-weight:var(--font-weight-extrabold);flex-grow:1;line-height:var(--font-line-height-tight)}
+.ib{width:var(--size-target);height:var(--size-target);border:0;background:none;display:flex;align-items:center;justify-content:center;color:inherit;padding:0;flex-shrink:0}
+.tb{min-height:var(--size-target);padding:0 var(--space-md);border:0;background:none;font:inherit;font-size:var(--font-size-label);font-weight:var(--font-weight-semibold);color:inherit}
+.body{flex-grow:1;min-height:0;overflow:hidden;padding:var(--space-2xs) var(--space-lg) 0}
+.foot{flex-shrink:0;padding:var(--space-md) var(--space-lg) var(--space-lg);display:flex;flex-direction:column;gap:var(--space-sm);background:var(--color-surface-default)}
+.foot.line{border-top:var(--border-thin) solid var(--color-line-subtle)}
+
+/* 글자 */
+h2{margin:var(--space-xl) var(--space-2xs) var(--space-sm);font-size:var(--font-size-label);font-weight:var(--font-weight-extrabold);color:var(--color-ink-muted);letter-spacing:.02em;line-height:var(--font-line-height-tight)}
+.muted{color:var(--color-ink-muted)}
+.sm{font-size:var(--font-size-body-sm);line-height:var(--font-line-height-normal)}
+.note{font-size:var(--font-size-body-sm);line-height:var(--font-line-height-normal);color:var(--color-ink-muted)}
+
+/* 버튼 */
+.btn{min-height:var(--size-button-lg);width:100%;border:0;border-radius:var(--radius-button);font:inherit;font-size:var(--font-size-body);font-weight:var(--font-weight-extrabold);
+  display:flex;align-items:center;justify-content:center;gap:var(--space-sm);padding:var(--space-xs) var(--space-lg);line-height:var(--font-line-height-tight);text-align:center}
+.btn.ink{background:var(--color-ink-default);color:var(--color-ink-on-solid)}
+.btn.p{background:var(--p-solid);color:var(--color-ink-on-solid)}
+.btn.line{background:var(--color-surface-default);color:var(--color-ink-default);border:var(--border-strong) solid var(--color-line-strong);font-weight:var(--font-weight-semibold)}
+.btn.text{background:none;color:var(--color-ink-default);font-weight:var(--font-weight-semibold);min-height:var(--size-target)}
+.btn.danger{background:none;color:var(--color-ink-danger);font-weight:var(--font-weight-semibold);min-height:var(--size-target)}
+.btn.sm{min-height:var(--size-target);width:auto;padding:0 var(--space-lg)}
+
+/* 입력 */
+.fld{display:flex;flex-direction:column;gap:var(--space-xs);margin-bottom:var(--space-lg)}
+.fld label,.lbl{font-size:var(--font-size-label);font-weight:var(--font-weight-semibold);line-height:var(--font-line-height-tight)}
+.lbl .opt{font-weight:var(--font-weight-regular);color:var(--color-ink-muted)}
+.in{min-height:var(--size-input);border:var(--border-strong) solid var(--color-line-strong);border-radius:var(--radius-button);padding:var(--space-sm) var(--space-lg);
+  display:flex;align-items:center;font-size:var(--font-size-body);line-height:var(--font-line-height-tight)}
+.in.focus{border:var(--border-focus) solid var(--color-ink-default)}
+.in.ph{color:var(--color-ink-muted)}
+.in.err{border:var(--border-focus) solid var(--color-ink-danger)}
+.err-msg{color:var(--color-ink-danger);font-size:var(--font-size-body-sm);font-weight:var(--font-weight-semibold);display:flex;gap:var(--space-xs);align-items:flex-start;line-height:var(--font-line-height-normal)}
+
+/* 칸 고르기: 약통 칸처럼 같은 크기의 칸 중 하나를 채움 */
+.pick{display:grid;gap:var(--space-xs)}
+.pick .c{min-height:var(--size-button-lg);border-radius:var(--radius-button);border:var(--border-strong) solid var(--color-line-strong);background:var(--color-surface-default);
+  font:inherit;font-size:var(--font-size-body);font-weight:var(--font-weight-semibold);color:var(--color-ink-default);display:flex;align-items:center;justify-content:center;padding:var(--space-2xs);line-height:var(--font-line-height-tight);text-align:center}
+.pick .c.on{background:var(--color-ink-default);border-color:var(--color-ink-default);color:var(--color-ink-on-solid);font-weight:var(--font-weight-extrabold)}
+.pick .c.p{background:var(--p-tint);border-color:var(--p-tint);color:var(--p-ink)}
+.pick .c.p.on{background:var(--p-solid);border-color:var(--p-solid);color:var(--color-ink-on-solid)}
+
+/* 켜기·끄기 */
+.tg{width:52px;height:32px;border-radius:16px;position:relative;flex-shrink:0;border:var(--border-focus) solid var(--color-line-strong);background:var(--color-surface-default)}
+.tg::after{content:"";position:absolute;top:4px;left:4px;width:20px;height:20px;border-radius:50%;background:var(--color-line-strong)}
+.tg.on{background:var(--color-ink-default);border-color:var(--color-ink-default)}
+.tg.on::after{left:24px;background:var(--color-ink-on-solid)}
+
+/* 목록 줄 */
+.li{display:flex;align-items:center;gap:var(--space-md);min-height:var(--size-input);padding:var(--space-sm) var(--space-2xs);border-bottom:var(--border-thin) solid var(--color-line-subtle)}
+.li:last-child{border-bottom:0}
+.li .k{flex-grow:1;line-height:var(--font-line-height-tight)}
+.li .k small{display:block;font-size:var(--font-size-body-sm);color:var(--color-ink-muted);margin-top:2px;line-height:var(--font-line-height-normal)}
+.li .v{color:var(--color-ink-muted);text-align:right;white-space:nowrap}
+.li .v.ok{color:var(--color-ink-default);font-weight:var(--font-weight-semibold)}
+
+/* 뚜껑: 사람 색 네모 + 첫 글자 */
+.lid{width:var(--size-lid);height:var(--size-lid);border-radius:var(--radius-button);background:var(--p-solid);color:var(--color-ink-on-solid);
+  display:flex;align-items:center;justify-content:center;font-weight:var(--font-weight-extrabold);flex-shrink:0;font-size:var(--font-size-body)}
+.lid.all{background:var(--color-ink-default)}
+.lid.off{background:var(--color-surface-skip);color:var(--color-ink-muted)}
+
+/* 이번 주 칸 */
+.cell{height:var(--size-cell);border-radius:var(--radius-cell);background:var(--color-surface-sunken)}
+.cell.taken{background:var(--p-solid)}
+.cell.miss{background:var(--color-surface-default);border:var(--border-strong) solid var(--color-line-strong)}
+.cell.skip{background:repeating-linear-gradient(135deg,var(--color-line-strong) 0 2px,var(--color-surface-skip) 2px 7px)}
+.cell.todo{background:var(--color-surface-default);border:var(--border-focus) dashed var(--p-solid)}
+.cell.now{box-shadow:0 0 0 2px var(--color-surface-default),0 0 0 4px var(--color-ink-default)}
+
+/* 안내 띠 */
+.band{background:var(--color-surface-notice);color:var(--color-ink-notice);border-radius:var(--radius-tile);padding:var(--space-md) var(--space-lg);
+  font-size:var(--font-size-body-sm);line-height:var(--font-line-height-normal);font-weight:var(--font-weight-semibold)}
+.band .btn{margin-top:var(--space-sm)}
+
+/* 요일 배지 */
+.dow{width:var(--size-badge);height:var(--size-badge);border-radius:var(--radius-badge);background:var(--color-ink-default);color:var(--color-ink-on-solid);
+  font-size:var(--font-size-display-sm);font-weight:var(--font-weight-extrabold);display:flex;align-items:center;justify-content:center;flex-shrink:0}

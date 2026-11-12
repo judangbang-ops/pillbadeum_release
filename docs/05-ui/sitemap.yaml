@@ -1,5 +1,5 @@
 # 화면 목록 (사이트맵) — 1차 범위 확정 반영 2026-11-12 (화면 5장 7개, 2026-11-12 10:18 KST 동희님 확정). 처음 초안 2026-11-11, Claude 작성
-# CORTHEX 07 다시 하기 2026-11-12 (Claude): 흐름을 03의 FL ID로, terms를 01의 CTX·TERM으로 바꿈. 화면 구성은 그대로. 내비게이션 확인 전
+# CORTHEX 07 다시 하기 2026-11-12 (Claude): 흐름을 03의 FL ID로, terms를 01의 CTX·TERM으로 바꿈. 화면 구성은 그대로. 내비게이션 확인 끝 (2026-11-13 01:04 KST 동희님 "추천모두승인", 질문은 00:55 KST 메시지 2번, screens.md 6장)
 #
 # - 기준: DidITake develop 7a800ac (이 저장소로 가져온 코드와 같음). 요구는 ../01-planning/requirements.md, 화면별 상태는 screens.md
 # - 이 파일이 화면 목록의 원본임. screens.md 1장의 그림과 표는 draw_sitemap.py로 이 파일에서 그림(손으로 고치지 않음)

@@ -9,6 +9,7 @@ import com.judangbang.pillbadeum.testing.TEST_DEVICE_ID
 import com.judangbang.pillbadeum.testing.seoul
 import com.judangbang.pillbadeum.usecase.IntakeDraft
 import com.judangbang.pillbadeum.usecase.ManagePeople
+import com.judangbang.pillbadeum.usecase.PersonChange
 import com.judangbang.pillbadeum.usecase.RecordResult
 import com.judangbang.pillbadeum.usecase.SaveIntake
 import com.judangbang.pillbadeum.usecase.SaveIntakeResult
@@ -20,6 +21,7 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 
 /**
@@ -256,6 +258,36 @@ class LabelsTest {
         people.add("엄마", "#C2501A")
         assertTrue(WidgetModel.from(load(), SEOUL).showPeople)
         assertEquals("나 아침약, 복용함, 오늘 08:02", button(morning).description)
+    }
+
+    /**
+     * SPEC-027 (RR-57): '나' and '엄마', then '나' is archived. 엄마 is left alone, so every place drops the person
+     * again: the board, the widget tile and its TalkBack sentence, and the history screen's person picker (TASK-015).
+     * History still shows 나's past cells.
+     */
+    @Test
+    fun rr57_archiving_me_leaves_mom_without_badge_name_or_picker() = runTest {
+        val history = LoadHistory(fx.db, fx.clock)
+        val morning = mine("아침약")
+        val me = people.list().single()
+        val mom = people.add("엄마", "#C2501A")
+        val pressure = assertIs<SaveIntakeResult.Saved>(save.create(IntakeDraft(mom.id, "혈압약"))).intakeId
+        recordAt(pressure, "2026-11-10T21:40")
+        fx.at("2026-11-11T09:00")
+        assertTrue(load().showPeople)
+        assertEquals("엄마", button(pressure).who)
+        assertEquals("엄마 혈압약, 미완료, 마지막 복용 어제 21:40", button(pressure).description)
+        assertTrue(history(LocalDate(2026, 11, 1)).showPeople)
+
+        assertEquals(PersonChange.Saved, people.archive(me.id))
+        val board = load()
+        assertFalse(board.showPeople)
+        assertEquals(listOf(pressure), board.items.map { it.intakeId }, "나's item left the board with her")
+        assertEquals(null, button(pressure).who)
+        assertEquals("혈압약, 미완료, 마지막 복용 어제 21:40", button(pressure).description)
+        val month = history(LocalDate(2026, 11, 1))
+        assertFalse(month.showPeople, "one active person: no picker on SCR-008 (REQ-018)")
+        assertTrue(month.days.any { day -> day.cells.any { it.intakeId == morning } }, "나's past cells stay in history")
     }
 
     @Test

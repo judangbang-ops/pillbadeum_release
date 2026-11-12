@@ -32,6 +32,8 @@ data class HistoryMonth(
     val days: List<HistoryDay>,
     /** First day of the month of the earliest schedule start, for the "이전 달" limit; null with no items. */
     val firstMonth: LocalDate?,
+    /** Two or more people are not archived: the person picker is shown (REQ-018, REQ-040, [showsPeople]). */
+    val showPeople: Boolean = true,
 ) {
     /** SCR-008#empty: no item had a window in this month. */
     val isEmpty: Boolean get() = days.isEmpty()
@@ -220,6 +222,7 @@ class LoadHistory(
             settings = settings,
             days = byDate.keys.sortedDescending().map { HistoryDay(it, byDate.getValue(it)) },
             firstMonth = firstMonth,
+            showPeople = showsPeople(people.values.count { it.archivedAt == null }),
         )
     }
 }

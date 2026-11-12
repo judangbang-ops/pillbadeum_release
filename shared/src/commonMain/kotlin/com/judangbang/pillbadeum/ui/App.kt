@@ -38,6 +38,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -53,6 +55,7 @@ import com.judangbang.pillbadeum.status.DayState
 import com.judangbang.pillbadeum.status.IntakeStatus
 import com.judangbang.pillbadeum.status.Labels
 import com.judangbang.pillbadeum.status.StatusBoard
+import com.judangbang.pillbadeum.status.showsPeople
 import com.judangbang.pillbadeum.usecase.IntakeDraft
 import com.judangbang.pillbadeum.usecase.PersonColors
 import com.judangbang.pillbadeum.usecase.SaveIntakeResult
@@ -147,10 +150,11 @@ fun App(core: DidITakeCore, onDataChanged: suspend () -> Unit, refreshKey: Int =
             is Screen.Edit -> EditScreen(
                 editing = current.editing,
                 people = people,
-                onAddPerson = { name, color ->
+                onAddPerson = { name, color, onAdded ->
                     scope.launch {
-                        runCatching { core.people.add(name, color) }
+                        val added = runCatching { core.people.add(name, color) }.getOrNull()
                         people = core.people.list()
+                        added?.let { onAdded(it.id) }
                     }
                 },
                 onCancel = { screen = Screen.Home },
@@ -223,12 +227,15 @@ private fun HomeScreen(
         if (board.items.isEmpty()) {
             Card { Text("아직 복용 항목이 없어요. [항목 추가]로 등록해 주세요.", color = Palette.Muted) }
         }
+        val zone = TimeZone.currentSystemDefault()
         board.items.forEach { item ->
             IntakeRow(
                 item = item,
                 // The row layout of the 09 mockup comes with TASK-016; until then the parts are joined.
-                detail = Labels.appRow(item, board, TimeZone.currentSystemDefault())
+                detail = Labels.appRow(item, board, zone)
                     .let { row -> listOfNotNull(row.detail, row.boldLine, row.skipLine).joinToString(" · ") },
+                showPerson = board.showPeople,
+                spoken = Labels.spoken(item, board.now, zone, withPerson = board.showPeople, name = item.name),
                 onClick = { onEdit(item) },
                 onRecord = { onRecord(item) },
                 onVoid = { confirmVoid = item },
@@ -273,10 +280,17 @@ private fun stampOf(item: IntakeStatus, board: StatusBoard?): String {
     return Labels.stamp(Instant.fromEpochMilliseconds(judgment.takenAt), board.now, TimeZone.currentSystemDefault())
 }
 
+/**
+ * One item row. [showPerson]: two or more people are active, so the person badge is drawn (REQ-018).
+ * [spoken] is what TalkBack reads for the row, the widget's sentence ([Labels.spoken], REQ-068): the row's
+ * own texts are not read, and the button stays a stop of its own.
+ */
 @Composable
 private fun IntakeRow(
     item: IntakeStatus,
     detail: String,
+    showPerson: Boolean,
+    spoken: String,
     onClick: () -> Unit,
     onRecord: () -> Unit,
     onVoid: () -> Unit,
@@ -287,14 +301,22 @@ private fun IntakeRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        StatusDot(done = item.isDone)
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                PersonTag(item.person)
-                Spacer(Modifier.width(4.dp))
-                Text(item.name, bold = true, size = 15)
+        Row(
+            Modifier.weight(1f).clearAndSetSemantics { contentDescription = spoken },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            StatusDot(done = item.isDone)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (showPerson) {
+                        PersonTag(item.person)
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    Text(item.name, bold = true, size = 15)
+                }
+                Text(detail, color = Palette.Muted, size = 12)
             }
-            Text(detail, color = Palette.Muted, size = 12)
         }
         if (item.isDone) LineButton("기록 취소", onVoid) else LineButton("먹었어", onRecord, primary = true)
     }
@@ -363,7 +385,8 @@ private fun WeekGrid(board: StatusBoard, daily: List<IntakeStatus>) {
 private fun EditScreen(
     editing: IntakeStatus?,
     people: List<PersonEntity>,
-    onAddPerson: (name: String, color: String) -> Unit,
+    /** Adds a person; `onAdded` gets the new person's id, which the form then selects. */
+    onAddPerson: (name: String, color: String, onAdded: (String) -> Unit) -> Unit,
     onCancel: () -> Unit,
     onSave: (IntakeDraft) -> Unit,
     onArchive: (IntakeStatus) -> Unit,
@@ -391,12 +414,16 @@ private fun EditScreen(
         Field("이름", name, { name = it }, "예: 아침약")
         Field("위젯 별칭 (선택)", alias, { alias = it }, "위젯에 짧게 보일 이름")
 
-        Text("대상자", color = Palette.Muted)
+        // With one active person the person field is folded to [+ 가족 추가] alone (REQ-018, SCR-006 rule).
+        val showPeople = showsPeople(people.size)
+        if (showPeople) Text("대상자", color = Palette.Muted)
         Chips {
-            people.forEach { p ->
-                Chip(p.name, selected = p.id == personId, accent = personColor(p.color)) { personId = p.id }
+            if (showPeople) {
+                people.forEach { p ->
+                    Chip(p.name, selected = p.id == personId, accent = personColor(p.color)) { personId = p.id }
+                }
             }
-            Chip("+ 사람 추가", selected = addingPerson) { addingPerson = !addingPerson }
+            Chip("+ 가족 추가", selected = addingPerson) { addingPerson = !addingPerson }
         }
         if (addingPerson) {
             Card {
@@ -414,7 +441,8 @@ private fun EditScreen(
                     }
                     DarkButton("추가") {
                         if (newPersonName.isNotBlank()) {
-                            onAddPerson(newPersonName, newPersonColor)
+                            // The new person is who the item is for, so it is selected (Claude's choice, TASK-015).
+                            onAddPerson(newPersonName, newPersonColor) { id -> personId = id }
                             newPersonName = ""
                             addingPerson = false
                         }

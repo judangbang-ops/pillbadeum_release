@@ -92,7 +92,8 @@
 
 - TASK-013·041·043의 공통 코드: R2 [PR #19](https://github.com/judangbang-ops/pillbadeum_release/pull/19). 건너뜀 따로 세기, 마지막 복용(복용만)과 늦은 건너뜀 줄, 보충 S-2의 날짜 글자, 주 1회 첫 줄 크게, TalkBack 문장, 기기 시간대 표시. jvm `LabelsTest` 15개와 고친 `StatusBoardTest`가 로컬에서 통과(2026-11-13, CI는 Actions가 멈춰 아직). Claude가 정한 세부는 [기록 규칙 보충 3장·6장의 구현](../04-spec/record-rules-supplement.md)
 - TASK-014 위젯 새 배치: 같은 PR. 09 토큰(`design/base.tokens.json` → `Tokens`, 대상자 색 여섯과 '나'의 파랑), 요일 칩 머리글, 사람 색 칸, 점선·체크·빼기 원, 목록만 스크롤과 아래 화살표, 안내 줄은 머리글 자리, 가장 작은 크기 270×110dp. 배치는 `WidgetLayout`이 위젯 크기와 글자 배율로 정함(한 줄에 둘·하나, 머리글 두 줄, 이름 위 대상자, 화살표). 글자 배율이 바뀌면 위젯을 다시 그림. 시험: jvm `WidgetLayoutTest`·`TokensTest`, 렌더 `WidgetRenderTest` 12개(로컬, [시험 계획 7장](../12-qa/test-plan.md#7-셈-2026-11-12)). 남은 것: 런처 캡처(4×2에 6개, 글자 115%·130% 문턱)는 Actions가 다시 돌면
-- 남은 것: 앱 줄 배치(TASK-016), 알림 본문 첫 줄과 알림 시각의 기기 시간대(R3 PR #20이 들어간 뒤 `ReminderLabels`를 바꿈)
+- TASK-015 대상자 한 명: 같은 PR. 규칙 하나(`showsPeople`, 보관되지 않은 대상자 둘 이상)를 첫 화면·위젯·지난 기록이 같이 씀. 앱 첫 화면은 한 명이면 배지를 그리지 않고, 줄마다 TalkBack이 위젯과 같은 문장(`Labels.spoken`, 앱은 별칭 대신 이름)을 읽고 버튼은 따로 읽힘. 항목 화면은 한 명이면 대상자 칸을 접고 [+ 가족 추가]만 보이며, 그렇게 더한 사람이 바로 골라짐(Claude 선택). 지난 기록의 대상자 고르기는 `HistoryMonth.showPeople`로 숨김 값을 주고 화면은 TASK-019에서 그림. 위젯의 대상자 고르기 화면을 한 명일 때 건너뛰는 것은 TASK-012. 시험: jvm `LabelsTest.rr57_archiving_me_leaves_mom_without_badge_name_or_picker`, 앱 화면 시험 `AppScreenTest` 3개(Robolectric으로 앱을 폭 360dp에 그려 PNG와 의미 트리를 남김, 로컬). 남은 것: 에뮬레이터 캡처와 TalkBack 확인(TASK-030과 함께)
+- 남은 것: 앱 줄 배치(TASK-016), 앱 글의 한글 낱말 갈림(BUG-002, `지워지지 않 / 고`. TASK-016에서 위젯의 `keepWords`를 앱 글에도 씀), 알림 본문 첫 줄과 알림 시각의 기기 시간대(R3 PR #20이 들어간 뒤 `ReminderLabels`를 바꿈)
 
 ### 1.4 앱 화면
 

@@ -4,6 +4,7 @@ import androidx.room3.ConstructedBy
 import androidx.room3.Database
 import androidx.room3.RoomDatabase
 import androidx.room3.RoomDatabaseConstructor
+import androidx.sqlite.SQLiteDriver
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.Dispatchers
@@ -54,12 +55,16 @@ expect object DidITakeDatabaseConstructor : RoomDatabaseConstructor<DidITakeData
  * bundled SQLite (same SQLite version on every platform), the schema migrations and a background
  * query context. There is no destructive fallback: a missing migration fails instead of wiping
  * records (REQ-072).
+ *
+ * [driver] is for tests only: Android screen tests on the JVM (Robolectric) cannot load the bundled SQLite's
+ * Android library and pass the framework driver instead (TASK-015).
  */
 fun buildDidITakeDatabase(
     builder: RoomDatabase.Builder<DidITakeDatabase>,
     queryContext: CoroutineContext = Dispatchers.IO,
+    driver: SQLiteDriver = BundledSQLiteDriver(),
 ): DidITakeDatabase = builder
-    .setDriver(BundledSQLiteDriver())
+    .setDriver(driver)
     .addMigrations(*Migrations.ALL)
     .setQueryCoroutineContext(queryContext)
     .build()

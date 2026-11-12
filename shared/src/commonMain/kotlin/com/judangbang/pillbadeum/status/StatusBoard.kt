@@ -23,6 +23,13 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 
+/**
+ * One rule for the widget, the app screens and history (REQ-018, SPEC-005, SPEC-027, TASK-015): person
+ * badges, the person filters and the person's name in TalkBack sentences appear only while two or more
+ * people are not archived. [activePeople] counts the people that are not archived.
+ */
+fun showsPeople(activePeople: Int): Boolean = activePeople >= 2
+
 /** Read-only snapshot for the widget and the app's "오늘 · 이번 주" screen. */
 data class StatusBoard(
     val now: Instant,
@@ -209,7 +216,7 @@ class LoadStatusBoard(
             items = items,
             restoreNotice = db.settingDao().loadRestoreNotice(),
             clockWarnings = clockWarnings,
-            showPeople = people.size >= 2,
+            showPeople = showsPeople(people.size),
         )
     }
 

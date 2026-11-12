@@ -27,11 +27,12 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | TASK-001 | 패키지 이름(`applicationId`)을 정해 빌드 설정에 넣기. **끝남** (2026-11-12, [PR #4](https://github.com/judangbang-ops/pillbadeum_release/pull/4)) | REQ-061 | `androidApp/build.gradle.kts` | 결정 Q9 (2026-11-12 정함) | Claude | 0.5일 | 정한 이름이 빌드 설정·README에 있고, CI가 만든 디버그 APK의 패키지 이름이 그 이름임 |
 | TASK-002 | 릴리즈 서명과 버전 번호: Gradle `signingConfig`(비밀값은 환경 변수). 서명은 `pull_request`를 받지 않는 `release.yml`에서만 함(main 푸시·`v*` 태그·수동 실행). 그 한 번의 실행에서 업로드 키로 서명한 릴리즈 AAB와 서명하지 않은 개인 APK 원본이 함께 나오고, 개인 APK는 PC 스크립트가 앱 서명 키로 서명함. 개인 APK는 release 변형(디버그 불가)이고 코드 축소(R8)는 1차에 끔. 버전 번호(versionCode)는 빌드한 커밋의 `git rev-list --count HEAD`라 AAB와 개인 APK가 한 수열을 씀. PR에서는 임시 키 서명 시험과 릴리즈 변형 권한 비교를 `ci.yml`에서 함 (검토 A1~A3·B1). 키와 계획은 아래 메모. **끝남** (2026-11-12, [PR #6](https://github.com/judangbang-ops/pillbadeum_release/pull/6)) | REQ-057, REQ-062 | `androidApp/build.gradle.kts`, `.github/workflows/release.yml`(새로)·`ci.yml`, 개인 APK 서명 스크립트(새로) | TASK-001 | Claude | 1.5일 | 두 키의 알고리즘·길이를 `keytool -list -v`로 확인해 아래 메모에 적음(RSA 2048 이상, Play 요건). CI 로그에서 릴리즈 AAB의 인증서 SHA-256 = 업로드 키 지문. 동희님 PC에서 스크립트로 서명한 APK의 `apksigner verify --print-certs` SHA-256 = 앱 서명 키 지문. main의 서로 다른 두 커밋으로 만든 빌드에서 뒤 커밋의 버전 번호가 큼. CI가 개인 APK의 디버그 불가와 릴리즈 변형의 권한 목록을 확인함. 키·비밀번호가 Git과 CI 로그에 없음 |
-| TASK-003 | Room 스키마 2: 알림 규칙·미루기·시계 표식 표와 1→2 마이그레이션(첫 일정 버전의 유효 시작을 등록 창 시작으로 앞당김). 설정 키는 key-value라 쓰는 작업에서 더함 (보충 N-1·N-2·C-1·P-4) | REQ-041, REQ-042, REQ-072, REQ-009 | `reminder_rule`, `reminder_snooze`, `clock_flag`, `schedule_version`, `shared/schemas` | 없음 | Claude | 1.5일 | 스키마 2 JSON이 생기고, 1→2 마이그레이션 테스트가 기존 판정 행을 그대로 남기고 첫 일정 버전의 유효 시작을 옮김 |
+| TASK-003 | Room 스키마 2: 알림 규칙·미루기·시계 표식 표와 1→2 마이그레이션(첫 일정 버전의 유효 시작을 등록 창 시작으로 앞당김). 설정 키는 key-value라 쓰는 작업에서 더함 (보충 N-1·N-2·C-1·P-4). **끝남** (2026-11-12, [PR #8](https://github.com/judangbang-ops/pillbadeum_release/pull/8)) | REQ-041, REQ-042, REQ-072, REQ-009 | `reminder_rule`, `reminder_snooze`, `clock_flag`, `schedule_version`, `shared/schemas` | 없음 | Claude | 1.5일 | 스키마 2 JSON이 생기고, 1→2 마이그레이션 테스트가 기존 판정 행을 그대로 남기고 첫 일정 버전의 유효 시작을 옮김 |
 | TASK-004 | 새 일정 버전의 `late_policy`를 `KEEP`으로 저장 (보충 W-1, 요구 4장 1번). 개인 APK를 나눠 주기 전에 넣음(R0b). 그 사이에 만든 일정 버전이 `ASK`로 남지 않게 하기 위함 (검토 C4). **끝남** (2026-11-12, [PR #7](https://github.com/judangbang-ops/pillbadeum_release/pull/7)) | REQ-010 | `ManageIntakes`, `schedule_version` | 없음 (2026-11-12 확정) | Claude | 0.5일 | 새 항목·주기 변경의 `late_policy` = KEEP. RR-60·RR-62(기준 요일 그대로) JVM 테스트. 기존 테스트 통과 |
 
 진행 메모 (2026-11-12)
 
+- TASK-003: PR #8. 독립 검토(Fable 5.2) 지적에 따라 TASK-005 몫이던 "새 항목의 첫 일정 버전을 등록 창 시작부터"(보충 P-4)도 이 PR에서 함. 스키마 2 빌드와 TASK-005 사이에 만든 항목이 마이그레이션 뒤라 앞당겨지지 않는 틈을 없애려는 것임
 - TASK-001: 결정 Q9의 `com.judangbang.pillbadeum`을 PR #4로 main에 합침(2026-11-12 10:19 KST, `843a737`). CI의 APK 정보에서 패키지 이름을 확인함. 기기 설치는 아직 하지 않음(TASK-047)
 - TASK-033: PR #2로 main에 합침(`da916c6`). PR마다 JVM 테스트, 디버그 APK 빌드, 권한 목록 비교(`androidApp/expected-permissions.txt`, `INTERNET`이 있으면 실패)를 함. 릴리즈 변형의 권한 비교는 TASK-002에서 더함(검토 A3)
 - TASK-002: 요구 4장 2번 확정(10:18)에 따라 키를 둘로 나눔 (릴리즈 서명 키 스레드, 동희님 PC에서 만듦)
@@ -49,7 +50,7 @@
 
 | ID | 작업 | 근거 | 닿는 곳 | 먼저 할 것 | 담당 | 크기 | 끝난 조건 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| TASK-005 | 앱 전용 `RecordInWindow`(일정 버전과 기간키로 창을 정함. 지금 창·끝난 창, 고른 시각)와 시각 고치기(옛 행 무효 `TIME_EDIT` + 새 행), 설정 변경 전 창 막기, 새 항목의 첫 일정 버전을 등록 창 시작부터 (보충 I-1·I-2, P-1~P-6) | REQ-030, REQ-031, REQ-032, REQ-033, REQ-034 | `RecordDose`, `ChangeJudgment`, `ManageIntakes`, `dose_record`, `setting` | TASK-003 | Claude | 2일 | RR-38~44 JVM 테스트 통과(RR-43의 알림 몫은 TASK-027). 위젯·알림의 `RecordCommand`는 지금 창에만 씀 |
+| TASK-005 | 앱 전용 `RecordInWindow`(일정 버전과 기간키로 창을 정함. 지금 창·끝난 창, 고른 시각)와 시각 고치기(옛 행 무효 `TIME_EDIT` + 새 행), 설정 변경 전 창 막기 (보충 I-1·I-2, P-1~P-6). 새 항목의 첫 일정 버전을 등록 창 시작부터 두는 것은 TASK-003(PR #8)에서 함 | REQ-030, REQ-031, REQ-032, REQ-033, REQ-034 | `RecordDose`, `ChangeJudgment`, `ManageIntakes`, `dose_record`, `setting` | TASK-003 | Claude | 2일 | RR-38~44 JVM 테스트 통과(RR-43의 알림 몫은 TASK-027). 위젯·알림의 `RecordCommand`는 지금 창에만 씀 |
 | TASK-006 | 시계가 틀렸던 기록: 표식 남기기(`TIME_SET`·`TIMEZONE_CHANGED`·`BOOT_COMPLETED`, 판정 읽을 때, 지금보다 5분 넘게 뒤), 표시값에 넣기, [그대로 두기]·[기록 취소], 다른 길로 판정이 무효가 되면 표식도 풀기 (보충 C-1~C-3) | REQ-009 | `clock_flag`, `LoadStatusBoard`, `DayBoundaryReceiver` | TASK-003 | Claude | 1일 | RR-19, RR-64~67, RR-88·89 JVM 테스트 통과 |
 | TASK-007 | 지난 기록 읽기 `LoadHistory`(달, 대상자): 그날 유효했던 일정 버전으로 칸 그리기, 칸이 판정을 고르는 법(같은 버전은 기간키, 다른 버전은 시각), 일정을 바꾼 주. 첫 화면의 이번 주 칸도 같은 규칙을 씀 (보충 P-8, S-5) | REQ-037, REQ-038, REQ-039, REQ-040 | `dose_record`, `schedule_version`, `intake`, `person`, `StatusBoard` | 없음 | Claude | 2일 | RR-45, RR-77·78과 빠짐 판정, 등록 전·보관 뒤 칸 없음, 주 1회 창 한 칸, 대상자 거르기 JVM 테스트. 항목 10개·1년치에서 한 달 읽는 시간을 기록 |
 | TASK-008 | 대상자 수정·보관·되살리기, 보관한 대상자의 항목 기록 막기 (검토 B5) | REQ-005, REQ-016, REQ-017, REQ-018 | `ManagePeople`, `RecordDose`, `person` | 없음 | Claude | 1일 | JVM 테스트: 마지막 대상자 보관 거절, 보관한 대상자의 항목이 `LoadStatusBoard`에서 빠지고 지난 판정은 남음, 그 항목의 버튼 탭 → `Gone`(RR-14의 대상자 몫) |
@@ -136,7 +137,7 @@
 flowchart LR
     R0["R0 CI<br/>TASK-033 끝남"] --> R0b["R0b 실사용 전<br/>TASK-001·002·004 끝남, 028, 029, 051"]
     R0b --> P["개인 APK 단계<br/>TASK-047, 7일 이상"]
-    R0b --> R1["R1 공통 규칙<br/>TASK-003, 005~011"]
+    R0b --> R1["R1 공통 규칙<br/>TASK-003 끝남, 005~011"]
     A["계정·테스터<br/>TASK-048, 지금 시작"] --> K["Play 앱·앱 서명 키<br/>TASK-050"]
     R0b --> K
     K -->|가족 폰| P
@@ -153,7 +154,7 @@ flowchart LR
 | R0 CI | TASK-033 | 끝남 | PR마다 테스트·빌드·권한 비교가 돎 |
 | R0b 실사용 전 | TASK-001(끝남), TASK-002(끝남), TASK-004(끝남), TASK-028, TASK-029, TASK-051 | 진행 중 (2026-11-12) | 개인 APK를 나눠 줘도 키·패키지 이름·버전 번호·빌드 변형·백업 때문에 기록을 잃지 않음 (검토 5.1절, 2026-11-12 검토 A1~A4·C4) |
 | 개인 APK 단계 | TASK-047 | R0b 뒤 동희님 폰부터, 가족 폰은 TASK-050 뒤. R1~R4와 함께 감 | 7일 이상의 실사용 기록. 개인 APK → Play 전환 시험은 TASK-038 |
-| R1 공통 규칙 | TASK-003, TASK-005~TASK-011 | R0b 다음 | JVM 테스트로 규칙 보충의 반례가 통과함 |
+| R1 공통 규칙 | TASK-003(끝남), TASK-005~TASK-011 | 진행 중 (2026-11-12, R0b와 함께) | JVM 테스트로 규칙 보충의 반례가 통과함 |
 | R2 위젯·앱 화면 | TASK-044·TASK-042 먼저, TASK-012~TASK-023, TASK-041, TASK-043, TASK-045 | R1 뒤 | 화면별 캡처 |
 | R3 알림·복원 알림 | TASK-024~TASK-027, TASK-040, TASK-052 | R1 뒤, R2와 함께 | 에뮬레이터 확인. 잠금 화면은 실기기(TASK-052) |
 | R4 품질 확인 | TASK-030~TASK-032, TASK-034, TASK-046 | R2·R3 뒤 | QA 보고서 |
@@ -178,7 +179,7 @@ flowchart LR
 - 요구 83개가 모두 작업 하나 이상의 '근거'에 있음. 작업이 없는 Must 요구도 없음 (스크립트)
 - [기록 규칙 보충](../04-spec/record-rules-supplement.md)의 반례 RR-26~89가 모두 어느 작업의 작업 칸이나 끝난 조건에 있음 (스크립트)
 - '먼저 할 것'에 순환이 없고, 가리키는 작업이 모두 표에 있음 (스크립트)
-- 크기 합은 '이상'이 붙은 TASK-039(14일 이상)와 TASK-047(7일 이상)을 빼고 53.0일이고, 그중 끝난 TASK-001·TASK-002·TASK-004·TASK-033이 3.0일임 (스크립트, TASK-004는 2026-11-12 PR #7, TASK-002는 같은 날 PR #6 결과 기록에서 더함). 2026-11-11 초안의 35.5일에서 새 작업 TASK-040~049가 8.0일, 범위 확정과 규칙 보충으로 기존 작업 15개를 0.5일씩 늘린 것이 7.5일, 2026-11-12 검토로 새 작업 TASK-050~052가 1.5일, TASK-002를 0.5일 늘린 것이 0.5일임
+- 크기 합은 '이상'이 붙은 TASK-039(14일 이상)와 TASK-047(7일 이상)을 빼고 53.0일이고, 그중 끝난 TASK-001·TASK-002·TASK-003·TASK-004·TASK-033이 4.5일임 (스크립트, TASK-004는 2026-11-12 PR #7, TASK-002는 같은 날 PR #6 결과 기록, TASK-003은 같은 날 PR #8에서 더함). 2026-11-11 초안의 35.5일에서 새 작업 TASK-040~049가 8.0일, 범위 확정과 규칙 보충으로 기존 작업 15개를 0.5일씩 늘린 것이 7.5일, 2026-11-12 검토로 새 작업 TASK-050~052가 1.5일, TASK-002를 0.5일 늘린 것이 0.5일임
 - 가장 긴 사슬은 TASK-038까지 12.0일임: TASK-003 > TASK-011 > TASK-024 > TASK-025 > TASK-041 > TASK-046 > TASK-032 > TASK-038 ('이상' 작업은 0으로 셈, 스크립트). 달력으로는 TASK-047(7일 이상)과 TASK-048의 계정·테스터 모집, TASK-032의 하룻밤 측정 두 번이 더 길 수 있음
 - API가 없어 '응답마다 테스트' 검사는 해당 없음. 대신 공통 함수의 결과(`RecordResult` 등)마다 화면 상태가 [screens.md](../05-ui/screens.md)에 있음
 - 사람 확인: 담당과 R 단계 순서는 Claude 제안이고 동희님이 아직 보지 않음. 2026-11-12 지시("범위 확정 후 Fable 5.2 독립검토를 거쳐 Opus 5.5 xhigh로 개발 구현 및 배포 파이프라인을 완결하세요")에 따라 독립 검토 뒤 R0b·R1을 이 순서로 시작하고, 바꾸라고 하시면 이 표를 고침. 2026-11-12 검토 반영으로 TASK-004를 R0b로 당기고 TASK-050~052를 더한 것도 Claude 제안임

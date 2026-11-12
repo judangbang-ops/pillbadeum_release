@@ -58,6 +58,14 @@ fun windowOf(rule: ScheduleRule, at: Instant, settings: WindowSettings): Window 
     )
 }
 
+/**
+ * Effective start of an intake's first schedule version (record-rules-supplement.md P-4): the start
+ * of the window, under [rule], that contains the registration instant. Registering in the afternoon
+ * still lets the user record "this morning at 08:00"; anything earlier stays out of reach.
+ */
+fun firstVersionStart(rule: ScheduleRule, registeredAt: Instant, settings: WindowSettings): Instant =
+    windowOf(rule, registeredAt, settings).start
+
 /** Period key format: the window start date as `YYYY-MM-DD`. */
 fun periodKeyOf(windowStartDate: LocalDate): String = windowStartDate.toString()
 

@@ -175,6 +175,7 @@
 
 - **N-1** 항목마다: `reminder_rule(intake_id PK·FK, enabled, start_time)`. 간격·하루 최대·방해 금지는 항목마다 두지 않고 `setting`에 공통으로 둠: `reminder_interval_minutes`(60), `reminder_max_per_day`(3), `quiet_start`(22:00), `quiet_end`(07:00). **원본과 다름**: DidITake 데이터 모델 4장의 `REMINDER_RULE`은 항목마다 간격·최대·방해 금지를 둠. 화면 5장 5번 추천(공통 설정)에 맞춤
 - **N-2** 알림 실행 상태: `setting.reminder_last_run_at`(마지막으로 알림을 계산해 띄운 시각), 미루기 표 `reminder_snooze(intake_id PK, period_key, fire_at)`
+- 공통 메타데이터 (TASK-003, Claude): `reminder_rule`은 사용자 설정이라 `created_at`·`updated_at`·`version`·`device_id`를 둠. 항목을 키로 쓰므로 `id`는 따로 두지 않고, `archived_at` 없이 항목의 보관을 따름. `reminder_snooze`와 C-1의 `clock_flag`는 기기 안의 실행 상태라 `setting`처럼 공통 메타데이터를 두지 않음. **원본과 다름**: 데이터 모델 0장은 `setting` 말고 모든 표에 공통 메타데이터를 둠
 - **N-3** `start_time` 기본값은 항목의 시간대 표시(`slot_label`)를 따름: 아침 08:00, 점심 12:00, 저녁 18:00, 자기 전 21:00, 표시 없음 08:00. 알림은 끔으로 시작함 (요구 4장 3번 검토 의견)
 
 ### 계산 규칙

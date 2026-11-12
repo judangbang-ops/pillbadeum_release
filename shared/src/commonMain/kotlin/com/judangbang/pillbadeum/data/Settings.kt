@@ -22,9 +22,16 @@ object SettingKeys {
  * Stored values are written by the app in a fixed format (`HH:MM`, IANA zone id); a malformed
  * value throws instead of being silently replaced.
  */
-suspend fun SettingDao.loadWindowSettings(): WindowSettings = WindowSettings(
-    dayStart = get(SettingKeys.DAY_START)?.let(LocalTime::parse) ?: WindowSettings.DEFAULT_DAY_START,
-    baseZone = TimeZone.of(get(SettingKeys.BASE_ZONE) ?: WindowSettings.DEFAULT_BASE_ZONE_ID),
+suspend fun SettingDao.loadWindowSettings(): WindowSettings =
+    parseWindowSettings(dayStart = get(SettingKeys.DAY_START), baseZone = get(SettingKeys.BASE_ZONE))
+
+/**
+ * Window settings from the stored `day_start` and `base_zone` values; null means "not stored yet"
+ * and gives the default. A malformed value throws (callers that must not fail catch it).
+ */
+fun parseWindowSettings(dayStart: String?, baseZone: String?): WindowSettings = WindowSettings(
+    dayStart = dayStart?.let(LocalTime::parse) ?: WindowSettings.DEFAULT_DAY_START,
+    baseZone = TimeZone.of(baseZone ?: WindowSettings.DEFAULT_BASE_ZONE_ID),
 )
 
 suspend fun SettingDao.saveWindowSettings(settings: WindowSettings) {

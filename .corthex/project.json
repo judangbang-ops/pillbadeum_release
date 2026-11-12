@@ -61,8 +61,8 @@
     },
     "09-mockup": {
       "human": "github",
-      "link": "https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/05-ui/ui-mockup-v3.html",
-      "note": "가쟈누님 시안 v3 (HTML, DidITake). 디자인 토큰 파일은 없음"
+      "link": "docs/09-mockup/README.md",
+      "note": "2026-11-12 CORTHEX 09 다시 하기: 위젯·첫 화면 후보 A/B를 claude.ai Design 캔버스(https://claude.ai/artifact/QW5JRsx1Zpz5ekeqHmjpKC)에 Pillbox 토큰으로 그림. 방향 확인 전. 가쟈누님 시안 v3(DidITake 7a800ac docs/05-ui/ui-mockup-v3.html)는 참고 자료. DTCG design/base.tokens.json은 방향 확인 뒤 만듦"
     },
     "10-wbs": {
       "human": "github",

@@ -58,8 +58,8 @@ data class HistoryCell(
     val clockWarning: Boolean = false,
     /**
      * The old version's window that a schedule change cut short, kept only to show that version's own
-     * judgment (supplement P-8). SCR-007 offers only [기록 취소] here: [RecordInWindow] treats the window
-     * as the new version's and refuses other writes as stale.
+     * judgment (supplement P-8). SCR-007 offers [기록 취소] and the time edit here; `RecordInWindow.record`
+     * treats the window as the new version's and refuses a judgment change or a new record as stale.
      */
     val cutByScheduleChange: Boolean = false,
 )
@@ -123,7 +123,11 @@ internal class ItemCells(
         val result = LinkedHashMap<LocalDate, List<HistoryCell>>()
         var date = from
         while (date <= to) {
-            val cells = spans.mapNotNull { span -> cellOf(intake, person, span, date, cutoff, records, flagged) }
+            val all = spans.mapNotNull { span -> cellOf(intake, person, span, date, cutoff, records, flagged) }
+            // A cut cell is only there so its judgment stays visible; drop it when another cell of the line
+            // already shows that judgment (a schedule changed and changed back in one window).
+            val shown = all.filterNot { it.cutByScheduleChange }.mapNotNullTo(HashSet()) { it.judgment?.id }
+            val cells = all.filterNot { it.cutByScheduleChange && it.judgment?.id in shown }
             if (cells.isNotEmpty()) result[date] = cells
             date = date.plus(1, DateTimeUnit.DAY)
         }

@@ -57,7 +57,7 @@
 | TASK-008 | 대상자 수정·보관·되살리기, 보관한 대상자의 항목 기록 막기 (검토 B5). **끝남** (2026-11-12, [PR #11](https://github.com/judangbang-ops/pillbadeum_release/pull/11)) | REQ-005, REQ-016, REQ-017, REQ-018 | `ManagePeople`, `RecordDose`, `person` | 없음 | Claude | 1일 | JVM 테스트: 마지막 대상자 보관 거절, 보관한 대상자의 항목이 `LoadStatusBoard`에서 빠지고 지난 판정은 남음, 그 항목의 버튼 탭 → `Gone`(RR-14의 대상자 몫) |
 | TASK-009 | 설정 저장과 '바꾼 때부터 적용', 바꾼 시각을 `window_settings_changed_at`에 남기기 (보충 P-5). **끝남** (2026-11-12, [PR #11](https://github.com/judangbang-ops/pillbadeum_release/pull/11)) | REQ-011, REQ-053 | `setting` | 없음 | Claude | 1일 | RR-15 JVM 테스트 통과. 지난 판정의 기간키가 바뀌지 않음. 하루 시작·기준 시간대를 바꾸면 그 시각이 남음 |
 | TASK-010 | 보관된 항목 완전 삭제 (Could). **끝남** (2026-11-12, [PR #11](https://github.com/judangbang-ops/pillbadeum_release/pull/11)) | REQ-015 | `intake`, `dose_record`, `schedule_version` | 없음 | Claude | 0.5일 | JVM 테스트: 항목·판정 행이 없고, 남은 위젯 버튼은 Gone |
-| TASK-011 | 알림 계획 `PlanReminders`: 격자 칸(칸 0은 창 시작 뒤 처음 오는 시작 시각), 방해 금지 [시작, 끝)(첫 칸은 울림), 창 끝, 미루기(방해 금지여도 울림, 창 끝 뒤는 안 씀), 다음 칸 하나, 밀린 칸 모으기, 저장 때 줄어드는 칸 수 (보충 N-3~N-8, N-12) | REQ-041, REQ-042, REQ-043, REQ-044, REQ-045, REQ-077 | `reminder_rule`, `reminder_snooze`, `setting` | TASK-003 | Claude | 2일 | RR-21, RR-22, RR-46~54, RR-79·80, RR-82~85 JVM 테스트 통과 |
+| TASK-011 | 알림 계획 `PlanReminders`: 격자 칸(칸 0은 창 시작 뒤 처음 오는 시작 시각), 방해 금지 [시작, 끝)(첫 칸은 울림), 창 끝, 미루기(방해 금지여도 울림, 창 끝 뒤는 안 씀), 다음 칸 하나, 밀린 칸 모으기, 저장 때 줄어드는 칸 수 (보충 N-3~N-8, N-12). **끝남** (2026-11-12, [PR #13](https://github.com/judangbang-ops/pillbadeum_release/pull/13)) | REQ-041, REQ-042, REQ-043, REQ-044, REQ-045, REQ-077 | `reminder_rule`, `reminder_snooze`, `setting` | TASK-003 | Claude | 2일 | RR-21, RR-22, RR-46~54, RR-79·80, RR-82~85 JVM 테스트 통과 |
 
 진행 메모 (2026-11-12)
 
@@ -68,6 +68,8 @@
 - TASK-006·007: [PR #12](https://github.com/judangbang-ops/pillbadeum_release/pull/12). Claude가 정한 세부는 [기록 규칙 보충](../04-spec/record-rules-supplement.md) C-3과 P-8의 '구현' 줄에 적음
 - TASK-006: 경고의 [기록 취소]도 첫 화면의 취소(`VoidDose`)와 같은 규칙이라, 설정 변경 전에 끝난 칸의 판정이면 `Locked`이고 [그대로 두기]는 늘 됨(P-5). PR #11 독립 검토가 '고치면 좋은 것'으로 남긴 대로 지금 창 판정 바꾸기(`ChangeJudgment`)도 같은 잠금을 봄
 - TASK-007: 항목 10개·1년치(판정 3,640행)에서 한 달 읽기 12.6 ms와 24.1 ms (JVM 테스트 `ten_items_for_a_year_read_one_month_in_time`, 4코어 클라우드 컨테이너, 2026-11-12 두 번). 휴대폰에서 잰 값은 아님
+- TASK-011: [PR #13](https://github.com/judangbang-ops/pillbadeum_release/pull/13). 계산과 저장만 하고, 안드로이드 알람·알림은 TASK-024·025, 다시 계산을 부르는 곳은 TASK-027. Claude가 정한 세부는 [기록 규칙 보충](../04-spec/record-rules-supplement.md) N-13 아래 '구현' 줄에 적음. 독립 검토에서 늦은 알람이 다시 계산 때 빠지는 경로가 나와 `reminder_alarm_at`으로 고침(N-12)
+- PR #12 재검토의 '고치면 좋은 것'도 PR #13에서 함: 일정을 바꿨다가 같은 창 안에서 되돌리면 지난 기록 한 줄에 같은 판정이 두 번 보이던 것, 보충 P-8의 잘린 칸 설명과 한계 한 줄
 
 ### 1.3 위젯
 
@@ -100,11 +102,11 @@
 
 | ID | 작업 | 근거 | 닿는 곳 | 먼저 할 것 | 담당 | 크기 | 끝난 조건 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| TASK-024 | 알림 예약기: 모든 항목의 다음 칸 하나만 예약(정확 알람이 허용되면 정확, 아니면 비정확), 울리면 밀린 칸을 항목마다 알림 하나로 (보충 N-8) | REQ-041, REQ-042, REQ-048, REQ-052 | `androidApp` 알람 | TASK-011 | Claude | 1.5일 | 허용·거부 두 경우의 `dumpsys alarm`에서 이 앱의 반복 알림 알람이 하나(하루 경계 알람은 따로 있음). RR-54 (에뮬레이터). 병합 매니페스트에 `USE_EXACT_ALARM` 없음 |
+| TASK-024 | 알림 예약기: 모든 항목의 다음 칸 하나만 예약(정확 알람이 허용되면 정확, 아니면 비정확), 울리면 밀린 칸을 항목마다 알림 하나로 (보충 N-8) | REQ-041, REQ-042, REQ-048, REQ-052 | `androidApp` 알람 | TASK-011 | Claude | 1.5일 | 허용·거부 두 경우의 `dumpsys alarm`에서 이 앱의 반복 알림 알람이 하나(하루 경계 알람은 따로 있음). RR-54 (에뮬레이터). 병합 매니페스트에 `USE_EXACT_ALARM` 없음. `nextAlarm`·`fire`가 돌려준 시각을 지난 시각이어도 그대로 예약하고 null이면 지움(보충 N-13 '구현'의 앱이 지킬 순서) |
 | TASK-025 | 알림 표시와 버튼(먹었어·30분 뒤·건너뜀), 떠 있는 알림 지우기, 잠금 화면에서 이름을 숨기는 방법(공개용 판으로 안 되면 다른 방법, 검토 B6)과 이름 숨김이면 버튼 없음, 버튼 수신기 보호 (보충 N-7·N-13, 화면 5장 6번) | REQ-004, REQ-027, REQ-043, REQ-045, REQ-046, REQ-076, REQ-081 | SCR-003, 알림 버튼 수신기 | TASK-024, TASK-044 | Claude | 2일 | 버튼마다 판정 행 확인, RR-23, RR-51·52, RR-85~87(RR-85는 버튼 숨김 몫). 이름 표시 끔·켬 × 잠금·해제 × 기기 설정 두 가지 여덟 칸 에뮬레이터 캡처(실기기는 TASK-052). 수신기 `exported="false"`, PendingIntent `FLAG_IMMUTABLE` |
 | TASK-026 | 권한 안내: 알림 권한, 정확 알람, 배터리 최적화. 분 단위 약속 없이 "알림이 늦을 수 있어요" (검토 B1, 보충 N-11) | REQ-048, REQ-049, REQ-050, REQ-051 | SCR-004#permission, SCR-006#permission, SCR-009 | 없음 | Claude | 1일 | 권한 거부 → 안내 → 버튼 → 시스템 화면 (에뮬레이터 캡처). 앱 문구에 분 단위 약속이 없음 |
-| TASK-027 | 다시 계산: 판정·항목·대상자·알림 설정·하루 시작·기준 시간대가 바뀐 뒤, 재부팅·시각 변경·시간대 변경·업데이트 뒤. 밀린 칸은 알람·재부팅·시각 변경 때만 모음 (보충 N-9·N-10·N-12, P-7, 검토 B5) | REQ-043, REQ-044, REQ-047 | `DayBoundaryReceiver`, 알림 예약기 | TASK-024 | Claude | 1일 | RR-18, RR-43의 알림 몫, RR-55~58, RR-81 (에뮬레이터. 재부팅 실기기는 TASK-032) |
-| TASK-040 | 복원 뒤 알림: [확인했어요] 전에는 복용 알림 대신 복원 안내 알림 하나, 확인 뒤 알림 다시 계산 (보충 R-3의 알림 몫) | REQ-047, REQ-073 | SCR-003#restored, 알림 예약기 | TASK-027, TASK-029 | Claude | 0.5일 | RR-30(알림 몫), RR-33, RR-73 (에뮬레이터 복원) |
+| TASK-027 | 다시 계산: 판정·항목·대상자·알림 설정·하루 시작·기준 시간대가 바뀐 뒤, 재부팅·시각 변경·시간대 변경·업데이트 뒤. 밀린 칸은 알람·재부팅·시각 변경 때만 모음 (보충 N-9·N-10·N-12, P-7, 검토 B5) | REQ-043, REQ-044, REQ-047 | `DayBoundaryReceiver`, 알림 예약기 | TASK-024 | Claude | 1일 | RR-18, RR-43의 알림 몫, RR-55~58, RR-81 (에뮬레이터. 재부팅 실기기는 TASK-032). 알람이 늦는 동안 기록해도 그 칸이 뜸(보충 N-12 늦은 알람, `PlanRemindersTest`의 늦은 알람 두 경우를 에뮬레이터로) |
+| TASK-040 | 복원 뒤 알림: [확인했어요] 전에는 복용 알림 대신 복원 안내 알림 하나, 확인 뒤 알림 다시 계산 (보충 R-3의 알림 몫) | REQ-047, REQ-073 | SCR-003#restored, 알림 예약기 | TASK-027, TASK-029 | Claude | 0.5일 | RR-30(알림 몫), RR-33, RR-73 (에뮬레이터 복원). 확인 전에는 복원된 지난 `reminder_alarm_at` 때문에 복용 알림이 뜨지 않음: 복원을 감지할 때 그 키를 지우거나 확인 전에는 `fire`를 부르지 않음(보충 N-12 늦은 알람, PR #13 재검토) |
 
 ### 1.6 백업
 
@@ -148,7 +150,7 @@
 flowchart LR
     R0["R0 CI<br/>TASK-033 끝남"] --> R0b["R0b 실사용 전<br/>TASK-001·002·004·028·029 끝남, 051"]
     R0b --> P["개인 APK 단계<br/>TASK-047, 7일 이상"]
-    R0b --> R1["R1 공통 규칙<br/>TASK-003·005·008~010 끝남, 006, 007, 011"]
+    R0b --> R1["R1 공통 규칙<br/>TASK-003·005~011 끝남"]
     A["계정·테스터<br/>TASK-048, 지금 시작"] --> K["Play 앱·앱 서명 키<br/>TASK-050"]
     R0b --> K
     K -->|가족 폰| P
@@ -165,7 +167,7 @@ flowchart LR
 | R0 CI | TASK-033 | 끝남 | PR마다 테스트·빌드·권한 비교가 돎 |
 | R0b 실사용 전 | TASK-001(끝남), TASK-002(끝남), TASK-004(끝남), TASK-028(끝남), TASK-029(끝남), TASK-051 | 진행 중 (2026-11-12) | 개인 APK를 나눠 줘도 키·패키지 이름·버전 번호·빌드 변형·백업 때문에 기록을 잃지 않음 (검토 5.1절, 2026-11-12 검토 A1~A4·C4) |
 | 개인 APK 단계 | TASK-047 | R0b 뒤 동희님 폰부터, 가족 폰은 TASK-050 뒤. R1~R4와 함께 감 | 7일 이상의 실사용 기록. 개인 APK → Play 전환 시험은 TASK-038 |
-| R1 공통 규칙 | TASK-003(끝남), TASK-005~TASK-010(끝남), TASK-011 | 진행 중 (2026-11-12, R0b와 함께) | JVM 테스트로 규칙 보충의 반례가 통과함 |
+| R1 공통 규칙 | TASK-003(끝남), TASK-005~TASK-011(끝남) | 끝남 (2026-11-12, PR #8·#11·#12·#13) | JVM 테스트로 규칙 보충의 반례가 통과함 |
 | R2 위젯·앱 화면 | TASK-044·TASK-042 먼저, TASK-012~TASK-023, TASK-041, TASK-043, TASK-045 | R1 뒤 | 화면별 캡처 |
 | R3 알림·복원 알림 | TASK-024~TASK-027, TASK-040, TASK-052 | R1 뒤, R2와 함께 | 에뮬레이터 확인. 잠금 화면은 실기기(TASK-052) |
 | R4 품질 확인 | TASK-030~TASK-032, TASK-034, TASK-046 | R2·R3 뒤 | QA 보고서 |

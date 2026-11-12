@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 디버그 빌드에만 들어감 (androidApp/src/debug). 릴리즈 변형의 병합 매니페스트에는 없음.
+     에뮬레이터 알림 확인(scripts/emulator/reminder_check.py)이 항목 화면(TASK-023, R2) 대신 알림 켠 항목을 만듦.
+     exported="false"라서 root 셸(adb root)만 부를 수 있음. 부르는 명령은 스크립트에 있음. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <receiver
+            android:name=".debug.ReminderSeedReceiver"
+            android:exported="false" />
+    </application>
+
+</manifest>

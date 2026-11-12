@@ -1,0 +1,108 @@
+# 에뮬레이터에서 복용 알림을 확인함 (TASK-024·025·027·040, 릴리즈 단계 R3).
+# 알람 하나(정확·비정확), 잠금 화면 여덟 칸, 버튼, 놓친 알람, 복원 안내, 재부팅, 창 끝.
+# 경우와 기대 동작은 scripts/emulator/reminder_check.py 첫 주석. 실기기 확인은 TASK-032·052.
+#
+# - 사람이 시킬 때만 돎(실행마다 약 40분 × API 수, 무료 분 한도): PR에 라벨 `emulator-reminders`를 붙이면 그 PR로
+#   API 34 하나, 수동 실행(main에 합친 뒤)은 고른 API들(기본 34·36·30·26). PR 자동 실행은 이번 푸시가 바꾼 파일로
+#   정하는 gate(PR #18, .github/scripts/push_gate.py)가 합쳐진 뒤 그 방식으로 붙임. on.pull_request.paths만 쓰면
+#   알림 코드를 한 번 바꾼 PR은 문서만 고친 푸시에도 다시 돎
+# - 서명 키·비밀값을 쓰지 않음. 디버그 APK로 확인함 (항목 화면 TASK-023 대신 디버그 빌드 전용 수신기로 알림 켠 항목을 만듦)
+# - Android SDK·에뮬레이터는 러너에 있는 sdkmanager로 받음(.github/actions/android-emulator). 서드파티 액션을 쓰지 않음
+name: 에뮬레이터 알림 확인
+
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+    inputs:
+      apis:
+        description: API 수준 목록 (JSON 배열)
+        required: false
+        default: "[34, 36, 30, 26]"
+
+permissions:
+  contents: read
+
+# 다른 라벨을 붙인 실행이 돌고 있는 확인을 취소하지 않게 라벨 이름을 그룹에 넣음
+concurrency:
+  group: reminder-emulator-${{ github.event.pull_request.number || github.ref }}-${{ github.event.label.name || 'dispatch' }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    name: 디버그 APK
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'emulator-reminders'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: gradle/actions/wrapper-validation@0723195856401067f7a2779048b490ace7a47d7c # v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: 디버그 APK (./gradlew :androidApp:assembleDebug)
+        run: ./gradlew :androidApp:assembleDebug
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: reminder-apk
+          path: androidApp/build/outputs/apk/debug/androidApp-debug.apk
+          retention-days: 1
+          overwrite: true
+          if-no-files-found: error
+
+  reminders:
+    name: 알림 (API ${{ matrix.api }})
+    needs: apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # 34: 기준. 36: 가장 새 Android(알림 묶음 규칙이 바뀜). 30: 정확 알람 권한이 없는 Android 11.
+        # 26: 알림 권한·정확 알람 권한이 없는 가장 낮은 지원 버전
+        api: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.apis || '[34]') }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: reminder-apk
+          path: ${{ runner.temp }}/apk
+
+      # KVM, 시스템 이미지, AVD를 준비하고 부팅을 기다림 (백업·복원 확인과 같은 액션). 시계를 바꾸므로 코어 4개
+      - uses: ./.github/actions/android-emulator
+        with:
+          api: ${{ matrix.api }}
+          cores: "4"
+
+      - name: 알림 확인 (scripts/emulator/reminder_check.py)
+        run: |
+          python3 scripts/emulator/reminder_check.py \
+            --apk "$RUNNER_TEMP/apk/androidApp-debug.apk" \
+            --out "$RUNNER_TEMP/reminders-${{ matrix.api }}"
+
+      - name: 결과 표
+        if: ${{ !cancelled() }}
+        run: |
+          report="$RUNNER_TEMP/reminders-${{ matrix.api }}/report.md"
+          if [ -f "$report" ]; then cat "$report" >> "$GITHUB_STEP_SUMMARY"; else echo "보고서 없음" >> "$GITHUB_STEP_SUMMARY"; fi
+          cp "$RUNNER_TEMP/emulator.log" "$RUNNER_TEMP/reminders-${{ matrix.api }}/" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() }}
+        with:
+          name: reminders-api${{ matrix.api }}
+          path: ${{ runner.temp }}/reminders-${{ matrix.api }}/
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: ignore

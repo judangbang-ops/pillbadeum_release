@@ -49,6 +49,36 @@ object Labels {
     /** `08:02` */
     fun time(at: Instant, zone: TimeZone): String = hhmm(at.toLocalDateTime(zone))
 
+    /** `11/09 21:40` (restore notice, screens.md SCR-001#restored, SCR-004#restored) */
+    fun monthDayTime(at: Instant, zone: TimeZone): String {
+        val local = at.toLocalDateTime(zone)
+        return "${local.date.month.ordinal + 1}/${local.date.day.toString().padStart(2, '0')} ${hhmm(local)}"
+    }
+
+    /** Same-phone advice (REQ-074), also on first start and when adding a person. */
+    const val ONE_PHONE: String = "한 약은 한 휴대폰에서 기록해 주세요"
+
+    /**
+     * Widget line under the header while a restore notice is pending (SCR-001#restored):
+     * `복원됨 · 마지막 기록 11/09 21:40 · 앱에서 확인`. With no restored record the middle part is
+     * `기록 없음` (Claude default, the screens do not cover that case).
+     */
+    fun restoreWidgetLine(notice: RestoreNotice, zone: TimeZone): String {
+        val last = notice.lastRecordAt?.let { "마지막 기록 ${monthDayTime(it, zone)}" } ?: NO_RECORD
+        return "복원됨 · $last · 앱에서 확인"
+    }
+
+    /**
+     * App notice at the top of the first screen (SCR-004#restored, REQ-073, REQ-074). With no
+     * restored record the second sentence says so (Claude default).
+     */
+    fun restoreAppNotice(notice: RestoreNotice, zone: TimeZone): String {
+        val last = notice.lastRecordAt
+            ?.let { "마지막 기록은 ${monthDayTime(it, zone)}이에요. 그 뒤의 기록은 없을 수 있어요." }
+            ?: "복원된 복용 기록이 없어요. 다른 휴대폰에서 한 기록은 없을 수 있어요."
+        return "백업에서 복원했어요. $last $ONE_PHONE"
+    }
+
     /** `n / m 완료` */
     fun count(board: StatusBoard): String = "${board.doneCount} / ${board.totalCount} 완료"
 

@@ -1,13 +1,16 @@
 package com.judangbang.pillbadeum
 
 import com.judangbang.pillbadeum.data.DidITakeDatabase
-import com.judangbang.pillbadeum.data.loadOrCreateDeviceId
 import com.judangbang.pillbadeum.data.loadWindowSettings
 import com.judangbang.pillbadeum.domain.DoseKind
 import com.judangbang.pillbadeum.domain.DoseSource
 import com.judangbang.pillbadeum.domain.UuidV7
 import com.judangbang.pillbadeum.domain.WindowSettings
 import com.judangbang.pillbadeum.domain.nextDayBoundary
+import com.judangbang.pillbadeum.restore.AcknowledgeRestore
+import com.judangbang.pillbadeum.restore.CheckInstall
+import com.judangbang.pillbadeum.restore.InstallMarker
+import com.judangbang.pillbadeum.restore.InstallState
 import com.judangbang.pillbadeum.status.LoadStatusBoard
 import com.judangbang.pillbadeum.usecase.ArchiveIntake
 import com.judangbang.pillbadeum.usecase.ManagePeople
@@ -25,11 +28,15 @@ import kotlinx.datetime.TimeZone
  * instance per process with [open] and only calls these members; all writes go through them.
  *
  * @param deviceZone device time zone at input time (stored as `zone_id`); windows never use it.
+ * @property installState what [open] found: a restore is detected here, before any write
+ *   (record-rules-supplement.md R-1, R-2). Platform code re-creates widgets and alarms on
+ *   [InstallState.Restored] (R-4).
  */
 class DidITakeCore private constructor(
     val db: DidITakeDatabase,
     val clock: Clock,
     val deviceId: String,
+    val installState: InstallState,
     ids: UuidV7,
     private val deviceZone: () -> TimeZone,
 ) {
@@ -39,6 +46,7 @@ class DidITakeCore private constructor(
     val archiveIntake: ArchiveIntake = ArchiveIntake(db, clock)
     val people: ManagePeople = ManagePeople(db, clock, ids, deviceId)
     val loadStatusBoard: LoadStatusBoard = LoadStatusBoard(db, clock)
+    val acknowledgeRestore: AcknowledgeRestore = AcknowledgeRestore(db)
 
     /** Records TAKEN for [intakeId] from [source], checked against [renderedPeriodKey]. */
     suspend fun record(intakeId: String, source: DoseSource, renderedPeriodKey: String?): RecordResult =
@@ -59,15 +67,20 @@ class DidITakeCore private constructor(
     suspend fun nextDayBoundary(): Instant = nextDayBoundary(clock.now(), windowSettings())
 
     companion object {
-        /** Loads or creates the device id and the default person "나". */
+        /**
+         * Checks for a restore with [installMarker] (and so loads or creates the device id), then
+         * makes sure the default person "나" exists.
+         */
         suspend fun open(
             db: DidITakeDatabase,
+            installMarker: InstallMarker,
             clock: Clock = Clock.System,
             deviceZone: () -> TimeZone = { TimeZone.currentSystemDefault() },
         ): DidITakeCore {
             val ids = UuidV7(clock)
-            val deviceId = db.settingDao().loadOrCreateDeviceId(ids)
-            return DidITakeCore(db, clock, deviceId, ids, deviceZone).also { it.people.ensureDefault() }
+            val install = CheckInstall(db, clock, ids, installMarker)()
+            return DidITakeCore(db, clock, install.deviceId, install.state, ids, deviceZone)
+                .also { it.people.ensureDefault() }
         }
     }
 }

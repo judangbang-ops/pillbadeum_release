@@ -4,6 +4,8 @@ import com.judangbang.pillbadeum.data.DidITakeDatabase
 import com.judangbang.pillbadeum.data.DoseRecordEntity
 import com.judangbang.pillbadeum.data.PersonEntity
 import com.judangbang.pillbadeum.data.ScheduleParams
+import com.judangbang.pillbadeum.data.SettingDao
+import com.judangbang.pillbadeum.data.SettingKeys
 import com.judangbang.pillbadeum.data.loadWindowSettings
 import com.judangbang.pillbadeum.domain.ScheduleRule
 import com.judangbang.pillbadeum.domain.SlotLabel
@@ -13,6 +15,7 @@ import com.judangbang.pillbadeum.domain.dailyWindowOn
 import com.judangbang.pillbadeum.domain.logicalDateOf
 import com.judangbang.pillbadeum.domain.mondayToSunday
 import com.judangbang.pillbadeum.domain.windowOf
+import com.judangbang.pillbadeum.restore.CheckInstall
 import com.judangbang.pillbadeum.usecase.findActiveIn
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -27,6 +30,8 @@ data class StatusBoard(
     /** Monday..Sunday of the week containing [baseDate]. */
     val week: List<LocalDate>,
     val items: List<IntakeStatus>,
+    /** Shown until [확인했어요] after a restore (supplement R-3, REQ-073); null otherwise. */
+    val restoreNotice: RestoreNotice? = null,
 ) {
     val doneCount: Int get() = items.count { it.isDone }
     val totalCount: Int get() = items.size
@@ -77,6 +82,21 @@ enum class DayState {
 data class DayCell(val date: LocalDate, val state: DayState, val isToday: Boolean)
 
 /**
+ * Restore notice state (supplement R-2, R-3).
+ *
+ * @property lastRecordAt latest active judgment before the restore was detected; null when the
+ *   restored database held none.
+ */
+data class RestoreNotice(val lastRecordAt: Instant?)
+
+/** Reads the restore notice settings; null unless `restore_notice_pending` = 1. */
+suspend fun SettingDao.loadRestoreNotice(): RestoreNotice? {
+    if (get(SettingKeys.RESTORE_NOTICE_PENDING) != CheckInstall.PENDING) return null
+    val last = get(SettingKeys.RESTORE_NOTICE_LAST_RECORD_AT)?.toLongOrNull()
+    return RestoreNotice(last?.let(Instant::fromEpochMilliseconds))
+}
+
+/**
  * Builds the [StatusBoard] from the database at the injected clock's time. Archived intakes are
  * excluded; their records stay in the database.
  */
@@ -111,7 +131,7 @@ class LoadStatusBoard(
                 weekCells = if (rule is ScheduleRule.Daily) weekCells(intake.id, week, baseDate, settings) else emptyList(),
             )
         }
-        return StatusBoard(now, settings, baseDate, week, items)
+        return StatusBoard(now, settings, baseDate, week, items, db.settingDao().loadRestoreNotice())
     }
 
     private suspend fun weekCells(

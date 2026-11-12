@@ -151,6 +151,13 @@ interface DoseRecordDao {
     )
     suspend fun findLastActiveBefore(intakeId: String, before: Long): DoseRecordEntity?
 
+    /**
+     * `taken_at` of the latest active judgment of any intake taken before [before], or null.
+     * Restore notice "마지막 기록" (supplement R-2): judgments a wrong clock put in the future are left out.
+     */
+    @Query("SELECT MAX(taken_at) FROM dose_record WHERE active = 1 AND taken_at < :before")
+    suspend fun latestActiveTakenAtBefore(before: Long): Long?
+
     @Query("SELECT * FROM dose_record WHERE id = :id")
     suspend fun findById(id: String): DoseRecordEntity?
 

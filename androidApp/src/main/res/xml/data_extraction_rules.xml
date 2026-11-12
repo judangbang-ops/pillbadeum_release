@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Backup rules for Android 12 and later (android:dataExtractionRules). Android 11 and earlier
+    read backup_rules.xml. TASK-028, REQ-055, docs/04-spec/record-rules-supplement.md B-1 to B-3.
+
+    - Only the record database and its companion files (B-1). Nothing else is backed up or moved.
+    - cloud-backup: skipped when the phone cannot encrypt the backup, i.e. no screen lock
+      (disableIfNoEncryptionCapabilities="true"). Decision Q16 (2026-11-12).
+    - device-transfer: not sent to a server, so it runs with or without a screen lock
+      (official Auto Backup guide).
+-->
+<data-extraction-rules>
+    <cloud-backup disableIfNoEncryptionCapabilities="true">
+        <include domain="database" path="diditake.db" />
+        <include domain="database" path="diditake.db-wal" />
+        <include domain="database" path="diditake.db-journal" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="database" path="diditake.db" />
+        <include domain="database" path="diditake.db-wal" />
+        <include domain="database" path="diditake.db-journal" />
+    </device-transfer>
+</data-extraction-rules>

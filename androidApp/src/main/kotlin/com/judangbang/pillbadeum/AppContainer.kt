@@ -2,15 +2,20 @@ package com.judangbang.pillbadeum
 
 import android.app.Application
 import android.content.Context
+import android.util.Log
+import com.judangbang.pillbadeum.boundary.DayBoundaryAlarm
 import com.judangbang.pillbadeum.data.DidITakeDatabase
 import com.judangbang.pillbadeum.data.buildDidITakeDatabase
 import com.judangbang.pillbadeum.data.didITakeDatabaseBuilder
+import com.judangbang.pillbadeum.restore.FileInstallMarker
+import com.judangbang.pillbadeum.restore.InstallState
 import com.judangbang.pillbadeum.status.WidgetModel
 import com.judangbang.pillbadeum.widget.WidgetUpdater
 import kotlin.time.Clock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -41,9 +46,31 @@ class AppContainer(private val context: Context, private val clock: Clock) {
     @Volatile
     private var core: DidITakeCore? = null
 
-    /** Opens the core on first use (device id + default person "나"). */
+    /**
+     * Opens the core on first use: restore check with the install marker (device id), default
+     * person "나". Every entry (app, widget, alarm, boot) comes through here first (supplement R-1).
+     */
     suspend fun core(): DidITakeCore = core ?: mutex.withLock {
-        core ?: DidITakeCore.open(database, clock).also { core = it }
+        core ?: DidITakeCore.open(database, FileInstallMarker.of(context), clock).also {
+            core = it
+            if (it.installState is InstallState.Restored) rebuildAfterRestore()
+        }
+    }
+
+    /**
+     * Supplement R-4, REQ-056: a restored install has no alarms and its widgets were drawn before
+     * the check. Runs after [core] is set, so the work below can call [core] again.
+     */
+    private fun rebuildAfterRestore() {
+        appScope.launch {
+            try {
+                Log.i(TAG, "restore detected: refreshing widgets and the day-boundary alarm")
+                WidgetUpdater.updateAll(context)
+                DayBoundaryAlarm.scheduleNext(context)
+            } catch (e: Exception) {
+                Log.e(TAG, "rebuild after restore failed", e)
+            }
+        }
     }
 
     suspend fun widgetModel(): WidgetModel = WidgetModel.from(core().loadStatusBoard())
@@ -51,5 +78,9 @@ class AppContainer(private val context: Context, private val clock: Clock) {
     /** Called after every write so every widget re-renders from the database. */
     suspend fun afterWrite() {
         WidgetUpdater.updateAll(context)
+    }
+
+    private companion object {
+        const val TAG = "AppContainer"
     }
 }

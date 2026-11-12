@@ -56,7 +56,7 @@ NOTICE = "백업에서 복원했어요"
 
 
 def run(args: list[str], check: bool = True, timeout: int = 120) -> str:
-    proc = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+    proc = subprocess.run(args, capture_output=True, text=True, errors="replace", timeout=timeout)
     out = (proc.stdout or "") + (proc.stderr or "")
     if check and proc.returncode != 0:
         raise RuntimeError(f"{' '.join(args)} -> {proc.returncode}\n{out}")
@@ -121,8 +121,11 @@ BOUNDS = re.compile(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]")
 
 
 # A system app that stalls on a slow emulator (seen: "System UI isn't responding" on API 34, 2026-11-12)
-# puts an ANR dialog over every app, so the screen below cannot be read. Such a dialog is closed with [Wait].
+# puts an ANR dialog over every app, so the screen below cannot be read. Such a dialog is closed with [Wait]
+# and listed in the report. Our own app not responding is a failure, never closed.
 ANR_TITLE = "isn't responding"
+APP_LABEL = "DidITake"  # app_name in androidApp/src/main/res/values/strings.xml
+CLOSED_DIALOGS: list[str] = []
 
 
 def dump_ui() -> list[Node]:
@@ -142,9 +145,12 @@ def dump_ui() -> list[Node]:
             nodes.append(Node(el.get("text", ""), el.get("content-desc", ""), el.get("class", ""),
                               tuple(int(v) for v in m.groups()), el.get("resource-id", "")))
         title = next((n.text for n in nodes if ANR_TITLE in n.text), None)
+        if title is not None and (APP_LABEL in title or PKG in title):
+            raise RuntimeError(f"the app is not responding (ANR dialog): {title}")
         wait = next((n for n in nodes if n.text == "Wait"), None)
         if title is None or wait is None:
             return nodes
+        CLOSED_DIALOGS.append(title)
         print(f"[note] closed a system dialog with [Wait]: {title}", flush=True)
         tap(wait)
     if nodes:
@@ -459,8 +465,11 @@ class Report:
         for case, expected, actual, ok in self.rows:
             cell = lambda s: s.replace("|", "\\|").replace("\n", " ")
             lines.append(f"| {cell(case)} | {cell(expected)} | {cell(actual)} | {'통과' if ok else '**실패**'} |")
-        if self.notes:
-            lines += ["", *[f"- {n}" for n in self.notes]]
+        notes = list(self.notes)
+        if CLOSED_DIALOGS:
+            notes.append(f"[Wait]로 닫은 시스템 ANR 대화상자 {len(CLOSED_DIALOGS)}번: {', '.join(sorted(set(CLOSED_DIALOGS)))}")
+        if notes:
+            lines += ["", *[f"- {n}" for n in notes]]
         (self.out / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -675,8 +684,11 @@ def main() -> int:
         except Exception:
             pass
     finally:
-        (args.out / f"api{api}-logcat.txt").write_text(adb("logcat", "-d", check=False, timeout=60), encoding="utf-8")
         r.write()
+        try:
+            (args.out / f"api{api}-logcat.txt").write_text(adb("logcat", "-d", check=False, timeout=60), encoding="utf-8")
+        except Exception as exc:  # the report is already written; a missing logcat must not hide it
+            print(f"[note] logcat not saved: {exc}", flush=True)
     return 1 if r.failed else 0
 
 

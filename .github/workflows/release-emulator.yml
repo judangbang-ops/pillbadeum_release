@@ -5,10 +5,25 @@
 # 경우와 기대 동작은 scripts/emulator/release_check.py 첫 주석.
 #
 # - 업로드 키·앱 서명 키·Secrets를 쓰지 않음. 임시 키는 서명 단계 안에서만 만들고 지움
-# - 개인 APK를 나눠 주기 전에 main에서 수동 실행함. PR에서는 이 확인의 코드가 바뀔 때만 돎(실행마다 약 25분)
+# - main에서는 release.yml과 같은 앱 빌드 경로가 바뀐 푸시마다 돎. 그래서 개인 APK로 서명할 main 커밋에는
+#   이 확인의 결과가 있음(Actions의 그 커밋 실행). PR에서는 빌드 설정과 이 확인의 코드가 바뀔 때만 돎
+# - 실행마다 약 10분(2026-11-12 실측, APK 둘 약 3분 + 에뮬레이터 약 7분)
 name: 릴리즈 변형 에뮬레이터 확인
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "androidApp/**"
+      - "shared/**"
+      - "gradle/**"
+      - "*.gradle.kts"
+      - "gradle.properties"
+      - "gradlew"
+      - "gradlew.bat"
+      - "scripts/emulator/**"
+      - ".github/actions/android-emulator/**"
+      - ".github/workflows/release-emulator.yml"
   pull_request:
     paths:
       - androidApp/build.gradle.kts
@@ -83,9 +98,18 @@ jobs:
             "$build_tools/apksigner" sign --ks "$key" --ks-type PKCS12 --ks-key-alias release-check \
               --ks-pass env:TEST_KEY_PASSWORD --key-pass env:TEST_KEY_PASSWORD --v4-signing-enabled false \
               --out "$out" "$in"
-            "$build_tools/apksigner" verify --print-certs "$out" | grep -E 'certificate (DN|SHA-256)|Number of signers' || true
+            # 서명 뒤 확인 (sign-personal-apk.ps1과 같은 조건): 서명자 1명, v2·v3 서명, 정렬, 패키지 정보.
+            # 파이프 대신 변수와 here-string을 써서 grep이 일찍 끝나도 pipefail에 걸리지 않게 함
+            verify="$("$build_tools/apksigner" verify --verbose --print-certs "$out")"
+            grep -E 'certificate (DN|SHA-256)|Number of signers|Verified using v[0-9.]+ scheme' <<< "$verify"
+            grep -qx 'Number of signers: 1' <<< "$verify"
+            grep -q '^Verified using v2 scheme .*: true$' <<< "$verify"
+            grep -q '^Verified using v3 scheme .*: true$' <<< "$verify"
             "$build_tools/zipalign" -c -P 16 4 "$out"
-            "$build_tools/aapt2" dump badging "$out" | sed -n 1p
+            badging="$("$build_tools/aapt2" dump badging "$out")"
+            sed -n 1p <<< "$badging"
+            grep -q "^package: name='com.judangbang.pillbadeum' versionCode='$code' " <<< "$badging"
+            if grep -q 'application-debuggable' <<< "$badging"; then echo "디버그 가능한 APK"; exit 1; fi
           done
 
       - uses: actions/upload-artifact@v6
@@ -100,7 +124,7 @@ jobs:
     name: 릴리즈 변형 (API 34)
     needs: apks
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
         with:
@@ -117,11 +141,14 @@ jobs:
 
       - name: 릴리즈 변형 확인 (scripts/emulator/release_check.py)
         shell: bash
+        env:
+          # PR이면 PR 머리 커밋과 실제로 빌드한 main 합침 커밋을 함께 적음
+          COMMIT: ${{ github.event_name == 'pull_request' && format('{0} (PR 머리 {1})', github.sha, github.event.pull_request.head.sha) || github.sha }}
         run: |
           apks=($(ls "$RUNNER_TEMP"/apk/release-*.apk | sort -V))
           test "${#apks[@]}" = 2
           python3 scripts/emulator/release_check.py --apk "${apks[0]}" --next-apk "${apks[1]}" \
-            --out "$RUNNER_TEMP/release-check"
+            --out "$RUNNER_TEMP/release-check" --commit "$COMMIT"
 
       - name: 결과 표
         if: ${{ !cancelled() }}

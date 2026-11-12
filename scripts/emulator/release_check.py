@@ -42,6 +42,7 @@ from backup_restore_check import (
     adb,
     add_item,
     api_level,
+    backup_entries,
     backup_now,
     become_root,
     describe,
@@ -50,12 +51,15 @@ from backup_restore_check import (
     find,
     install,
     launch_app,
+    only_db_files,
+    package_result,
     read_state,
     screen_has,
     set_transport_params,
     setup_transport,
     sh,
     short,
+    show_entries,
     tap,
     tap_text,
     uninstall,
@@ -146,7 +150,7 @@ def open_full_widget_picker(r: Report, tag: str, w: int, h: int) -> int:
     go_home()
     sh(f"input swipe {w // 2} {h // 2} {w // 2} {h // 2} 1500")
     tap_text("Widgets", 10)
-    search = find("Search", 5)
+    search = next((n for n in dump_ui() if n.cls.endswith("EditText") and "Search" in (n.text + n.desc)), None)
     if search is not None:
         tap(search)
         sh(f"input text {WIDGET_LABEL}")
@@ -170,7 +174,11 @@ def open_full_widget_picker(r: Report, tag: str, w: int, h: int) -> int:
         sh(f"input swipe {w // 2} {h * 3 // 4} {w // 2} {h // 2} 1000")
         time.sleep(1)
         header = next((n for n in dump_ui() if n.text == WIDGET_LABEL and not n.cls.endswith("EditText")), None)
-    return header.bounds[3] if header is not None else 0
+        if header is None:
+            # Without the row the previews of other apps could be taken for ours.
+            save_ui(r, f"{tag}-picker-scrolled")
+            raise RuntimeError(f"the '{WIDGET_LABEL}' row scrolled out of the picker")
+    return header.bounds[3]
 
 
 def place_widget(r: Report, tag: str) -> None:
@@ -259,30 +267,38 @@ def run_flow(apk: Path, next_apk: Path, r: Report) -> None:
     widget = try_place_widget(r, "n")
     shown, source = record(r, ITEM_A, widget)
     tapped = read_state()
-    r.check("위젯 탭 기록 (릴리즈 N)", "활성 판정 1, source WIDGET",
-            f"위젯에 {ITEM_A} {'보임' if shown else '없음'}; 활성 판정 {tapped.active_records}, source {tapped.sources}",
-            shown and tapped.active_records == 1 and tapped.sources == ["WIDGET"])
     old_id = tapped.settings.get("device_id")
+    r.check("위젯 탭 기록 (릴리즈 N)", "활성 판정 1, source WIDGET, device_id·표식 있음",
+            f"위젯에 {ITEM_A} {'보임' if shown else '없음'}; 활성 판정 {tapped.active_records}, source {tapped.sources}, "
+            f"device_id {short(old_id)}, 표식 {short(tapped.marker)}",
+            shown and tapped.active_records == 1 and tapped.sources == ["WIDGET"]
+            and bool(old_id) and tapped.marker == old_id)
 
     # 3. RR-26: back up -> uninstall -> install -> the record comes back
     wipe_backup()
     set_transport_params("is_encrypted=true")
     out = backup_now()
-    r.note(f"bmgr backupnow (is_encrypted=true): {out.strip().splitlines()[-1] if out.strip() else ''}")
+    entries = backup_entries()
+    r.check("B-1 릴리즈 변형 백업에 든 파일 (암호화 있음)", "앱 백업이 성공하고 기록 DB와 짝 파일만",
+            f"{package_result(out) or '앱 줄 없음'}; {show_entries(entries)}",
+            "with result: Success" in package_result(out) and only_db_files(entries))
     uninstall()
     time.sleep(2)
     install(apk)
     restored = read_state()
-    r.check("RR-26 백업 → 지우고 다시 설치 (릴리즈 N)", f"기록 1건(source {source})이 돌아옴",
+    r.check("RR-26 백업 → 지우고 다시 설치 (릴리즈 N)", f"기록 1건(source {source})이 돌아옴, 표식 없음",
             describe(restored) + f", source {restored.sources}",
-            restored.active_records == 1 and restored.sources == [source])
+            restored.active_records == 1 and restored.sources == [source] and restored.marker is None
+            and restored.settings.get("device_id") == old_id)
     launch_app()
     notice = screen_has(NOTICE, 10)
     r.shot("restored-notice")
     after = read_state()
-    r.check("복원 뒤 첫 실행 (릴리즈 N)", "복원 안내, restored_from = 옛 device_id",
+    new_id = after.settings.get("device_id")
+    r.check("복원 뒤 첫 실행 (릴리즈 N)", "복원 안내, 새 device_id = 표식, restored_from = 옛 device_id",
             f"안내 {'보임' if notice else '없음'}; {describe(after)}",
-            notice and after.settings.get("restored_from_device_id") == old_id)
+            notice and bool(old_id) and after.settings.get("restored_from_device_id") == old_id
+            and bool(new_id) and new_id != old_id and after.marker == new_id)
 
     # Supplement R-3, widget part: uninstalling took the first widget off the home screen. Add the second
     # item and place a widget again while the notice is pending: the widget shows the short restore line
@@ -296,15 +312,22 @@ def run_flow(apk: Path, next_apk: Path, r: Report) -> None:
         r.check("복원 뒤 위젯 (보충 R-3)", f"머리글 아래 '{RESTORED_LINE} · … · 앱에서 확인' 줄",
                 line.text if line else "줄 없음", line is not None and "앱에서 확인" in line.text)
     launch_app()
-    tap_text("확인했어요")
-    time.sleep(2)
+    if notice:
+        tap_text("확인했어요")
+        time.sleep(2)
     if widget:
         go_home()
         end = time.time() + 15
-        while screen_has(RESTORED_LINE) and time.time() < end:
+        while True:
+            texts = [n.text for n in dump_ui()]
+            on_screen_item = any(ITEM_A in t for t in texts)
+            line_left = any(RESTORED_LINE in t for t in texts)
+            if (on_screen_item and not line_left) or time.time() >= end:
+                break
             time.sleep(1)
-        gone = not screen_has(RESTORED_LINE)
-        r.check("[확인했어요] 뒤 위젯 (RR-33 위젯 몫)", "복원 줄이 사라짐", "사라짐" if gone else "남아 있음", gone)
+        r.check("[확인했어요] 뒤 위젯 (RR-33 위젯 몫)", f"위젯에 {ITEM_A}가 보이고 복원 줄이 사라짐",
+                f"위젯 {ITEM_A} {'보임' if on_screen_item else '없음'}, 복원 줄 {'남아 있음' if line_left else '없음'}",
+                on_screen_item and not line_left)
     set_transport_params("")
 
     # 4. N+1 over N
@@ -317,6 +340,7 @@ def run_flow(apk: Path, next_apk: Path, r: Report) -> None:
             f"versionCode {version_n} → {version_next}; {describe(updated)}",
             version_next > version_n > 0
             and updated.active_records == before_update.active_records == 1
+            and bool(before_update.settings.get("device_id")) and bool(before_update.marker)
             and updated.settings.get("device_id") == before_update.settings.get("device_id")
             and updated.marker == before_update.marker)
 
@@ -340,6 +364,7 @@ def main() -> int:
     parser.add_argument("--apk", required=True, type=Path, help="release APK, version N")
     parser.add_argument("--next-apk", required=True, type=Path, help="same key, version N+1")
     parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument("--commit", default="", help="commit the APKs were built from, for the report")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
 
@@ -354,7 +379,8 @@ def main() -> int:
     sh("svc power stayon true", check=False)
     sh("settings put system screen_off_timeout 1800000", check=False)
     setup_transport()
-    r.note(f"기기: API {api}, {sh('getprop ro.product.model').strip()}, APK {args.apk.name} → {args.next_apk.name}")
+    r.note(f"기기: API {api}, {sh('getprop ro.product.model').strip()}, APK {args.apk.name} → {args.next_apk.name}"
+           + (f", 커밋 {args.commit}" if args.commit else ""))
     try:
         ensure_transport(r)
         run_flow(args.apk, args.next_apk, r)
@@ -366,8 +392,11 @@ def main() -> int:
         except Exception:
             pass
     finally:
-        (args.out / f"api{api}-logcat.txt").write_text(adb("logcat", "-d", check=False, timeout=60), encoding="utf-8")
         r.write()
+        try:
+            (args.out / f"api{api}-logcat.txt").write_text(adb("logcat", "-d", check=False, timeout=60), encoding="utf-8")
+        except Exception as exc:  # the report is already written; a missing logcat must not hide it
+            print(f"[note] logcat not saved: {exc}", flush=True)
     return 1 if r.failed else 0
 
 

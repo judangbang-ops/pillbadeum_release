@@ -3,7 +3,9 @@
 # 서명한 Play용 AAB를 만들고 서명 인증서·버전 번호·debuggable·정렬·권한 목록을 확인함.
 # pull_request는 받지 않음. PR에서는 ci.yml이 그 실행에서만 쓰는 임시 키로 같은 서명 경로를 시험함 (독립 검토 B1).
 # 이 저장소는 비공개·무료 플랜이라 브랜치 보호와 Environment 비밀값을 쓸 수 없어(API 403),
-# '업로드 키는 main·태그·수동 실행에서만'은 이 파일의 트리거로만 지킴.
+# '업로드 키는 main에 들어간 코드에만'은 이 파일의 트리거와 '빌드할 커밋이 main 이력 안에 있는지' 검사로 지킴.
+# 다른 브랜치에서 수동 실행하거나 main 밖 커밋에 v* 태그를 달면 빌드 전에 멈춤(독립 검토 2026-11-12).
+# 쓰기 권한이 있는 사람이 브랜치에서 이 파일 자체를 고쳐 수동 실행하는 것은 막지 못함.
 # 앱 서명 키는 GitHub에 없음. 개인 APK는 여기서 받은 APK를 동희님 PC에서 scripts/sign-personal-apk.ps1로 서명함.
 name: 릴리즈 빌드
 
@@ -55,10 +57,16 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: 버전 번호 (빌드한 커밋까지의 커밋 수)
+      - name: main 이력 확인과 버전 번호 (빌드한 커밋까지의 커밋 수)
         shell: bash
         run: |
           test "$(git rev-parse --is-shallow-repository)" = false
+          # 업로드 키는 main에 들어간 커밋에만 씀. main 밖 커밋의 버전 번호는 main의 다른 커밋과 겹치거나 앞설 수 있음
+          git rev-parse --verify --quiet refs/remotes/origin/main > /dev/null
+          if ! git merge-base --is-ancestor HEAD refs/remotes/origin/main; then
+            echo "::error::빌드할 커밋 $(git rev-parse --short HEAD)($GITHUB_REF)이 main 이력 안에 없음. 릴리즈 빌드는 main에 합친 커밋에서만 함"
+            exit 1
+          fi
           count="$(git rev-list --count HEAD)"
           echo "versionCode: $count ($(git rev-parse --short HEAD))"
           echo "PILLBADEUM_VERSION_CODE=$count" >> "$GITHUB_ENV"
@@ -68,7 +76,9 @@ jobs:
         id: apk
         run: ./gradlew :androidApp:assembleRelease
 
-      # 업로드 키는 이 단계 안에서만 파일로 꺼내고 끝나면 지움. 비밀번호·별칭은 이 단계의 환경 변수로만 넘김.
+      # 업로드 키는 이 단계 안에서만 파일로 꺼내고 끝나면 지움. 비밀번호는 이 단계의 환경 변수로만 넘김.
+      # 별칭(upload)은 공개값이라 여기 적음. Secret ANDROID_UPLOAD_KEY_ALIAS로 넘기면 이 작업 로그의 'upload'가
+      # 모두 ***로 가려짐(actions/***-artifact 등). 업로드 키를 Play에서 재설정하면 별칭과 UPLOAD_CERT_SHA256을 함께 고침
       # --no-daemon: 비밀값을 받은 Gradle 프로세스가 단계 뒤에 남지 않게 함
       # --no-configuration-cache: 비밀번호가 설정 캐시 파일에 들어가지 않게 함
       - name: 업로드 키로 릴리즈 AAB 서명 (./gradlew :androidApp:bundleRelease)
@@ -76,10 +86,10 @@ jobs:
         env:
           UPLOAD_KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
           PILLBADEUM_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD }}
-          PILLBADEUM_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+          PILLBADEUM_KEY_ALIAS: upload
         run: |
-          if [ -z "$UPLOAD_KEYSTORE_BASE64" ] || [ -z "$PILLBADEUM_KEYSTORE_PASSWORD" ] || [ -z "$PILLBADEUM_KEY_ALIAS" ]; then
-            echo "::error::GitHub Secrets ANDROID_UPLOAD_KEYSTORE_BASE64·ANDROID_UPLOAD_KEYSTORE_PASSWORD·ANDROID_UPLOAD_KEY_ALIAS 중 빈 값이 있음"
+          if [ -z "$UPLOAD_KEYSTORE_BASE64" ] || [ -z "$PILLBADEUM_KEYSTORE_PASSWORD" ]; then
+            echo "::error::GitHub Secrets ANDROID_UPLOAD_KEYSTORE_BASE64·ANDROID_UPLOAD_KEYSTORE_PASSWORD 중 빈 값이 있음"
             exit 1
           fi
           umask 077

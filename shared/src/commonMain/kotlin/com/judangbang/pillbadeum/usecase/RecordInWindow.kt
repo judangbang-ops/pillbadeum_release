@@ -7,6 +7,8 @@ import com.judangbang.pillbadeum.data.DidITakeDatabase
 import com.judangbang.pillbadeum.data.DoseRecordDao
 import com.judangbang.pillbadeum.data.DoseRecordEntity
 import com.judangbang.pillbadeum.data.ScheduleParams
+import com.judangbang.pillbadeum.data.SettingEntity
+import com.judangbang.pillbadeum.data.SettingKeys
 import com.judangbang.pillbadeum.data.loadWindowSettings
 import com.judangbang.pillbadeum.data.loadWindowSettingsChangedAt
 import com.judangbang.pillbadeum.domain.DoseKind
@@ -16,6 +18,7 @@ import com.judangbang.pillbadeum.domain.UuidV7
 import com.judangbang.pillbadeum.domain.Window
 import com.judangbang.pillbadeum.domain.WindowSettings
 import com.judangbang.pillbadeum.domain.cellHolding
+import com.judangbang.pillbadeum.domain.windowOf
 import com.judangbang.pillbadeum.domain.windowWithKey
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -125,7 +128,7 @@ class RecordInWindow(
 
     private suspend fun TransactionScope<WindowWriteResult>.record(command: WindowCommand, now: Instant): WindowWriteResult {
         if (!isActiveIntake(command.intakeId)) return WindowWriteResult.Gone
-        val context = loadContext(command.intakeId, command.renderedAt) ?: return WindowWriteResult.Stale
+        val context = loadContext(command.intakeId, command.renderedAt, now) ?: return WindowWriteResult.Stale
         val (spans, settings, changedAt) = context
 
         val span = spans.firstOrNull { it.versionId == command.scheduleVersionId } ?: return WindowWriteResult.Stale
@@ -145,13 +148,17 @@ class RecordInWindow(
             }
         }
 
-        val dao = db.doseRecordDao()
-        val actives = dao.activeIn(command.intakeId, window)
         val replaced = command.replacing?.let { id ->
-            actives.firstOrNull { it.id == id } ?: return WindowWriteResult.Stale
+            db.doseRecordDao().activeIn(command.intakeId, window).firstOrNull { it.id == id } ?: return WindowWriteResult.Stale
         }
-        if (replaced != null && replaced.kind == command.kind) return WindowWriteResult.Already(replaced)
-        actives.firstOrNull { it.id != replaced?.id }?.let { return WindowWriteResult.Already(it) }
+        if (replaced != null) {
+            if (replaced.kind == command.kind) return WindowWriteResult.Already(replaced)
+            // The replaced row may belong to another cell (another version's, or a key from before a
+            // day-start change); that cell must be open too (P-5).
+            if (isLocked(ownWindowOf(replaced, spans, settings), changedAt)) return WindowWriteResult.Locked
+        }
+        conflictFor(command.intakeId, span, window, takenAt, spans, settings, excluding = replaced?.id)
+            ?.let { return WindowWriteResult.Already(it) }
 
         if (replaced != null) voidOrRollBack(replaced, now, VoidReasons.CHANGED)
         val record = newRow(command.intakeId, span, window, command.kind, takenAt, command.deviceZoneId, now)
@@ -165,27 +172,31 @@ class RecordInWindow(
         if (!isActiveIntake(old.intakeId)) return WindowWriteResult.Gone
         // A skip has no time on screen (P-3); it is changed with [record] and `replacing` instead.
         if (old.kind != DoseKind.TAKEN) return WindowWriteResult.Error("only a dose has a time to edit (${old.id})")
-        val context = loadContext(old.intakeId, command.renderedAt) ?: return WindowWriteResult.Stale
+        val context = loadContext(old.intakeId, command.renderedAt, now) ?: return WindowWriteResult.Stale
         val (spans, settings, changedAt) = context
 
         val source = spans.firstOrNull { it.versionId == old.scheduleVersionId }
             ?: return WindowWriteResult.Error("judgment ${old.id} points at a missing schedule version")
-        val sourceWindow = windowWithKey(source.rule, old.periodKey, settings)
+        val sourceWindow = ownWindowOf(old, spans, settings)
             ?: return WindowWriteResult.Error("judgment ${old.id} has a period key its version cannot produce")
         if (isLocked(sourceWindow, changedAt)) return WindowWriteResult.Locked
 
         val t = command.newTakenAt
         if (t > now) return WindowWriteResult.InvalidTime(InvalidTimeReason.FUTURE)
-        val (target, window) = cellHolding(t, spans, preferred = source, settings)
-            ?: return WindowWriteResult.InvalidTime(InvalidTimeReason.BEFORE_SCHEDULE)
+        // P-6: the dose stays in its own cell while that cell holds the new time; otherwise it goes to
+        // the cell of the version in effect at that time.
+        val (target, window) = if (t in sourceWindow && source.owns(sourceWindow)) {
+            source to sourceWindow
+        } else {
+            cellHolding(t, spans, settings) ?: return WindowWriteResult.InvalidTime(InvalidTimeReason.BEFORE_SCHEDULE)
+        }
         if (isLocked(window, changedAt)) return WindowWriteResult.Locked
 
         val sameCell = target.versionId == old.scheduleVersionId && window.periodKey == old.periodKey
         if (sameCell && t.toEpochMilliseconds() == old.takenAt) return WindowWriteResult.Unchanged
 
         // P-6, REQ-031: another active judgment in the new time's window blocks the edit.
-        db.doseRecordDao().activeIn(old.intakeId, window)
-            .firstOrNull { it.id != old.id }
+        conflictFor(old.intakeId, target, window, t, spans, settings, excluding = old.id)
             ?.let { return WindowWriteResult.Already(it) }
 
         voidOrRollBack(old, now, VoidReasons.TIME_EDIT)
@@ -196,10 +207,20 @@ class RecordInWindow(
 
     private data class Context(val spans: List<ScheduleSpan>, val settings: WindowSettings, val changedAt: Instant?)
 
-    /** Spans and settings, or null when the settings changed after the screen was drawn (P-5). */
-    private suspend fun loadContext(intakeId: String, renderedAt: Instant): Context? {
+    /**
+     * Spans and settings, or null when the settings changed after the screen was drawn (P-5).
+     *
+     * A change time after now means the clock was ahead when the settings were saved. It is rewritten to
+     * now, like `reminder_last_run_at` (N-12); otherwise every app write would stay stale until that time.
+     * Now is the earliest the change can be known to have happened, so this locks more, never less.
+     */
+    private suspend fun loadContext(intakeId: String, renderedAt: Instant, now: Instant): Context? {
         val settingDao = db.settingDao()
-        val changedAt = settingDao.loadWindowSettingsChangedAt()
+        var changedAt = settingDao.loadWindowSettingsChangedAt()
+        if (changedAt != null && changedAt > now) {
+            settingDao.upsert(SettingEntity(SettingKeys.WINDOW_SETTINGS_CHANGED_AT, now.toEpochMilliseconds().toString()))
+            changedAt = now
+        }
         if (changedAt != null && changedAt > renderedAt) return null
         val spans = db.scheduleVersionDao().listByIntake(intakeId)
             .filter { it.archivedAt == null }
@@ -222,7 +243,45 @@ class RecordInWindow(
     }
 
     /** P-5: a window that ended before the last settings change cannot be written. */
-    private fun isLocked(window: Window, changedAt: Instant?): Boolean = changedAt != null && window.end <= changedAt
+    private fun isLocked(window: Window?, changedAt: Instant?): Boolean =
+        window != null && changedAt != null && window.end <= changedAt
+
+    /** The cell a judgment was written to: its version's window with its period key, under today's settings. */
+    private fun ownWindowOf(record: DoseRecordEntity, spans: List<ScheduleSpan>, settings: WindowSettings): Window? {
+        val span = spans.firstOrNull { it.versionId == record.scheduleVersionId } ?: return null
+        return windowWithKey(span.rule, record.periodKey, settings)
+    }
+
+    /**
+     * The first active judgment that blocks writing a row at [takenAt] into the cell ([span], [window])
+     * (P-6, REQ-031), other than [excluding]:
+     * - one the current-window lookup finds for [window] (period key or time, record-rules.md 5), and
+     * - for every other version that owns a window holding [takenAt], that version's own judgment of that
+     *   window. In the week a schedule changed, the old daily cells and the new weekly cell overlap; this
+     *   keeps an old cell from being filled after the new cell has its own judgment, which would leave two
+     *   judgments in the new window and make the result depend on the order of the writes.
+     */
+    private suspend fun conflictFor(
+        intakeId: String,
+        span: ScheduleSpan,
+        window: Window,
+        takenAt: Instant,
+        spans: List<ScheduleSpan>,
+        settings: WindowSettings,
+        excluding: String?,
+    ): DoseRecordEntity? {
+        val dao = db.doseRecordDao()
+        dao.activeIn(intakeId, window).firstOrNull { it.id != excluding }?.let { return it }
+        for (other in spans) {
+            if (other.versionId == span.versionId) continue
+            val otherWindow = windowOf(other.rule, takenAt, settings)
+            if (!other.owns(otherWindow)) continue
+            dao.activeIn(intakeId, otherWindow)
+                .firstOrNull { it.id != excluding && it.scheduleVersionId == other.versionId && it.periodKey == otherWindow.periodKey }
+                ?.let { return it }
+        }
+        return null
+    }
 
     private fun pickedTimeProblem(picked: Instant, window: Window, now: Instant): WindowWriteResult? = when {
         picked > now -> WindowWriteResult.InvalidTime(InvalidTimeReason.FUTURE)

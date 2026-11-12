@@ -4,10 +4,12 @@ import com.judangbang.pillbadeum.data.ScheduleParams
 import com.judangbang.pillbadeum.domain.DoseKind
 import com.judangbang.pillbadeum.domain.DoseSource
 import com.judangbang.pillbadeum.domain.ScheduleRule
+import com.judangbang.pillbadeum.domain.UuidV7
 import com.judangbang.pillbadeum.domain.WindowSettings
 import com.judangbang.pillbadeum.testing.DbFixture
 import com.judangbang.pillbadeum.testing.SEOUL
 import com.judangbang.pillbadeum.testing.TEST_DEVICE_ID
+import com.judangbang.pillbadeum.testing.ZeroRandom
 import com.judangbang.pillbadeum.testing.seoul
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -326,6 +328,122 @@ class RecordInWindowTest {
         val moved = assertIs<WindowWriteResult.Recorded>(inWindow.editTime(edit(tuesday.id, seoul("2026-11-11T11:00")))).record
         assertEquals(weekly, moved.scheduleVersionId)
         assertEquals("2026-11-09", moved.periodKey)
+    }
+
+    @Test
+    fun in_the_week_a_schedule_changed_the_order_of_writes_does_not_matter() = runTest {
+        val intake = fx.newIntake()
+        fx.changeSchedule(intake, ScheduleRule.Weekly(DayOfWeek.MONDAY), at = seoul("2026-11-11T10:00"))
+        val (daily, weekly) = versionIds(intake)
+        fx.at("2026-11-11T11:00")
+
+        // The new weekly cell first: the old daily cells of that week can no longer be filled.
+        val week = assertIs<WindowWriteResult.Recorded>(inWindow.record(cell(intake, "2026-11-09", DoseKind.TAKEN, version = weekly))).record
+        assertEquals(
+            WindowWriteResult.Already(week),
+            inWindow.record(cell(intake, "2026-11-10", DoseKind.TAKEN, takenAt = seoul("2026-11-10T08:00"), version = daily)),
+        )
+        assertEquals(WindowWriteResult.Already(week), inWindow.record(cell(intake, "2026-11-09", DoseKind.SKIPPED, version = daily)))
+        assertEquals(listOf(week.id), fx.activeRows(intake).map { it.id })
+        // The weekly judgment can still be changed: nothing else sits in its window.
+        assertIs<WindowWriteResult.Recorded>(inWindow.editTime(edit(week.id, seoul("2026-11-11T10:30"))))
+    }
+
+    @Test
+    fun in_the_week_a_schedule_changed_old_cells_fill_first_and_then_count_for_the_new_cell() = runTest {
+        val intake = fx.newIntake()
+        fx.changeSchedule(intake, ScheduleRule.Weekly(DayOfWeek.MONDAY), at = seoul("2026-11-11T10:00"))
+        val (daily, weekly) = versionIds(intake)
+        fx.at("2026-11-11T11:00")
+
+        val monday = assertIs<WindowWriteResult.Recorded>(
+            inWindow.record(cell(intake, "2026-11-09", DoseKind.TAKEN, takenAt = seoul("2026-11-09T08:00"), version = daily)),
+        ).record
+        assertIs<WindowWriteResult.Recorded>(
+            inWindow.record(cell(intake, "2026-11-10", DoseKind.TAKEN, takenAt = seoul("2026-11-10T08:00"), version = daily)),
+        )
+        // record-rules.md 8: a record of the old schedule inside the new window completes it.
+        assertEquals(WindowWriteResult.Already(monday), inWindow.record(cell(intake, "2026-11-09", DoseKind.TAKEN, version = weekly)))
+    }
+
+    @Test
+    fun replacing_a_judgment_whose_own_cell_is_locked_is_refused() = runTest {
+        val intake = fx.newIntake()
+        fx.at("2026-11-01T12:00")
+        settings.saveWindowSettings(WindowSettings(dayStart = LocalTime(6, 0)))
+        fx.at("2026-11-10T05:00") // before 06:00: the 11-09 window
+        val early = assertIs<RecordResult.Recorded>(fx.record(intake, renderedKey = "2026-11-09")).record
+        fx.at("2026-11-10T12:00")
+        settings.saveWindowSettings(WindowSettings(dayStart = LocalTime(4, 0)))
+
+        // Under 04:00 the open 11-10 cell holds 05:00, but the row's own cell (11-09) ended before the change.
+        fx.at("2026-11-11T10:00")
+        assertEquals(
+            WindowWriteResult.Locked,
+            inWindow.record(cell(intake, "2026-11-10", DoseKind.SKIPPED, replacing = early.id)),
+        )
+        assertEquals(listOf(early.id), fx.activeRows(intake).map { it.id })
+    }
+
+    @Test
+    fun a_dose_in_a_locked_cell_cannot_move_to_an_open_one_or_be_cancelled() = runTest {
+        val intake = fx.newIntake()
+        fx.at("2026-11-09T08:00")
+        val dayBefore = assertIs<RecordResult.Recorded>(fx.record(intake, renderedKey = "2026-11-09")).record
+        fx.at("2026-11-10T12:00")
+        settings.saveWindowSettings(WindowSettings(dayStart = LocalTime(6, 0)))
+        fx.at("2026-11-11T10:00")
+
+        assertEquals(WindowWriteResult.Locked, inWindow.editTime(edit(dayBefore.id, seoul("2026-11-10T20:00"))))
+        assertEquals(VoidResult.Locked, fx.voidDose(dayBefore.id))
+        assertEquals(listOf(dayBefore), fx.history(intake))
+    }
+
+    @Test
+    fun a_cell_ending_exactly_at_the_settings_change_is_locked() = runTest {
+        val intake = fx.newIntake()
+        fx.at("2026-11-11T05:00")
+        settings.saveWindowSettings(WindowSettings(dayStart = LocalTime(5, 0)))
+        fx.at("2026-11-11T10:00")
+        // Under 05:00 the 11-10 window ends at 11-11 05:00, the change time itself.
+        assertEquals(WindowWriteResult.Locked, inWindow.record(cell(intake, "2026-11-10", DoseKind.SKIPPED)))
+        assertIs<WindowWriteResult.Recorded>(inWindow.record(cell(intake, "2026-11-11", DoseKind.SKIPPED)))
+    }
+
+    @Test
+    fun a_failed_insert_rolls_back_the_void() = runTest {
+        // Every id is the same while the clock stands still, so the new row clashes with the old one.
+        val sameIds = RecordInWindow(fx.db, fx.clock, UuidV7(fx.clock, ZeroRandom), TEST_DEVICE_ID)
+        val intake = fx.newIntake()
+        fx.at("2026-11-11T09:00")
+        val skip = assertIs<WindowWriteResult.Recorded>(sameIds.record(cell(intake, "2026-11-10", DoseKind.SKIPPED))).record
+        fx.at("2026-11-11T09:01")
+        val dose = assertIs<WindowWriteResult.Recorded>(
+            sameIds.record(cell(intake, "2026-11-11", DoseKind.TAKEN, takenAt = seoul("2026-11-11T08:00"))),
+        ).record
+
+        fx.at("2026-11-11T09:30")
+        val first = assertIs<WindowWriteResult.Recorded>(
+            sameIds.record(cell(intake, "2026-11-10", DoseKind.TAKEN, takenAt = seoul("2026-11-10T21:00"), replacing = skip.id)),
+        ).record
+        // Same clock: the next row would get `first.id` again.
+        assertIs<WindowWriteResult.Error>(sameIds.editTime(edit(first.id, seoul("2026-11-10T20:00"))))
+        assertIs<WindowWriteResult.Error>(
+            sameIds.record(cell(intake, "2026-11-10", DoseKind.SKIPPED, replacing = first.id)),
+        )
+        assertEquals(setOf(first.id, dose.id), fx.activeRows(intake).map { it.id }.toSet(), "the voids were rolled back")
+    }
+
+    @Test
+    fun a_settings_change_saved_with_the_clock_ahead_does_not_block_writes_forever() = runTest {
+        val intake = fx.newIntake()
+        fx.at("2026-11-13T09:00") // clock two days ahead
+        settings.saveWindowSettings(WindowSettings(dayStart = LocalTime(5, 0)))
+        fx.at("2026-11-11T10:00") // corrected
+
+        assertIs<WindowWriteResult.Recorded>(inWindow.record(cell(intake, "2026-11-11", DoseKind.TAKEN)))
+        assertEquals(seoul("2026-11-11T10:00"), settings.windowSettingsChangedAt(), "rewritten to now")
+        assertEquals(WindowWriteResult.Locked, inWindow.record(cell(intake, "2026-11-10", DoseKind.SKIPPED)))
     }
 
     @Test

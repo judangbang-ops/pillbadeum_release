@@ -7,9 +7,11 @@ import com.judangbang.pillbadeum.data.IntakeEntity
 import com.judangbang.pillbadeum.data.ScheduleParams
 import com.judangbang.pillbadeum.data.ScheduleVersionEntity
 import com.judangbang.pillbadeum.data.loadWindowSettings
+import com.judangbang.pillbadeum.data.loadWindowSettingsChangedAt
 import com.judangbang.pillbadeum.domain.UuidV7
 import com.judangbang.pillbadeum.domain.Window
 import com.judangbang.pillbadeum.domain.windowOf
+import com.judangbang.pillbadeum.domain.windowWithKey
 import kotlin.time.Instant
 
 /** Result of the first checks of record-rules.md section 6, shared by every judgment writer. */
@@ -80,4 +82,17 @@ internal fun WindowLookup.Open.newJudgment(
         updatedAt = nowMillis,
         deviceId = deviceId,
     )
+}
+
+/**
+ * P-5: [record]'s own cell (its version's window with its period key, under today's settings) ended before
+ * the last day-start or base-zone change, so it cannot be changed. A change time after [now] counts as now
+ * (the clock was ahead when it was saved). Inside the caller's transaction.
+ */
+internal suspend fun DidITakeDatabase.isLockedJudgment(record: DoseRecordEntity, now: Instant): Boolean {
+    val changedAt = settingDao().loadWindowSettingsChangedAt() ?: return false
+    val version = scheduleVersionDao().findById(record.scheduleVersionId) ?: return false
+    val window = windowWithKey(ScheduleParams.toRule(version), record.periodKey, settingDao().loadWindowSettings())
+        ?: return false
+    return window.end <= minOf(changedAt, now)
 }

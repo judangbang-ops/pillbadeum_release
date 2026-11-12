@@ -139,6 +139,9 @@ interface ScheduleVersionDao {
     )
     suspend fun findOpen(intakeId: String): ScheduleVersionEntity?
 
+    @Query("SELECT * FROM schedule_version WHERE id = :id")
+    suspend fun findById(id: String): ScheduleVersionEntity?
+
     /** Every version of one intake, oldest first (history and tests). */
     @Query("SELECT * FROM schedule_version WHERE intake_id = :intakeId ORDER BY effective_from, id")
     suspend fun listByIntake(intakeId: String): List<ScheduleVersionEntity>

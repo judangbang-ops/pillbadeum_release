@@ -35,15 +35,14 @@ fun windowWithKey(rule: ScheduleRule, periodKey: String, settings: WindowSetting
 }
 
 /**
- * The cell that holds [at] for a time edit (supplement P-4, P-6): the window of [preferred] (the
- * edited judgment's own version) when that version owns it, then the version in effect at [at], then
- * any other version, newest first. Null when no version owns the window holding [at], e.g. before
- * the first version started (P-4).
+ * The cell that holds [at] when a dose moves out of its own cell (supplement P-4, P-6): the version in
+ * effect at [at] when it owns the window holding [at], otherwise any version that owns its window holding
+ * [at], newest first (the window holding a schedule change is the new version's, P-8). Null when no
+ * version owns one, e.g. before the first version started (P-4).
  */
-fun cellHolding(at: Instant, spans: List<ScheduleSpan>, preferred: ScheduleSpan?, settings: WindowSettings): Pair<ScheduleSpan, Window>? {
+fun cellHolding(at: Instant, spans: List<ScheduleSpan>, settings: WindowSettings): Pair<ScheduleSpan, Window>? {
     val inEffect = spans.filter { it.from <= at && (it.to == null || at < it.to) }
-    val order = listOfNotNull(preferred) + inEffect + spans.sortedByDescending { it.from }
-    for (span in order) {
+    for (span in inEffect + spans.sortedByDescending { it.from }) {
         val window = windowOf(span.rule, at, settings)
         if (span.owns(window)) return span to window
     }

@@ -45,4 +45,7 @@ object VoidReasons {
 
     /** Replaced by another judgment for the same window (record-rules.md section 6.3). */
     const val CHANGED: String = "CHANGED"
+
+    /** Replaced by the same kind at another time (record-rules.md 6.4, supplement P-6, I-2). */
+    const val TIME_EDIT: String = "TIME_EDIT"
 }

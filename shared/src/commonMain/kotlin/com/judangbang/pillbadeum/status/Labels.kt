@@ -25,6 +25,9 @@ object Labels {
     const val ERROR: String = "기록하지 못했어요. 앱에서 확인해 주세요"
     const val EMPTY_WIDGET: String = "앱에서 복용 항목을 추가해 주세요"
 
+    /** A cell that ended before the last day-start or base-zone change (supplement P-5, SCR-007#locked). */
+    const val LOCKED: String = "설정을 바꾸기 전의 기록은 고칠 수 없어요"
+
     fun weekday(day: DayOfWeek): String = when (day) {
         DayOfWeek.MONDAY -> "월"
         DayOfWeek.TUESDAY -> "화"

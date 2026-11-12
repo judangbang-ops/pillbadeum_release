@@ -128,6 +128,7 @@ fun App(core: DidITakeCore, onDataChanged: suspend () -> Unit, refreshKey: Int =
                         message = when (core.voidDose(judgment.id)) {
                             VoidResult.Voided -> "${item.name} 기록을 취소했어요. 기록은 무효로 남아요"
                             VoidResult.NotActive -> "이미 취소된 기록이에요"
+                            VoidResult.Locked -> Labels.LOCKED
                         }
                         onDataChanged()
                         reload()

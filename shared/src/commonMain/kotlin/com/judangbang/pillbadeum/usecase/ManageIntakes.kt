@@ -106,14 +106,22 @@ class SaveIntake(
                     return@immediateTransaction SaveIntakeResult.Gone
                 }
                 val versions = db.scheduleVersionDao()
-                val current = versions.findEffective(intakeId, now)
+                // The open version, not the one in effect at now: with the clock set back, "now" can
+                // fall inside an older closed version or before the first one (TASK-005).
+                val current = versions.findOpen(intakeId)
                 val changed = current == null || ScheduleParams.toRule(current) != d.rule
                 if (changed) {
-                    if (current != null) versions.close(current.id, effectiveTo = now, now = now)
                     // A changed schedule applies from now; the window holding now follows the new
-                    // version (supplement P-8). `current == null` only happens when the clock is
-                    // before the first version's start; TASK-005 handles that case.
-                    insertVersion(intakeId, d.rule, now, effectiveFrom = now)
+                    // version (supplement P-8). If the clock is behind the open version's start, the
+                    // change applies from that start instead, which leaves the open version empty
+                    // (from = to) and never two open versions.
+                    val from = maxOf(now, current?.effectiveFrom ?: now)
+                    if (current != null) {
+                        check(versions.close(current.id, effectiveTo = from, now = now) == 1) {
+                            "open schedule version ${current.id} could not be closed"
+                        }
+                    }
+                    insertVersion(intakeId, d.rule, now, effectiveFrom = from)
                 }
                 SaveIntakeResult.Saved(intakeId, newScheduleVersion = changed)
             }

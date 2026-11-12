@@ -2,6 +2,7 @@ package com.judangbang.pillbadeum.data
 
 import com.judangbang.pillbadeum.domain.UuidV7
 import com.judangbang.pillbadeum.domain.WindowSettings
+import kotlin.time.Instant
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 
@@ -14,6 +15,12 @@ object SettingKeys {
 
     /** This installation's id, written once on first launch (data-model.md section 0, device_id). */
     const val DEVICE_ID: String = "device_id"
+
+    /**
+     * When `day_start` or `base_zone` last changed (UTC epoch ms). Windows that ended before it cannot
+     * be edited, since past windows are computed with the current settings (supplement P-5).
+     */
+    const val WINDOW_SETTINGS_CHANGED_AT: String = "window_settings_changed_at"
 }
 
 /**
@@ -24,6 +31,10 @@ object SettingKeys {
  */
 suspend fun SettingDao.loadWindowSettings(): WindowSettings =
     parseWindowSettings(dayStart = get(SettingKeys.DAY_START), baseZone = get(SettingKeys.BASE_ZONE))
+
+/** When the day start or base zone last changed, or null if never (supplement P-5). */
+suspend fun SettingDao.loadWindowSettingsChangedAt(): Instant? =
+    get(SettingKeys.WINDOW_SETTINGS_CHANGED_AT)?.toLongOrNull()?.let(Instant::fromEpochMilliseconds)
 
 /**
  * Window settings from the stored `day_start` and `base_zone` values; null means "not stored yet"

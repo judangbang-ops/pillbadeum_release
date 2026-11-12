@@ -1,5 +1,7 @@
 package com.judangbang.pillbadeum.usecase
 
+import androidx.room3.immediateTransaction
+import androidx.room3.useWriterConnection
 import com.judangbang.pillbadeum.data.DidITakeDatabase
 import kotlin.time.Clock
 
@@ -11,10 +13,20 @@ class VoidDose(
     private val db: DidITakeDatabase,
     private val clock: Clock,
 ) {
-    suspend operator fun invoke(recordId: String, reason: String = VoidReasons.USER_CANCEL): VoidResult {
-        val changed = db.doseRecordDao().voidActive(recordId, clock.now().toEpochMilliseconds(), reason)
-        return if (changed == 1) VoidResult.Voided else VoidResult.NotActive
-    }
+    suspend operator fun invoke(recordId: String, reason: String = VoidReasons.USER_CANCEL): VoidResult =
+        db.useWriterConnection { transactor ->
+            transactor.immediateTransaction {
+                val now = clock.now()
+                val record = db.doseRecordDao().findById(recordId)
+                when {
+                    record == null || !record.isActive -> VoidResult.NotActive
+                    // A cell that ended before the last settings change cannot be changed (supplement P-5).
+                    db.isLockedJudgment(record, now) -> VoidResult.Locked
+                    db.doseRecordDao().voidActive(recordId, now.toEpochMilliseconds(), reason) == 1 -> VoidResult.Voided
+                    else -> VoidResult.NotActive
+                }
+            }
+        }
 }
 
 sealed interface VoidResult {
@@ -22,4 +34,7 @@ sealed interface VoidResult {
 
     /** No such row, or it was already voided. Nothing changed. */
     data object NotActive : VoidResult
+
+    /** Its cell ended before the last day-start or base-zone change (supplement P-5). Nothing changed. */
+    data object Locked : VoidResult
 }

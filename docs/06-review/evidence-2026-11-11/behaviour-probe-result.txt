@@ -1,0 +1,30 @@
+# Output of BehaviourProbeTest (JVM, in-memory database, code at 7b8d9df, 2026-11-11). Names are test fixtures.
+A. skip on 11/10 09:10 (daily item), then the next morning
+  skip result=Recorded
+  [11/10 09:11, same window] header=11/10 (화) 1 / 1 완료
+      button done=true key=2026-11-10 subtitle='09:10' talkback='Test person Morning dose, 오늘 09:10 기록됨'
+  [11/11 08:00, next window] header=11/11 (수) 0 / 1 완료
+      button done=false key=2026-11-11 subtitle='마지막 어제 09:10' talkback='Test person Morning dose, 미완료'
+B. hypothetical row: period_key=2026-11-11 (yesterday), taken_at=now (11/12 09:00), SKIPPED
+  [11/12 09:00, today's window] header=11/12 (목) 1 / 1 완료
+      button done=true key=2026-11-12 subtitle='09:00' talkback='Test person Morning dose, 오늘 09:00 기록됨'
+  widget tap today -> Already
+C. person archived after the widget was drawn
+  [before archive] header=11/11 (수) 0 / 1 완료
+      button done=false key=2026-11-11 subtitle='기록 없음' talkback='Test person Morning dose, 미완료'
+  [after archive] header=11/11 (수) 0 / 0 완료
+      (no buttons)
+  tap on the stale button -> Recorded (screens.md SCR-001#gone expects Gone)
+  active rows now=1
+D. clock wrongly at Fri 11/13 08:00, widget tap, clock back to Wed 11/11 08:05, then real Fri 11/13 09:00
+  tap with wrong clock -> Recorded
+  [clock back: Wed 11/11 08:05] header=11/11 (수) 0 / 1 완료
+      button done=false key=2026-11-11 subtitle='기록 없음' talkback='Test person Morning dose, 미완료'
+  [real Fri 11/13 09:00] header=11/13 (금) 1 / 1 완료
+      button done=true key=2026-11-13 subtitle='08:00' talkback='Test person Morning dose, 오늘 08:00 기록됨'
+E. weekly item (anchor Mon), dose on Sun 11/15 22:00, then Mon 11/16 08:00
+  tap on Sun 11/15 22:00 -> Recorded
+  [Sun 11/15 22:01] header=11/15 (일) 1 / 1 완료
+      button done=true key=2026-11-09 subtitle='일 22:00' talkback='Test person Morning dose, 오늘 22:00 기록됨'
+  [Mon 11/16 08:00, 10 hours later] header=11/16 (월) 0 / 1 완료
+      button done=false key=2026-11-16 subtitle='마지막 어제 22:00' talkback='Test person Morning dose, 미완료'

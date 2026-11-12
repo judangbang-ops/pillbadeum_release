@@ -351,7 +351,7 @@ private fun Note(text: String, modifier: Modifier = Modifier) {
 
 /** One date, hour or minute (box.css `.pick .c`): ink when chosen, sunken when it cannot be chosen. */
 @Composable
-private fun TimeCell(label: String, spoken: String, selected: Boolean, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
+internal fun TimeCell(label: String, spoken: String, selected: Boolean, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val (fill, border, ink) = when {
         selected -> Triple(Ui.Ink, Ui.Ink, Ui.OnSolid)
         enabled -> Triple(Ui.Surface, Ui.LineStrong, Ui.Ink)

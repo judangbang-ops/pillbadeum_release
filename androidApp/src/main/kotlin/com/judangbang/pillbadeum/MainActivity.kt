@@ -35,10 +35,12 @@ class MainActivity : ComponentActivity() {
                 Log.e(TAG, "day boundary alarm not set", e)
             }
         }
+        val phone = AndroidPhone(this)
         setContent {
             App(
                 open = { container.core() },
                 onDataChanged = { container.afterWrite() },
+                phone = phone,
                 refreshKey = resumeCount,
                 homeRequests = homeRequests,
                 backHandler = { enabled, onBack -> BackHandler(enabled, onBack) },

@@ -14,6 +14,7 @@ import com.judangbang.pillbadeum.restore.InstallState
 import com.judangbang.pillbadeum.status.JudgeCell
 import com.judangbang.pillbadeum.status.LoadHistory
 import com.judangbang.pillbadeum.status.LoadJudgeCell
+import com.judangbang.pillbadeum.status.LoadSettings
 import com.judangbang.pillbadeum.status.LoadStatusBoard
 import com.judangbang.pillbadeum.usecase.ArchiveIntake
 import com.judangbang.pillbadeum.usecase.DeleteArchivedIntake
@@ -77,6 +78,9 @@ class DidITakeCore private constructor(
 
     /** One cell of the judgment screen (SCR-007, TASK-018). */
     val loadJudgeCell: LoadJudgeCell = LoadJudgeCell(db, clock)
+
+    /** What the settings screen shows (SCR-009, TASK-020). */
+    val loadSettings: LoadSettings = LoadSettings(db)
 
     /** Reminder plan: next alarm after a change, overdue reminders when the alarm rings (TASK-011, N-8). */
     val planReminders: PlanReminders = PlanReminders(db, clock)

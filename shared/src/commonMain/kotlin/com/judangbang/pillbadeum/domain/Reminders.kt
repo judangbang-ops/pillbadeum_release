@@ -102,6 +102,29 @@ fun quietNotice(
     settings: WindowSettings,
     reminders: ReminderSettings,
 ): QuietNotice? {
+    val repeats = repeats(start, settings, reminders)
+    return when {
+        repeats.dropped == 0 -> null
+        repeats.kept == 0 && reminders.isQuiet(start) -> QuietNotice.FirstOnly
+        else -> QuietNotice.Reduced(repeats.dropped)
+    }
+}
+
+/**
+ * How many repeats of an item starting at [start] quiet hours drop in one logical day, counted as [quietNotice]
+ * counts them: 0 when it gives no notice. The settings screen adds these up over the items with reminders on
+ * ("다시 알림이 모두 4번 줄어요", SCR-009, REQ-077).
+ */
+fun quietDrops(
+    start: LocalTime,
+    settings: WindowSettings,
+    reminders: ReminderSettings,
+): Int = repeats(start, settings, reminders).dropped
+
+/** The repeats (slots 1 and on) of one logical day that quiet hours drop and keep (supplement N-4). */
+private class Repeats(val dropped: Int, val kept: Int)
+
+private fun repeats(start: LocalTime, settings: WindowSettings, reminders: ReminderSettings): Repeats {
     val day = MINUTES_PER_DAY
     val dayStart = settings.dayStart.minuteOfDay()
     val offset0 = (start.minuteOfDay() - dayStart + day) % day
@@ -114,11 +137,7 @@ fun quietNotice(
         val minute = (dayStart + offset) % day
         if (reminders.isQuiet(LocalTime(minute / 60, minute % 60))) dropped++ else kept++
     }
-    return when {
-        dropped == 0 -> null
-        kept == 0 && reminders.isQuiet(start) -> QuietNotice.FirstOnly
-        else -> QuietNotice.Reduced(dropped)
-    }
+    return Repeats(dropped, kept)
 }
 
 private const val MINUTES_PER_DAY: Int = 24 * 60

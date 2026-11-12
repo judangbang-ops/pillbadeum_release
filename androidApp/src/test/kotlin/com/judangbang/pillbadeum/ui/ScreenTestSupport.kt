@@ -2,13 +2,17 @@ package com.judangbang.pillbadeum.ui
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Rect
+import android.view.Gravity
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.junit4.ComposeTestRule
-import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.printToString
 import androidx.compose.ui.unit.dp
 import com.judangbang.pillbadeum.DidITakeCore
@@ -24,11 +28,13 @@ import com.judangbang.pillbadeum.usecase.SaveIntakeResult
 import com.judangbang.pillbadeum.usecase.WindowCommand
 import com.judangbang.pillbadeum.usecase.WindowWriteResult
 import java.io.File
+import kotlin.math.roundToInt
 import kotlin.time.Instant
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.DayOfWeek
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.robolectric.shadows.ShadowDialog
 
 /** Shared by the app's Robolectric screen tests ([AppScreenTest], [JudgeScreenTest]). */
 
@@ -107,20 +113,41 @@ internal fun ComposeTestRule.spokenTexts(): List<String> =
 
 /**
  * The window drawn into a bitmap by the view tree itself. Compose's `captureToImage` waits for a frame that Robolectric
- * never draws on its own, so the views draw here on a software canvas, as the widget check does.
+ * never draws on its own, so the views draw here on a software canvas, as the widget check does. An open dialog is a
+ * window of its own: it is drawn over the screen where its gravity puts it, behind its dim.
  */
 internal fun ComposeTestRule.screenshot(activity: ComponentActivity): Bitmap {
     waitForIdle()
     val view = activity.window.decorView
     val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
-    view.draw(Canvas(bitmap))
+    val canvas = Canvas(bitmap)
+    view.draw(canvas)
+    for (dialog in ShadowDialog.getShownDialogs().filter { it.isShowing }) {
+        val window = dialog.window ?: continue
+        val decor = window.decorView
+        if (decor.width == 0 || decor.height == 0) continue
+        val attributes = window.attributes
+        if (attributes.flags and WindowManager.LayoutParams.FLAG_DIM_BEHIND != 0) {
+            canvas.drawColor(Color.argb((attributes.dimAmount * 255).roundToInt(), 0, 0, 0))
+        }
+        val frame = Rect()
+        val gravity = attributes.gravity.takeIf { it != Gravity.NO_GRAVITY } ?: Gravity.CENTER
+        Gravity.apply(gravity, decor.width, decor.height, Rect(0, 0, view.width, view.height), frame)
+        val saved = canvas.save()
+        canvas.translate(frame.left.toFloat(), frame.top.toFloat())
+        decor.draw(canvas)
+        canvas.restoreToCount(saved)
+    }
     return bitmap
 }
 
-/** Saves the whole screen and its merged semantics tree as `build/app-render/<case>.png` and `<case>.txt`. */
+/**
+ * Saves the whole screen and the merged semantics tree of each window (the screen, then any open dialog) as
+ * `build/app-render/<case>.png` and `<case>.txt`.
+ */
 internal fun ComposeTestRule.saveScreen(case: String, activity: ComponentActivity) {
     val bitmap = screenshot(activity)
     val dir = File("build/app-render").apply { mkdirs() }
     File(dir, "$case.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-    File(dir, "$case.txt").writeText(onRoot().printToString(maxDepth = Int.MAX_VALUE) + "\n")
+    File(dir, "$case.txt").writeText(onAllNodes(isRoot()).printToString(maxDepth = Int.MAX_VALUE) + "\n")
 }

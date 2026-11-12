@@ -29,11 +29,15 @@ import com.judangbang.pillbadeum.status.HistoryMonth
 import com.judangbang.pillbadeum.status.JudgeCell
 import com.judangbang.pillbadeum.status.JudgeLoad
 import com.judangbang.pillbadeum.status.Labels
+import com.judangbang.pillbadeum.status.SettingsView
 import com.judangbang.pillbadeum.status.StatusBoard
 import com.judangbang.pillbadeum.status.showsPeople
 import com.judangbang.pillbadeum.usecase.ClockFlagResult
+import com.judangbang.pillbadeum.usecase.DeleteIntakeResult
 import com.judangbang.pillbadeum.usecase.RecordResult
 import com.judangbang.pillbadeum.usecase.SaveIntakeResult
+import com.judangbang.pillbadeum.usecase.SaveReminderSettingsResult
+import com.judangbang.pillbadeum.usecase.SaveSettingsResult
 import com.judangbang.pillbadeum.usecase.VoidResult
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Clock
@@ -123,8 +127,10 @@ internal sealed interface Route {
  * Root of the app, shared by every platform.
  *
  * @param open opens the core (the database); a failure shows SCR-004#error with `[다시 시도]`.
- * @param onDataChanged called after every write (record, cancel, item, person, restore notice) so the platform can
- *   redraw its widgets and plan its reminders again.
+ * @param onDataChanged called after every write (record, cancel, item, person, restore notice, settings) so the
+ *   platform can redraw its widgets and plan its reminders again.
+ * @param phone what the settings screen reads from and asks of the phone (SCR-009, TASK-020).
+ * @param privacyPolicyUrl the privacy policy's address, null until TASK-035 decides it (REQ-063).
  * @param refreshKey bump to read the database again (on resume: the widget may have recorded meanwhile).
  * @param homeRequests bump to show the first screen (a notification or the widget opened the app, R3 memo).
  * @param backHandler the platform's system back: called with whether back stays in the app, and what it does.
@@ -133,6 +139,8 @@ internal sealed interface Route {
 fun App(
     open: suspend () -> DidITakeCore,
     onDataChanged: suspend () -> Unit,
+    phone: Phone,
+    privacyPolicyUrl: String? = PRIVACY_POLICY_URL,
     refreshKey: Int = 0,
     homeRequests: Int = 0,
     backHandler: @Composable (enabled: Boolean, onBack: () -> Unit) -> Unit = { _, _ -> },
@@ -154,6 +162,12 @@ fun App(
     var historyFailed by remember { mutableStateOf(false) }
     var historyAttempts by remember { mutableIntStateOf(0) }
     var historyList by rememberSaveable(stateSaver = ListPlace) { mutableStateOf(LazyListState()) }
+    // SCR-009 (TASK-020): the settings last read and the phone's state read with them. They stay while SCR-010 is open
+    // on top, so back shows them at once (and reads them again).
+    var settings by remember { mutableStateOf<SettingsView?>(null) }
+    var phoneState by remember { mutableStateOf<PhoneState?>(null) }
+    var settingsFailed by remember { mutableStateOf(false) }
+    var settingsAttempts by remember { mutableIntStateOf(0) }
     val zone = TimeZone.currentSystemDefault()
 
     suspend fun reload() {
@@ -217,6 +231,13 @@ fun App(
         go(to)
     }
 
+    /** SCR-009 from the first screen: read anew. */
+    fun openSettings() {
+        settings = null
+        settingsFailed = false
+        go(Route.Settings)
+    }
+
     LaunchedEffect(refreshKey, retries) {
         message = null
         reloadOrFail()
@@ -257,7 +278,7 @@ fun App(
                     history = {
                         board?.baseDate?.let { today -> openHistory(Route.History(LocalDate(today.year, today.month, 1), null)) }
                     },
-                    settings = { go(Route.Settings) },
+                    settings = { openSettings() },
                     add = { go(Route.Item(null)) },
                     edit = { go(Route.Item(it.intakeId)) },
                     more = { go(Route.Judge(it.intakeId, it.scheduleVersionId, it.window.periodKey)) },
@@ -561,8 +582,102 @@ fun App(
                 )
             }
 
-            // Filled by TASK-020 (SCR-009) and TASK-021 (SCR-010).
-            Route.Settings -> NotYet("설정") { go(Route.Home) }
+            Route.Settings -> {
+                // Read on opening, after every write and on coming back to the app (SCR-009#stale): the screen lock may
+                // have been set meanwhile in the system settings.
+                LaunchedEffect(core, reads, settingsAttempts) {
+                    val c = core ?: return@LaunchedEffect
+                    phoneState = PhoneState(phone.appVersion, phone.backupUnsupported, phone.screenLock())
+                    try {
+                        settings = c.loadSettings()
+                        settingsFailed = false
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        settingsFailed = true
+                    }
+                }
+                val shown = settings
+                SettingsScreen(
+                    state = when {
+                        shown != null -> SettingsState.Ready(shown)
+                        settingsFailed || (failed && core == null) -> SettingsState.Failed
+                        else -> SettingsState.Loading
+                    },
+                    phone = phoneState ?: PhoneState(phone.appVersion, phone.backupUnsupported, screenLock = null),
+                    privacyUrl = privacyPolicyUrl,
+                    message = message,
+                    now = { (core?.clock ?: Clock.System).now() },
+                    actions = SettingsActions(
+                        back = { go(Route.Home) },
+                        retry = {
+                            failed = false
+                            settingsFailed = false
+                            retries++
+                            settingsAttempts++
+                        },
+                        pickDayStart = { initial, onPicked -> phone.pickTime(initial, onPicked) },
+                        saveWindow = { new ->
+                            write(failure = Labels.SAVE_FAILED) { c ->
+                                when (c.settings.saveWindowSettings(new)) {
+                                    SaveSettingsResult.Changed -> {
+                                        // Shown at once; the read after the write follows.
+                                        settings = settings?.copy(window = new)
+                                        message = null
+                                        try {
+                                            phone.windowSettingsChanged()
+                                        } catch (e: CancellationException) {
+                                            throw e
+                                        } catch (_: Exception) {
+                                            // The boundary refresh is set again on the next start; the setting is saved.
+                                        }
+                                        afterWrite()
+                                    }
+                                    SaveSettingsResult.Unchanged -> message = null
+                                    SaveSettingsResult.Invalid -> message = Labels.SAVE_FAILED
+                                }
+                            }
+                        },
+                        saveReminders = { new ->
+                            write(failure = Labels.SAVE_FAILED) { c ->
+                                when (val result = c.reminders.saveSettings(new)) {
+                                    is SaveReminderSettingsResult.Saved -> {
+                                        settings = settings?.copy(reminders = new)
+                                        // REQ-077: how many repeats quiet hours drop, over the items with reminders on.
+                                        message = if (result.notices.isEmpty()) null else Labels.quietSaved(result.dropped, result.notices.size)
+                                        afterWrite()
+                                    }
+                                    SaveReminderSettingsResult.Invalid -> message = Labels.SAVE_FAILED
+                                }
+                            }
+                        },
+                        showNamesOnLock = { on ->
+                            write(failure = Labels.SAVE_FAILED) { c ->
+                                if (c.settings.setShowNamesOnLock(on) == SaveSettingsResult.Changed) {
+                                    settings = settings?.copy(showNamesOnLock = on)
+                                    message = if (on) Labels.SHOW_NAMES_ON else null
+                                    afterWrite()
+                                }
+                            }
+                        },
+                        people = { go(Route.People) },
+                        delete = { item ->
+                            write(failure = Labels.DELETE_FAILED) { c ->
+                                message = when (c.deleteArchivedIntake(item.intakeId)) {
+                                    DeleteIntakeResult.Deleted -> Labels.deleted(item.name)
+                                    DeleteIntakeResult.Gone -> Labels.DELETE_GONE
+                                    DeleteIntakeResult.NotArchived -> null
+                                }
+                                settings = settings?.let { view -> view.copy(archived = view.archived.filterNot { it.intakeId == item.intakeId }) }
+                                afterWrite()
+                            }
+                        },
+                        openPrivacy = { url -> message = if (phone.openUrl(url)) null else Labels.noBrowser(url) },
+                    ),
+                )
+            }
+
+            // Filled by TASK-021 (SCR-010).
             Route.People -> NotYet("대상자") { go(Route.Settings) }
         }
     }

@@ -21,6 +21,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
+import com.judangbang.pillbadeum.AndroidPhone
 import com.judangbang.pillbadeum.DidITakeCore
 import com.judangbang.pillbadeum.MainActivity
 import com.judangbang.pillbadeum.TestApp
@@ -255,6 +256,7 @@ class AppScreenTest {
             App(
                 open = { if (attempts++ == 0) error("database not readable") else app.container.core() },
                 onDataChanged = {},
+                phone = AndroidPhone(activity),
             )
         }
         compose.waitUntil(10_000) { compose.onAllNodesWithText(Labels.LOAD_FAILED).fetchSemanticsNodes().isNotEmpty() }

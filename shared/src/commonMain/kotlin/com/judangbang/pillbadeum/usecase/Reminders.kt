@@ -21,6 +21,7 @@ import com.judangbang.pillbadeum.domain.ReminderSlot
 import com.judangbang.pillbadeum.domain.Window
 import com.judangbang.pillbadeum.domain.WindowSettings
 import com.judangbang.pillbadeum.domain.defaultReminderStart
+import com.judangbang.pillbadeum.domain.quietDrops
 import com.judangbang.pillbadeum.domain.quietNotice
 import com.judangbang.pillbadeum.domain.reminderSlots
 import com.judangbang.pillbadeum.domain.windowOf
@@ -221,8 +222,12 @@ sealed interface SaveReminderResult {
 }
 
 sealed interface SaveReminderSettingsResult {
-    /** Saved; [notices] holds the quiet-hours message per item with reminders on, by intake id (N-4, REQ-077). */
-    data class Saved(val notices: Map<String, QuietNotice>) : SaveReminderSettingsResult
+    /**
+     * Saved; [notices] holds the quiet-hours message per item with reminders on, by intake id (N-4, REQ-077), and
+     * [dropped] the repeats quiet hours drop in one day over all those items, for the settings screen's one notice
+     * "다시 알림이 모두 4번 줄어요 (알림을 켠 항목 2개)" (SCR-009).
+     */
+    data class Saved(val notices: Map<String, QuietNotice>, val dropped: Int) : SaveReminderSettingsResult
 
     /** Not among the offered values (N-4). Nothing written. */
     data object Invalid : SaveReminderSettingsResult
@@ -311,10 +316,11 @@ class ManageReminders(
                 if (!settings.isValid) return@immediateTransaction SaveReminderSettingsResult.Invalid
                 db.settingDao().saveReminderSettings(settings)
                 val windowSettings = db.settingDao().loadWindowSettings()
-                val notices = db.reminderDao().listEnabledRules().mapNotNull { row ->
-                    quietNotice(LocalTime.parse(row.startTime), windowSettings, settings)?.let { row.intakeId to it }
+                val starts = db.reminderDao().listEnabledRules().map { it.intakeId to LocalTime.parse(it.startTime) }
+                val notices = starts.mapNotNull { (intakeId, start) ->
+                    quietNotice(start, windowSettings, settings)?.let { intakeId to it }
                 }.toMap()
-                SaveReminderSettingsResult.Saved(notices)
+                SaveReminderSettingsResult.Saved(notices, starts.sumOf { (_, start) -> quietDrops(start, windowSettings, settings) })
             }
         }
 

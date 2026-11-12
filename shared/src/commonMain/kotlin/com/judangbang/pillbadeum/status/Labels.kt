@@ -2,17 +2,21 @@ package com.judangbang.pillbadeum.status
 
 import com.judangbang.pillbadeum.data.DoseRecordEntity
 import com.judangbang.pillbadeum.domain.DoseKind
+import com.judangbang.pillbadeum.domain.ReminderSettings
 import com.judangbang.pillbadeum.domain.ScheduleRule
 import com.judangbang.pillbadeum.domain.SlotLabel
 import com.judangbang.pillbadeum.usecase.InvalidTimeReason
 import com.judangbang.pillbadeum.usecase.RecordResult
+import kotlin.time.Duration
 import kotlin.time.Instant
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
+import kotlinx.datetime.offsetAt
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 
@@ -586,6 +590,110 @@ object Labels {
 
     /** What TalkBack reads for a history line's date: `11월 12일 목요일`, the base date's `11월 12일 목요일, 오늘`. */
     fun historyDay(date: LocalDate, today: LocalDate): String = if (date == today) "${longDate(date)}, $TODAY" else longDate(date)
+
+    // SCR-009 설정 (TASK-020, 09 Settings) ---------------------------------------------------------------------------
+
+    /** SCR-009#error: a change that was not saved; the old value stays on the screen. */
+    const val SAVE_FAILED: String = "저장하지 못했어요. 다시 눌러 주세요"
+
+    /** The settings could not be read (Claude's design: SCR-009 names no read error, so it is said as SCR-008's). */
+    const val SETTINGS_LOAD_FAILED: String = "설정을 불러오지 못했어요"
+
+    /** What changing the day start or base zone does, asked before saving (supplement P-5, SPEC-033). */
+    const val WINDOW_CHANGE_NOTE: String = "바꾼 때부터 적용돼요. 지난 기록의 날짜는 그대로예요. 바꾸기 전에 끝난 날의 기록은 고칠 수 없게 돼요."
+
+    /** The question before a new day start: `06:00부터 하루가 시작돼요.` and [WINDOW_CHANGE_NOTE]. */
+    fun dayStartQuestion(new: LocalTime): String = "${clock(new)}부터 하루가 시작돼요. $WINDOW_CHANGE_NOTE"
+
+    /** The question before a new base zone: `날짜를 Asia/Tokyo 기준으로 셈해요.` and [WINDOW_CHANGE_NOTE]. */
+    fun zoneQuestion(zoneId: String): String = "날짜를 $zoneId 기준으로 셈해요. $WINDOW_CHANGE_NOTE"
+
+    /** A time of the settings screen, `04:00`, `22:30`. */
+    fun clock(time: LocalTime): String = "${two(time.hour)}:${two(time.minute)}"
+
+    /** What TalkBack reads for a time of the settings screen: `4시`, `22시 30분`. */
+    fun clockSpoken(time: LocalTime): String = if (time.minute == 0) "${time.hour}시" else "${time.hour}시 ${time.minute}분"
+
+    /** `다시 알림 간격` (09 Settings `60분`). */
+    fun interval(interval: Duration): String = "${interval.inWholeMinutes}분"
+
+    /** `하루 최대` (09 Settings `3번`). */
+    fun perDay(count: Int): String = "${count}번"
+
+    /** No quiet hours: the start and the end are the same (supplement N-4). */
+    const val QUIET_NONE: String = "없음"
+
+    /** `방해 금지` (09 Settings `22:00 ~ 07:00`), or [QUIET_NONE]. */
+    fun quiet(reminders: ReminderSettings): String =
+        if (reminders.quietStart == reminders.quietEnd) QUIET_NONE else "${clock(reminders.quietStart)} ~ ${clock(reminders.quietEnd)}"
+
+    /** What TalkBack reads for [quiet]: `22시부터 7시까지`. */
+    fun quietSpoken(reminders: ReminderSettings): String =
+        if (reminders.quietStart == reminders.quietEnd) QUIET_NONE else "${clockSpoken(reminders.quietStart)}부터 ${clockSpoken(reminders.quietEnd)}까지"
+
+    /**
+     * After the common reminder settings were saved and quiet hours drop repeats (REQ-077, SPEC-031, 2026-11-12 review C6):
+     * [dropped] in one day over [items] items with reminders on.
+     */
+    fun quietSaved(dropped: Int, items: Int): String = "방해 금지 시간과 겹쳐 다시 알림이 모두 ${dropped}번 줄어요 (알림을 켠 항목 ${items}개)"
+
+    /** Under `잠금 화면에 약 이름 보이기` (09 Settings). */
+    const val SHOW_NAMES_NOTE: String = "끄면 '복용 시간이에요'만 보여요."
+
+    /** Said when the lock-screen names are switched on (SPEC-034: names show on the lock screen). */
+    const val SHOW_NAMES_ON: String = "이제 잠금 화면 알림에 약 이름이 보여요"
+
+    /** `대상자 관리 2명`, `보관한 항목 1개` (09 Settings). */
+    fun peopleCount(count: Int): String = "${count}명"
+
+    fun itemCount(count: Int): String = "${count}개"
+
+    /** An archived item in the list: its name, after its person's while two or more people are active (REQ-018). */
+    fun archivedName(item: ArchivedItem, withPerson: Boolean): String = if (withPerson) "${item.person.name} ${item.name}" else item.name
+
+    /** The question before `[완전 삭제]` (REQ-015, SPEC-025). */
+    fun deleteQuestion(name: String): String = "${withObject(name)} 완전히 지울까요?"
+
+    const val DELETE_NOTE: String = "지난 기록도 함께 지워지고 되돌릴 수 없어요."
+
+    fun deleted(name: String): String = "${withObject(name)} 완전히 지웠어요"
+
+    /** `[완전 삭제]` failed: the item and its records are still there. */
+    const val DELETE_FAILED: String = "지우지 못했어요. 다시 눌러 주세요"
+
+    /** The item was deleted meanwhile (another tap, another screen). */
+    const val DELETE_GONE: String = "이미 지워진 항목이에요"
+
+    /** SPEC-035, REQ-054: the backup notice, by Android version and screen lock. */
+    const val BACKUP_ON: String = "화면 잠금과 Google 백업이 켜져 있으면 복용 기록이 백업돼요."
+    const val BACKUP_NO_LOCK: String = "화면 잠금이 없어 복용 기록이 백업되지 않아요."
+    const val BACKUP_OLD_ANDROID: String = "이 휴대폰은 Android 버전이 낮아 복용 기록이 백업되지 않아요."
+
+    /** The backup notice: 8.x first, then no screen lock; the general one when the lock cannot be read (SPEC-035). */
+    fun backup(oldAndroid: Boolean, screenLock: Boolean?): String = when {
+        oldAndroid -> BACKUP_OLD_ANDROID
+        screenLock == false -> BACKUP_NO_LOCK
+        else -> BACKUP_ON
+    }
+
+    /** The medical notice of the settings (REQ-036, SPEC-036). */
+    const val SETTINGS_MEDICAL: String = "의료기기가 아니며 질병을 진단·치료·예방하지 않아요."
+
+    /** `개인정보처리방침` before its address is decided (TASK-035). */
+    const val NOT_READY: String = "준비 중"
+
+    /** No browser could open the privacy policy: its address instead (SPEC-036). */
+    fun noBrowser(url: String): String = "브라우저를 열 수 없어요. 주소: $url"
+
+    /** A zone's offset now, for the base-zone list: `UTC+09:00`, `UTC-03:00`, `UTC+05:30`. */
+    fun utcOffset(zone: TimeZone, at: Instant): String {
+        val seconds = zone.offsetAt(at).totalSeconds
+        val sign = if (seconds < 0) "-" else "+"
+        val minutes = kotlin.math.abs(seconds) / 60
+        return "UTC$sign${two(minutes / 60)}:${two(minutes % 60)}"
+    }
+
+    private fun two(n: Int): String = n.toString().padStart(2, '0')
 
     /** `11/11 (수)` with a no-break space before the weekday. */
     private fun dateKept(date: LocalDate): String = "${monthDay(date)}$NBSP(${weekday(date.dayOfWeek)})"

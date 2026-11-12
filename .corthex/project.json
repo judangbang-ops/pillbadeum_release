@@ -62,7 +62,7 @@
     "09-mockup": {
       "human": "github",
       "link": "docs/09-mockup/README.md",
-      "note": "2026-11-12 CORTHEX 09 다시 하기: 17:34 동희님 'AI 슬롭' 지적으로 Pillbox 토큰 후보를 버리고 1안 약봉투·2안 요일 약통을 claude.ai Design 캔버스(https://claude.ai/artifact/QW5JRsx1Zpz5ekeqHmjpKC)에 다시 그림. 18:27 KST 동희님이 결정 카드에서 '2안 요일 약통'을 고름. 그 뒤 화면 10개와 주요 상태를 2안으로 그림(보드 원본 docs/09-mockup/boards/). 토큰 원본은 DTCG design/base.tokens.json(개발이 쓰기 전에 굳히는 확인 남음). 가쟈누님 시안 v3(DidITake 7a800ac docs/05-ui/ui-mockup-v3.html)는 참고 자료"
+      "note": "2026-11-12 CORTHEX 09 다시 하기: 17:34 동희님 'AI 슬롭' 지적으로 Pillbox 토큰 후보를 버리고 1안 약봉투·2안 요일 약통을 claude.ai Design 캔버스(https://claude.ai/artifact/QW5JRsx1Zpz5ekeqHmjpKC)에 다시 그림. 18:27 KST 동희님이 결정 카드에서 '2안 요일 약통'을 고름. 그 뒤 화면 10개와 주요 상태를 2안으로 그림(보드 원본 docs/09-mockup/boards/). 토큰 원본은 DTCG design/base.tokens.json. 19:11 KST 동희님 '모두 승인'으로 09 확인 끝: 위젯 '더 있음'은 글자 없는 아래 화살표(REQ-078), 가장 작은 크기는 실제 4×2 칸(REQ-026), 토큰을 지금 값으로 굳힘. 가쟈누님 시안 v3(DidITake 7a800ac docs/05-ui/ui-mockup-v3.html)는 참고 자료"
     },
     "10-wbs": {
       "human": "github",

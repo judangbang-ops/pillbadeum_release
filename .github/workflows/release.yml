@@ -1,0 +1,126 @@
+# 릴리즈 빌드 (TASK-002, REQ-062, 릴리즈 단계 R0b).
+# main 푸시·v* 태그·수동 실행에서 서명하지 않은 릴리즈 APK(개인 APK의 원본)와, GitHub Secrets의 업로드 키로
+# 서명한 Play용 AAB를 만들고 서명 인증서·버전 번호·debuggable·정렬·권한 목록을 확인함.
+# pull_request는 받지 않음. PR에서는 ci.yml이 그 실행에서만 쓰는 임시 키로 같은 서명 경로를 시험함 (독립 검토 B1).
+# 이 저장소는 비공개·무료 플랜이라 브랜치 보호와 Environment 비밀값을 쓸 수 없어(API 403),
+# '업로드 키는 main·태그·수동 실행에서만'은 이 파일의 트리거로만 지킴.
+# 앱 서명 키는 GitHub에 없음. 개인 APK는 여기서 받은 APK를 동희님 PC에서 scripts/sign-personal-apk.ps1로 서명함.
+name: 릴리즈 빌드
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    # main 푸시는 앱 빌드에 닿는 파일이 바뀔 때만 돎 (태그 푸시는 경로와 상관없이 돎)
+    paths:
+      - "androidApp/**"
+      - "shared/**"
+      - "gradle/**"
+      - "*.gradle.kts"
+      - "gradle.properties"
+      - "gradlew"
+      - "gradlew.bat"
+      - ".github/workflows/release.yml"
+      - ".github/scripts/check_release.py"
+      - ".github/scripts/check_permissions.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # 업로드 키 인증서 SHA-256 (공개값, 2026-11-12 만듦). 업로드 키를 Play에서 재설정하면 이 값도 고침
+  UPLOAD_CERT_SHA256: "7D:23:C2:A8:C9:1B:96:4A:08:14:D5:70:12:CB:38:93:CF:25:BF:68:E7:A9:B3:43:6E:AA:87:FA:D5:2D:39:BB"
+  APK: androidApp/build/outputs/apk/release/androidApp-release-unsigned.apk
+  AAB: androidApp/build/outputs/bundle/release/androidApp-release.aab
+
+jobs:
+  release:
+    name: 릴리즈 APK·AAB (업로드 키)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          # 버전 번호를 빌드한 커밋까지의 커밋 수로 정하므로 전체 이력을 받음
+          fetch-depth: 0
+
+      # 커밋된 gradle-wrapper.jar가 Gradle 공식 배포본과 같은지 확인함. 서드파티 액션이라 커밋으로 고정함.
+      - uses: gradle/actions/wrapper-validation@0723195856401067f7a2779048b490ace7a47d7c # v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: 버전 번호 (빌드한 커밋까지의 커밋 수)
+        shell: bash
+        run: |
+          test "$(git rev-parse --is-shallow-repository)" = false
+          count="$(git rev-list --count HEAD)"
+          echo "versionCode: $count ($(git rev-parse --short HEAD))"
+          echo "PILLBADEUM_VERSION_CODE=$count" >> "$GITHUB_ENV"
+
+      # 서명 환경 변수 없이 빌드하므로 서명하지 않은 APK가 나옴
+      - name: 서명하지 않은 릴리즈 APK (./gradlew :androidApp:assembleRelease)
+        id: apk
+        run: ./gradlew :androidApp:assembleRelease
+
+      # 업로드 키는 이 단계 안에서만 파일로 꺼내고 끝나면 지움. 비밀번호·별칭은 이 단계의 환경 변수로만 넘김.
+      # --no-daemon: 비밀값을 받은 Gradle 프로세스가 단계 뒤에 남지 않게 함
+      # --no-configuration-cache: 비밀번호가 설정 캐시 파일에 들어가지 않게 함
+      - name: 업로드 키로 릴리즈 AAB 서명 (./gradlew :androidApp:bundleRelease)
+        shell: bash
+        env:
+          UPLOAD_KEYSTORE_BASE64: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          PILLBADEUM_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEYSTORE_PASSWORD }}
+          PILLBADEUM_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
+        run: |
+          if [ -z "$UPLOAD_KEYSTORE_BASE64" ] || [ -z "$PILLBADEUM_KEYSTORE_PASSWORD" ] || [ -z "$PILLBADEUM_KEY_ALIAS" ]; then
+            echo "::error::GitHub Secrets ANDROID_UPLOAD_KEYSTORE_BASE64·ANDROID_UPLOAD_KEYSTORE_PASSWORD·ANDROID_UPLOAD_KEY_ALIAS 중 빈 값이 있음"
+            exit 1
+          fi
+          umask 077
+          export PILLBADEUM_KEYSTORE_FILE="$RUNNER_TEMP/upload.p12"
+          trap 'rm -f "$PILLBADEUM_KEYSTORE_FILE"' EXIT
+          printf '%s' "$UPLOAD_KEYSTORE_BASE64" | base64 --decode > "$PILLBADEUM_KEYSTORE_FILE"
+          ./gradlew --no-daemon --no-configuration-cache :androidApp:bundleRelease
+
+      - name: 릴리즈 확인 (AAB 서명 인증서·버전 번호·debuggable·정렬)
+        shell: bash
+        run: |
+          build_tools="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)"
+          echo "build-tools: $build_tools"
+          python3 .github/scripts/check_release.py --build-tools "$build_tools" \
+            --apk "$APK" --aab "$AAB" --cert-sha256 "$UPLOAD_CERT_SHA256" \
+            --version-code "$PILLBADEUM_VERSION_CODE" --key-label "업로드 키" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # REQ-057: 릴리즈 APK도 INTERNET 권한이 없고 나머지가 androidApp/expected-permissions.txt와 같아야 함
+      - name: 릴리즈 APK 권한 목록 비교 (REQ-057)
+        if: ${{ !cancelled() && steps.apk.outcome == 'success' }}
+        shell: bash
+        run: |
+          aapt2="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)aapt2"
+          "$aapt2" dump permissions "$APK" > "$RUNNER_TEMP/permissions.txt"
+          python3 .github/scripts/check_permissions.py "$RUNNER_TEMP/permissions.txt" androidApp/expected-permissions.txt "릴리즈 APK" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # 개인 APK의 원본. 동희님 PC에서 scripts/sign-personal-apk.ps1이 이 아티팩트를 받아 앱 서명 키로 서명함
+      - name: 서명하지 않은 릴리즈 APK 올리기
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-apk-unsigned
+          path: ${{ env.APK }}
+          retention-days: ${{ startsWith(github.ref, 'refs/tags/') && 30 || 7 }}
+          if-no-files-found: error
+
+      # Play에 올릴 AAB는 태그·수동 실행에서만 남김. main 푸시는 서명과 지문만 확인함 (저장 공간을 아끼려고)
+      - name: 업로드 키로 서명한 AAB 올리기 (태그·수동 실행)
+        if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-aab
+          path: ${{ env.AAB }}
+          retention-days: 30
+          if-no-files-found: error

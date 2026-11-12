@@ -27,6 +27,8 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+          # 릴리즈 변형의 버전 번호를 빌드한 커밋까지의 커밋 수로 정하므로 전체 이력을 받음 (TASK-002)
+          fetch-depth: 0
 
       # 커밋된 gradle-wrapper.jar가 Gradle 공식 배포본과 같은지 확인함. 서드파티 액션이라 커밋으로 고정함.
       - uses: gradle/actions/wrapper-validation@0723195856401067f7a2779048b490ace7a47d7c # v5
@@ -94,7 +96,7 @@ jobs:
           aapt2="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)aapt2"
           echo "aapt2: $aapt2"
           "$aapt2" dump permissions "$APK" > "$RUNNER_TEMP/permissions.txt"
-          python3 .github/scripts/check_permissions.py "$RUNNER_TEMP/permissions.txt" androidApp/expected-permissions.txt | tee -a "$GITHUB_STEP_SUMMARY"
+          python3 .github/scripts/check_permissions.py "$RUNNER_TEMP/permissions.txt" androidApp/expected-permissions.txt "디버그 APK" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: APK 올리기
         if: ${{ !cancelled() && steps.debug-apk.outcome == 'success' }}
@@ -103,5 +105,84 @@ jobs:
           name: androidApp-debug-${{ github.event.pull_request.head.sha || github.sha }}
           path: androidApp/build/outputs/apk/debug/androidApp-debug.apk
           retention-days: 7
+          overwrite: true
+          if-no-files-found: error
+
+      # ---- 릴리즈 변형 (TASK-002, REQ-062·REQ-057, 독립 검토 A2·A3·B1) ----
+      # 업로드 키는 쓰지 않음. 이 실행에서만 쓰는 임시 키로 release.yml과 같은 서명 경로(환경 변수 → Gradle → AAB 서명)를
+      # 시험하고, 서명하지 않은 릴리즈 APK의 버전 번호·debuggable·정렬·권한 목록을 release.yml과 같은 기준으로 확인함.
+      # 업로드 키 서명은 pull_request를 받지 않는 release.yml(main 푸시·v* 태그·수동 실행)에서만 함
+      - name: 버전 번호 (빌드한 커밋까지의 커밋 수)
+        id: version
+        if: ${{ !cancelled() && steps.debug-apk.outcome == 'success' }}
+        shell: bash
+        run: |
+          test "$(git rev-parse --is-shallow-repository)" = false
+          count="$(git rev-list --count HEAD)"
+          echo "versionCode: $count ($(git rev-parse --short HEAD))"
+          echo "PILLBADEUM_VERSION_CODE=$count" >> "$GITHUB_ENV"
+
+      # 서명 환경 변수 없이 빌드하므로 서명하지 않은 APK가 나옴
+      - name: 서명하지 않은 릴리즈 APK (./gradlew :androidApp:assembleRelease)
+        id: release-apk
+        if: ${{ !cancelled() && steps.version.outcome == 'success' }}
+        run: ./gradlew :androidApp:assembleRelease
+
+      # 임시 키(RSA 2048, 유효 1일)는 이 단계 안에서만 만들고 끝나면 지움. 비밀번호는 무작위이고 로그에서 가림
+      - name: 임시 키로 릴리즈 AAB 서명 (./gradlew :androidApp:bundleRelease)
+        id: release-aab
+        if: ${{ !cancelled() && steps.release-apk.outcome == 'success' }}
+        shell: bash
+        run: |
+          umask 077
+          export PILLBADEUM_KEYSTORE_FILE="$RUNNER_TEMP/ci-ephemeral.p12"
+          export PILLBADEUM_KEY_ALIAS=ci-ephemeral
+          PILLBADEUM_KEYSTORE_PASSWORD="$(openssl rand -hex 24)"
+          export PILLBADEUM_KEYSTORE_PASSWORD
+          echo "::add-mask::$PILLBADEUM_KEYSTORE_PASSWORD"
+          trap 'rm -f "$PILLBADEUM_KEYSTORE_FILE"' EXIT
+          keytool -genkeypair -noprompt -storetype PKCS12 -keystore "$PILLBADEUM_KEYSTORE_FILE" \
+            -storepass:env PILLBADEUM_KEYSTORE_PASSWORD -alias "$PILLBADEUM_KEY_ALIAS" \
+            -keyalg RSA -keysize 2048 -validity 1 -dname "CN=Pillbadeum CI ephemeral key"
+          fingerprint="$(keytool -list -v -storetype PKCS12 -keystore "$PILLBADEUM_KEYSTORE_FILE" \
+            -storepass:env PILLBADEUM_KEYSTORE_PASSWORD -alias "$PILLBADEUM_KEY_ALIAS" | sed -n 's/^[[:space:]]*SHA256: //p')"
+          test -n "$fingerprint"
+          echo "임시 키 인증서 SHA-256: $fingerprint"
+          echo "EPHEMERAL_CERT_SHA256=$fingerprint" >> "$GITHUB_ENV"
+          ./gradlew :androidApp:bundleRelease
+
+      - name: 릴리즈 확인 (AAB 서명 인증서·버전 번호·debuggable·정렬)
+        id: release-check
+        if: ${{ !cancelled() && steps.release-aab.outcome == 'success' }}
+        shell: bash
+        env:
+          APK: androidApp/build/outputs/apk/release/androidApp-release-unsigned.apk
+          AAB: androidApp/build/outputs/bundle/release/androidApp-release.aab
+        run: |
+          build_tools="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)"
+          echo "build-tools: $build_tools"
+          python3 .github/scripts/check_release.py --build-tools "$build_tools" \
+            --apk "$APK" --aab "$AAB" --cert-sha256 "$EPHEMERAL_CERT_SHA256" \
+            --version-code "$PILLBADEUM_VERSION_CODE" --key-label "시험용 임시 키" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # REQ-057: 릴리즈 APK도 INTERNET 권한이 없고 나머지가 androidApp/expected-permissions.txt와 같아야 함
+      - name: 릴리즈 APK 권한 목록 비교 (REQ-057)
+        if: ${{ !cancelled() && steps.release-apk.outcome == 'success' }}
+        shell: bash
+        env:
+          APK: androidApp/build/outputs/apk/release/androidApp-release-unsigned.apk
+        run: |
+          aapt2="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)aapt2"
+          "$aapt2" dump permissions "$APK" > "$RUNNER_TEMP/permissions-release.txt"
+          python3 .github/scripts/check_permissions.py "$RUNNER_TEMP/permissions-release.txt" androidApp/expected-permissions.txt "릴리즈 APK" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # 개인 APK 서명 스크립트(scripts/sign-personal-apk.ps1 -RunId)를 PR에서 시험할 때 씀. 저장 공간을 아끼려고 하루만 둠
+      - name: 서명하지 않은 릴리즈 APK 올리기 (하루 보관)
+        if: ${{ !cancelled() && steps.release-check.outcome == 'success' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: release-apk-unsigned
+          path: androidApp/build/outputs/apk/release/androidApp-release-unsigned.apk
+          retention-days: 1
           overwrite: true
           if-no-files-found: error

@@ -71,6 +71,8 @@ android {
         unitTests.isIncludeAndroidResources = true
         unitTests.all { test ->
             providers.gradleProperty("robolectric.repo").orNull?.let { test.systemProperty("robolectric.dependency.repo.url", it) }
+            // 렌더 그림(PNG)도 결과로 둬서, 빌드 캐시가 시험 결과를 되살릴 때 그림도 같은 판으로 되살아나게 함
+            test.outputs.dir(layout.buildDirectory.dir("widget-render"))
         }
     }
 }

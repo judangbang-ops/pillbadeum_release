@@ -252,11 +252,15 @@ try {
     #    하나라도 어긋나면 작업 폴더째 지우므로 -OutDir에는 확인을 모두 통과한 파일만 남음
     $verify = Invoke-Tool $java @('-jar', $apksignerJar, 'verify', '--print-certs', '--verbose', $signedApk)
     Assert-Tool $verify 'apksigner verify'
+    # apksigner 0.9(build-tools 37)는 'V3.0 Signer: certificate SHA-256 digest: …', 그 전 판은
+    # 'Signer #1 certificate SHA-256 digest: …'로 씀. 어느 꼴이든 서명자는 하나, 서명 인증서도 하나여야 함
+    $signerCounts = @($verify.Stdout | ForEach-Object { if ($_ -match '^Number of signers: (\d+)\s*$') { [int]$Matches[1] } })
+    if ($signerCounts.Count -ne 1 -or $signerCounts[0] -ne 1) { throw "서명자가 1명이 아닙니다 (apksigner의 Number of signers: $($signerCounts -join ', '))." }
     $digests = @($verify.Stdout | ForEach-Object {
-            if ($_ -match '^Signer #\d+ certificate SHA-256 digest: ([0-9a-fA-F]{64})\s*$') { $Matches[1] }
-        })
-    if ($digests.Count -ne 1) { throw "서명자가 $($digests.Count)명입니다 (1명이어야 함)." }
-    $actual = Format-Fingerprint $digests[0]
+            if ($_ -match 'Signer\b.*\bcertificate SHA-256 digest: ([0-9a-fA-F]{64})\s*$') { Format-Fingerprint $Matches[1] }
+        } | Sort-Object -Unique)
+    if ($digests.Count -ne 1) { throw "서명 인증서가 $($digests.Count)개입니다 (1개여야 함)." }
+    $actual = $digests[0]
     if ($actual -ne $ExpectedCertSha256) { throw "서명 인증서 SHA-256이 앱 서명 키 지문과 다릅니다: $actual" }
     Assert-Tool (Invoke-Tool $zipalign @('-c', '-P', '16', '4', $signedApk)) '서명한 APK 정렬 확인 (zipalign -c -P 16 4)'
     $signed = Get-ApkInfo $aapt2 $signedApk

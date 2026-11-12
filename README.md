@@ -16,15 +16,21 @@
 | 문서 | 내용 | 상태 |
 | --- | --- | --- |
 | [기획 v4](docs/01-planning/planning-v4.md) | DidITake 기획 v3 뒤에 정한 결정(1차 범위, 백업, Play 비공개 테스트, 범위 확정)으로 바뀐 점 | 범위 확정 반영 (2026-11-12) |
-| [요구사항](docs/01-planning/requirements.md) | 요구 REQ-001~083, 합격 기준, 범위 확정 때 정한 것 | 1차 범위 확정 (2026-11-12 10:18 KST) |
-| [기록 규칙 보충](docs/04-spec/record-rules-supplement.md) | 설계 독립 검토(PR #3)의 A1~A6·B3과 범위 확정 반영 검토(2026-11-12)의 A4·B2~B11을 규칙과 반례 RR-26~89로 적음. 주 1회 약은 결정 Q15의 1차 방식 | 개발 기준 (2026-11-12) |
-| [화면 목록](docs/05-ui/sitemap.yaml) · [화면 상태](docs/05-ui/screens.md) | 화면 SCR-001~010과 화면별 상태, 화면에서 정한 것. 상태별 와이어프레임은 아직 없음(TASK-044) | 범위 확정 반영 (2026-11-12) |
+| [01 도메인 설계](docs/01-domain/domain.md) | 경계 CTX-001~005와 용어집 TERM-001~031. Miro 보드와 맞춤 | 확인 1~3 지남 (2026-11-12 16:03 KST) |
+| [02 요구사항](docs/01-planning/requirements.md) | 요구 REQ-001~095, 합격 기준, v3 뒤에 정한 결정(0장) | 범위 확인 지남 (2026-11-12 16:32 KST). REQ-095는 04 고정 때 더함 |
+| [03 사용자 흐름](docs/03-user-flow/README.md) | 흐름 FL-001~010. 흐름마다 Mermaid 그림 | 확인 끝 (2026-11-12 23:50 KST) |
+| [04 기능 명세](docs/04-functional-spec/spec.md) | 동작마다 한 줄인 SPEC-001~044(출처, 전제, 예외, 합격 기준) | 고정 (2026-11-13 00:16 KST) |
+| [기록 규칙 보충](docs/04-spec/record-rules-supplement.md) | 04 명세가 따르는 규칙(I·B·R·S·P·N·W·C)과 반례 RR-26~90. 주 1회 약은 결정 Q15의 1차 방식 | 개발 기준 (2026-11-12, 2026-11-13 P-9·RR-90 더함) |
+| [05 ERD](docs/05-erd/README.md) · [`db/schema.sql`](db/schema.sql) | 표 TBL-001~011. Room이 내보낸 스키마와 같음 | 초안, 스키마 고정 전 |
+| [07 화면 목록](docs/05-ui/sitemap.yaml) · [08 화면 상태](docs/05-ui/screens.md) | 화면 SCR-001~010과 화면별 상태, 화면에서 정한 것 | 초안, 확인 전 |
+| [09 목업](docs/09-mockup/README.md) | 2안 요일 약통 보드와 토큰([`design/base.tokens.json`](design/base.tokens.json)) | 확인 끝 (2026-11-12 19:11 KST). 글꼴만 2026-11-13에 기기 글꼴로 바꿈 |
+| [10 작업 분해](docs/08-wbs/wbs.md) | 작업 TASK-001~053, 담당, 릴리즈 단계 R0~R5와의 대응. 지금 프로토타입에서 Play 비공개 테스트까지 | 초안, 다음 묶음 계획 확인 전. 담당은 Claude 제안 |
+| [12 QA 시험 계획](docs/12-qa/test-plan.md) | 시험 사례 TC-001~088과 버그 BUG ID. 이전 QA 보고서는 [`docs/07-qa/`](docs/07-qa/) | 초안, 출시 판단 전 |
 | [설계 독립 검토](docs/06-review/design-review-2026-11-11.md) | 2026-11-11 독립 검토 의견과 근거 파일 | 끝남 (PR #3) |
 | [범위 확정 반영 검토](docs/06-review/scope-confirm-review-2026-11-12.md) | 2026-11-12 Fable 5.2 독립 검토 의견(조건부 통과). 반영한 곳은 각 문서에 '2026-11-12 검토'로 적음 | 반영함 (PR #5) |
-| [작업 분해](docs/08-wbs/wbs.md) | 작업 TASK-001~052, 담당, 릴리즈 단계 R0~R5와의 대응. 지금 프로토타입에서 Play 비공개 테스트까지 | 범위 확정 반영 (2026-11-12). 담당은 Claude 제안 |
-| [.corthex/project.json](.corthex/project.json) | 단계별 원본 위치 (CORTHEX) | |
+| [.corthex/project.json](.corthex/project.json) | CORTHEX 단계별 원본 위치와 확인 기록 요약. 06 API와 13 발표는 뺌 | |
 
-문서를 고치면 `python3 .github/scripts/check_docs.py`로 요구·화면·작업 분해·기록 규칙 보충이 서로 맞는지와 문서 안 링크를 대조함. PR마다 CI의 '문서 대조' 작업에서도 돎.
+문서를 고치면 `python3 .github/scripts/check_docs.py`로 요구·흐름·명세·스키마·화면·작업 분해·시험 계획·기록 규칙 보충이 서로 맞는지와 문서 안 링크를 대조함. PR마다 CI의 '문서 대조' 작업에서도 돎.
 
 ## 빌드와 실행
 

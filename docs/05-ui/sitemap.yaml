@@ -114,5 +114,5 @@
           status: active
           code: 일부 (항목 화면에서 대상자 추가만 있음)
           flows: [FL-006]
-          reqs: [REQ-017, REQ-018, REQ-047, REQ-074, REQ-079, REQ-085, REQ-086, REQ-093, REQ-094]
+          reqs: [REQ-017, REQ-018, REQ-047, REQ-074, REQ-079, REQ-085, REQ-086, REQ-093, REQ-094, REQ-095]
           terms: [CTX-002, TERM-002, TERM-003, TERM-018]

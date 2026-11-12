@@ -22,7 +22,7 @@
       "human": "github",
       "source": "docs/01-planning/requirements.md",
       "truth": "source",
-      "note": "요구 ID 원본. 1차 범위 확정 2026-11-12 10:18 KST(동희님). 2026-11-12 15:02 KST 지시로 02를 다시 함: 01 결과로 경계(CTX) 열·용어 맞춤·두 동작 줄 나눔(REQ-084~091)·새 요구 REQ-092~094. 범위 확인 지남(2026-11-12 16:32 KST, 동희님 '추천 모두 승인', 0장). 사람이 읽는 기획은 DidITake 기획 v3와 이 저장소의 기획 v4"
+      "note": "요구 ID 원본. 1차 범위 확정 2026-11-12 10:18 KST(동희님). 2026-11-12 15:02 KST 지시로 02를 다시 함: 01 결과로 경계(CTX) 열·용어 맞춤·두 동작 줄 나눔(REQ-084~091)·새 요구 REQ-092~094. 범위 확인 지남(2026-11-12 16:32 KST, 동희님 '추천 모두 승인', 0장). 사람이 읽는 기획은 DidITake 기획 v3와 이 저장소의 기획 v4. 04 명세 고정(2026-11-13 00:16 KST)에서 REQ-095(대상자 되살리기, Should)를 더하고 REQ-046의 방법을 고침(0장, 5.2절)"
     },
     "03-user-flow": {
       "human": "github",
@@ -34,7 +34,7 @@
       "human": "github",
       "source": "docs/04-functional-spec/spec.md",
       "truth": "source",
-      "note": "2026-11-12 15:02 KST 지시('/corthex 첨부터')로 이 저장소에서 새로 씀. 동작마다 SPEC 줄 하나(REQ·FL 링크, 전제, 예외, 합격 기준). 규칙 문장과 반례 RR-26~89는 docs/04-spec/record-rules-supplement.md에 그대로 두고, RR-1~25는 가쟈누님 DidITake 기록 규칙(7a800ac, 시안). 확인(명세 고정) 전"
+      "note": "2026-11-12 15:02 KST 지시('/corthex 첨부터')로 이 저장소에서 새로 씀. 동작마다 SPEC 줄 하나(REQ·FL 링크, 전제, 예외, 합격 기준). 규칙 문장과 반례 RR-26~90(RR-90은 고정 때 더함)은 docs/04-spec/record-rules-supplement.md에 두고, RR-1~25는 가쟈누님 DidITake 기록 규칙(7a800ac, 시안). 명세 고정(2026-11-13 00:16 KST, 동희님 '추천 모두 승인', 프로젝트 채팅. 질문은 00:03 KST 프로젝트 스레드 메시지 1~4번): SPEC-001~043 고정과 요구에 없던 동작 셋, 대상자 되살리기 REQ-095·SPEC-044(보충 P-9·RR-90, TASK-053), 잠금 화면 방법은 PR #15 실험 방법 5(SPEC-013, N-13), 글꼴은 기기 글꼴(토큰). 기록은 spec.md 5장. 고정한 줄을 바꾸려면 동희님 결정"
     },
     "05-erd": {
       "human": "github",
@@ -62,7 +62,7 @@
     "09-mockup": {
       "human": "github",
       "link": "docs/09-mockup/README.md",
-      "note": "2026-11-12 CORTHEX 09 다시 하기: 17:34 동희님 'AI 슬롭' 지적으로 Pillbox 토큰 후보를 버리고 1안 약봉투·2안 요일 약통을 claude.ai Design 캔버스(https://claude.ai/artifact/QW5JRsx1Zpz5ekeqHmjpKC)에 다시 그림. 18:27 KST 동희님이 결정 카드에서 '2안 요일 약통'을 고름. 그 뒤 화면 10개와 주요 상태를 2안으로 그림(보드 원본 docs/09-mockup/boards/). 토큰 원본은 DTCG design/base.tokens.json. 19:11 KST 동희님 '모두 승인'으로 09 확인 끝: 위젯 '더 있음'은 글자 없는 아래 화살표(REQ-078), 가장 작은 크기는 실제 4×2 칸(REQ-026), 토큰을 지금 값으로 굳힘. 가쟈누님 시안 v3(DidITake 7a800ac docs/05-ui/ui-mockup-v3.html)는 참고 자료"
+      "note": "2026-11-12 CORTHEX 09 다시 하기: 17:34 동희님 'AI 슬롭' 지적으로 Pillbox 토큰 후보를 버리고 1안 약봉투·2안 요일 약통을 claude.ai Design 캔버스(https://claude.ai/artifact/QW5JRsx1Zpz5ekeqHmjpKC)에 다시 그림. 18:27 KST 동희님이 결정 카드에서 '2안 요일 약통'을 고름. 그 뒤 화면 10개와 주요 상태를 2안으로 그림(보드 원본 docs/09-mockup/boards/). 토큰 원본은 DTCG design/base.tokens.json. 19:11 KST 동희님 '모두 승인'으로 09 확인 끝: 위젯 '더 있음'은 글자 없는 아래 화살표(REQ-078), 가장 작은 크기는 실제 4×2 칸(REQ-026), 토큰을 지금 값으로 굳힘. 가쟈누님 시안 v3(DidITake 7a800ac docs/05-ui/ui-mockup-v3.html)는 참고 자료. 2026-11-13 00:16 KST 04 명세 고정 질문 4(동희님 '추천 모두 승인')로 글꼴을 앱에 넣지 않고 기기 글꼴을 씀: font.family.base를 sans-serif로, 보드는 Pixel 기본 글꼴(Roboto·Noto Sans KR)로 다시 그리고 글자 200% 배치를 다시 잼(README 4장)"
     },
     "10-wbs": {
       "human": "github",
@@ -79,7 +79,7 @@
       "human": "github",
       "source": "docs/12-qa/test-plan.md",
       "truth": "source",
-      "note": "2026-11-12 12 다시 하기(Claude): 시험 계획을 이 저장소에서 새로 씀(TC-001~087: 명세 43, 흐름 10, 비기능 24, 화면 10). 이전 QA 보고서는 docs/07-qa/. 브라우저 화면이 없어 브라우저 대리인 대신 에뮬레이터 둘러보기(explore.py)가 흐름을 걸음. 버그는 계획의 6장(BUG ID). 출시 판단 전"
+      "note": "2026-11-12 12 다시 하기(Claude): 시험 계획을 이 저장소에서 새로 씀(TC-001~087: 명세 43, 흐름 10, 비기능 24, 화면 10). 이전 QA 보고서는 docs/07-qa/. 브라우저 화면이 없어 브라우저 대리인 대신 에뮬레이터 둘러보기(explore.py)가 흐름을 걸음. 버그는 계획의 6장(BUG ID). 04 고정(2026-11-13) 때 SPEC-044의 TC-088을 더함. 출시 판단 전"
     },
     "13-presentation": {
       "skip": true

@@ -16,7 +16,7 @@
 --   TERM-031 (빠짐: 계산)
 
 
--- TBL-001 person (CTX-002) ← SPEC-001, SPEC-004, SPEC-005, SPEC-026, SPEC-027 | terms: TERM-002, TERM-003, TERM-018
+-- TBL-001 person (CTX-002) ← SPEC-001, SPEC-004, SPEC-005, SPEC-026, SPEC-027, SPEC-044 | terms: TERM-002, TERM-003, TERM-018
 --   대상자 한 명. 처음 실행에 '나'가 생김(SPEC-001).
 --   rule (CTX-002, 코드): 보관되지 않은 대상자는 늘 한 명 이상. 마지막 한 명은 보관하지 않음(REQ-093, ManagePeople.archive).
 --   rule (코드): archived_at이 있으면 보관(TERM-018). 그 대상자의 항목은 위젯·알림·오늘 목록에서 빠지고 판정은 남음.
@@ -30,12 +30,13 @@ CREATE TABLE IF NOT EXISTS `person` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `
 CREATE TABLE IF NOT EXISTS `intake` (`id` TEXT NOT NULL, `person_id` TEXT NOT NULL, `name` TEXT NOT NULL, `widget_alias` TEXT, `slot_label` TEXT, `sort_order` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `version` INTEGER NOT NULL, `device_id` TEXT NOT NULL, `archived_at` INTEGER, PRIMARY KEY(`id`), FOREIGN KEY(`person_id`) REFERENCES `person`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION );
 CREATE INDEX IF NOT EXISTS `ix_intake_person` ON `intake` (`person_id`);
 
--- TBL-003 schedule_version (CTX-002) ← SPEC-003, SPEC-022, SPEC-023 | terms: TERM-005
+-- TBL-003 schedule_version (CTX-002) ← SPEC-003, SPEC-022, SPEC-023, SPEC-044 | terms: TERM-005
 --   주기의 한 버전. 주기를 바꾸면 지금 버전을 닫고(effective_to) 새 버전을 엶. 지난 기록은 그날 유효했던 버전대로 그림(SPEC-022).
 --   type: DAILY | WEEKLY. params_json: 주 1회는 기준 요일 {"anchorWeekday":"MON"} 꼴(ScheduleParams.kt).
 --   late_policy: ASK | MOVE | KEEP, 주 1회를 늦게 먹었을 때 기준 요일을 옮길지(확장용, 1차 화면에는 없음).
 --   rule (코드): 항목마다 열린 버전(effective_to IS NULL)은 하나. ManageIntakes.update가 닫고 같은 거래에서 엶.
 --   첫 버전은 등록한 창의 시작에서 시작(보충 P-4, MIGRATION_1_2).
+--   대상자를 되살리면 그 대상자 항목의 열린 버전을 보관한 때에 닫고 되살린 때부터 새로 엶(보충 P-9, SPEC-044). 보관한 동안은 버전이 없어 빠짐이 아님.
 CREATE TABLE IF NOT EXISTS `schedule_version` (`id` TEXT NOT NULL, `intake_id` TEXT NOT NULL, `type` TEXT NOT NULL, `params_json` TEXT NOT NULL, `late_policy` TEXT NOT NULL, `effective_from` INTEGER NOT NULL, `effective_to` INTEGER, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `version` INTEGER NOT NULL, `device_id` TEXT NOT NULL, `archived_at` INTEGER, PRIMARY KEY(`id`), FOREIGN KEY(`intake_id`) REFERENCES `intake`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION );
 CREATE INDEX IF NOT EXISTS `ix_schedule_intake_from` ON `schedule_version` (`intake_id`, `effective_from`);
 

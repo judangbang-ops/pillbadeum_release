@@ -1,7 +1,8 @@
 /* 2안 요일 약통: 화면 공통 조각. 값은 tokens.css(design/base.tokens.json에서 만듦)의 이름만 씀. */
+/* 글꼴: 토큰 font.family.base는 기기 기본(sans-serif). 보드는 Pixel·AOSP의 기본 글꼴을 흉내 내 라틴은 Roboto, 한글은 Noto Sans KR(기기의 Noto Sans CJK와 같은 디자인)로 그림 (2026-11-13) */
 body{margin:0;background:transparent}
 .s{width:360px;height:800px;overflow:hidden;box-sizing:border-box;background:var(--color-surface-default);
-  font-family:var(--font-family-base);font-size:var(--font-size-body);color:var(--color-ink-default);
+  font-family:Roboto,'Noto Sans KR',var(--font-family-base);font-size:var(--font-size-body);color:var(--color-ink-default);
   word-break:keep-all;overflow-wrap:break-word;font-variant-numeric:tabular-nums;display:flex;flex-direction:column;position:relative}
 .s *{box-sizing:border-box}
 .s p{margin:0}

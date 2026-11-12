@@ -365,10 +365,9 @@
       "$type": "fontFamily",
       "base": {
         "$value": [
-          "Gothic A1",
           "sans-serif"
         ],
-        "$description": "Google Fonts, SIL OFL 1.1"
+        "$description": "기기 기본 글꼴. 앱에 글꼴 파일을 넣지 않음(2026-11-13 00:16 KST 04 명세 고정 질문 4, 동희님 '추천 모두 승인'). Android에서는 FontFamily.Default로, 라틴 글자는 Roboto, 한글은 기기 글꼴(Pixel·AOSP는 Noto Sans CJK, 갤럭시는 제조사 글꼴)임. 위젯(Glance)도 기기 글꼴만 씀. 목업 보드는 Pixel을 흉내 내 Roboto와 Noto Sans KR로 그림(docs/09-mockup/README.md 2장). 그 전 값은 Gothic A1(Google Fonts, SIL OFL 1.1)"
       }
     },
     "weight": {

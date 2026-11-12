@@ -31,7 +31,7 @@ def board(name, title, body, css='', w=360, h=800, props=None, logic=None):
 <x-dc>
 <helmet>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@400;600;800&amp;display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;800&amp;family=Roboto:wght@400;600;800&amp;display=swap">
 <link rel="stylesheet" href="tokens.css">
 <link rel="stylesheet" href="box.css">
 <style>
@@ -370,9 +370,13 @@ board('People', 'SCR-010 대상자 관리', f'''
     <div class="li p2"><span class="lid" aria-hidden="true">엄</span><span class="k">엄마<small>약 2개</small></span><span class="muted">{CHEV}</span></div>
     <button class="btn ink" type="button" style="margin-top:var(--space-lg)">{PLUS}대상자 추가</button>
     <h2>보관됨</h2>
-    <div class="li"><span class="lid off" aria-hidden="true">아</span><span class="k">아빠<small>약 1개 · 지난 기록은&nbsp;남아요</small></span><button class="btn line sm" type="button">되살리기</button></div>
+    <div class="li arch"><span class="lid off" aria-hidden="true">아</span><span class="k">아빠<small>약 1개 · 지난 기록은&nbsp;남아요</small></span><button class="btn line sm" type="button">되살리기</button></div>
   </div>
-</div>''')
+</div>''', css='''
+.fs200 .li.arch{flex-wrap:wrap}
+.fs200 .li.arch .k{flex-basis:calc(100% - var(--size-lid) - var(--space-md))}
+.fs200 .li.arch .btn{margin-left:calc(var(--size-lid) + var(--space-md))}
+''')
 
 COLORS = ''.join(f'<button class="sw p{i}{" on" if i == 3 else ""}" type="button" aria-label="{n}"{" aria-pressed=\"true\"" if i == 3 else ""}>{CHECK if i == 3 else ""}</button>'
                  for i, n in enumerate(['파랑', '주황', '초록', '보라', '장미', '청록'], 1))

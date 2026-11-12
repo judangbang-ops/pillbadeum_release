@@ -61,21 +61,27 @@ object Labels {
     /**
      * Widget line under the header while a restore notice is pending (SCR-001#restored):
      * `복원됨 · 마지막 기록 11/09 21:40 · 앱에서 확인`. With no restored record the middle part is
-     * `기록 없음` (Claude default, the screens do not cover that case).
+     * `기록 없음`; when every restored record is after this phone's clock there is no middle part
+     * (Claude defaults, the screens do not cover these cases).
      */
-    fun restoreWidgetLine(notice: RestoreNotice, zone: TimeZone): String {
-        val last = notice.lastRecordAt?.let { "마지막 기록 ${monthDayTime(it, zone)}" } ?: NO_RECORD
-        return "복원됨 · $last · 앱에서 확인"
+    fun restoreWidgetLine(notice: RestoreNotice, zone: TimeZone): String = when {
+        notice.lastRecordAt != null -> "복원됨 · 마지막 기록 ${monthDayTime(notice.lastRecordAt, zone)} · 앱에서 확인"
+        notice.hasRecords -> "복원됨 · 앱에서 확인"
+        else -> "복원됨 · $NO_RECORD · 앱에서 확인"
     }
 
     /**
      * App notice at the top of the first screen (SCR-004#restored, REQ-073, REQ-074). With no
-     * restored record the second sentence says so (Claude default).
+     * restored record, or only records after this phone's clock, the second sentence changes
+     * (Claude defaults).
      */
     fun restoreAppNotice(notice: RestoreNotice, zone: TimeZone): String {
-        val last = notice.lastRecordAt
-            ?.let { "마지막 기록은 ${monthDayTime(it, zone)}이에요. 그 뒤의 기록은 없을 수 있어요." }
-            ?: "복원된 복용 기록이 없어요. 다른 휴대폰에서 한 기록은 없을 수 있어요."
+        val last = when {
+            notice.lastRecordAt != null ->
+                "마지막 기록은 ${monthDayTime(notice.lastRecordAt, zone)}이에요. 그 뒤의 기록은 없을 수 있어요."
+            notice.hasRecords -> "다른 휴대폰에서 한 기록은 없을 수 있어요."
+            else -> "복원된 복용 기록이 없어요. 다른 휴대폰에서 한 기록은 없을 수 있어요."
+        }
         return "백업에서 복원했어요. $last $ONE_PHONE"
     }
 

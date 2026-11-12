@@ -226,6 +226,77 @@ class InstallCheckTest {
         assertEquals(seoul("2026-11-10T21:40"), notice.lastRecordAt)
     }
 
+    /** RR-75, other side: every restored judgment is after this phone's clock. No time, no "no record". */
+    @Test
+    fun onlyLaterRecords_noticeShowsNoTime_doesNotSayNoRecord() = runTest {
+        val intake = fx.newIntake()
+        fx.at("2026-11-13T09:00")
+        assertIs<RecordResult.Recorded>(fx.record(intake, renderedKey = "2026-11-13"))
+        fx.db.settingDao().upsert(SettingEntity(SettingKeys.DEVICE_ID, OLD_PHONE))
+
+        fx.at("2026-11-11T07:30") // this phone's clock is behind the old phone's records
+        val board = open().loadStatusBoard()
+        val notice = assertNotNull(board.restoreNotice)
+        assertNull(notice.lastRecordAt)
+        assertTrue(notice.hasRecords)
+        assertEquals(CheckInstall.ONLY_LATER_RECORDS, setting(SettingKeys.RESTORE_NOTICE_LAST_RECORD_AT))
+        assertEquals("복원됨 · 앱에서 확인", WidgetModel.from(board).restoreLine)
+        assertEquals(
+            "백업에서 복원했어요. 다른 휴대폰에서 한 기록은 없을 수 있어요. 한 약은 한 휴대폰에서 기록해 주세요",
+            Labels.restoreAppNotice(notice, SEOUL),
+        )
+    }
+
+    /** A cancelled (void) judgment is not the "last record": only active ones count. */
+    @Test
+    fun voidedLatestJudgment_isSkipped() = runTest {
+        val intake = oldPhoneDatabase() // active 11-10 21:40
+        fx.at("2026-11-11T07:00")
+        val later = assertIs<RecordResult.Recorded>(fx.record(intake, renderedKey = "2026-11-11"))
+        assertEquals(1, fx.db.doseRecordDao().voidActive(later.record.id, fx.clock.now().toEpochMilliseconds(), "USER_CANCEL"))
+
+        fx.at("2026-11-11T07:30")
+        val notice = assertNotNull(open().loadStatusBoard().restoreNotice)
+        assertEquals(seoul("2026-11-10T21:40"), notice.lastRecordAt)
+    }
+
+    /** A backup taken after an earlier restore: the old restore settings are overwritten, not kept. */
+    @Test
+    fun secondRestore_overwritesEarlierRestoreSettings() = runTest {
+        oldPhoneDatabase()
+        val settings = fx.db.settingDao()
+        settings.upsert(SettingEntity(SettingKeys.RESTORED_FROM_DEVICE_ID, "phone-before-old-phone"))
+        settings.upsert(SettingEntity(SettingKeys.RESTORE_NOTICE_PENDING, CheckInstall.DONE))
+        settings.upsert(SettingEntity(SettingKeys.RESTORE_NOTICE_LAST_RECORD_AT, "0"))
+
+        fx.at("2026-11-11T07:30")
+        val core = open()
+        assertEquals(InstallState.Restored(OLD_PHONE), core.installState)
+        assertEquals(OLD_PHONE, setting(SettingKeys.RESTORED_FROM_DEVICE_ID))
+        assertEquals(CheckInstall.PENDING, setting(SettingKeys.RESTORE_NOTICE_PENDING))
+        assertEquals(seoul("2026-11-10T21:40"), core.loadStatusBoard().restoreNotice?.lastRecordAt)
+    }
+
+    /** New install, process killed after the marker write: the next start is a new install again. */
+    @Test
+    fun newInstall_diedAfterMarkerWrite_nextStartIsNewInstall() = runTest {
+        val dying = object : InstallMarker {
+            override suspend fun read(): String? = marker.read()
+            override suspend fun write(deviceId: String) {
+                marker.write(deviceId)
+                throw IllegalStateException("process killed after the marker write")
+            }
+        }
+        assertFailsWith<IllegalStateException> { open(dying) }
+        assertNull(setting(SettingKeys.DEVICE_ID))
+
+        val core = open()
+        assertEquals(InstallState.New, core.installState)
+        assertEquals(core.deviceId, marker.value)
+        assertEquals(core.deviceId, setting(SettingKeys.DEVICE_ID))
+        assertNull(core.loadStatusBoard().restoreNotice)
+    }
+
     /** Restored database without any judgment: the notice says so instead of a time (Claude default). */
     @Test
     fun restoreWithoutRecords_noticeSaysNoRecord() = runTest {
@@ -234,7 +305,8 @@ class InstallCheckTest {
         val board = open().loadStatusBoard()
         val notice = assertNotNull(board.restoreNotice)
         assertNull(notice.lastRecordAt)
-        assertEquals("", setting(SettingKeys.RESTORE_NOTICE_LAST_RECORD_AT))
+        assertFalse(notice.hasRecords)
+        assertEquals(CheckInstall.NO_RECORDS, setting(SettingKeys.RESTORE_NOTICE_LAST_RECORD_AT))
         assertEquals("복원됨 · 기록 없음 · 앱에서 확인", WidgetModel.from(board).restoreLine)
         assertTrue(Labels.restoreAppNotice(notice, SEOUL).endsWith(Labels.ONE_PHONE))
     }

@@ -1,6 +1,9 @@
 package com.judangbang.pillbadeum.restore
 
 import android.content.Context
+import android.system.ErrnoException
+import android.system.Os
+import android.system.OsConstants
 import java.io.File
 import java.io.FileOutputStream
 import kotlinx.coroutines.Dispatchers
@@ -18,15 +21,33 @@ class FileInstallMarker(private val file: File) : InstallMarker {
         file.readText(Charsets.UTF_8).trim().takeIf { it.isNotEmpty() }
     }
 
-    /** Write to a temporary file, flush it to disk, then rename: never a half-written marker. */
+    /**
+     * Write to a temporary file, flush it to disk, rename, then flush the directory so the rename
+     * itself survives a power cut (f2fs does not flush it with the file): never a half-written or
+     * lost marker once this returns.
+     */
     override suspend fun write(deviceId: String) = withContext(Dispatchers.IO) {
-        file.parentFile?.mkdirs()
-        val tmp = File(file.parentFile, file.name + ".tmp")
+        val dir = checkNotNull(file.parentFile) { "no directory for $file" }
+        dir.mkdirs()
+        val tmp = File(dir, file.name + ".tmp")
         FileOutputStream(tmp).use { out ->
             out.write(deviceId.toByteArray(Charsets.UTF_8))
             out.fd.sync()
         }
         check(tmp.renameTo(file)) { "could not replace $file" }
+        syncDirectory(dir)
+    }
+
+    private fun syncDirectory(dir: File) {
+        val fd = Os.open(dir.path, OsConstants.O_RDONLY, 0)
+        try {
+            Os.fsync(fd)
+        } catch (e: ErrnoException) {
+            // A file system that cannot flush a directory has nothing more to flush.
+            if (e.errno != OsConstants.EINVAL) throw e
+        } finally {
+            Os.close(fd)
+        }
     }
 
     companion object {

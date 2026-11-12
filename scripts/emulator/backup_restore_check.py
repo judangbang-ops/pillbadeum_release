@@ -25,6 +25,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import tarfile
 import tempfile
 import time
 import xml.etree.ElementTree as ET
@@ -35,6 +36,7 @@ PKG = "com.judangbang.pillbadeum"
 ACTIVITY = f"{PKG}/.MainActivity"
 DATA = f"/data/data/{PKG}"
 DB = "diditake.db"
+DB_DOMAIN = "db"  # tar folder of the `database` backup domain
 LOCAL_TRANSPORT = "com.android.localtransport/.LocalTransport"
 CONTROL_PKG = "com.android.providers.settings"
 CONTROL_OK = "Backup finished with result: Success"
@@ -193,6 +195,7 @@ class AppState:
     settings: dict[str, str] = field(default_factory=dict)
     marker: str | None = None
     files: str = ""
+    readable: bool = True
 
 
 def read_state() -> AppState:
@@ -212,8 +215,9 @@ def read_state() -> AppState:
             records = con.execute("SELECT COUNT(*) FROM dose_record WHERE active = 1").fetchone()[0]
             ids = [r[0] for r in con.execute("SELECT device_id FROM dose_record WHERE active = 1 ORDER BY recorded_at")]
             settings = dict(con.execute("SELECT key, value FROM setting"))
-        except sqlite3.OperationalError:
-            records, ids, settings = 0, [], {}
+        except sqlite3.DatabaseError:
+            # A broken or half-copied database is not "no records": callers see readable = False.
+            return AppState(True, -1, [], {}, marker, files, readable=False)
         finally:
             con.close()
         return AppState(True, records, ids, settings, marker, files)
@@ -270,6 +274,53 @@ def ensure_transport(r: "Report") -> None:
 def last_line(out: str) -> str:
     lines = [line for line in out.strip().splitlines() if line.strip()]
     return lines[-1] if lines else ""
+
+
+def package_result(out: str) -> str:
+    """The `bmgr backupnow` line for the app ("Package ... with result: ...")."""
+    return next((line.strip() for line in out.splitlines() if f"Package {PKG} with result" in line), "")
+
+
+def backup_entries() -> list[str] | None:
+    """File names inside the test transport's full backup of the app (a tar stream the transport
+    keeps under its `_full` folder). None when the transport holds no full backup of the app."""
+    found = sh(f"find /data /cache -path '*/_full/{PKG}' -type f 2>/dev/null", check=False).split()
+    if not found:
+        return None
+    tmp = Path(tempfile.mkdtemp())
+    try:
+        local = tmp / "backup.tar"
+        adb("pull", found[0], str(local))
+        names: list[str] = []
+        try:
+            with tarfile.open(local, mode="r|") as tar:
+                names = [member.name for member in tar]
+        except tarfile.TarError:
+            pass
+        if not names:  # fall back to the header names in the raw stream
+            raw = local.read_bytes()
+            names = sorted({m.decode() for m in re.findall(rb"apps/" + re.escape(PKG.encode()) + rb"/[\x21-\x7e]+", raw)})
+        return names
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def db_entries(names: list[str] | None) -> list[str]:
+    return [n for n in names or [] if f"/{DB_DOMAIN}/" in n]
+
+
+def only_db_files(names: list[str] | None) -> bool:
+    """B-1: the backup holds the record DB and its companion files, nothing else of the app."""
+    allowed = {f"apps/{PKG}/{DB_DOMAIN}/{DB}{suffix}" for suffix in ("", "-wal", "-journal")}
+    data = [n for n in names or [] if not n.endswith(("/_manifest", "/_meta"))]
+    return bool(data) and all(n in allowed for n in data)
+
+
+def show_entries(names: list[str] | None) -> str:
+    if names is None:
+        return "전송에 백업 없음"
+    short_names = [n.split(f"apps/{PKG}/", 1)[-1] for n in names]
+    return "백업 안: " + (", ".join(short_names) if short_names else "(빈 백업)")
 
 
 def set_transport_params(params: str) -> None:
@@ -343,6 +394,8 @@ class Report:
 def describe(state: AppState) -> str:
     if not state.exists:
         return f"DB 없음, 표식 {'있음' if state.marker else '없음'}"
+    if not state.readable:
+        return "DB가 있으나 읽지 못함"
     s = state.settings
     return (f"활성 판정 {state.active_records}, device_id {short(s.get('device_id'))}, "
             f"restored_from {short(s.get('restored_from_device_id'))}, "
@@ -376,6 +429,9 @@ def cases_api31(apk: Path, r: Report) -> None:
     old_id = before.settings.get("device_id")
     out = backup_now()
     r.note(f"bmgr backupnow (is_encrypted=true): {last_line(out)}")
+    entries = backup_entries()
+    r.check("B-1 백업에 든 파일 (암호화 가능)", "기록 DB와 짝 파일만",
+            show_entries(entries), only_db_files(entries))
     reinstall(apk)
     restored = read_state()
     r.check("RR-26·RR-69 백업 → 지우고 다시 설치 (암호화 가능)", "기록 1건이 돌아옴, 표식 없음",
@@ -422,6 +478,9 @@ def cases_api31(apk: Path, r: Report) -> None:
     stop_app()
     out = sh(f"bmgr restore {PKG}", check=False, timeout=180)
     r.note(f"bmgr restore: {last_line(out)}")
+    before_start = read_state()
+    r.note(f"RR-71 복원 직후 실행 전: {describe(before_start)} "
+           "(표식이 없으면 시스템이 복원 전에 앱 데이터를 지운 것: R-1 표의 '표식 없음' 줄로 감)")
     launch_app()
     over = read_state()
     notice = screen_has(NOTICE, 10)
@@ -445,10 +504,12 @@ def cases_api31(apk: Path, r: Report) -> None:
     fresh_install_with_record(apk, r)
     out = backup_now()
     r.note(f"bmgr backupnow (is_encrypted=false): {last_line(out)}")
+    entries = backup_entries()
     reinstall(apk)
     nolock = read_state()
-    r.check("RR-68 암호화 없음(화면 잠금 없음)", "기록이 돌아오지 않음", describe(nolock),
-            nolock.active_records == 0)
+    r.check("RR-68 암호화 없음(화면 잠금 없음)", "백업에 DB 없음, 다시 설치하면 DB 없음",
+            f"{package_result(out) or last_line(out)}; {show_entries(entries)}; {describe(nolock)}",
+            CONTROL_OK in out and not db_entries(entries) and not nolock.exists)
     launch_app()
     r.check("RR-68 그 뒤 첫 실행", "새 설치로 처리, 안내 없음",
             f"안내 {'보임' if screen_has(NOTICE, 3) else '없음'}", not screen_has(NOTICE, 0))
@@ -459,6 +520,8 @@ def cases_api31(apk: Path, r: Report) -> None:
     d2d_before = fresh_install_with_record(apk, r)
     out = backup_now()
     r.note(f"bmgr backupnow (is_device_transfer=true): {last_line(out)}")
+    entries = backup_entries()
+    r.check("B-1 기기 간 이전에 든 파일", "기록 DB와 짝 파일만", show_entries(entries), only_db_files(entries))
     reinstall(apk)
     d2d = read_state()
     launch_app()
@@ -469,22 +532,29 @@ def cases_api31(apk: Path, r: Report) -> None:
     set_transport_params("")
 
 
-def cases_no_backup(apk: Path, r: Report, case: str, expected_note: str) -> None:
+def cases_no_backup(apk: Path, r: Report, case: str, expected_note: str, needs_parse_failure: bool) -> None:
+    """Android 8.x (parse failure) and 9-11 (the test transport has no encryption flag): the backup
+    runs for the app but holds no DB, and a reinstall brings no DB back."""
     wipe_backup()
     set_transport_params("")
     sh("logcat -c", check=False)
     fresh_install_with_record(apk, r)
     out = backup_now()
-    r.note(f"bmgr backupnow: {' / '.join(line.strip() for line in out.strip().splitlines() if PKG in line or 'finished' in line)}")
+    result = package_result(out)
     log = adb("logcat", "-d", check=False, timeout=60)
     lines = [line for line in log.splitlines()
              if re.search(r"XmlPullParser|Aborting|BackupXmlParserLogging|FullBackup", line)]
     (r.out / f"api{r.api}-backup-rules.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    parse_failed = any("XmlPullParserException" in line or "Aborting" in line for line in lines)
-    r.note(f"규칙 파일 파싱 실패 기록 {'있음' if parse_failed else '없음'} (api{r.api}-backup-rules.txt)")
+    parse_failed = any("XmlPullParserException" in line or "Aborting full backup" in line for line in lines)
+    entries = backup_entries()
     reinstall(apk)
     state = read_state()
-    r.check(case, expected_note, describe(state), state.active_records == 0)
+    evidence = (f"{result or last_line(out)}; 규칙 파일 파싱 실패 기록 {'있음' if parse_failed else '없음'}; "
+                f"{show_entries(entries)}; 다시 설치 뒤 {describe(state)}")
+    ok = bool(result) and not db_entries(entries) and not state.exists
+    if needs_parse_failure:
+        ok = ok and parse_failed
+    r.check(case, expected_note, evidence, ok)
     launch_app()
     r.check(f"{case} 뒤 첫 실행", "새 설치로 처리, 안내 없음",
             f"안내 {'보임' if screen_has(NOTICE, 3) else '없음'}", not screen_has(NOTICE, 0))
@@ -515,9 +585,12 @@ def main() -> int:
             cases_api31(args.apk, r)
         elif api >= 28:
             cases_no_backup(args.apk, r, "Android 9~11, 시험 전송(암호화 플래그 없음)",
-                            "기록이 돌아오지 않음 (이 전송은 clientSideEncryption을 켤 수 없음)")
+                            "앱 백업은 돌지만 DB가 들지 않음, 다시 설치하면 DB 없음 (이 전송은 clientSideEncryption을 켤 수 없음)",
+                            needs_parse_failure=False)
         else:
-            cases_no_backup(args.apk, r, "RR-70 Android 8.x", "백업하지 않음 (규칙 파일 파싱 실패로 건너뜀)")
+            cases_no_backup(args.apk, r, "RR-70 Android 8.x",
+                            "규칙 파일 파싱 실패로 앱 전체 백업을 건너뜀, 백업에 DB 없음, 다시 설치하면 DB 없음",
+                            needs_parse_failure=True)
     except Exception as exc:  # report what happened, then fail
         r.check("스크립트", "끝까지 돎", f"{type(exc).__name__}: {exc}", False)
         try:

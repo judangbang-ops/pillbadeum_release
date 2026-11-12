@@ -53,22 +53,26 @@ class AppContainer(private val context: Context, private val clock: Clock) {
     suspend fun core(): DidITakeCore = core ?: mutex.withLock {
         core ?: DidITakeCore.open(database, FileInstallMarker.of(context), clock).also {
             core = it
-            if (it.installState is InstallState.Restored) rebuildAfterRestore()
+            afterOpen(restored = it.installState is InstallState.Restored)
         }
     }
 
     /**
-     * Supplement R-4, REQ-056: a restored install has no alarms and its widgets were drawn before
-     * the check. Runs after [core] is set, so the work below can call [core] again.
+     * Once per process, after [core] is set (so the work below can call [core] again): re-arms the
+     * day-boundary alarm, which is cheap and replaces the same alarm. After a restore (supplement
+     * R-4, REQ-056) the widgets were drawn before the check, so they are redrawn too. Doing the
+     * alarm on every process start also covers a restore whose rebuild was cut off.
      */
-    private fun rebuildAfterRestore() {
+    private fun afterOpen(restored: Boolean) {
         appScope.launch {
             try {
-                Log.i(TAG, "restore detected: refreshing widgets and the day-boundary alarm")
-                WidgetUpdater.updateAll(context)
+                if (restored) {
+                    Log.i(TAG, "restore detected: refreshing widgets")
+                    WidgetUpdater.updateAll(context)
+                }
                 DayBoundaryAlarm.scheduleNext(context)
             } catch (e: Exception) {
-                Log.e(TAG, "rebuild after restore failed", e)
+                Log.e(TAG, "after-open work failed (restored=$restored)", e)
             }
         }
     }

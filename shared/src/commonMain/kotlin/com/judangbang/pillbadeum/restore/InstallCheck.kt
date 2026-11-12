@@ -83,19 +83,33 @@ class CheckInstall(
             transactor.immediateTransaction {
                 val now = clock.now().toEpochMilliseconds()
                 val settings = db.settingDao()
-                val lastRecordAt = db.doseRecordDao().latestActiveTakenAtBefore(now)
                 settings.upsert(SettingEntity(SettingKeys.DEVICE_ID, id))
                 settings.upsert(SettingEntity(SettingKeys.RESTORED_FROM_DEVICE_ID, previous))
-                settings.upsert(SettingEntity(SettingKeys.RESTORE_NOTICE_LAST_RECORD_AT, lastRecordAt?.toString().orEmpty()))
+                settings.upsert(SettingEntity(SettingKeys.RESTORE_NOTICE_LAST_RECORD_AT, lastRecordValue(now)))
                 settings.upsert(SettingEntity(SettingKeys.RESTORE_NOTICE_PENDING, PENDING))
             }
         }
         return id
     }
 
+    /**
+     * The "last record" of the notice: the latest active judgment before now (RR-75), as epoch
+     * milliseconds. [NO_RECORDS] when nothing active came back; [ONLY_LATER_RECORDS] when every
+     * active judgment is after this phone's clock, so no time can be shown (Claude default).
+     */
+    private suspend fun lastRecordValue(now: Long): String {
+        val records = db.doseRecordDao()
+        records.latestActiveTakenAtBefore(now)?.let { return it.toString() }
+        return if (records.latestActiveTakenAtBefore(Long.MAX_VALUE) == null) NO_RECORDS else ONLY_LATER_RECORDS
+    }
+
     companion object {
         const val PENDING: String = "1"
         const val DONE: String = "0"
+
+        /** `restore_notice_last_record_at` values besides epoch milliseconds. */
+        const val NO_RECORDS: String = ""
+        const val ONLY_LATER_RECORDS: String = "later"
     }
 }
 

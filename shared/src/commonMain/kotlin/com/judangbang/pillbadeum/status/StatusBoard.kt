@@ -87,13 +87,18 @@ data class DayCell(val date: LocalDate, val state: DayState, val isToday: Boolea
  * @property lastRecordAt latest active judgment before the restore was detected; null when the
  *   restored database held none.
  */
-data class RestoreNotice(val lastRecordAt: Instant?)
+/**
+ * The pending restore notice. [lastRecordAt] is the latest restored judgment before the restore;
+ * null with [hasRecords] = true means every restored judgment is after this phone's clock.
+ */
+data class RestoreNotice(val lastRecordAt: Instant?, val hasRecords: Boolean = lastRecordAt != null)
 
 /** Reads the restore notice settings; null unless `restore_notice_pending` = 1. */
 suspend fun SettingDao.loadRestoreNotice(): RestoreNotice? {
     if (get(SettingKeys.RESTORE_NOTICE_PENDING) != CheckInstall.PENDING) return null
-    val last = get(SettingKeys.RESTORE_NOTICE_LAST_RECORD_AT)?.toLongOrNull()
-    return RestoreNotice(last?.let(Instant::fromEpochMilliseconds))
+    val value = get(SettingKeys.RESTORE_NOTICE_LAST_RECORD_AT)
+    val last = value?.toLongOrNull()?.let(Instant::fromEpochMilliseconds)
+    return RestoreNotice(last, hasRecords = last != null || value == CheckInstall.ONLY_LATER_RECORDS)
 }
 
 /**

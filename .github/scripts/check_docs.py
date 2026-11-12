@@ -544,6 +544,33 @@ for end in ("TASK-038", "TASK-039"):
         days, chain = longest(end)
         print(f"  longest dependency chain ending at {end} (open-ended tasks count 0): {days}일 = {' > '.join(chain)}")
 
+# --- QA test plan (stage 12) ---------------------------------------------------------------
+plan_path = root / "docs/12-qa/test-plan.md"
+if plan_path.exists():
+    plan = plan_path.read_text(encoding="utf-8")
+    tcs = {}
+    for line in plan.splitlines():
+        m = re.match(r"\|\s*(TC-\d{3})\s*\|", line)
+        if m:
+            c = cells(line)
+            if m.group(1) in tcs:
+                problem(f"qa: duplicate {m.group(1)}")
+            if len(c) != 5 or not all(c):
+                problem(f"qa: {m.group(1)} needs 5 filled cells")
+            tcs[m.group(1)] = c
+    basis = " ".join(c[2] for c in tcs.values())
+    nf_must = {k for k, c in rows.items() if c[2] == "비기능" and c[3].startswith("Must")}
+    gaps = {
+        "spec rows": sorted(set(specs) - set(re.findall(r"SPEC-\d{3}", basis))) if spec_text else [],
+        "flows": sorted(set(flow_ids) - set(re.findall(r"FL-\d{3}", basis))),
+        "non-functional Must requirements": sorted(nf_must - set(re.findall(r"REQ-\d{3}", basis))),
+        "screen states": sorted(f"{s}#{x}" for s, v in states.items() for x in v if f"{s}#{x}" not in basis),
+    }
+    print(f"qa: {len(tcs)} test cases; " + ", ".join(f"{k} without a case: {v or 'none'}" for k, v in gaps.items()))
+    for k, v in gaps.items():
+        if v:
+            problem(f"qa: {k} without a test case {v}")
+
 # --- project settings -----------------------------------------------------------------------
 project = json.loads(read(".corthex/project.json"))
 for key, stage in project.get("stages", {}).items():

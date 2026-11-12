@@ -77,9 +77,9 @@
     },
     "12-qa": {
       "human": "github",
-      "source": "diditake:docs/07-qa/",
+      "source": "docs/12-qa/test-plan.md",
       "truth": "source",
-      "note": "가쟈누님 QA 보고서 형식 (DidITake). TC·BUG ID 없음"
+      "note": "2026-11-12 12 다시 하기(Claude): 시험 계획을 이 저장소에서 새로 씀(TC-001~087: 명세 43, 흐름 10, 비기능 24, 화면 10). 이전 QA 보고서는 docs/07-qa/. 브라우저 화면이 없어 브라우저 대리인 대신 에뮬레이터 둘러보기(explore.py)가 흐름을 걸음. 버그는 계획의 6장(BUG ID). 출시 판단 전"
     },
     "13-presentation": {
       "skip": true

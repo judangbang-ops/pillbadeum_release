@@ -279,6 +279,46 @@ if flow_files:
     if flow_scr - set(scr):
         problem(f"flows: unknown screen ids {sorted(flow_scr - set(scr))}")
 
+# --- sitemap against flows and the glossary (stage 07) --------------------------------------
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import draw_sitemap  # noqa: E402
+
+site = draw_sitemap.parse(sitemap)
+scr_in_flow = {}
+for path in flow_files:
+    fid = path.name[:6]
+    for sid in set(re.findall(r"SCR-\d{3}", path.read_text(encoding="utf-8"))):
+        scr_in_flow.setdefault(sid, set()).add(fid)
+domain_md = read("docs/01-domain/domain.md")
+glossary = set(re.findall(r"^\| (TERM-\d{3}) ", domain_md, re.M))
+screen_terms = set()
+for s in site:
+    sid = s["id"]
+    if not s.get("access"):
+        problem(f"sitemap: {sid} does not say who can see it")
+    named = set(s.get("flows", []))
+    if flow_files and named != scr_in_flow.get(sid, set()):
+        problem(f"sitemap: {sid} flows {sorted(named)} differ from the flows that name it "
+                f"{sorted(scr_in_flow.get(sid, set()))}")
+    terms = s.get("terms", "none")
+    if terms != "none":
+        unknown = {t for t in terms if t not in glossary and t not in domain_ctx}
+        if unknown or not isinstance(terms, list):
+            problem(f"sitemap: {sid} terms {terms}")
+        screen_terms |= set(terms)
+    for link in s.get("links", []):
+        if link.partition(":")[0].strip() not in scr:
+            problem(f"sitemap: {sid} links to an unknown screen '{link}'")
+without_screen = re.search(r"^# without a screen: (.*?)(?=^#\s*$|^[^#])", sitemap, re.M | re.S)
+without_screen = set(re.findall(r"TERM-\d{3}", without_screen.group(1))) if without_screen else set()
+no_screen = sorted(glossary - screen_terms - without_screen)
+print(f"  sitemap: glossary terms with neither a screen nor a 'without a screen' line: {no_screen or 'none'}")
+if no_screen:
+    problem(f"sitemap: terms with no screen and no 'without a screen' entry {no_screen}")
+m = re.search(r"<!-- sitemap:start -->\n(.*?)\n<!-- sitemap:end -->", screens, re.S)
+if not m or m.group(1) != draw_sitemap.draw(site):
+    problem("screens: section 1 is not drawn from sitemap.yaml (run .github/scripts/draw_sitemap.py)")
+
 # --- functional spec (stage 04) -------------------------------------------------------------
 spec_path = root / "docs/04-functional-spec/spec.md"
 spec_text = ""

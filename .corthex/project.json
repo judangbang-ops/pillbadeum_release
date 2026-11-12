@@ -51,7 +51,7 @@
       "human": "github",
       "source": "docs/05-ui/sitemap.yaml",
       "truth": "source",
-      "note": "그림과 표는 docs/05-ui/screens.md 1장 (Mermaid)"
+      "note": "그림과 표는 docs/05-ui/screens.md 1장 (Mermaid), .github/scripts/draw_sitemap.py가 sitemap.yaml에서 그림. 2026-11-12 07 다시 하기(Claude): flows를 03의 FL ID로, terms를 01의 CTX·TERM으로, 화면 밖 길은 links로. 화면 10개는 범위 확정(10:18) 그대로. 슬라이드 보기는 혼자 보는 프로젝트라 두지 않음. 내비게이션 확인 전"
     },
     "08-screen-states": {
       "human": "github",

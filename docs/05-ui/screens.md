@@ -18,39 +18,41 @@
 
 진입 지점은 셋임: 홈 화면 위젯, 알림, 앱 아이콘. 실선은 부모 → 자식, 점선은 다른 화면으로 가는 길임.
 
+<!-- sitemap:start -->
 ```mermaid
 flowchart TD
-    home(["홈 화면"]) --> SCR001["SCR-001 홈 화면 위젯<br/>widget:home"]
+    widget(["홈 화면"]) --> SCR001["SCR-001 홈 화면 위젯<br/>widget:home"]
+    notification(["알림창 · 잠금 화면"]) --> SCR003["SCR-003 반복 알림<br/>notification:reminder"]
+    app(["앱 아이콘"]) --> SCR004["SCR-004 기록 (오늘·이번 주)<br/>app:/"]
     SCR001 --> SCR002["SCR-002 위젯 대상자 고르기<br/>widget:configure"]
-    shade(["알림창 · 잠금 화면"]) --> SCR003["SCR-003 반복 알림<br/>notification:reminder"]
-    icon(["앱 아이콘"]) --> SCR004["SCR-004 기록 (오늘·이번 주)<br/>app:/"]
     SCR004 --> SCR005["SCR-005 첫 실행 안내<br/>app:/welcome"]
     SCR004 --> SCR006["SCR-006 항목 추가·수정<br/>app:/intake/:intakeId"]
-    SCR004 --> SCR007["SCR-007 판정 고치기<br/>app:/judgment/:intakeId/:periodKey"]
+    SCR004 --> SCR007["SCR-007 판정 고치기<br/>app:/judgment/:intakeId/:scheduleVersionId/:periodKey"]
     SCR004 --> SCR008["SCR-008 지난 기록<br/>app:/history"]
     SCR004 --> SCR009["SCR-009 설정<br/>app:/settings"]
     SCR009 --> SCR010["SCR-010 대상자 관리<br/>app:/settings/people"]
     SCR001 -. "머리글 탭" .-> SCR004
     SCR001 -. "비어 있을 때 탭" .-> SCR004
     SCR003 -. "본문 탭" .-> SCR004
-    SCR008 -. "판정 탭" .-> SCR007
     SCR006 -. "새 대상자" .-> SCR010
+    SCR008 -. "판정 탭" .-> SCR007
 ```
 
-| ID | 화면 | 경로 | 누가 보나 | 플로우 | 지금 코드 |
+| ID | 화면 | 경로 | 누가 보나 | 흐름 | 지금 코드 |
 | --- | --- | --- | --- | --- | --- |
-| SCR-001 | 홈 화면 위젯 | `widget:home` | 위젯을 놓은 기기 사용자 | 1, 2, 3장 | 있음 (대상자 필터·넘칠 때 처리 없음) |
-| SCR-002 | 위젯 대상자 고르기 | `widget:configure` | 위젯을 놓거나 위젯 설정을 연 사용자 | 1장 | 없음 |
-| SCR-003 | 반복 알림 | `notification:reminder` | 알림 권한을 허용한 사용자. 잠금 화면은 이름 숨김(기본) | 1, 4장 | 없음 |
-| SCR-004 | 기록 (오늘·이번 주) | `app:/` | 기기 사용자 | 1, 2장 | 있음 (건너뜀·경고·권한 안내 없음) |
-| SCR-005 | 첫 실행 안내 | `app:/welcome` | 처음 실행한 사용자 | 1장 | 없음 |
-| SCR-006 | 항목 추가·수정 | `app:/intake/:intakeId` | 기기 사용자 | 1, 4장 | 있음 (알림 설정 없음) |
-| SCR-007 | 판정 고치기 | `app:/judgment/:intakeId/:periodKey` | 기기 사용자 | 2장 | 일부 (기록·취소 버튼만 첫 화면에 있음) |
-| SCR-008 | 지난 기록 | `app:/history` | 기기 사용자 | 2장 | 없음 (이번 주 칸만 있음) |
-| SCR-009 | 설정 | `app:/settings` | 기기 사용자 | 1장 | 없음 (첫 화면에 표시만) |
-| SCR-010 | 대상자 관리 | `app:/settings/people` | 기기 사용자 | 1장 | 일부 (항목 화면에서 추가만) |
+| SCR-001 | 홈 화면 위젯 | `widget:home` | 위젯을 놓은 기기 사용자 | FL-001, FL-002, FL-006, FL-009, FL-010 | 있음 (대상자 필터·넘칠 때 처리는 없음) |
+| SCR-002 | 　위젯 대상자 고르기 | `widget:configure` | 위젯을 놓거나 위젯 설정을 연 기기 사용자 | FL-001, FL-009 | 없음 |
+| SCR-003 | 반복 알림 | `notification:reminder` | 알림 권한을 허용한 기기 사용자. 잠금 화면에서는 약 이름을 숨김(기본) | FL-003, FL-009 | 없음 |
+| SCR-004 | 기록 (오늘·이번 주) | `app:/` | 기기 사용자 | FL-001, FL-004, FL-005, FL-006, FL-007, FL-009, FL-010 | 있음 (건너뜀·미래 시각 경고·권한 안내는 없음) |
+| SCR-005 | 　첫 실행 안내 | `app:/welcome` | 처음 실행한 기기 사용자 | FL-001 | 없음 |
+| SCR-006 | 　항목 추가·수정 | `app:/intake/:intakeId` | 기기 사용자 | FL-001, FL-006, FL-007 | 있음 (알림 설정·권한 요청은 없음) |
+| SCR-007 | 　판정 고치기 | `app:/judgment/:intakeId/:scheduleVersionId/:periodKey` | 기기 사용자 | FL-004, FL-005 | 일부 (기록·취소만 첫 화면 버튼으로 있음) |
+| SCR-008 | 　지난 기록 | `app:/history` | 기기 사용자 | FL-005 | 없음 (첫 화면의 이번 주 칸만 있음) |
+| SCR-009 | 　설정 | `app:/settings` | 기기 사용자 | FL-006, FL-007, FL-008 | 없음 (첫 화면에 하루 시작·기준 시간대 표시만 있음) |
+| SCR-010 | 　　대상자 관리 | `app:/settings/people` | 기기 사용자 | FL-006 | 일부 (항목 화면에서 대상자 추가만 있음) |
+<!-- sitemap:end -->
 
-플로우 열의 장 번호는 [flows.md](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/04-flow/flows.md)의 장임. 플로우 5장(주 1회 늦은 투약 처리)은 1차에 화면이 없음(요구 4장 1번 확정: 기준일을 옮기지 않고 마지막 복용을 크게 보임).
+그림과 표는 [sitemap.yaml](sitemap.yaml)에서 `.github/scripts/draw_sitemap.py`가 그림(2026-11-12 07 다시 하기). 흐름 열은 [03 흐름](../03-user-flow/README.md)의 FL ID이고, 들여 쓴 화면은 위 화면의 자식임. 시안의 플로우 5장(주 1회 늦은 투약 처리)은 1차에 화면이 없음(요구 4장 1번 확정: 기준일을 옮기지 않고 마지막 복용을 크게 보임).
 
 ## 2. 화면별 정의
 

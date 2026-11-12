@@ -72,6 +72,8 @@ Android 9~11 규칙 파일 (API 30, 로그캣 요약): 세 파일이 `requiredFl
 | D4 | Android 10 이상에서 `bmgr restore <패키지>`가 사용법만 출력 | 복원 세트 토큰이 필요해짐 | `bmgr list sets`의 토큰으로 `bmgr restore 1 <패키지>` |
 | D5 | `pm clear` 직후 `am start -W`가 120초를 넘김 | 시스템이 옛 작업을 지우며 새 프로세스를 끝냄 | `-W` 없이 띄우고 첫 화면을 기다림 |
 | D6 | RR-68 준비의 새 설치에 앞 경우의 기록이 되살아남 | `bmgr wipe`가 시험 전송의 전체 백업 파일을 지우지 않음(`clearBackupData`가 그 파일을 폴더로 읽음, AOSP) | root로 그 파일도 지우고 남지 않았는지 확인 |
+| D7 | 합친 뒤 알게 됨: PR #9 마지막 커밋(`6fd8eb9`, 문서만 바꿈)의 [에뮬레이터 실행 43154843364](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43154843364)에서 API 34가 "app home did not show"로 멈춤. 이 실행은 합칠 때 아직 도는 중이었음 | 느린 에뮬레이터에서 "System UI isn't responding" 대화상자가 앱 첫 화면을 가려 화면 읽기가 앱을 찾지 못함(캡처로 확인, 앱 화면은 그 아래에 떠 있었음) | [PR #14](https://github.com/judangbang-ops/pillbadeum_release/pull/14): 화면을 읽을 때 이 대화상자가 있으면 [Wait]로 닫고 다시 읽음 |
+| D8 | PR #14 첫 실행에서 API 27이 시작하자마자 `adb shell id -u -> 255` | `adb root`가 adbd를 다시 띄우는 동안 `wait-for-device`가 옛 연결로 먼저 돌아옴 | PR #14: root가 답할 때까지 60초 동안 다시 물음 |
 
 독립 검토(Fable 5.2, 2026-11-12)로 고친 앱 코드: 표식 파일의 이름을 바꾼 뒤 폴더까지 디스크에 내림, 복원된 판정이 모두 이 폰 시계보다 뒤일 때 '기록 없음' 대신 시각 없이 안내(`later`), 프로세스마다 처음 열 때 경계 알람을 다시 걺. 같은 검토가 '9~11·8.x 통과가 증명하는 것이 적다'고 지적해, 백업 안 파일 목록·다시 설치 뒤 DB 파일 없음·8.x 파싱 실패 기록을 판정에 넣음.
 

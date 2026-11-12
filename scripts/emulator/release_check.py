@@ -97,8 +97,9 @@ def go_home() -> None:
     time.sleep(2)
 
 
-def drag(x1: int, y1: int, x2: int, y2: int) -> None:
-    """Touch and hold, then move and drop: what a person does to place a widget."""
+def drag(x1: int, y1: int, x2: int, y2: int, r: Report | None = None, tag: str = "") -> None:
+    """Touch and hold, then move and drop: what a person does to place a widget.
+    With a report, takes a screenshot while still holding, to show whether the drag started."""
     sh(f"input motionevent DOWN {x1} {y1}")
     time.sleep(1.5)
     steps = 12
@@ -108,8 +109,16 @@ def drag(x1: int, y1: int, x2: int, y2: int) -> None:
         sh(f"input motionevent MOVE {x} {y}")
         time.sleep(0.05)
     time.sleep(1)
+    if r is not None:
+        r.shot(f"{tag}-dragging")
     sh(f"input motionevent UP {x2} {y2}")
     time.sleep(2)
+
+
+def save_ui(r: Report, name: str) -> None:
+    """Keeps the last screen dump next to the screenshots, for when the launcher steps go wrong."""
+    xml = adb("exec-out", "cat", "/sdcard/ui.xml", check=False)
+    (r.out / f"api{r.api}-{name}.xml").write_text(xml, encoding="utf-8")
 
 
 def on_screen(node: Node, h: int) -> bool:
@@ -118,9 +127,10 @@ def on_screen(node: Node, h: int) -> bool:
     return x2 > x1 and y2 > y1 and y1 >= 0 and y2 <= h - 120
 
 
-def widget_preview(h: int) -> Node | None:
-    """The DidITake widget's preview in an open widget sheet (Launcher3 ids), or its size label ("4 × 2")."""
-    nodes = dump_ui()
+def widget_preview(h: int, below: int = 0) -> Node | None:
+    """The DidITake widget's preview in an open widget sheet (Launcher3 ids), or its size label ("4 × 2").
+    In the full picker only nodes under the DidITake row (`below`) count."""
+    nodes = [n for n in dump_ui() if n.bounds[1] >= below]
     for name in ("widget_preview_container", "widget_preview", "widget_cell_content"):
         hit = next((n for n in nodes if n.rid.endswith(f"/{name}") and on_screen(n, h)), None)
         if hit is not None:
@@ -129,17 +139,23 @@ def widget_preview(h: int) -> Node | None:
     return next((n for n in nodes if re.fullmatch(r"\d+\s*[×x]\s*\d+", n.text) and on_screen(n, h)), None)
 
 
-def open_app_widget_sheet(w: int, h: int) -> bool:
+def open_app_widget_sheet(r: Report, tag: str) -> bool:
     """Home > touch and hold the app icon > Widgets: a sheet with this app's widgets only."""
     go_home()
-    icon = next((n for n in dump_ui() if WIDGET_LABEL in (n.text, n.desc)), None)
+    icon = next((n for n in dump_ui() if WIDGET_LABEL in (n.text, n.desc) and not n.cls.endswith("EditText")), None)
     if icon is None:
+        save_ui(r, f"{tag}-home")
+        r.note(f"위젯 놓기 ({tag}): 홈 화면에 앱 아이콘이 없음")
         return False
     x, y = icon.center
     sh(f"input swipe {x} {y} {x} {y} 1200")
     time.sleep(1)
-    entry = next((n for n in dump_ui() if "Widgets" in (n.text, n.desc)), None)
+    nodes = dump_ui()
+    entry = next((n for n in nodes if "Widgets" in (n.text, n.desc)), None)
     if entry is None:
+        save_ui(r, f"{tag}-icon-menu")
+        r.shot(f"{tag}-icon-menu")
+        r.note(f"위젯 놓기 ({tag}): 아이콘({icon.cls} {icon.bounds}) 메뉴에 Widgets 없음")
         go_home()
         return False
     tap(entry)
@@ -147,40 +163,53 @@ def open_app_widget_sheet(w: int, h: int) -> bool:
     return True
 
 
-def open_full_widget_picker(w: int, h: int) -> None:
-    """Home > touch and hold empty space > Widgets > the DidITake row, scrolled so its preview shows."""
+def open_full_widget_picker(r: Report, tag: str, w: int, h: int) -> int:
+    """Home > touch and hold empty space > Widgets > search DidITake, so its preview shows near the top."""
     go_home()
     sh(f"input swipe {w // 2} {h // 2} {w // 2} {h // 2} 1500")
     tap_text("Widgets", 10)
+    search = find("Search", 5)
+    if search is not None:
+        tap(search)
+        sh(f"input text {WIDGET_LABEL}")
+        time.sleep(2)
     header = None
     for _ in range(8):
-        header = next((n for n in dump_ui() if n.text == WIDGET_LABEL), None)
+        header = next((n for n in dump_ui() if n.text == WIDGET_LABEL and not n.cls.endswith("EditText")), None)
         if header is not None:
             break
         sh(f"input swipe {w // 2} {h * 3 // 4} {w // 2} {h // 4} 400")
         time.sleep(1)
     if header is None:
+        save_ui(r, f"{tag}-picker-no-app")
         raise RuntimeError(f"widget picker has no '{WIDGET_LABEL}'")
-    tap(header)
-    time.sleep(1)
-    if widget_preview(h) is None:
-        # The previews open below the row, often past the bottom edge (first run, 2026-11-12).
-        sh(f"input swipe {w // 2} {h * 3 // 4} {w // 2} {h // 3} 800")
+    if widget_preview(h, header.bounds[3]) is None:
+        tap(header)
         time.sleep(1)
+    header = next((n for n in dump_ui() if n.text == WIDGET_LABEL and not n.cls.endswith("EditText")), header)
+    if widget_preview(h, header.bounds[3]) is None:
+        # The previews open under the row, past the bottom edge when the row is low (first run, 2026-11-12).
+        sh(f"input swipe {w // 2} {h * 3 // 4} {w // 2} {h // 2} 1000")
+        time.sleep(1)
+        header = next((n for n in dump_ui() if n.text == WIDGET_LABEL and not n.cls.endswith("EditText")), None)
+    return header.bounds[3] if header is not None else 0
 
 
 def place_widget(r: Report, tag: str) -> None:
     """Drags the DidITake widget preview onto the middle of the home screen."""
     w, h = screen_size()
-    if not open_app_widget_sheet(w, h):
-        r.note(f"위젯 놓기 ({tag}): 앱 아이콘에 Widgets 메뉴가 없어 전체 위젯 목록으로 감")
-        open_full_widget_picker(w, h)
-    preview = widget_preview(h)
+    below = 0
+    if not open_app_widget_sheet(r, tag):
+        r.note(f"위젯 놓기 ({tag}): 전체 위젯 목록에서 찾음")
+        below = open_full_widget_picker(r, tag, w, h)
+    preview = widget_preview(h, below)
+    save_ui(r, f"{tag}-picker")
     r.shot(f"{tag}-picker")
     if preview is None:
         raise RuntimeError("widget preview not on screen")
+    r.note(f"위젯 놓기 ({tag}): 끈 곳 {preview.rid or preview.text} {preview.bounds}")
     x, y = preview.center
-    drag(x, y, w // 2, h // 2)
+    drag(x, y, w // 2, h // 2, r, tag)
     go_home()
     r.shot(f"{tag}-placed")
 
@@ -194,8 +223,7 @@ def try_place_widget(r: Report, tag: str) -> bool:
     except Exception as exc:  # the launcher UI differs between images
         r.check(f"위젯 놓기 ({tag})", f"홈 화면에 {WIDGET_LABEL} 위젯", f"{type(exc).__name__}: {exc}", False)
         r.shot(f"{tag}-widget-failed")
-        (r.out / f"api{r.api}-{tag}-ui.xml").write_text(adb("exec-out", "cat", "/sdcard/ui.xml", check=False),
-                                                       encoding="utf-8")
+        save_ui(r, f"{tag}-widget-failed")
         go_home()
         return False
 

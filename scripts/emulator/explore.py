@@ -182,21 +182,40 @@ def set_zone() -> str:
     return sh("getprop persist.sys.timezone").strip()
 
 
+def put_clock(target: int) -> None:
+    """Sets the phone clock to `target` (Unix seconds), or raises."""
+    sh(f"cmd alarm set-time {target * 1000}", check=False)
+    now = int(sh("date +%s").strip() or 0)
+    if abs(now - target) > 120:
+        utc = datetime.fromtimestamp(target, timezone.utc)
+        sh(f"date -u {utc.strftime('%m%d%H%M%Y.%S')}", check=False)
+        now = int(sh("date +%s").strip() or 0)
+    if abs(now - target) > 120:
+        raise RuntimeError(f"clock not set: wanted {target}, phone says {now}")
+
+
 def set_clock(at: datetime) -> str:
     """Turns off network time and sets the clock. `cmd alarm set-time` sends TIME_SET like a person
     changing the time in Settings; `date` is the fallback."""
     sh("settings put global auto_time 0", check=False)
     sh("settings put global auto_time_zone 0", check=False)
+    # Run 7 (2026-11-12) set 08:30, and a minute later the phone was back on the real time: the
+    # setting alone did not stop automatic time on API 34, so turn the time detector off as well.
+    sh("cmd time_detector set_auto_detection_enabled false", check=False)
     target = int(at.timestamp())
-    sh(f"cmd alarm set-time {target * 1000}", check=False)
-    now = int(sh("date +%s").strip() or 0)
-    if abs(now - target) > 120:
-        utc = at.astimezone(timezone.utc)
-        sh(f"date -u {utc.strftime('%m%d%H%M%Y.%S')}", check=False)
-        now = int(sh("date +%s").strip() or 0)
-    if abs(now - target) > 120:
-        raise RuntimeError(f"clock not set: wanted {target}, phone says {now}")
+    put_clock(target)
+    started = time.time()
     settle()
+    expected = target + int(time.time() - started)
+    now = int(sh("date +%s").strip() or 0)
+    if abs(now - expected) > 120:
+        # Seen once on run 7: the time went back while System UI was stalling. Set it once more.
+        put_clock(expected)
+        settle()
+        expected = target + int(time.time() - started)
+        now = int(sh("date +%s").strip() or 0)
+        if abs(now - expected) > 120:
+            raise RuntimeError(f"clock went back after it was set: wanted about {expected}, phone says {now}")
     return sh("date '+%Y-%m-%d %H:%M %Z'").strip()
 
 
@@ -244,7 +263,8 @@ def reboot() -> None:
     sh("input keyevent KEYCODE_WAKEUP", check=False)
     sh("wm dismiss-keyguard", check=False)
     time.sleep(10)
-    settle()
+    # Run 7: System UI kept stalling for over five minutes after the reboot, so wait longer here
+    settle(quiet=30, longest=420)
 
 
 # ------------------------------------------------------------------------------------------------

@@ -131,10 +131,12 @@ CLOSED_DIALOGS: list[str] = []
 def dump_ui() -> list[Node]:
     out = ""
     nodes: list[Node] = []
-    for _ in range(8):
+    # "null root node" means no window is ready yet; after a reboot on the CI emulator System UI can
+    # take more than a minute (explore run 7, 2026-11-12), so that case waits longer than a busy dump.
+    for _ in range(25):
         out = sh("uiautomator dump /sdcard/ui.xml", check=False)
         if "dumped" not in out:
-            time.sleep(1)
+            time.sleep(3 if "null root node" in out else 1)
             continue
         xml = adb("exec-out", "cat", "/sdcard/ui.xml")
         nodes = []

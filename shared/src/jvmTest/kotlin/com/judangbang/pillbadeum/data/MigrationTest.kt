@@ -15,6 +15,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
+import kotlinx.datetime.LocalDateTime
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toInstant
 import org.junit.Rule
 
 /**
@@ -39,7 +42,14 @@ class MigrationTest {
         listOf("", "-wal", "-shm", "-journal").forEach { Path("$dbFile$it").deleteIfExists() }
     }
 
+    // Expected values below pin what users upgrading from schema 1 get. If a later change to
+    // windowOf, ScheduleParams or the WindowSettings defaults breaks them, fix that change: do not
+    // edit these expectations, or the 1 -> 2 result silently differs between users.
+
     private fun ms(local: String): Long = seoul(local).toEpochMilliseconds()
+
+    private fun ny(local: String): Long =
+        LocalDateTime.parse(local).toInstant(TimeZone.of("America/New_York")).toEpochMilliseconds()
 
     @Test
     fun v1_to_v2_moves_first_versions_and_keeps_every_judgment() = runTest {
@@ -77,34 +87,86 @@ class MigrationTest {
             for (table in listOf("reminder_rule", "reminder_snooze", "clock_flag")) {
                 assertEquals(0L, v2.count("SELECT COUNT(*) FROM $table"), table)
             }
+            assertTrue(v2.rows("PRAGMA foreign_key_check").isEmpty())
         }
     }
 
     @Test
-    fun v1_to_v2_uses_the_stored_day_start_and_base_zone() = runTest {
+    fun v1_to_v2_uses_the_stored_day_start_and_base_zone_across_dst() = runTest {
+        // New York differs from Seoul by 13-14 hours, so ignoring the stored zone fails here.
+        // 2026-03-08 has no 02:00-03:00 in New York: the 02:30 day start falls into the gap and
+        // that day's window starts at 03:30 EDT (windowOf resolves the gap forward).
         helper.createDatabase(1).use { v1 ->
-            v1.setting(SettingKeys.DAY_START, "06:00")
-            v1.setting(SettingKeys.BASE_ZONE, "Asia/Tokyo") // same offset as Seoul, different id
+            v1.setting(SettingKeys.DAY_START, "02:30")
+            v1.setting(SettingKeys.BASE_ZONE, "America/New_York")
             v1.person("p1")
-            v1.intake("a", "p1", createdAt = ms("2026-11-11T05:00"))
-            v1.version("a-v1", "a", "DAILY", "{}", from = ms("2026-11-11T05:00"))
+            v1.intake("nov", "p1", createdAt = ny("2026-11-11T15:00"))
+            v1.version("nov-v1", "nov", "DAILY", "{}", from = ny("2026-11-11T15:00"))
+            v1.intake("early", "p1", createdAt = ny("2026-11-11T02:00"))
+            v1.version("early-v1", "early", "DAILY", "{}", from = ny("2026-11-11T02:00"))
+            v1.intake("gap", "p1", createdAt = ny("2026-03-08T03:10"))
+            v1.version("gap-v1", "gap", "DAILY", "{}", from = ny("2026-03-08T03:10"))
+            v1.intake("after-gap", "p1", createdAt = ny("2026-03-08T09:00"))
+            v1.version("after-gap-v1", "after-gap", "DAILY", "{}", from = ny("2026-03-08T09:00"))
+            v1.intake("sun", "p1", createdAt = ny("2026-03-10T12:00"))
+            v1.version("sun-v1", "sun", "WEEKLY", """{"anchorWeekday":"SUN"}""", from = ny("2026-03-10T12:00"))
         }
         helper.runMigrationsAndValidate(2, listOf(Migrations.MIGRATION_1_2)).use { v2 ->
-            // 05:00 is before the 06:00 day start: the window began 11/10 06:00.
-            assertEquals(ms("2026-11-10T06:00"), v2.longs("SELECT id, effective_from FROM schedule_version")["a-v1"])
+            assertEquals(
+                mapOf(
+                    "nov-v1" to ny("2026-11-11T02:30"),
+                    "early-v1" to ny("2026-11-10T02:30"), // before the 02:30 day start
+                    "gap-v1" to ny("2026-03-07T02:30"), // 03:10 is still before the 03:30 boundary
+                    "after-gap-v1" to ny("2026-03-08T03:30"),
+                    "sun-v1" to ny("2026-03-08T03:30"), // weekly (SUN) window began at the shifted boundary
+                ),
+                v2.longs("SELECT id, effective_from FROM schedule_version"),
+            )
         }
     }
 
     @Test
     fun v1_to_v2_keeps_starts_when_settings_cannot_be_read() = runTest {
+        for ((key, bad) in listOf(SettingKeys.DAY_START to "not a time", SettingKeys.BASE_ZONE to "Mars/Phobos")) {
+            tearDown()
+            helper.createDatabase(1).use { v1 ->
+                v1.setting(key, bad)
+                v1.person("p1")
+                v1.intake("a", "p1", createdAt = ms("2026-11-11T15:00"))
+                v1.version("a-v1", "a", "DAILY", "{}", from = ms("2026-11-11T15:00"))
+            }
+            helper.runMigrationsAndValidate(2, listOf(Migrations.MIGRATION_1_2)).use { v2 ->
+                assertEquals(
+                    ms("2026-11-11T15:00"),
+                    v2.longs("SELECT id, effective_from FROM schedule_version")["a-v1"],
+                    "$key = $bad",
+                )
+            }
+        }
+    }
+
+    @Test
+    fun v1_to_v2_skips_unreadable_versions_and_moves_the_rest() = runTest {
         helper.createDatabase(1).use { v1 ->
-            v1.setting(SettingKeys.DAY_START, "not a time")
             v1.person("p1")
-            v1.intake("a", "p1", createdAt = ms("2026-11-11T15:00"))
-            v1.version("a-v1", "a", "DAILY", "{}", from = ms("2026-11-11T15:00"))
+            v1.intake("bad-params", "p1", createdAt = ms("2026-11-11T15:00"))
+            v1.version("bad-params-v1", "bad-params", "WEEKLY", "{}", from = ms("2026-11-11T15:00"))
+            v1.intake("unknown-type", "p1", createdAt = ms("2026-11-11T15:00"))
+            v1.version("unknown-type-v1", "unknown-type", "EVERY_N_DAYS", """{"n":2}""", from = ms("2026-11-11T15:00"))
+            v1.intake("fine", "p1", createdAt = ms("2026-11-11T15:00"))
+            v1.version("fine-v1", "fine", "DAILY", "{}", from = ms("2026-11-11T15:00"))
+            v1.intake("no-version", "p1", createdAt = ms("2026-11-11T15:00"))
         }
         helper.runMigrationsAndValidate(2, listOf(Migrations.MIGRATION_1_2)).use { v2 ->
-            assertEquals(ms("2026-11-11T15:00"), v2.longs("SELECT id, effective_from FROM schedule_version")["a-v1"])
+            assertEquals(
+                mapOf(
+                    "bad-params-v1" to ms("2026-11-11T15:00"),
+                    "unknown-type-v1" to ms("2026-11-11T15:00"),
+                    "fine-v1" to ms("2026-11-11T04:00"),
+                ),
+                v2.longs("SELECT id, effective_from FROM schedule_version"),
+            )
+            assertTrue(v2.rows("PRAGMA foreign_key_check").isEmpty())
         }
     }
 

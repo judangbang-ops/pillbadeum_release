@@ -58,6 +58,8 @@ object Migrations {
             )
         }.getOrNull() ?: return
 
+        // "First" = smallest effective_from, then smallest id. archived_at is not looked at: the app
+        // never archives schedule versions, and it cannot write two versions in the same ms.
         val moves = mutableListOf<Pair<String, Long>>()
         connection.prepare(
             """

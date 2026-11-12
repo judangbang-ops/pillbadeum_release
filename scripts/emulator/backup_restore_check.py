@@ -176,6 +176,33 @@ def screen_has(text: str, timeout: float = 0) -> bool:
     return find(text, timeout) is not None
 
 
+def find_exact(text: str, timeout: float = 20) -> Node | None:
+    """A node whose text is exactly `text`. find() also matches longer texts: on the empty first screen the sentence
+    "[항목 추가]로 등록해 주세요." comes before the [항목 추가] button (TASK-016)."""
+    end = time.time() + timeout
+    while True:
+        for node in dump_ui():
+            if node.text == text:
+                return node
+        if time.time() >= end:
+            return None
+        time.sleep(1)
+
+
+# [지난 기록] in the first screen's top bar (SCR-004, TASK-016). Only the first screen has it, and it stays on screen
+# however long the list is or however large the text, unlike [항목 추가] at the end of the list.
+HOME_MARK = "지난 기록"
+
+
+def button_for(row: Node, label: str) -> Node | None:
+    """The [label] button of the item whose name `row` is. On the first screen (SCR-004, TASK-016) an item is a tile:
+    the name is read from the tile's text and the button sits under it in the same tile, and two tiles can share a
+    line, so the button is the nearest one below the name within the name's width."""
+    x1, y1, x2, _ = row.bounds
+    below = [n for n in dump_ui() if n.text == label and x1 <= n.center[0] <= x2 and n.center[1] > y1]
+    return min(below, key=lambda n: n.center[1], default=None)
+
+
 def tap(node: Node) -> None:
     x, y = node.center
     sh(f"input tap {x} {y}")
@@ -196,7 +223,7 @@ def launch_app() -> None:
     sh("wm dismiss-keyguard", check=False)
     for _ in range(2):
         sh(f"am start -n {ACTIVITY}")
-        if find("항목 추가", 30) is not None:
+        if find_exact(HOME_MARK, 30) is not None:
             return
     raise RuntimeError("app home did not show")
 
@@ -206,24 +233,28 @@ def stop_app() -> None:
 
 
 def add_item(name: str, r: Report | None = None) -> Node:
-    """Home > [항목 추가] > name > [저장]. Returns the new row's name on the home screen.
+    """Home > [항목 추가] > name > [저장]. Returns the node the new item's name is read from on the home screen
+    (the tile's text, whose description starts with the name, TASK-016).
 
-    The app keeps its current screen only in memory (BUG-003), so when the system restarts the
-    activity the form closes and home comes back. Right after a reinstall the late package
-    broadcasts can do that (API 34, run 43189568290). Then the form is filled in once more and the
-    restart is noted in the report."""
+    Until TASK-016 the app kept its current screen only in memory (BUG-003), so when the system
+    restarted the activity the form closed and home came back. Right after a reinstall the late
+    package broadcasts did that (API 34, run 43189568290). The form now survives the activity being
+    made again; if it still closes, it is filled in once more and the closing is noted in the report."""
     for attempt in (1, 2):
-        tap_text("항목 추가")
+        add = find_exact("항목 추가")
+        if add is None:
+            raise RuntimeError("'항목 추가' not on screen")
+        tap(add)
         field_node = next((n for n in dump_ui() if n.cls.endswith("EditText")), None)
         if field_node is None:
             raise RuntimeError("name field not found")
         tap(field_node)
         sh(f"input text {name}")
-        save = find("저장", 20)
+        save = find_exact("저장", 20)
         if save is not None:
             tap(save)
             break
-        if attempt == 2 or not screen_has("항목 추가"):
+        if attempt == 2 or find_exact(HOME_MARK, 0) is None:
             raise RuntimeError("'저장' not on screen")
         text = f"항목 추가 화면이 저절로 닫히고 첫 화면으로 돌아옴(앱 화면 다시 만들어짐, BUG-003). {name}을 한 번 더 입력함"
         if r is not None:
@@ -239,11 +270,9 @@ def add_item(name: str, r: Report | None = None) -> Node:
 def add_item_and_record(name: str, r: Report | None = None) -> None:
     """Home > [항목 추가] > name > [저장] > that row's [먹었어]."""
     row = add_item(name, r)
-    # The row's button sits at the right edge on the same line as the name.
-    buttons = [n for n in dump_ui() if n.text == "먹었어"]
-    if not buttons:
-        raise RuntimeError("no [먹었어] button")
-    button = min(buttons, key=lambda b: abs(b.center[1] - row.center[1]))
+    button = button_for(row, "먹었어")
+    if button is None:
+        raise RuntimeError(f"no [먹었어] button for {name}")
     tap(button)
     time.sleep(2)
 

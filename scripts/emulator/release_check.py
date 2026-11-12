@@ -45,6 +45,7 @@ from backup_restore_check import (
     backup_entries,
     backup_now,
     become_root,
+    button_for,
     describe,
     dump_ui,
     ensure_transport,
@@ -259,10 +260,10 @@ def record_in_app(name: str) -> None:
     """App home > that row's [먹었어] (fallback when the widget could not be placed)."""
     launch_app()
     row = find(name, 20)
-    buttons = [n for n in dump_ui() if n.text == "먹었어"]
-    if row is None or not buttons:
+    button = button_for(row, "먹었어") if row is not None else None
+    if button is None:
         raise RuntimeError(f"no [먹었어] for {name}")
-    tap(min(buttons, key=lambda b: abs(b.center[1] - row.center[1])))
+    tap(button)
     time.sleep(2)
 
 

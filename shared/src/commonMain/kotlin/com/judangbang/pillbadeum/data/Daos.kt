@@ -72,6 +72,10 @@ interface IntakeDao {
     @Query("SELECT * FROM intake ORDER BY sort_order, created_at, id")
     suspend fun listAll(): List<IntakeEntity>
 
+    /** One person's intakes that are not archived themselves (person restore, supplement P-9). */
+    @Query("SELECT * FROM intake WHERE person_id = :personId AND archived_at IS NULL ORDER BY sort_order, created_at, id")
+    suspend fun listActiveOfPerson(personId: String): List<IntakeEntity>
+
     @Query("SELECT COALESCE(MAX(sort_order), -1) FROM intake")
     suspend fun maxSortOrder(): Int
 

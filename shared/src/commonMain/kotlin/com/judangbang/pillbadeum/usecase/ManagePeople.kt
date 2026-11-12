@@ -83,10 +83,49 @@ class ManagePeople(
         }
     }
 
-    /** Brings an archived person back; their intakes show again with their past judgments. */
-    suspend fun restore(personId: String): PersonChange {
-        val changed = db.personDao().restore(personId, clock.now().toEpochMilliseconds())
-        return if (changed == 1) PersonChange.Saved else PersonChange.Gone
+    /**
+     * Brings an archived person back; their intakes show again with their past judgments (REQ-095,
+     * SPEC-044, supplement P-9). There is no archive history table, so the archived stretch is kept in the
+     * schedule versions instead, in the same write transaction as the restore: every intake of the person
+     * that is not archived itself has its open version closed at the person's archive time and a new version
+     * with the same schedule opened at the restore time. History then has no cells while the person was
+     * archived (no version, not missed), the window holding the archive keeps a cell only for that version's
+     * own judgment, and the window holding the restore is the new version's (P-8). Restoring again changes
+     * nothing ([PersonChange.Gone]). Recomputing reminders and widgets is the caller's job (N-9).
+     */
+    suspend fun restore(personId: String): PersonChange = db.useWriterConnection { transactor ->
+        transactor.immediateTransaction {
+            val people = db.personDao()
+            val archivedAt = people.findById(personId)?.archivedAt ?: return@immediateTransaction PersonChange.Gone
+            val now = clock.now().toEpochMilliseconds()
+            val versions = db.scheduleVersionDao()
+            for (intake in db.intakeDao().listActiveOfPerson(personId)) {
+                val open = versions.findOpen(intake.id) ?: continue
+                // A version that starts after the archive (changed then, or the clock was wrong) already
+                // leaves the archived stretch out; it is kept as it is.
+                if (open.effectiveFrom > archivedAt) continue
+                // With the clock set back before the archive, close and open at now so versions never overlap,
+                // and never before the open version's own start (that leaves it empty, as SaveIntake.update does).
+                val closeAt = maxOf(minOf(archivedAt, now), open.effectiveFrom)
+                check(versions.close(open.id, effectiveTo = closeAt, now = now) == 1) {
+                    "open schedule version ${open.id} could not be closed"
+                }
+                versions.insert(
+                    open.copy(
+                        id = ids.next(),
+                        effectiveFrom = maxOf(now, closeAt),
+                        effectiveTo = null,
+                        createdAt = now,
+                        updatedAt = now,
+                        version = 1,
+                        deviceId = deviceId,
+                    ),
+                )
+            }
+            // Read as archived in this same transaction, so the row must change; anything else rolls back.
+            check(people.restore(personId, now) == 1) { "archived person $personId could not be restored" }
+            PersonChange.Saved
+        }
     }
 
     companion object {

@@ -114,6 +114,12 @@
 | TASK-027 | 다시 계산: 판정·항목·대상자·알림 설정·하루 시작·기준 시간대가 바뀐 뒤, 재부팅·시각 변경·시간대 변경·업데이트 뒤. 밀린 칸은 알람·재부팅·시각 변경 때만 모음 (보충 N-9·N-10·N-12, P-7, 검토 B5) | REQ-043, REQ-044, REQ-047 | `DayBoundaryReceiver`, 알림 예약기 | TASK-024 | Claude | 1일 | RR-18, RR-43의 알림 몫, RR-55~58, RR-81 (에뮬레이터. 재부팅 실기기는 TASK-032). 알람이 늦는 동안 기록해도 그 칸이 뜸(보충 N-12 늦은 알람, `PlanRemindersTest`의 늦은 알람 두 경우를 에뮬레이터로) |
 | TASK-040 | 복원 뒤 알림: [확인했어요] 전에는 복용 알림 대신 복원 안내 알림 하나, 확인 뒤 알림 다시 계산 (보충 R-3의 알림 몫) | REQ-047, REQ-073 | SCR-003#restored, 알림 예약기 | TASK-027, TASK-029 | Claude | 0.5일 | RR-30(알림 몫), RR-33, RR-73 (에뮬레이터 복원). 확인 전에는 복원된 지난 `reminder_alarm_at` 때문에 복용 알림이 뜨지 않음: 복원을 감지할 때 그 키를 지우거나 확인 전에는 `fire`를 부르지 않음(보충 N-12 늦은 알람, PR #13 재검토) |
 
+진행 메모 (2026-11-13)
+
+- TASK-024·025·027·040과 TASK-026의 정확 알람 부분: R3 [PR #20](https://github.com/judangbang-ops/pillbadeum_release/pull/20). 안드로이드 `reminder` 패키지(알람 하나, 알림과 버튼, 잠금 화면 방법 5, 떠 있는 알림 지우기, 복원 안내 알림)와 공통 코드의 `PlanReminders.review`(떠 있는 알림 중 지울 것), 복원 대기 중 `nextAlarm`·`fire` 멈춤, `ReminderLabels`(알림 문구). Claude가 정한 세부는 [기록 규칙 보충](../04-spec/record-rules-supplement.md) N-13 아래 TASK-024 '구현' 줄. JVM 테스트 21개를 더해 모두 226개 통과(2026-11-13 컨테이너)
+- TASK-026은 나눔(2026-11-13 R2 스레드와 합의): 정확 알람 예약·권한 바뀜 방송·알림 채널은 이 PR, 권한 안내 화면(SCR-004#permission, SCR-006#permission, SCR-009)은 R2. R2가 쓸 수 있게 `ManageReminders.anyEnabled()`(알림 켠 항목이 있는지)를 더함
+- 에뮬레이터 확인은 `scripts/emulator/reminder_check.py`와 `reminder-emulator.yml`(PR에 라벨 `emulator-reminders`를 붙이면 API 34, main에 합친 뒤 수동 실행은 34·36·30·26). 항목 화면(TASK-023) 전이라 디버그 빌드에만 있는 수신기로 알림 켠 항목을 만듦(릴리즈 병합 매니페스트에 없음을 확인). GitHub Actions가 2026-11-12 23:52 KST부터 러너 배정 전에 실패해 아직 돌리지 못함. 그래서 끝난 조건의 에뮬레이터 칸(알람 하나, 잠금 화면 여덟 칸, RR-54, 버튼, 재부팅, 복원)은 확인 전임
+
 ### 1.6 백업
 
 | ID | 작업 | 근거 | 닿는 곳 | 먼저 할 것 | 담당 | 크기 | 끝난 조건 |

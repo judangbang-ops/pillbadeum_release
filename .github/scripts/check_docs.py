@@ -3,7 +3,7 @@
 
 Usage: python3 .github/scripts/check_docs.py [repository root]
 
-Reads docs/01-planning/requirements.md, docs/04-spec/record-rules-supplement.md,
+Reads docs/01-planning/requirements.md, docs/01-domain/domain.md (context IDs), docs/04-spec/record-rules-supplement.md,
 docs/05-ui/sitemap.yaml, docs/05-ui/screens.md, docs/08-wbs/wbs.md and every Markdown file
 under docs/ plus README.md. Standard library only. Prints the counts, then every problem it
 found, and exits with 1 when there is a problem. It changes nothing.
@@ -81,8 +81,8 @@ for line in req_md.splitlines():
         c = cells(line)
         if m.group(1) in rows:
             problem(f"requirements: duplicate {m.group(1)}")
-        if len(c) != 7:
-            problem(f"requirements: {m.group(1)} has {len(c)} cells, expected 7")
+        if len(c) != 8:
+            problem(f"requirements: {m.group(1)} has {len(c)} cells, expected 8")
         rows[m.group(1)] = c
 ids = sorted(rows)
 nums = [int(i[4:]) for i in ids]
@@ -99,10 +99,19 @@ for rid, r in rows.items():
         problem(f"requirements: {rid} kind '{r[2]}'")
     if not re.match(r"(Must|Should|Could)\b", r[3]):
         problem(f"requirements: {rid} priority '{r[3]}'")
-empty = [i for i, r in rows.items() if not all(r[k] for k in range(1, min(len(r), 7)))]
+empty = [i for i, r in rows.items() if not all(r[k] for k in range(1, min(len(r), 8)))]
 print("  rows with an empty cell:", empty or "none")
 if empty:
     problem(f"requirements: empty cells in {empty}")
+# The context column (02 stage, 2026-11-12) holds CTX IDs from the domain document, or 없음
+domain_ctx = set(re.findall(r"^\| (CTX-\d{3}) ", read("docs/01-domain/domain.md"), re.M))
+contexts = Counter()
+for rid, r in rows.items():
+    for ctx in r[4].split(", "):
+        contexts[ctx] += 1
+        if ctx != "없음" and ctx not in domain_ctx:
+            problem(f"requirements: {rid} context '{ctx}' is not a context in docs/01-domain/domain.md")
+print("  context:", dict(sorted(contexts.items())))
 functional = {i for i, r in rows.items() if r[2] == "기능"}
 must = {i for i, r in rows.items() if r[3].startswith("Must")}
 
@@ -113,7 +122,7 @@ expected_rr = list(range(26, defined_rr[-1] + 1)) if defined_rr else []
 print(f"supplement: counterexamples RR-{defined_rr[0]}..RR-{defined_rr[-1]}, {len(defined_rr)} rows")
 if defined_rr != expected_rr:
     problem(f"supplement: counterexample numbers are not RR-26.. without gaps: {defined_rr}")
-rr_in_reqs = set().union(*(rr_refs(r[5]) for r in rows.values()))
+rr_in_reqs = set().union(*(rr_refs(r[6]) for r in rows.values()))
 original_unlinked = sorted(set(range(1, 26)) - rr_in_reqs)
 supplement_unlinked = sorted(set(defined_rr) - rr_in_reqs)
 print(f"  RR-1..25 not linked from acceptance criteria: {original_unlinked}")

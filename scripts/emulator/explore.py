@@ -21,6 +21,8 @@ Flow (clock set to the run's date in Asia/Seoul, so the screens show Korean date
    9. Reboot: the widget after the phone restarts.
   10. The next morning 08:30: the widget and the app start a new day.
   11. 02:00 the day after: before the day start (04:00) the day has not changed yet.
+  12. The app left open from 03:55 past 04:00 (TASK-017, SCR-004#stale): the first screen turns to the new day
+      without being opened again.
 
 Names are typed in English because `adb shell input text` cannot type Korean.
 Notifications are not checked: the reminder feature is not built yet (R3).
@@ -279,6 +281,16 @@ def settle(quiet: float = 30, longest: float = 180) -> None:
         if time.time() - last_dialog >= quiet:
             return
         time.sleep(3)
+
+
+def phone_now() -> int:
+    """The phone clock in Unix seconds (it was set apart from the computer's clock)."""
+    return int(sh("date +%s").strip() or 0)
+
+
+def day_label(d) -> str:
+    """The first screen's date line for the logical date `d`: `11월 12일 목요일` (Labels.longDate)."""
+    return f"{d.month}월 {d.day}일 {'월화수목금토일'[d.weekday()]}요일"
 
 
 def font_scale(scale: str) -> None:
@@ -663,6 +675,33 @@ def run(r: Report, steps: Steps) -> None:
         return f"시계 {clock}"
 
     steps("11. 그다음 날 02:00", "하루 시작 04:00 전이라 앞날로 셈", before_day_start, look=True)
+
+    # 12. the day start with the app left open (TASK-017)
+    def across_day_start() -> str:
+        clock = set_clock(at(2, 3, 55))
+        start = phone_now()
+        boundary = int(at(2, 4, 0).timestamp())
+        if start > boundary - 60:
+            raise RuntimeError(f"the clock settled too late to watch 04:00 pass ({clock})")
+        before, after = day_label(at(1, 12).date()), day_label(at(2, 12).date())
+        launch_app()
+        if exact(before, 10) is None:
+            raise RuntimeError(f"before 04:00 the first screen does not show {before}")
+        r.shot("app-0355")
+        # The app is not touched from here on: only the screen is read until the new day shows.
+        while phone_now() < boundary + 90:
+            if exact(after, 0) is not None:
+                break
+            time.sleep(5)
+        seen = phone_now()
+        r.shot("app-0400")
+        if exact(after, 0) is None:
+            raise RuntimeError(f"{after} not shown by {datetime.fromtimestamp(seen, ZONE):%H:%M:%S}")
+        if seen < boundary:
+            raise RuntimeError(f"{after} shown before 04:00")
+        return f"{before} → {after} ({datetime.fromtimestamp(seen, ZONE):%H:%M:%S}에 봄, 시계 {clock})"
+
+    steps("12. 앱을 켜 둔 채 04:00 넘기기", "다시 열지 않아도 첫 화면이 새 날짜로 바뀜(SCR-004#stale)", across_day_start)
 
 
 def main() -> int:

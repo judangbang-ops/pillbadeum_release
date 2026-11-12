@@ -1,7 +1,9 @@
 package com.judangbang.pillbadeum.status
 
+import com.judangbang.pillbadeum.data.saveWindowSettings
 import com.judangbang.pillbadeum.design.Tokens
 import com.judangbang.pillbadeum.domain.ScheduleRule
+import com.judangbang.pillbadeum.domain.WindowSettings
 import com.judangbang.pillbadeum.testing.DbFixture
 import com.judangbang.pillbadeum.testing.SEOUL
 import com.judangbang.pillbadeum.testing.TEST_DEVICE_ID
@@ -21,6 +23,7 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
 
 class StatusBoardTest {
     private val fx = DbFixture()
@@ -115,6 +118,19 @@ class StatusBoardTest {
         // A widget still rendered before 04:00 sends the old key: nothing is recorded.
         assertEquals(RecordResult.Stale("2026-11-11"), fx.record(intake, renderedKey = before.items.single().window.periodKey))
         assertEquals(1, fx.history(intake).size)
+    }
+
+    /** SCR-004#stale (TASK-017): the open app reads again at the next day start of the base zone and setting. */
+    @Test
+    fun the_board_goes_stale_at_the_next_day_start() = runTest {
+        fx.newIntake(rule = ScheduleRule.Weekly(DayOfWeek.MONDAY))
+        fx.at("2026-11-11T03:59:59")
+        assertEquals(seoul("2026-11-11T04:00"), load().staleAt)
+        fx.at("2026-11-11T04:00")
+        assertEquals(seoul("2026-11-12T04:00"), load().staleAt, "a weekly item does not wait for its week")
+
+        fx.db.settingDao().saveWindowSettings(WindowSettings(dayStart = LocalTime(6, 0)))
+        assertEquals(seoul("2026-11-11T06:00"), load().staleAt)
     }
 
     @Test

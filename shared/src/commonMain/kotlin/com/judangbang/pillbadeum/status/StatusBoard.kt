@@ -15,6 +15,7 @@ import com.judangbang.pillbadeum.domain.Window
 import com.judangbang.pillbadeum.domain.WindowSettings
 import com.judangbang.pillbadeum.domain.logicalDateOf
 import com.judangbang.pillbadeum.domain.mondayToSunday
+import com.judangbang.pillbadeum.domain.nextDayBoundary
 import com.judangbang.pillbadeum.domain.windowOf
 import com.judangbang.pillbadeum.restore.CheckInstall
 import com.judangbang.pillbadeum.usecase.FlagClockMismatch
@@ -63,6 +64,12 @@ data class StatusBoard(
     /** `k` of `· 건너뜀 k` (S-1). */
     val skippedCount: Int get() = items.count { it.isSkipped }
     val totalCount: Int get() = items.size
+
+    /**
+     * The next day start after [now] in the base zone: from then on this board shows the wrong day (SCR-004#stale,
+     * TASK-017). Daily and weekly windows both end at a day start, so the board needs no other timer.
+     */
+    val staleAt: Instant get() = nextDayBoundary(now, settings)
 }
 
 data class IntakeStatus(

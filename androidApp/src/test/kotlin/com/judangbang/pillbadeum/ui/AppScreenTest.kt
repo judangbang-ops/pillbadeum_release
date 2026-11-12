@@ -69,14 +69,15 @@ import kotlin.math.roundToInt
 import java.util.TimeZone as JavaTimeZone
 
 /**
- * The app's screens without an emulator (TASK-015, TASK-016): [MainActivity] on the real container ([TestApp], database
- * in memory, a clock the test sets), drawn by Android's Compose, text layout and fonts (Robolectric with native
- * graphics, Android 15, Korean locale, a 360dp wide phone). It reads the merged semantics tree, which is what TalkBack
- * reads, and saves each case as `androidApp/build/app-render/<case>.png` with the tree beside it as `<case>.txt`.
+ * The app's screens without an emulator (TASK-015, TASK-016, TASK-017): [MainActivity] on the real container
+ * ([TestApp], database in memory, a clock the test sets), drawn by Android's Compose, text layout and fonts (Robolectric
+ * with native graphics, Android 15, Korean locale, a 360dp wide phone). It reads the merged semantics tree, which is what
+ * TalkBack reads, and saves each case as `androidApp/build/app-render/<case>.png` with the tree beside it as `<case>.txt`.
  *
- * Covered: SCR-004 normal, empty, error, skipped, future (one clock warning and many) and restored, tiles a row at
- * 100%, 130% and 200%, targets of at least 48 dp (REQ-067), system back (REQ-094, BUG-001), a recreated activity keeping
- * the form (BUG-003), the home intent of the widget and reminders, and SCR-006's person field, colors and empty name.
+ * Covered: SCR-004 normal, empty, error, skipped, future (one clock warning and many), restored and stale (04:00
+ * passing with the app open), tiles a row at 100%, 130% and 200%, targets of at least 48 dp (REQ-067), system back
+ * (REQ-094, BUG-001), a recreated activity keeping the form (BUG-003), the home intent of the widget and reminders, and
+ * SCR-006's person field, colors and empty name.
  * Not a phone: no TalkBack itself, no Galaxy fonts, no system bars. The emulator covers those.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -323,6 +324,38 @@ class AppScreenTest {
         compose.onNodeWithText("다시 시도").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText("아직 복용 항목이 없어요.").fetchSemanticsNodes().isNotEmpty() }
         assertEquals(2, attempts)
+    }
+
+    /** SCR-004#stale (TASK-017, SPEC-040): left open across 04:00, the first screen reads the new day by itself. */
+    @Test
+    fun the_open_first_screen_turns_to_the_new_day_at_the_day_start() {
+        seed(family = false)
+        app.clock.now = at("2026-11-13T03:59")
+        open()
+        compose.onNodeWithText("11월 12일 목요일").assertExists()
+        assertTrue(spokenTexts().toString(), spokenTexts().any { it.startsWith("아침약, 복용함") })
+
+        app.clock.now = Instant.parse("2026-11-13T04:00:01+09:00")
+        compose.mainClock.advanceTimeBy(60_000)
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("11월 13일 금요일").fetchSemanticsNodes().isNotEmpty() }
+        assertTrue(spokenTexts().toString(), spokenTexts().any { it.startsWith("아침약, 미완료") })
+        save("home-new-day")
+    }
+
+    /** SCR-004#stale: [먹었어] drawn before 04:00 and pressed after it records nothing, says so and shows the new day. */
+    @Test
+    fun a_tap_drawn_before_the_day_start_records_nothing() {
+        seed(family = true)
+        app.clock.now = at("2026-11-13T03:59")
+        open()
+        compose.onNodeWithText("11월 12일 목요일").assertExists()
+
+        app.clock.now = Instant.parse("2026-11-13T04:00:30+09:00")
+        compose.onAllNodesWithText("먹었어")[0].performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("11월 13일 금요일").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText(Labels.STALE).assertExists()
+        assertEquals("nothing recorded on the new day", 0, runBlocking { core.loadStatusBoard() }.doneCount)
+        save("home-stale-tap")
     }
 
     // ---------------------------------------------------------------------------------------------------------------

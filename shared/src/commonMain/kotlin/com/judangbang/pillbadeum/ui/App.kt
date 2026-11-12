@@ -30,6 +30,9 @@ import com.judangbang.pillbadeum.usecase.RecordResult
 import com.judangbang.pillbadeum.usecase.SaveIntakeResult
 import com.judangbang.pillbadeum.usecase.VoidResult
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 
@@ -181,6 +184,21 @@ fun App(
         reloadOrFail()
     }
     LaunchedEffect(homeRequests) { if (homeRequests > 0) go(Route.Home) }
+    // SCR-004#stale (TASK-017): left open across the day start, the app reads the new day at the boundary. It looks
+    // at the clock at least once a minute, so a clock set forward is noticed too; coming back to the app reads again
+    // anyway (refreshKey). A tap drawn before the boundary records nothing and says so (RecordResult.Stale).
+    val staleAt = board?.staleAt
+    LaunchedEffect(staleAt) {
+        val at = staleAt ?: return@LaunchedEffect
+        val clock = core?.clock ?: return@LaunchedEffect
+        while (true) {
+            val left = at - clock.now()
+            if (left <= Duration.ZERO) break
+            delay(left.coerceAtMost(1.minutes))
+        }
+        message = null
+        reloadOrFail()
+    }
     backHandler(route.back != null) { route.back?.let(::go) }
 
     Box(Modifier.fillMaxSize().background(Ui.Surface).safeDrawingPadding().imePadding()) {

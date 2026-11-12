@@ -346,7 +346,15 @@ def set_transport_params(params: str) -> None:
 
 
 def wipe_backup() -> None:
+    """`bmgr wipe` alone leaves the app's full backup in the test transport: LocalTransport
+    .clearBackupData() lists `_full/<package>` as a folder, but a full backup is one tar file there,
+    so nothing is deleted (AOSP android-11.0.0_r1) and the next install restores the old backup.
+    Delete that file as root too, and check that nothing is left."""
     sh(f"bmgr wipe {transport} {PKG}", check=False)
+    for path in sh(f"find /data /cache -path '*/_full/{PKG}' -type f 2>/dev/null", check=False).split():
+        sh(f"rm -f {path}")
+    if backup_entries() is not None:
+        raise RuntimeError("the test transport still holds a backup of the app")
 
 
 def backup_now() -> str:

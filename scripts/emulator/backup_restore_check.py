@@ -159,9 +159,15 @@ def tap_text(text: str, timeout: float = 20) -> None:
 
 
 def launch_app() -> None:
-    sh(f"am start -W -n {ACTIVITY}")
-    if find("항목 추가", 30) is None:
-        raise RuntimeError("app home did not show")
+    """Starts the app and waits for its home. No `am start -W`: right after `pm clear` the system
+    can still be removing the old task and kill the new process, and -W then waits forever."""
+    sh("input keyevent KEYCODE_WAKEUP", check=False)
+    sh("wm dismiss-keyguard", check=False)
+    for _ in range(2):
+        sh(f"am start -n {ACTIVITY}")
+        if find("항목 추가", 30) is not None:
+            return
+    raise RuntimeError("app home did not show")
 
 
 def stop_app() -> None:
@@ -354,6 +360,17 @@ def backup_now() -> str:
     return sh(f"bmgr backupnow {PKG}", timeout=180)
 
 
+def restore_now() -> str:
+    """`bmgr restore <token> <package>`: restores the app from the test transport's restore set.
+    Android 10 and later no longer take `bmgr restore <package>` alone."""
+    listed = sh("bmgr list sets", check=False)
+    tokens = re.findall(r"^\s*([0-9a-f]+) : ", listed, re.M)
+    if not tokens:
+        raise RuntimeError(f"no restore set: {listed.strip()}")
+    token = "1" if "1" in tokens else tokens[0]  # LocalTransport's current set is token 1
+    return sh(f"bmgr restore {token} {PKG}", check=False, timeout=180)  # ends "restoreFinished: 0", "done"
+
+
 def uninstall() -> None:
     sh(f"pm uninstall --user 0 {PKG}", check=False)
 
@@ -494,8 +511,8 @@ def cases_api31(apk: Path, r: Report) -> None:
 
     # RR-71: restore the backup over the installed app (marker stays, ids differ).
     stop_app()
-    out = sh(f"bmgr restore {PKG}", check=False, timeout=180)
-    r.note(f"bmgr restore: {last_line(out)}")
+    out = restore_now()
+    r.note(f"bmgr restore: {' / '.join(line.strip() for line in out.splitlines() if line.strip())}")
     before_start = read_state()
     r.note(f"RR-71 복원 직후 실행 전: {describe(before_start)} "
            "(표식이 없으면 시스템이 복원 전에 앱 데이터를 지운 것: R-1 표의 '표식 없음' 줄로 감)")
@@ -509,6 +526,7 @@ def cases_api31(apk: Path, r: Report) -> None:
 
     # RR-34: clearing app data is a new install.
     sh(f"pm clear {PKG}")
+    time.sleep(3)
     launch_app()
     cleared = read_state()
     r.check("RR-34 앱 데이터 삭제 뒤 실행", "새 설치, 안내 없음, 기록 0",
@@ -594,6 +612,8 @@ def main() -> int:
     for setting in ("window_animation_scale", "transition_animation_scale", "animator_duration_scale"):
         sh(f"settings put global {setting} 0")
     sh("settings put secure show_ime_with_hard_keyboard 0", check=False)
+    sh("svc power stayon true", check=False)
+    sh("settings put system screen_off_timeout 1800000", check=False)
     setup_transport()
     r.note(f"기기: API {api}, {sh('getprop ro.product.model').strip()}, 전송 {transport}")
 

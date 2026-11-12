@@ -35,7 +35,7 @@
       status: active
       code: 없음
       flows: [FL-001, FL-009]
-      reqs: [REQ-016, REQ-017, REQ-018, REQ-025, REQ-079]
+      reqs: [REQ-017, REQ-018, REQ-025, REQ-079, REQ-093]
       terms: [CTX-004, TERM-026, TERM-002]
 
 - id: SCR-003

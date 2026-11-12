@@ -367,6 +367,23 @@ if spec_path.exists():
         problem(f"spec: functional Must requirements without a SPEC row {no_spec}")
     fn_other = sorted({k for k, c in rows.items() if c[2] == "기능"} - fn_must - spec_reqs)
     print(f"  other functional requirements without a SPEC row: {fn_other or 'none'}")
+    # Stage 08: each screen names the SPEC rows it shows; the rest run in the background
+    on_screens = set()
+    for sid, body in zip(sections[1::2], sections[2::2]):
+        line = re.search(r"^명세: (.*)$", body.split("\n## ")[0], re.M)
+        if not line:
+            problem(f"screens: {sid} has no '명세:' line")
+            continue
+        named = set(re.findall(r"SPEC-\d{3}", line.group(1)))
+        if named - set(specs):
+            problem(f"screens: {sid} names unknown specs {sorted(named - set(specs))}")
+        on_screens |= named
+    background = re.search(r"화면 없이 뒤에서 도는 명세는 (.*?)임", screens)
+    background = set(re.findall(r"SPEC-\d{3}", background.group(1))) if background else set()
+    unplaced = sorted(set(specs) - on_screens - background)
+    print(f"  spec rows on no screen and not listed as background: {unplaced or 'none'}")
+    if unplaced:
+        problem(f"screens: spec rows on no screen and not listed as background {unplaced}")
 
 # --- data model (stage 05) ------------------------------------------------------------------
 # db/schema.sql copies the CREATE statements of the newest Room schema export word for word and

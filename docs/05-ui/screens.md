@@ -1,6 +1,6 @@
 # 화면 목록과 상태 (1차 릴리즈)
 
-- 상태: **CORTHEX 08 다시 하기 초안** (2026-11-12, Claude). 화면 구성과 5장 7개는 2026-11-12 10:18 KST 동희님 범위 확정 그대로이고, 다시 하기에서는 흐름을 03의 FL ID로, 화면마다 보이는 04 명세(SPEC)를, 화면 글자를 01 용어(보관·완전 삭제 등)로 맞춤. 화면 정의 승인 전. 상태별 와이어프레임은 아직 없음(TASK-044)
+- 상태: **화면 정의 승인** (2026-11-13 01:04 KST, 동희님 "추천모두승인", 프로젝트 채팅. 질문은 2026-11-13 00:55 KST 프로젝트 스레드 '약봉이 1차 릴리즈 이어 가기'의 Claude 메시지 2번. 기록은 [6장](#6-승인-기록)). 07 화면 지도(1장)도 같은 답으로 확인 끝. 그 전: CORTHEX 08 다시 하기 초안 (2026-11-12, Claude). 화면 구성과 5장 7개는 2026-11-12 10:18 KST 동희님 범위 확정 그대로이고, 다시 하기에서는 흐름을 03의 FL ID로, 화면마다 보이는 04 명세(SPEC)를, 화면 글자를 01 용어(보관·완전 삭제 등)로 맞춤. 상태별 와이어프레임은 아직 없음(TASK-044가 R2 첫 작업으로 위젯 큰 글씨·잠금 화면·판정 고치기를 먼저 그리고, 나머지는 화면 작업 PR마다 그림)
 - 기준: DidITake develop `7a800ac`의 [UI 초안](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/05-ui/README.md), [시안 v3](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/05-ui/ui-mockup-v3.html), [플로우](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/04-flow/flows.md), [기록 규칙](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/02-design/record-rules.md), 지금 코드(`App.kt`, `DidITakeWidget.kt`, `Labels.kt`)
 - 화면 목록의 원본은 [sitemap.yaml](sitemap.yaml)이고, 1장의 그림과 표는 그 파일에서 옮겨 그림. 요구는 [requirements.md](../01-planning/requirements.md)
 - 이 문서는 UI 초안을 대신하지 않음. UI 초안의 위젯·앱·알림 화면에 화면 ID와 상태를 붙이고, 1차 범위(결정 Q1)로 새로 생긴 화면을 더함. 화면이 따르는 기록 규칙은 원본 [기록 규칙](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/02-design/record-rules.md)과 [기록 규칙 보충](../04-spec/record-rules-supplement.md)(규칙 ID `S-1`, `P-2` 등)임
@@ -11,7 +11,7 @@
 - **상태 이름**: normal(기본), loading(불러오는 중), empty(비어 있음), error(오류), permission(권한), stale(지난 화면)은 모든 화면에서 따짐. 생기지 않는 상태는 이유를 적음. 화면에만 있는 상태(`#already`, `#skipped` 등)는 따로 붙임
 - **출처**: 서버 API가 없어서 공통 코드의 함수 이름을 적음. `LoadStatusBoard`·`RecordDose`·`VoidDose`·`ChangeJudgment`·`SaveIntake`·`ArchiveIntake`·`ManagePeople`은 지금 있음. '(새로 만듦)'은 아직 없는 함수임(`RecordInWindow`, `LoadHistory` 등)
 - **결과 → 상태**: `RecordResult`의 Recorded·Already·Stale·Gone·Error, `VoidResult`의 Voided·NotActive, `SaveIntakeResult`의 Saved·Invalid·Gone이 어느 상태로 가는지 각 화면에 적음
-- **(제안)**: Claude가 정한 작은 것이고 범위 확정 카드에서 따로 묻지 않았음. 구현하며 바꿀 수 있음. 5장 7개는 확정됨
+- **(제안)**: Claude가 정한 작은 것이고 범위 확정 카드에서 따로 묻지 않았음. 5장 7개는 확정됨. 이 문서의 제안 다섯(SCR-001#empty의 대상자 문구, SCR-003 주 1회 [이번 주 건너뜀], SCR-004#error, SCR-004#stale, SCR-008 무효 판정 숨김)은 2026-11-13 화면 정의 승인 때 함께 승인됨(6장). 승인 뒤 바꾸려면 동희님 결정이 필요함
 - **지금 코드**: 이 저장소 main(2026-11-12 `843a737`, DidITake `7a800ac` 프로토타입에서 패키지 이름만 바뀜)을 Claude가 읽고 판단함(기기에서 실행하지 않음)
 
 ## 1. 화면 지도
@@ -522,3 +522,11 @@ flowchart TD
 | 5 | 알림 간격·하루 최대·방해 금지를 항목마다 둘지 | 모든 항목 공통(설정), 항목에는 켜기와 시작 시각만. 방해 금지와 겹치면 저장할 때 알림 (REQ-077) | 겹침 안내를 더함(검토 A6) |
 | 6 | 잠금 화면에서 알림 버튼을 누를 때 잠금 해제를 요구할지 | 약 이름 표시를 켠 알림에만 버튼을 두고, 그때는 잠금 해제를 요구하지 않음. 이름을 숨긴 잠금 화면 판에는 버튼이 없음 (REQ-076) | 이름을 숨긴 판의 버튼을 뺌(검토 B2). 어느 약인지 모르고 [먹었어]를 누르게 되기 때문임 |
 | 7 | 지난 기록 모양 | 날짜 줄 목록(최신이 위) (REQ-037) | 같음 |
+
+## 6. 승인 기록
+
+- 언제·누가: 2026-11-13 01:04 KST, 동희님 "추천모두승인", 프로젝트 채팅
+- 물은 것: 질문은 2026-11-13 00:55 KST 프로젝트 스레드 '약봉이 1차 릴리즈 이어 가기'의 Claude 메시지 2번 "07·08 화면 지도와 화면 정의를 승인할까요?" (추천: 승인). 1장 화면 지도(진입 셋, 화면 10개)가 07 내비게이션 확인이고, 2장 화면별 정의가 08 승인임
+- 함께 정해진 것: 09 목업에서 바꾼 셋(SCR-004 [항목 추가]를 목록 아래 큰 버튼으로, SCR-005 1쪽 [다음], SCR-007 지금 창이면 제목 '오늘 기록')과 Claude 제안 다섯(SCR-001#empty의 "엄마 항목이 없어요", SCR-003 주 1회 약 버튼 [이번 주 건너뜀], SCR-004#error의 [다시 시도], SCR-004#stale의 다시 불러오기, SCR-008에서 무효 판정 숨김)
+- 반론으로 알린 것: 상태별 그림이 아직 다 있지 않음. TASK-044가 R2 첫 작업으로 위젯 큰 글씨·잠금 화면·판정 고치기를 먼저 그리고, 나머지 상태는 그 화면 작업 PR마다 먼저 그림(4장 '통과하지 못한 것')
+- 승인 뒤 화면을 바꾸려면 동희님 결정이 필요하고, 바꾼 것은 이 장에 날짜와 함께 더함. 화면 지도는 sitemap.yaml만 고치고 1장은 draw_sitemap.py로 다시 그림

@@ -21,10 +21,10 @@
 | [03 사용자 흐름](docs/03-user-flow/README.md) | 흐름 FL-001~010. 흐름마다 Mermaid 그림 | 확인 끝 (2026-11-12 23:50 KST) |
 | [04 기능 명세](docs/04-functional-spec/spec.md) | 동작마다 한 줄인 SPEC-001~044(출처, 전제, 예외, 합격 기준) | 고정 (2026-11-13 00:16 KST) |
 | [기록 규칙 보충](docs/04-spec/record-rules-supplement.md) | 04 명세가 따르는 규칙(I·B·R·S·P·N·W·C)과 반례 RR-26~90. 주 1회 약은 결정 Q15의 1차 방식 | 개발 기준 (2026-11-12, 2026-11-13 P-9·RR-90 더함) |
-| [05 ERD](docs/05-erd/README.md) · [`db/schema.sql`](db/schema.sql) | 표 TBL-001~011. Room이 내보낸 스키마와 같음 | 초안, 스키마 고정 전 |
-| [07 화면 목록](docs/05-ui/sitemap.yaml) · [08 화면 상태](docs/05-ui/screens.md) | 화면 SCR-001~010과 화면별 상태, 화면에서 정한 것 | 초안, 확인 전 |
+| [05 ERD](docs/05-erd/README.md) · [`db/schema.sql`](db/schema.sql) | 표 TBL-001~011. Room이 내보낸 스키마와 같음 | 고정 (2026-11-13 01:04 KST) |
+| [07 화면 목록](docs/05-ui/sitemap.yaml) · [08 화면 상태](docs/05-ui/screens.md) | 화면 SCR-001~010과 화면별 상태, 화면에서 정한 것 | 승인 (2026-11-13 01:04 KST) |
 | [09 목업](docs/09-mockup/README.md) | 2안 요일 약통 보드와 토큰([`design/base.tokens.json`](design/base.tokens.json)) | 확인 끝 (2026-11-12 19:11 KST). 글꼴만 2026-11-13에 기기 글꼴로 바꿈 |
-| [10 작업 분해](docs/08-wbs/wbs.md) | 작업 TASK-001~053, 담당, 릴리즈 단계 R0~R5와의 대응. 지금 프로토타입에서 Play 비공개 테스트까지 | 초안, 다음 묶음 계획 확인 전. 담당은 Claude 제안 |
+| [10 작업 분해](docs/08-wbs/wbs.md) | 작업 TASK-001~054, 담당, 릴리즈 단계 R0~R5와의 대응. 지금 프로토타입에서 Play 비공개 테스트까지 | 다음 묶음 계획 확인 (2026-11-13 01:04 KST) |
 | [12 QA 시험 계획](docs/12-qa/test-plan.md) | 시험 사례 TC-001~088과 버그 BUG ID. 이전 QA 보고서는 [`docs/07-qa/`](docs/07-qa/) | 초안, 출시 판단 전 |
 | [설계 독립 검토](docs/06-review/design-review-2026-11-11.md) | 2026-11-11 독립 검토 의견과 근거 파일 | 끝남 (PR #3) |
 | [범위 확정 반영 검토](docs/06-review/scope-confirm-review-2026-11-12.md) | 2026-11-12 Fable 5.2 독립 검토 의견(조건부 통과). 반영한 곳은 각 문서에 '2026-11-12 검토'로 적음 | 반영함 (PR #5) |

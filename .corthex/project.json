@@ -41,7 +41,7 @@
       "link": "docs/05-erd/README.md",
       "source": "db/schema.sql",
       "truth": "source",
-      "note": "2026-11-12 15:02 KST 지시('/corthex 첨부터')로 이 저장소에서 다시 함. db/schema.sql은 Room 스키마 JSON(shared/schemas, 가장 높은 버전)의 CREATE 문을 그대로 옮기고 TBL-001~011 주석을 단 것이며 check_docs.py가 같은지 봄. 스키마를 바꾸는 순서는 Entities.kt → Room 내보내기 → schema.sql. 사람이 보는 곳은 GitHub의 Mermaid 그림(docs/05-erd/README.md)으로 제안: ERD Editor를 기본값 대신 쓰지 않는 까닭은 SQLite 표 주석(TBL 번호)이 그 도구의 가져오기·내보내기에서 사라지고 원본이 Room 코드이기 때문. 스키마 고정 확인 전"
+      "note": "2026-11-12 15:02 KST 지시('/corthex 첨부터')로 이 저장소에서 다시 함. db/schema.sql은 Room 스키마 JSON(shared/schemas, 가장 높은 버전)의 CREATE 문을 그대로 옮기고 TBL-001~011 주석을 단 것이며 check_docs.py가 같은지 봄. 스키마를 바꾸는 순서는 Entities.kt → Room 내보내기 → schema.sql. 사람이 보는 곳은 GitHub의 Mermaid 그림(docs/05-erd/README.md)으로 제안: ERD Editor를 기본값 대신 쓰지 않는 까닭은 SQLite 표 주석(TBL 번호)이 그 도구의 가져오기·내보내기에서 사라지고 원본이 Room 코드이기 때문. 스키마 고정(2026-11-13 01:04 KST, 동희님 '추천모두승인', 프로젝트 채팅. 질문은 00:55 KST 프로젝트 스레드 메시지 1번): 1차 스키마는 Room 스키마 2(TBL-001~011) 그대로, intro_seen_at 설정 키, 위젯 고른 대상자는 Glance 상태, 2차 빈 표 셋은 둠. 기록은 docs/05-erd/README.md 7장. 바꾸려면 동희님 결정과 이주"
     },
     "06-api": {
       "skip": true,
@@ -51,13 +51,13 @@
       "human": "github",
       "source": "docs/05-ui/sitemap.yaml",
       "truth": "source",
-      "note": "그림과 표는 docs/05-ui/screens.md 1장 (Mermaid), .github/scripts/draw_sitemap.py가 sitemap.yaml에서 그림. 2026-11-12 07 다시 하기(Claude): flows를 03의 FL ID로, terms를 01의 CTX·TERM으로, 화면 밖 길은 links로. 화면 10개는 범위 확정(10:18) 그대로. 슬라이드 보기는 혼자 보는 프로젝트라 두지 않음. 내비게이션 확인 전"
+      "note": "그림과 표는 docs/05-ui/screens.md 1장 (Mermaid), .github/scripts/draw_sitemap.py가 sitemap.yaml에서 그림. 2026-11-12 07 다시 하기(Claude): flows를 03의 FL ID로, terms를 01의 CTX·TERM으로, 화면 밖 길은 links로. 화면 10개는 범위 확정(10:18) 그대로. 슬라이드 보기는 혼자 보는 프로젝트라 두지 않음. 내비게이션 확인 끝(2026-11-13 01:04 KST, 동희님 '추천모두승인', 질문은 00:55 KST 메시지 2번, 기록은 screens.md 6장)"
     },
     "08-screen-states": {
       "human": "github",
       "source": "docs/05-ui/screens.md",
       "truth": "source",
-      "note": "화면 정의를 한 파일에 둠. 화면 5장 7개는 2026-11-12 10:18 KST 확정. 2026-11-12 08 다시 하기(Claude): 흐름 FL ID, 화면마다 '명세:' 줄(SPEC), 01 용어로 글자 맞춤, 04 명세 3장의 화면 쪽 항목 정함. 출처 열은 API가 없어 공통 코드 함수 이름. 상태별 와이어프레임은 아직 없음(TASK-044). 화면 정의 승인 전"
+      "note": "화면 정의를 한 파일에 둠. 화면 5장 7개는 2026-11-12 10:18 KST 확정. 2026-11-12 08 다시 하기(Claude): 흐름 FL ID, 화면마다 '명세:' 줄(SPEC), 01 용어로 글자 맞춤, 04 명세 3장의 화면 쪽 항목 정함. 출처 열은 API가 없어 공통 코드 함수 이름. 상태별 와이어프레임은 아직 없음(TASK-044). 화면 정의 승인(2026-11-13 01:04 KST, 동희님 '추천모두승인', 질문은 00:55 KST 메시지 2번). Claude 제안 다섯과 09에서 바꾼 셋 함께 승인. 상태별 그림은 TASK-044와 화면 작업 PR에서. 기록은 screens.md 6장"
     },
     "09-mockup": {
       "human": "github",
@@ -68,7 +68,7 @@
       "human": "github",
       "source": "docs/08-wbs/wbs.md",
       "truth": "source",
-      "note": "담당과 R 단계 순서는 Claude 제안(2026-11-12). 작업 보드(GitHub Projects 또는 Notion)는 아직 두지 않고 이 파일이 원본임. 요구·화면·작업 대조는 .github/scripts/check_docs.py 2026-11-12 10 다시 하기: wbs.md 2장 '명세와 작업'이 SPEC마다 작업을 잇고 check_docs.py가 봄. 다음 묶음 계획 확인 전"
+      "note": "담당과 R 단계 순서는 Claude 제안(2026-11-12). 작업 보드(GitHub Projects 또는 Notion)는 아직 두지 않고 이 파일이 원본임. 요구·화면·작업 대조는 .github/scripts/check_docs.py 2026-11-12 10 다시 하기: wbs.md 2장 '명세와 작업'이 SPEC마다 작업을 잇고 check_docs.py가 봄. 다음 묶음 계획 확인(2026-11-13 01:04 KST, 동희님 '추천모두승인', 질문은 00:55 KST 메시지 3·4번): PR #17 뒤 TASK-054(BUG-004, 새로 더함) → R2·R3 나란히, 담당 확인, 실기기는 시험용 갤럭시를 동희님 PC에 연결. PR #17 독립 검토는 동희님 말씀('독립검토 넘어가고 개발 시작해 ㄱㄱ', 01:04)으로 하지 않음"
     },
     "11-development": {
       "human": "github",

@@ -631,21 +631,26 @@ if tokens_path.exists():
 
     walk_tokens(tokens, [], None)
     boards = root / "docs" / "09-mockup" / "boards"
+    pages = []
     if boards.is_dir():
         css_vars = set(re.findall(r"(--[a-z0-9-]+):", (boards / "tokens.css").read_text(encoding="utf-8")))
         if css_vars != token_vars:
             problem(f"tokens: boards/tokens.css is out of date (run gen_css.py): differs in {sorted(css_vars ^ token_vars)[:5]}")
-        # Boards use token names. Local helpers are --p-* (person colour picked per row).
-        # Notif.dc.html draws the system notification shade, whose colours the device sets.
-        for page in sorted(boards.glob("*.dc.html")) + [boards / "box.css"]:
+        # Boards and the TASK-044 state drawings use token names. Local helpers are --p-* (person colour
+        # picked per row). Notif.dc.html and LockSheet.dc.html draw the system notification shade and lock
+        # screen, whose colours the device sets.
+        states = root / "docs" / "05-ui" / "states"
+        pages = sorted(boards.glob("*.dc.html")) + [boards / "box.css"]
+        pages += sorted(states.glob("*.dc.html")) if states.is_dir() else []
+        for page in pages:
             text = page.read_text(encoding="utf-8")
             for used in sorted(set(re.findall(r"var\((--[a-z0-9-]+)\)", text))):
                 if used not in token_vars and not used.startswith("--p-"):
                     problem(f"tokens: {page.relative_to(root)} uses {used}, which is not a token")
-            if page.name != "Notif.dc.html":
+            if page.name not in ("Notif.dc.html", "LockSheet.dc.html"):
                 for hex_value in sorted(set(re.findall(r"#[0-9A-Fa-f]{6}\b|#[0-9A-Fa-f]{3}\b", re.sub(r"<title>.*?</title>", "", text)))):
                     problem(f"tokens: {page.relative_to(root)} uses the raw colour {hex_value} instead of a token")
-    print(f"tokens: {len(token_vars)} tokens in design/base.tokens.json, boards checked")
+    print(f"tokens: {len(token_vars)} tokens in design/base.tokens.json, {len(pages)} boards and state drawings checked")
 
 md_files = sorted((root / "docs").rglob("*.md")) + [root / "README.md"]
 link_count, table_count = 0, 0

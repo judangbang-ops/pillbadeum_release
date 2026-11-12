@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>TASK-044 SCR-007 지난 창의 판정 고치기 (360dp, 글자 100%·200%)</title>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;800&amp;family=Roboto:wght@400;600;800&amp;display=swap">
+<link rel="stylesheet" href="../../09-mockup/boards/tokens.css">
+<link rel="stylesheet" href="../../09-mockup/boards/box.css">
+<style>
+.sheet{box-sizing:border-box;padding:var(--space-xl);background:var(--color-surface-sunken);color:var(--color-ink-default);
+  font-family:Roboto,'Noto Sans KR',var(--font-family-base);font-size:var(--font-size-body);word-break:keep-all;overflow-wrap:break-word}
+.sheet *{box-sizing:border-box}
+.sheet p{margin:0}
+.sheet .st{font-size:var(--font-size-title-md);font-weight:var(--font-weight-extrabold);line-height:var(--font-line-height-tight)}
+.sheet .sd{margin:var(--space-xs) 0 var(--space-xl);font-size:var(--font-size-body-sm);line-height:var(--font-line-height-normal);color:var(--color-ink-muted)}
+.sheet figure{margin:0}
+.sheet figcaption{font-size:var(--font-size-body-sm);font-weight:var(--font-weight-semibold);line-height:var(--font-line-height-tight);margin-bottom:var(--space-xs)}
+
+.pair{display:grid;grid-template-columns:360px 360px;gap:var(--space-xl) var(--space-lg);align-items:start}
+.sheet .s{height:auto;padding-bottom:var(--space-xl);border-radius:var(--radius-tile);box-shadow:0 0 0 1px var(--color-line-subtle)}
+.sheet .s .body{overflow:visible}
+.sheet .s .bar{padding-top:var(--space-xs);padding-bottom:var(--space-xs)}
+.tile{border-radius:var(--radius-tile);padding:var(--space-lg);display:flex;flex-direction:column;gap:2px;background:var(--p-tint);color:var(--p-ink);margin-top:var(--space-sm)}
+.tile.done{background:var(--p-solid);color:var(--color-ink-on-solid)}
+.tile.skip{background:var(--color-surface-skip);color:var(--color-ink-muted)}
+.tile .who{font-size:var(--font-size-body-sm);font-weight:var(--font-weight-semibold)}
+.tile .nm{font-size:var(--font-size-display-sm);font-weight:var(--font-weight-extrabold);line-height:1.3}
+.tile .win{margin-top:var(--space-md);font-size:var(--font-size-body-sm);line-height:var(--font-line-height-normal)}
+.tile .stt{font-size:var(--font-size-title-sm);font-weight:var(--font-weight-extrabold);margin-top:2px}
+.acts{display:flex;flex-direction:column;gap:var(--space-sm);margin-top:var(--space-xl)}
+.acts .note{margin-top:var(--space-2xs);padding:0 var(--space-2xs)}
+</style>
+</helmet>
+<div class="sheet" style="width: 784px">
+  <p class="st">SCR-007 판정 고치기: 지난 창 (폭 360dp)</p>
+  <p class="sd">지난 창에는 [지금 먹었어]가 없음. 시각은 연 창 안에서만 고름(보충 P-2). 화면 높이는 내용만큼 그림(휴대폰에서는 800dp를 넘으면 스크롤)</p>
+  <div class="pair"><figure><figcaption>기록 없음 · 매일 약 · 어제 · 글자 100%</figcaption><div data-v="none-100" class="s"><div class="bar back"><button class="ib" type="button" aria-label="뒤로"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h1>11/11 (수) 기록 고치기</h1></div><div class="body p2"><div class="tile "><span class="who">엄마</span><span class="nm">혈압약</span><span class="sm">매일 · 저녁</span><span class="win">11/11 (수) 04:00 ~ 11/12 (목) 04:00</span><span class="stt">기록이 없어요</span></div><div class="acts"><button class="btn p" type="button">먹은 시각 고르기</button><button class="btn line" type="button">건너뜀</button><p class="note">먹은 시각은 11/11 (수) 04:00부터 11/12 (목) 04:00 전까지 고를 수 있어요.</p></div></div></div></figure><figure><figcaption>기록 없음 · 매일 약 · 어제 · 글자 200%</figcaption><div data-v="none-200" class="s fs200"><div class="bar back"><button class="ib" type="button" aria-label="뒤로"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h1>11/11 (수) 기록 고치기</h1></div><div class="body p2"><div class="tile "><span class="who">엄마</span><span class="nm">혈압약</span><span class="sm">매일 · 저녁</span><span class="win">11/11 (수) 04:00 ~ 11/12 (목) 04:00</span><span class="stt">기록이 없어요</span></div><div class="acts"><button class="btn p" type="button">먹은 시각 고르기</button><button class="btn line" type="button">건너뜀</button><p class="note">먹은 시각은 11/11 (수) 04:00부터 11/12 (목) 04:00 전까지 고를 수 있어요.</p></div></div></div></figure><figure><figcaption>먹음 · 매일 약 · 어제 · 글자 100%</figcaption><div data-v="taken-100" class="s"><div class="bar back"><button class="ib" type="button" aria-label="뒤로"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h1>11/11 (수) 기록 고치기</h1></div><div class="body p1"><div class="tile done"><span class="who">나</span><span class="nm">아침약</span><span class="sm">매일 · 아침</span><span class="win">11/11 (수) 04:00 ~ 11/12 (목) 04:00</span><span class="stt">08:10에 먹음</span></div><div class="acts"><button class="btn line" type="button">먹은 시각 고치기</button><button class="btn danger" type="button">기록 취소</button><p class="note">기록을 취소해도 지워지지 않고 무효로 남아요.</p></div></div></div></figure><figure><figcaption>먹음 · 매일 약 · 어제 · 글자 200%</figcaption><div data-v="taken-200" class="s fs200"><div class="bar back"><button class="ib" type="button" aria-label="뒤로"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h1>11/11 (수) 기록 고치기</h1></div><div class="body p1"><div class="tile done"><span class="who">나</span><span class="nm">아침약</span><span class="sm">매일 · 아침</span><span class="win">11/11 (수) 04:00 ~ 11/12 (목) 04:00</span><span class="stt">08:10에 먹음</span></div><div class="acts"><button class="btn line" type="button">먹은 시각 고치기</button><button class="btn danger" type="button">기록 취소</button><p class="note">기록을 취소해도 지워지지 않고 무효로 남아요.</p></div></div></div></figure><figure><figcaption>건너뜀 · 주 1회 약 · 지난주 · 글자 100%</figcaption><div data-v="skipped-100" class="s"><div class="bar back"><button class="ib" type="button" aria-label="뒤로"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h1>11/02 (월) 주 기록 고치기</h1></div><div class="body p2"><div class="tile skip"><span class="who">엄마</span><span class="nm">골다공증약</span><span class="sm">주 1회 · 월요일</span><span class="win">11/02 (월) ~ 11/08 (일)</span><span class="stt">건너뜀</span></div><div class="acts"><button class="btn p" type="button">먹었어로 바꾸기</button><button class="btn danger" type="button">건너뜀 취소</button><p class="note">먹었어로 바꾸면 먹은 시각을 먼저 골라요. 11/02 (월) 04:00부터 11/09 (월) 04:00 전까지예요.</p></div></div></div></figure><figure><figcaption>건너뜀 · 주 1회 약 · 지난주 · 글자 200%</figcaption><div data-v="skipped-200" class="s fs200"><div class="bar back"><button class="ib" type="button" aria-label="뒤로"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h1>11/02 (월) 주 기록 고치기</h1></div><div class="body p2"><div class="tile skip"><span class="who">엄마</span><span class="nm">골다공증약</span><span class="sm">주 1회 · 월요일</span><span class="win">11/02 (월) ~ 11/08 (일)</span><span class="stt">건너뜀</span></div><div class="acts"><button class="btn p" type="button">먹었어로 바꾸기</button><button class="btn danger" type="button">건너뜀 취소</button><p class="note">먹었어로 바꾸면 먹은 시각을 먼저 골라요. 11/02 (월) 04:00부터 11/09 (월) 04:00 전까지예요.</p></div></div></div></figure><figure><figcaption>#locked · 하루 시작 시각을 바꾸기 전에 끝난 날 · 글자 100%</figcaption><div data-v="locked-100" class="s"><div class="bar back"><button class="ib" type="button" aria-label="뒤로"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h1>11/01 (일) 기록 고치기</h1></div><div class="body p1"><div class="tile done"><span class="who">나</span><span class="nm">아침약</span><span class="sm">매일 · 아침</span><span class="win">11/01 (일) 04:00 ~ 11/02 (월) 04:00</span><span class="stt">08:30에 먹음</span></div><div class="band" style="margin-top: var(--space-xl)">설정을 바꾸기 전의 기록은 고칠 수 없어요.</div><div class="acts"><p class="note">하루 시작 시각이나 기준 시간대를 바꾸기 전에 끝난 날이에요.</p></div></div></div></figure><figure><figcaption>#locked · 하루 시작 시각을 바꾸기 전에 끝난 날 · 글자 200%</figcaption><div data-v="locked-200" class="s fs200"><div class="bar back"><button class="ib" type="button" aria-label="뒤로"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h1>11/01 (일) 기록 고치기</h1></div><div class="body p1"><div class="tile done"><span class="who">나</span><span class="nm">아침약</span><span class="sm">매일 · 아침</span><span class="win">11/01 (일) 04:00 ~ 11/02 (월) 04:00</span><span class="stt">08:30에 먹음</span></div><div class="band" style="margin-top: var(--space-xl)">설정을 바꾸기 전의 기록은 고칠 수 없어요.</div><div class="acts"><p class="note">하루 시작 시각이나 기준 시간대를 바꾸기 전에 끝난 날이에요.</p></div></div></div></figure></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview": {"width": 784, "height": 4000}}'>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>

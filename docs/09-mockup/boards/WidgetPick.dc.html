@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>SCR-002 위젯 대상자 고르기</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;800&amp;family=Roboto:wght@400;600;800&amp;display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="box.css">
+<style>
+.ttl{font-size:var(--font-size-title-lg);font-weight:var(--font-weight-extrabold);line-height:var(--font-line-height-tight);padding:0 var(--space-2xs)}
+.sub{margin-top:var(--space-sm);padding:0 var(--space-2xs);line-height:var(--font-line-height-normal)}
+.opts{display:flex;flex-direction:column;gap:var(--space-sm);margin-top:var(--space-2xl)}
+.opt{display:flex;align-items:center;gap:var(--space-md);min-height:72px;padding:var(--space-md) var(--space-lg);border-radius:var(--radius-tile);
+  border:var(--border-strong) solid var(--color-line-strong);background:var(--color-surface-default);font:inherit;color:inherit;text-align:left}
+.opt .k{display:flex;flex-direction:column;gap:2px;line-height:var(--font-line-height-tight)}
+.opt b{font-size:var(--font-size-title-sm);font-weight:var(--font-weight-extrabold)}
+.opt small{font-size:var(--font-size-body-sm);color:var(--color-ink-muted)}
+</style>
+</helmet>
+<div class="s {{fs}}">
+  <div class="body" style="padding-top: var(--space-2xl)">
+    <p class="ttl">이 위젯에 누구 약을 보일까요?</p>
+    <p class="muted sub">고른 사람의 약만 이 위젯에 보여요.</p>
+    <div class="opts">
+      <button class="opt" type="button"><span class="lid all" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20"><rect x="2" y="2" width="7" height="7" rx="2" fill="currentColor"/><rect x="11" y="2" width="7" height="7" rx="2" fill="currentColor"/><rect x="2" y="11" width="7" height="7" rx="2" fill="currentColor"/><rect x="11" y="11" width="7" height="7" rx="2" fill="currentColor"/></svg></span><span class="k"><b>전체</b><small>나·엄마의 약 4개</small></span></button>
+      <button class="opt p1" type="button"><span class="lid" aria-hidden="true">나</span><span class="k"><b>나</b><small>약 2개</small></span></button>
+      <button class="opt p2" type="button"><span class="lid" aria-hidden="true">엄</span><span class="k"><b>엄마</b><small>약 2개</small></span></button>
+    </div>
+  </div>
+  <div class="foot"><button class="btn text" type="button">취소</button></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"fontScale": {"editor": "enum", "options": ["100", "200"], "default": "100"}, "$preview": {"width": 360, "height": 800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { fs: (this.props.fontScale ?? '100') === '200' ? 'fs200' : '' };
+  }
+}
+</script>
+</body>
+</html>

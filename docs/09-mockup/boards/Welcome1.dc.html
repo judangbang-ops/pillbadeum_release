@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>SCR-005 첫 실행 안내 1쪽</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;800&amp;family=Roboto:wght@400;600;800&amp;display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="box.css">
+<style>
+.box{margin:var(--space-lg) 0 var(--space-2xl);padding:var(--space-lg) var(--space-md);border-radius:var(--radius-tile);background:var(--color-surface-sunken)}
+.days,.lids{display:grid;grid-template-columns:repeat(7,1fr);gap:var(--space-xs)}
+.days .d{text-align:center;font-size:var(--font-size-body-sm);font-weight:var(--font-weight-semibold);color:var(--color-ink-muted);margin-bottom:var(--space-xs)}
+.lidc{height:56px;border-radius:var(--radius-button);background:var(--color-surface-default);border:var(--border-strong) solid var(--color-line-strong);display:flex;align-items:center;justify-content:center;color:var(--color-ink-on-solid)}
+.lidc.t{background:var(--p-solid);border-color:var(--p-solid)}
+.lidc.now{border:var(--border-focus) dashed var(--p-solid);box-shadow:0 0 0 2px var(--color-surface-sunken),0 0 0 4px var(--color-ink-default)}
+.hl{font-size:var(--font-size-display);font-weight:var(--font-weight-extrabold);line-height:1.3;padding:0 var(--space-2xs)}
+.lead{margin-top:var(--space-md)!important;line-height:var(--font-line-height-normal);color:var(--color-ink-muted);padding:0 var(--space-2xs)}
+.pts{margin-top:var(--space-xl);display:flex;flex-direction:column;gap:var(--space-md);padding:0 var(--space-2xs)}
+.pts p{font-size:var(--font-size-body-sm);line-height:var(--font-line-height-normal);padding-left:var(--space-md);border-left:3px solid var(--color-ink-default)}
+.pg{display:flex;gap:var(--space-xs);justify-content:center;margin-bottom:var(--space-2xs)!important}
+.pg i{width:20px;height:4px;border-radius:2px;background:var(--color-line-strong)}
+.pg i.on{width:32px;background:var(--color-ink-default)}
+</style>
+</helmet>
+<div class="s p1 {{fs}}">
+  <div class="bar"><span style="flex-grow:1"></span><button class="tb" type="button">건너뛰기</button></div>
+  <div class="body">
+    <div class="box" role="img" aria-label="요일 약통 그림: 월 화 수는 먹음, 목요일은 오늘">
+      <div class="days"><span class="d">월</span><span class="d">화</span><span class="d">수</span><span class="d">목</span><span class="d">금</span><span class="d">토</span><span class="d">일</span></div><div class="lids"><i class="lidc t"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><i class="lidc t"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><i class="lidc t"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></i><i class="lidc now"></i><i class="lidc"></i><i class="lidc"></i><i class="lidc"></i></div>
+    </div>
+    <p class="hl">먹었는지 헷갈릴 때, 위젯 한 번이면&nbsp;돼요</p>
+    <p class="lead">약을 먹고 홈 화면 위젯을 한 번 누르면 시각과 함께 남아요.</p>
+    <div class="pts">
+      <p><b>필받음은 기록 도구예요.</b> 복용 방법은 의사·약사와 상의해 주세요.</p>
+      <p><b>한 약은 한 휴대폰에서 기록해 주세요.</b> 휴대폰끼리는 기록이 이어지지 않아요.</p>
+    </div>
+  </div>
+  <div class="foot"><p class="pg" aria-label="2쪽 중 1쪽"><i class="on"></i><i></i></p><button class="btn ink" type="button">다음</button></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"fontScale": {"editor": "enum", "options": ["100", "200"], "default": "100"}, "$preview": {"width": 360, "height": 800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { fs: (this.props.fontScale ?? '100') === '200' ? 'fs200' : '' };
+  }
+}
+</script>
+</body>
+</html>

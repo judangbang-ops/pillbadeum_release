@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>SCR-010 대상자 관리</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;800&amp;family=Roboto:wght@400;600;800&amp;display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="box.css">
+<style>
+.fs200 .li.arch{flex-wrap:wrap}
+.fs200 .li.arch .k{flex-basis:calc(100% - var(--size-lid) - var(--space-md))}
+.fs200 .li.arch .btn{margin-left:calc(var(--size-lid) + var(--space-md))}
+</style>
+</helmet>
+<div class="s {{fs}}">
+  <div class="bar back"><button class="ib" type="button" aria-label="뒤로"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h1>대상자 관리</h1></div>
+  <div class="body">
+    <p class="note" style="padding:0 var(--space-2xs) var(--space-md)">사람마다 색이 있어요. 위젯과 앱에서 이 색으로 누구 약인지 알아봐요.</p>
+    <div class="li p1"><span class="lid" aria-hidden="true">나</span><span class="k">나<small>약 2개</small></span><span class="muted"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+    <div class="li p2"><span class="lid" aria-hidden="true">엄</span><span class="k">엄마<small>약 2개</small></span><span class="muted"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+    <button class="btn ink" type="button" style="margin-top:var(--space-lg)"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>대상자 추가</button>
+    <h2>보관됨</h2>
+    <div class="li arch"><span class="lid off" aria-hidden="true">아</span><span class="k">아빠<small>약 1개 · 지난 기록은&nbsp;남아요</small></span><button class="btn line sm" type="button">되살리기</button></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"fontScale": {"editor": "enum", "options": ["100", "200"], "default": "100"}, "$preview": {"width": 360, "height": 800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { fs: (this.props.fontScale ?? '100') === '200' ? 'fs200' : '' };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>SCR-003 반복 알림</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;800&amp;family=Roboto:wght@400;600;800&amp;display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="box.css">
+<style>
+/* 알림 모양은 기기(Android 14 밝은 테마)가 그림. 앱이 정하는 것은 글자, 작은 아이콘, 강조색(--color-ink-default)뿐 */
+.sys{width:360px;height:560px;box-sizing:border-box;word-break:keep-all;padding:16px 12px;background:#DADDE3;font-family:Roboto,'Noto Sans KR',sans-serif;display:flex;flex-direction:column;gap:8px}
+.sys p{margin:0}
+.cap{font-size:13px;color:#3B3F46;padding:6px 8px 0}
+.n{background:#F7F7FA;border-radius:24px;padding:14px 16px 6px;color:#1B1B1F}
+.nh{display:flex;align-items:center;gap:8px;font-size:13px;color:#46464F}
+.ai{width:22px;height:22px;border-radius:50%;background:var(--color-ink-default);color:#fff;display:flex;align-items:center;justify-content:center}
+.ai svg{width:14px;height:14px}
+.nt{font-size:16px;font-weight:600;margin-top:8px!important}
+.nb{font-size:14px;color:#46464F;margin-top:2px!important;padding-bottom:8px}
+.na{display:flex;gap:4px;margin:0 -8px}
+.na button{min-height:48px;border:0;background:none;font:inherit;font-size:14px;font-weight:600;color:var(--color-ink-default);padding:0 8px}
+</style>
+</helmet>
+<div class="sys">
+  <p class="cap">잠금을 푼 화면 · 알림을 펼친 모양</p>
+  <div class="n">
+    <div class="nh"><span class="ai" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>필받음 · 지금</span></div>
+    <p class="nt">혈압약 먹어~!</p>
+    <p class="nb">마지막 복용 어제 21:40</p>
+    <div class="na"><button type="button">먹었어</button><button type="button">30분 뒤</button><button type="button">오늘 건너뜀</button></div>
+  </div>
+  <p class="cap">잠금 화면 · 약 이름 보이기 끔(기본)</p>
+  <div class="n">
+    <div class="nh"><span class="ai" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>필받음 · 지금</span></div>
+    <p class="nt">복용 시간이에요</p>
+  </div>
+  <p class="cap">주 1회 약 · 펼친 모양</p>
+  <div class="n">
+    <div class="nh"><span class="ai" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>필받음 · 지금</span></div>
+    <p class="nt">골다공증약 먹어~!</p>
+    <p class="nb">마지막 복용 11/02(월) 08:10</p>
+    <div class="na"><button type="button">먹었어</button><button type="button">30분 뒤</button><button type="button">이번 주 건너뜀</button></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview": {"width": 360, "height": 560}}'>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>

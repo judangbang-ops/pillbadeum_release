@@ -1,0 +1,592 @@
+{
+  "$description": "필받음 1차 디자인 토큰 (CORTHEX 09, 2안 요일 약통). 2026-11-12 18:27 KST 동희님이 결정 카드에서 '2안 요일 약통'을 고름. 크기 단위 px는 안드로이드의 dp(글자는 sp)로 읽음. 밝은 모드만 있음(다크 테마는 2차 후보).",
+  "color": {
+    "$type": "color",
+    "surface": {
+      "default": {
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "hex": "#FFFFFF"
+        },
+        "$description": "앱·위젯 바탕"
+      },
+      "sunken": {
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.949,
+            0.9529,
+            0.9608
+          ],
+          "hex": "#F2F3F5"
+        },
+        "$description": "아직 오지 않은 날의 빈 칸"
+      },
+      "skip": {
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.9255,
+            0.9294,
+            0.9373
+          ],
+          "hex": "#ECEDEF"
+        },
+        "$description": "건너뜀 칸"
+      },
+      "notice": {
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            1.0,
+            0.9451,
+            0.8
+          ],
+          "hex": "#FFF1CC"
+        },
+        "$description": "복원·권한 안내 띠"
+      }
+    },
+    "ink": {
+      "default": {
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.0824,
+            0.0902,
+            0.1098
+          ],
+          "hex": "#15171C"
+        },
+        "$description": "본문 글자, 기본 버튼 채움, 요일 배지"
+      },
+      "muted": {
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.3608,
+            0.3843,
+            0.4392
+          ],
+          "hex": "#5C6270"
+        },
+        "$description": "보조 글자. 흰 바탕 6.1:1, 건너뜀 칸 5.2:1"
+      },
+      "on-solid": {
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "hex": "#FFFFFF"
+        },
+        "$description": "채운 칸·버튼 위 글자"
+      },
+      "notice": {
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.3608,
+            0.2667,
+            0.0
+          ],
+          "hex": "#5C4400"
+        },
+        "$description": "안내 띠 글자 (안내 띠 위 8.2:1)"
+      },
+      "danger": {
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.7059,
+            0.1373,
+            0.0941
+          ],
+          "hex": "#B42318"
+        },
+        "$description": "보관·완전 삭제 글자 (흰 바탕 6.6:1)"
+      }
+    },
+    "line": {
+      "subtle": {
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.8902,
+            0.898,
+            0.9137
+          ],
+          "hex": "#E3E5E9"
+        },
+        "$description": "꾸밈 구분선. 이것만으로 뜻을 나르지 않음"
+      },
+      "strong": {
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.5451,
+            0.5647,
+            0.6039
+          ],
+          "hex": "#8B909A"
+        },
+        "$description": "입력 칸 테두리, 빠짐 칸 테두리, 건너뜀 빗금 (흰 바탕 3.2:1)"
+      }
+    },
+    "person": {
+      "$description": "대상자 뚜껑 색. 고를 수 있는 여섯 색. solid=먹은 칸·버튼(흰 글자 4.5:1 이상), tint=아직 칸 바탕, ink=tint 위 글자(4.5:1 이상)",
+      "1": {
+        "$description": "파랑",
+        "solid": {
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.1686,
+              0.349,
+              0.7647
+            ],
+            "hex": "#2B59C3"
+          }
+        },
+        "tint": {
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.8941,
+              0.9255,
+              0.9843
+            ],
+            "hex": "#E4ECFB"
+          }
+        },
+        "ink": {
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.1176,
+              0.2471,
+              0.5608
+            ],
+            "hex": "#1E3F8F"
+          }
+        }
+      },
+      "2": {
+        "$description": "주황",
+        "solid": {
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.7608,
+              0.3137,
+              0.102
+            ],
+            "hex": "#C2501A"
+          }
+        },
+        "tint": {
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.9843,
+              0.9059,
+              0.8627
+            ],
+            "hex": "#FBE7DC"
+          }
+        },
+        "ink": {
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.5412,
+              0.2078,
+              0.0627
+            ],
+            "hex": "#8A3510"
+          }
+        }
+      },
+      "3": {
+        "$description": "초록",
+        "solid": {
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.1216,
+              0.4784,
+              0.298
+            ],
+            "hex": "#1F7A4C"
+          }
+        },
+        "tint": {
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.8745,
+              0.9451,
+              0.902
+            ],
+            "hex": "#DFF1E6"
+          }
+        },
+        "ink": {
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.0824,
+              0.3373,
+              0.2118
+            ],
+            "hex": "#155636"
+          }
+        }
+      },
+      "4": {
+        "$description": "보라",
+        "solid": {
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.4196,
+              0.2627,
+              0.7216
+            ],
+            "hex": "#6B43B8"
+          }
+        },
+        "tint": {
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.9255,
+              0.902,
+              0.9725
+            ],
+            "hex": "#ECE6F8"
+          }
+        },
+        "ink": {
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.2941,
+              0.1765,
+              0.5255
+            ],
+            "hex": "#4B2D86"
+          }
+        }
+      },
+      "5": {
+        "$description": "장미",
+        "solid": {
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.7216,
+              0.1961,
+              0.3725
+            ],
+            "hex": "#B8325F"
+          }
+        },
+        "tint": {
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.9765,
+              0.8863,
+              0.9176
+            ],
+            "hex": "#F9E2EA"
+          }
+        },
+        "ink": {
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.5176,
+              0.1294,
+              0.2627
+            ],
+            "hex": "#842143"
+          }
+        }
+      },
+      "6": {
+        "$description": "청록",
+        "solid": {
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.0588,
+              0.4314,
+              0.4784
+            ],
+            "hex": "#0F6E7A"
+          }
+        },
+        "tint": {
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.8627,
+              0.9373,
+              0.9451
+            ],
+            "hex": "#DCEFF1"
+          }
+        },
+        "ink": {
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.0392,
+              0.3098,
+              0.3451
+            ],
+            "hex": "#0A4F58"
+          }
+        }
+      }
+    }
+  },
+  "font": {
+    "family": {
+      "$type": "fontFamily",
+      "base": {
+        "$value": [
+          "sans-serif"
+        ],
+        "$description": "기기 기본 글꼴. 앱에 글꼴 파일을 넣지 않음(2026-11-13 00:16 KST 04 명세 고정 질문 4, 동희님 '추천 모두 승인'). Android에서는 FontFamily.Default로, 라틴 글자는 Roboto, 한글은 기기 글꼴(Pixel·AOSP는 Noto Sans CJK, 갤럭시는 제조사 글꼴)임. 위젯(Glance)도 기기 글꼴만 씀. 목업 보드는 Pixel을 흉내 내 Roboto와 Noto Sans KR로 그림(docs/09-mockup/README.md 2장). 그 전 값은 Gothic A1(Google Fonts, SIL OFL 1.1)"
+      }
+    },
+    "weight": {
+      "$type": "fontWeight",
+      "regular": {
+        "$value": 400
+      },
+      "semibold": {
+        "$value": 600
+      },
+      "extrabold": {
+        "$value": 800
+      }
+    },
+    "size": {
+      "$type": "dimension",
+      "$description": "sp. 글자 200%에서 안드로이드 14 이상은 비선형으로 키움(14→26, 16→28, 18→30, 20→34)",
+      "body-sm": {
+        "$value": {
+          "value": 14,
+          "unit": "px"
+        }
+      },
+      "label": {
+        "$value": {
+          "value": 15,
+          "unit": "px"
+        }
+      },
+      "body": {
+        "$value": {
+          "value": 16,
+          "unit": "px"
+        }
+      },
+      "title-sm": {
+        "$value": {
+          "value": 18,
+          "unit": "px"
+        }
+      },
+      "title-md": {
+        "$value": {
+          "value": 20,
+          "unit": "px"
+        }
+      },
+      "title-lg": {
+        "$value": {
+          "value": 22,
+          "unit": "px"
+        }
+      },
+      "display-sm": {
+        "$value": {
+          "value": 24,
+          "unit": "px"
+        }
+      },
+      "display": {
+        "$value": {
+          "value": 26,
+          "unit": "px"
+        }
+      }
+    },
+    "line-height": {
+      "$type": "number",
+      "tight": {
+        "$value": 1.25
+      },
+      "normal": {
+        "$value": 1.4
+      }
+    }
+  },
+  "space": {
+    "$type": "dimension",
+    "3xs": {
+      "$value": {
+        "value": 2,
+        "unit": "px"
+      }
+    },
+    "2xs": {
+      "$value": {
+        "value": 4,
+        "unit": "px"
+      }
+    },
+    "xs": {
+      "$value": {
+        "value": 6,
+        "unit": "px"
+      }
+    },
+    "sm": {
+      "$value": {
+        "value": 8,
+        "unit": "px"
+      }
+    },
+    "md": {
+      "$value": {
+        "value": 12,
+        "unit": "px"
+      }
+    },
+    "lg": {
+      "$value": {
+        "value": 16,
+        "unit": "px"
+      }
+    },
+    "xl": {
+      "$value": {
+        "value": 20,
+        "unit": "px"
+      }
+    },
+    "2xl": {
+      "$value": {
+        "value": 24,
+        "unit": "px"
+      }
+    }
+  },
+  "radius": {
+    "$type": "dimension",
+    "cell": {
+      "$value": {
+        "value": 8,
+        "unit": "px"
+      }
+    },
+    "button": {
+      "$value": {
+        "value": 12,
+        "unit": "px"
+      }
+    },
+    "badge": {
+      "$value": {
+        "value": 14,
+        "unit": "px"
+      }
+    },
+    "tile": {
+      "$value": {
+        "value": 18,
+        "unit": "px"
+      }
+    },
+    "widget": {
+      "$value": {
+        "value": 24,
+        "unit": "px"
+      }
+    }
+  },
+  "size": {
+    "$type": "dimension",
+    "target": {
+      "$value": {
+        "value": 48,
+        "unit": "px"
+      },
+      "$description": "누르는 곳 최소 (REQ-067)"
+    },
+    "button-lg": {
+      "$value": {
+        "value": 52,
+        "unit": "px"
+      }
+    },
+    "input": {
+      "$value": {
+        "value": 56,
+        "unit": "px"
+      }
+    },
+    "cell": {
+      "$value": {
+        "value": 28,
+        "unit": "px"
+      }
+    },
+    "badge": {
+      "$value": {
+        "value": 48,
+        "unit": "px"
+      }
+    },
+    "lid": {
+      "$value": {
+        "value": 40,
+        "unit": "px"
+      }
+    }
+  },
+  "border": {
+    "$type": "dimension",
+    "thin": {
+      "$value": {
+        "value": 1,
+        "unit": "px"
+      }
+    },
+    "strong": {
+      "$value": {
+        "value": 1.5,
+        "unit": "px"
+      }
+    },
+    "focus": {
+      "$value": {
+        "value": 2,
+        "unit": "px"
+      }
+    }
+  }
+}

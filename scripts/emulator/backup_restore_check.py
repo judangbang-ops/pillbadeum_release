@@ -193,6 +193,10 @@ def find_exact(text: str, timeout: float = 20) -> Node | None:
 # however long the list is or however large the text, unlike [항목 추가] at the end of the list.
 HOME_MARK = "지난 기록"
 
+# [건너뛰기] in the top bar of the first-run intro (SCR-005, TASK-022): the first start of an install (or after
+# `pm clear`) shows the intro before the first screen. Only the intro has this word.
+INTRO_MARK = "건너뛰기"
+
 
 def button_for(row: Node, label: str) -> Node | None:
     """The [label] button of the item whose name `row` is. On the first screen (SCR-004, TASK-016) an item is a tile:
@@ -216,15 +220,27 @@ def tap_text(text: str, timeout: float = 20) -> None:
     tap(node)
 
 
-def launch_app() -> None:
+def launch_app(stop_at_intro: bool = False) -> None:
     """Starts the app and waits for its home. No `am start -W`: right after `pm clear` the system
-    can still be removing the old task and kill the new process, and -W then waits forever."""
+    can still be removing the old task and kill the new process, and -W then waits forever.
+
+    On the first start of an install the intro (SCR-005, TASK-022) shows first: it is passed with
+    [건너뛰기], which saves that it was seen, or with stop_at_intro the function returns on it."""
     sh("input keyevent KEYCODE_WAKEUP", check=False)
     sh("wm dismiss-keyguard", check=False)
     for _ in range(2):
         sh(f"am start -n {ACTIVITY}")
-        if find_exact(HOME_MARK, 30) is not None:
-            return
+        end = time.time() + 30
+        while time.time() < end:
+            texts = {n.text for n in dump_ui()}
+            if HOME_MARK in texts:
+                return
+            if INTRO_MARK in texts:
+                if stop_at_intro:
+                    return
+                tap_text(INTRO_MARK)
+                continue
+            time.sleep(1)
     raise RuntimeError("app home did not show")
 
 

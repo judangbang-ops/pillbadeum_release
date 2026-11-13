@@ -10,8 +10,10 @@ import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.state.getAppWidgetState
 import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.state.PreferencesGlanceStateDefinition
+import com.judangbang.pillbadeum.container
 import com.judangbang.pillbadeum.restore.InstallState
 import com.judangbang.pillbadeum.status.WidgetChoice
+import com.judangbang.pillbadeum.status.showsPeople
 import java.io.File
 
 /**
@@ -41,7 +43,8 @@ internal object WidgetChoices {
      * Once per install, before any widget reads its choice (AppContainer opens the core with it): every placed widget
      * without a choice gets [WidgetChoice.Everyone]. Those are the widgets placed before the update that brought the
      * choice, so they keep showing everyone instead of all asking to be set up again (supplement R-3, RR-74). Widgets
-     * placed later always get a choice from SCR-002, so afterwards only a restore leaves a widget without one.
+     * placed later get a choice from SCR-002, or from [choosePinned] when the intro placed them, so afterwards only a
+     * restore, or a widget placed from the intro while two people are active, is left without one.
      *
      * After a restore ([state] is [InstallState.Restored]) nothing is filled in: the restored widgets cannot know
      * whose they were, and from two people on they ask to be set up again (REQ-079). The file is still written, so
@@ -63,6 +66,21 @@ internal object WidgetChoices {
         }
         ready.writeText("1\n")
         Log.i(TAG, "widget choices ready: $filled filled with everyone (install state ${state::class.simpleName})")
+    }
+
+    /**
+     * A widget placed from SCR-005's `[위젯 추가]` (TASK-022). A launcher shows no configuration activity for a widget
+     * placed on request (`AppWidgetManager.requestPinAppWidget`), so it gets its choice here as SCR-002 gives it with one
+     * person: 전체 (REQ-018, SPEC-005). From two people on it is left without one and asks to be set up
+     * (SCR-001#reconfigure, REQ-079); a widget that has a choice already keeps it. Returns the choice the widget has now,
+     * null for that case or for an id that is not one of this app's widgets.
+     */
+    suspend fun choosePinned(context: Context, appWidgetId: Int): WidgetChoice? {
+        val id = WidgetPickActivity.glanceIdOf(context, appWidgetId) ?: return null
+        read(context, id)?.let { return it }
+        if (showsPeople(context.container.core().people.list().size)) return null
+        write(context, id, WidgetChoice.Everyone)
+        return WidgetChoice.Everyone
     }
 
     /** The ids of this app's placed widgets, as the platform has them. */

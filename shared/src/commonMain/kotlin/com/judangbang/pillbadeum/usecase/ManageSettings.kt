@@ -23,7 +23,8 @@ sealed interface SaveSettingsResult {
 }
 
 /**
- * The settings screen's writes (SCR-009, REQ-011, REQ-053, TASK-009).
+ * The settings screen's writes (SCR-009, REQ-011, REQ-053, TASK-009), and whether the first-run intro was seen (SCR-005,
+ * TASK-022).
  *
  * A new day start or base zone applies from the moment it is saved: stored judgments keep their
  * period keys (record-rules.md section 8, RR-15), and the save time goes to
@@ -66,6 +67,16 @@ class ManageSettings(
     suspend fun setShowNamesOnLock(show: Boolean): SaveSettingsResult {
         if (showNamesOnLock() == show) return SaveSettingsResult.Unchanged
         db.settingDao().upsert(SettingEntity(SettingKeys.SHOW_NAMES_ON_LOCK, show.toString()))
+        return SaveSettingsResult.Changed
+    }
+
+    /** Whether the first-run intro was finished or skipped (SCR-005, SPEC-002); until then the app shows it. */
+    suspend fun introSeen(): Boolean = db.settingDao().get(SettingKeys.INTRO_SEEN_AT) != null
+
+    /** `[시작하기]` and `[건너뛰기]` of SCR-005: the intro is not shown again (SPEC-002). The first time is kept. */
+    suspend fun markIntroSeen(): SaveSettingsResult {
+        if (introSeen()) return SaveSettingsResult.Unchanged
+        db.settingDao().upsert(SettingEntity(SettingKeys.INTRO_SEEN_AT, clock.now().toEpochMilliseconds().toString()))
         return SaveSettingsResult.Changed
     }
 }

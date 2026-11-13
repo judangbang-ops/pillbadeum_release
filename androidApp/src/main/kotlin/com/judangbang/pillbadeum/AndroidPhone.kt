@@ -3,7 +3,9 @@ package com.judangbang.pillbadeum
 import android.app.Activity
 import android.app.KeyguardManager
 import android.app.TimePickerDialog
+import android.appwidget.AppWidgetManager
 import android.content.ActivityNotFoundException
+import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -11,9 +13,11 @@ import android.os.Build
 import android.util.Log
 import com.judangbang.pillbadeum.boundary.DayBoundaryAlarm
 import com.judangbang.pillbadeum.ui.Phone
+import com.judangbang.pillbadeum.widget.DidITakeWidgetReceiver
+import com.judangbang.pillbadeum.widget.WidgetPinnedReceiver
 import kotlinx.datetime.LocalTime
 
-/** [Phone] on Android, for the settings screen of [activity] (SCR-009, TASK-020). */
+/** [Phone] on Android, for the settings screen (SCR-009, TASK-020) and the intro (SCR-005, TASK-022) of [activity]. */
 class AndroidPhone(private val activity: Activity) : Phone {
     override val appVersion: String by lazy {
         try {
@@ -66,6 +70,34 @@ class AndroidPhone(private val activity: Activity) : Phone {
 
     override suspend fun windowSettingsChanged() {
         DayBoundaryAlarm.scheduleNext(activity.applicationContext)
+    }
+
+    /** `AppWidgetManager.isRequestPinAppWidgetSupported()`: the default launcher takes the request (API 26). */
+    override fun canPinWidget(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+        return try {
+            AppWidgetManager.getInstance(activity).isRequestPinAppWidgetSupported
+        } catch (e: RuntimeException) {
+            Log.w(TAG, "widget pin support not readable", e)
+            false
+        }
+    }
+
+    /**
+     * `AppWidgetManager.requestPinAppWidget` (API 26). True only says that the launcher took the request; the user may
+     * still decline, and then nothing comes back. The launcher shows no configuration activity for a widget placed this
+     * way, so [WidgetPinnedReceiver] gets the new widget's id and gives it its choice. It throws when the app is not in
+     * the foreground or the user is locked; that is a false here.
+     */
+    override fun pinWidget(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+        val provider = ComponentName(activity, DidITakeWidgetReceiver::class.java)
+        return try {
+            AppWidgetManager.getInstance(activity).requestPinAppWidget(provider, null, WidgetPinnedReceiver.callback(activity))
+        } catch (e: IllegalStateException) {
+            Log.w(TAG, "widget pin request refused", e)
+            false
+        }
     }
 
     private companion object {

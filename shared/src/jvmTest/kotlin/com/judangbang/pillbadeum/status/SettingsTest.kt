@@ -1,5 +1,6 @@
 package com.judangbang.pillbadeum.status
 
+import com.judangbang.pillbadeum.data.SettingKeys
 import com.judangbang.pillbadeum.domain.QuietNotice
 import com.judangbang.pillbadeum.domain.ReminderSettings
 import com.judangbang.pillbadeum.domain.WindowSettings
@@ -18,6 +19,7 @@ import com.judangbang.pillbadeum.usecase.SaveIntake
 import com.judangbang.pillbadeum.usecase.SaveIntakeResult
 import com.judangbang.pillbadeum.usecase.SaveReminderResult
 import com.judangbang.pillbadeum.usecase.SaveReminderSettingsResult
+import com.judangbang.pillbadeum.usecase.SaveSettingsResult
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -31,7 +33,8 @@ import kotlinx.datetime.TimeZone
 
 /**
  * SCR-009 (TASK-020): what the settings screen reads ([LoadSettings]), the one quiet-hours notice of the common settings
- * (REQ-077, 2026-11-12 review C6) and the base-zone list. Seen on Thursday 11/12 09:30 in Seoul.
+ * (REQ-077, 2026-11-12 review C6) and the base-zone list; and SCR-005's intro flag (TASK-022). Seen on Thursday 11/12
+ * 09:30 in Seoul.
  */
 class SettingsTest {
     private val fx = DbFixture(start = seoul("2026-11-12T09:30"))
@@ -136,6 +139,20 @@ class SettingsTest {
         )
         assertEquals(emptyMap(), none.notices)
         assertEquals(0, none.dropped)
+    }
+
+    /** SCR-005, SPEC-002 (TASK-022): `intro_seen_at` is absent on a new database and keeps the time it was first set. */
+    @Test
+    fun the_intro_is_marked_seen_once() = runTest {
+        assertFalse(settings.introSeen(), "a new database shows the intro")
+        assertEquals(SaveSettingsResult.Changed, settings.markIntroSeen())
+        assertTrue(settings.introSeen())
+        val first = fx.db.settingDao().get(SettingKeys.INTRO_SEEN_AT)
+        assertEquals(seoul("2026-11-12T09:30").toEpochMilliseconds().toString(), first)
+
+        fx.at("2026-11-12T10:00")
+        assertEquals(SaveSettingsResult.Unchanged, settings.markIntroSeen())
+        assertEquals(first, fx.db.settingDao().get(SettingKeys.INTRO_SEEN_AT), "the first time stays")
     }
 
     @Test

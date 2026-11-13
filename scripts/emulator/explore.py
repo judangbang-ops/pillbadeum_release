@@ -7,7 +7,7 @@ fails only when it cannot be done (a button is missing, the widget cannot be pla
 look like is judged by a person, or by Claude from the screenshots, in docs/07-qa/.
 
 Flow (clock set to the run's date in Asia/Seoul, so the screens show Korean dates and times):
-   1. First launch at 08:30: the empty home.
+   1. First launch at 08:30: the intro's two pages (SCR-005, TASK-022), [시작하기], then the empty home.
    2. [항목 추가]: the empty form, then a family member "Mom" added with [+ 가족 추가], and the form closed with [×].
    3. Three items: Vitamin (나, 매일 아침), BPpill (Mom, 매일 저녁), Weekly (나, 주 1회 월).
    4. [먹었어] on Vitamin's tile in the app.
@@ -391,17 +391,32 @@ def run(r: Report, steps: Steps) -> None:
 
     steps("준비: 서울 시간대, 오늘 08:30", "시간대·시계가 바뀜", setup)
 
-    # 1. first launch
+    # 1. first launch: the intro (SCR-005, TASK-022), then the empty home
     def first_launch() -> str:
-        launch_app()
+        launch_app(stop_at_intro=True)
         time.sleep(2)
+        r.shot("intro-1")
+        for text in ("기록 도구예요", "한 약은 한 휴대폰에서 기록해 주세요"):
+            if not screen_has(text, 5):
+                raise RuntimeError(f"intro page 1 lacks '{text}'")
+        tap_exact("다음")
+        time.sleep(1)
+        r.shot("intro-2")
+        if not screen_has("홈 화면에 위젯을 놓아 주세요", 5):
+            raise RuntimeError("intro page 2 not shown")
+        # The launcher's request is not used here: step 5 places the widget by hand, as page 2 explains.
+        pin = "있음" if exact("위젯 추가", 3) is not None else "없음(손으로 놓는 법만)"
+        tap_exact("시작하기")
+        if exact(HOME_MARK, 15) is None:
+            raise RuntimeError("[시작하기] did not open the first screen")
+        time.sleep(1)
         r.shot("first-launch")
         empty = screen_has("아직 복용 항목이 없어요", 5)
         if not empty:
             raise RuntimeError("empty-home text not shown")
-        return "빈 홈과 안내 문구"
+        return f"안내 두 쪽([위젯 추가] {pin}), [시작하기] 뒤 빈 홈과 안내 문구"
 
-    steps("1. 처음 실행", "빈 홈, [항목 추가] 안내", first_launch)
+    steps("1. 처음 실행", "첫 실행 안내 두 쪽, [시작하기] 뒤 빈 홈과 [항목 추가] 안내", first_launch)
 
     # 2. the add form, and adding a family member
     def add_form() -> str:

@@ -339,6 +339,47 @@ object Labels {
     /** The medical note of the app's first screen (REQ-036). */
     const val MEDICAL_NOTE: String = "기록 도구이며 복용 방법은 의사·약사와 상의해 주세요."
 
+    // SCR-005, the first-run intro (09 Welcome1, Welcome2; TASK-022).
+
+    const val INTRO_SKIP: String = "건너뛰기"
+    const val INTRO_NEXT: String = "다음"
+    const val INTRO_PIN: String = "위젯 추가"
+    const val INTRO_START: String = "시작하기"
+
+    /** Page 1's week-box picture, read as one sentence (09 Welcome1 `aria-label`). */
+    const val INTRO_PICTURE: String = "요일 약통 그림: 월 화 수는 먹음, 목요일은 오늘"
+
+    /** Page 1's headline; `돼요` never stands alone on the last line (09 Welcome1 `&nbsp;`). */
+    const val INTRO_HEADLINE: String = "먹었는지 헷갈릴 때, 위젯 한 번이면${NBSP}돼요"
+    const val INTRO_LEAD: String = "약을 먹고 홈 화면 위젯을 한 번 누르면 시각과 함께 남아요."
+
+    /** The record-tool note (REQ-036): its bold first sentence uses the app's name, then [INTRO_TOOL_BODY]. */
+    val INTRO_TOOL_TITLE: String get() = "${withTopic(APP_NAME)} 기록 도구예요."
+    const val INTRO_TOOL_BODY: String = "복용 방법은 의사·약사와 상의해 주세요."
+
+    /** The one-phone note (REQ-074): [ONE_PHONE] in bold, then this. */
+    const val INTRO_ONE_PHONE_BODY: String = "휴대폰끼리는 기록이 이어지지 않아요."
+
+    const val INTRO_PIN_TITLE: String = "홈 화면에 위젯을 놓아 주세요"
+    const val INTRO_PIN_LEAD: String = "위젯에서 바로 누르면 앱을 열지 않아도 기록돼요."
+
+    /** How to place the widget by hand (REQ-080), always shown; the launcher lists the widget under the app's name. */
+    val INTRO_STEPS: List<String> get() = listOf("홈 화면의 빈 곳을 길게 누르기", "'위젯'에서 $APP_NAME 찾기", "4×2 크기로 끌어다 놓기")
+    const val INTRO_STEPS_NOTE: String = "휴대폰마다 메뉴 이름이 조금 달라요."
+
+    /** What TalkBack reads for the page marks: `2쪽 중 1쪽` (09 Welcome1 `aria-label`). */
+    fun introPage(page: Int, pages: Int): String = "${pages}쪽 중 ${page}쪽"
+
+    /**
+     * [word] with the topic particle its last letter takes: `필받음은`, `약봉이는`. A word that does not end in a Korean
+     * letter (`DidITake`) gets both, `DidITake은(는)`, as [withObject] does.
+     */
+    fun withTopic(word: String): String {
+        val last = word.lastOrNull()
+        if (last == null || last !in '가'..'힣') return "${word}은(는)"
+        return word + if ((last - '가') % 28 == 0) "는" else "은"
+    }
+
     /** SCR-004#error, with `[다시 시도]` (screens.md, proposal approved 2026-11-13). */
     const val LOAD_FAILED: String = "기록을 불러오지 못했어요"
 

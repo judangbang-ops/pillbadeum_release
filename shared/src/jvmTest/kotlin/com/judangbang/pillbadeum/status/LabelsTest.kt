@@ -360,4 +360,17 @@ class LabelsTest {
         assertEquals("Vitamin을(를)", Labels.withObject("Vitamin"))
         assertEquals("을(를)", Labels.withObject(""))
     }
+
+    /** SCR-005 (TASK-022): the record-tool note takes the app's name with its topic particle. */
+    @Test
+    fun the_intro_names_the_app_with_its_topic_particle() {
+        assertEquals("필받음은", Labels.withTopic("필받음"))
+        assertEquals("약봉이는", Labels.withTopic("약봉이"))
+        assertEquals("DidITake은(는)", Labels.withTopic("DidITake"))
+        assertEquals("은(는)", Labels.withTopic(""))
+        assertEquals("${Labels.withTopic(Labels.APP_NAME)} 기록 도구예요.", Labels.INTRO_TOOL_TITLE)
+        assertEquals("'위젯'에서 ${Labels.APP_NAME} 찾기", Labels.INTRO_STEPS[1])
+        assertEquals("2쪽 중 1쪽", Labels.introPage(1, 2))
+        assertTrue(Labels.INTRO_HEADLINE.endsWith("이면\u00a0돼요"), "돼요 stays with the word before it")
+    }
 }

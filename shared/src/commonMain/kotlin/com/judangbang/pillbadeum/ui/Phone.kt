@@ -3,8 +3,8 @@ package com.judangbang.pillbadeum.ui
 import kotlinx.datetime.LocalTime
 
 /**
- * What the app asks of the phone itself, outside the database (SCR-009, TASK-020). Android gives its own; a test can give
- * one that records the calls.
+ * What the app asks of the phone itself, outside the database (SCR-009, TASK-020; SCR-005's widget request, TASK-022).
+ * Android gives its own; a test can give one that records the calls.
  */
 interface Phone {
     /** The installed version (`versionName`, `0.1.0`), shown under `앱 정보`. */
@@ -27,4 +27,16 @@ interface Phone {
 
     /** After the day start or base zone changed: the day-boundary refresh is set for the new boundary (SPEC-033). */
     suspend fun windowSettingsChanged()
+
+    /**
+     * Whether the launcher takes a request to place the widget, which SCR-005's `[위젯 추가]` makes (Android 8 and later,
+     * SPEC-002). Without it only the steps to place it by hand show (SCR-005#error).
+     */
+    fun canPinWidget(): Boolean
+
+    /**
+     * Asks the launcher to place the widget (SCR-005 `[위젯 추가]`); the launcher shows its own confirmation, and the
+     * placed widget is set up as SCR-002 would set it (TASK-022). False when the request could not be made.
+     */
+    fun pinWidget(): Boolean
 }

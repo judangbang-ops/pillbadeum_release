@@ -53,8 +53,9 @@ import kotlinx.datetime.TimeZone
 /**
  * The app's screens, one at a time (07 sitemap). [key] is what is saved when the screen is recreated (BUG-003).
  * [back] is where system back goes (REQ-094, SPEC-021): every screen to the first, the people screen to settings and its
- * person form to the people screen (TASK-021), SCR-007 opened from SCR-008 back to that month (TASK-019), and null on the
- * first screen, where back closes the app.
+ * person form to the people screen (TASK-021), SCR-007 opened from SCR-008 back to that month (TASK-019), the intro's
+ * second page to its first (TASK-022), and null on the first screen and on the intro's first page, where back closes the
+ * app.
  */
 internal sealed interface Route {
     val key: String
@@ -105,6 +106,15 @@ internal sealed interface Route {
         override val back: Route get() = People
     }
 
+    /**
+     * SCR-005, the first-run intro on its [page] (0 or 1, TASK-022). Back on the first page closes the app without
+     * finishing the intro, so the next start shows it again (Claude's choice).
+     */
+    data class Welcome(val page: Int) : Route {
+        override val key get() = "welcome:$page"
+        override val back: Route? get() = if (page > 0) Welcome(page - 1) else null
+    }
+
     companion object {
         fun parse(key: String): Route {
             if ('@' in key) {
@@ -124,6 +134,7 @@ internal sealed interface Route {
                 "settings" -> Settings
                 "people" -> People
                 "person" -> Person(parts.getOrNull(1)?.takeIf { it.isNotEmpty() })
+                "welcome" -> Welcome((parts.getOrNull(1)?.toIntOrNull() ?: 0).coerceIn(0, WELCOME_PAGES - 1))
                 else -> Home
             }
         }
@@ -138,10 +149,11 @@ internal sealed interface Route {
  * @param open opens the core (the database); a failure shows SCR-004#error with `[다시 시도]`.
  * @param onDataChanged called after every write (record, cancel, item, person, restore notice, settings) so the
  *   platform can redraw its widgets and plan its reminders again.
- * @param phone what the settings screen reads from and asks of the phone (SCR-009, TASK-020).
+ * @param phone what the settings screen and the intro read from and ask of the phone (SCR-009, TASK-020; SCR-005, TASK-022).
  * @param privacyPolicyUrl the privacy policy's address, null until TASK-035 decides it (REQ-063).
  * @param refreshKey bump to read the database again (on resume: the widget may have recorded meanwhile).
- * @param homeRequests bump to show the first screen (a notification or the widget opened the app, R3 memo).
+ * @param homeRequests bump to show the first screen (a notification or the widget opened the app, R3 memo); the intro
+ *   stays until it is finished.
  * @param backHandler the platform's system back: called with whether back stays in the app, and what it does.
  */
 @Composable
@@ -181,10 +193,22 @@ fun App(
     var peopleView by remember { mutableStateOf<PeopleView?>(null) }
     var peopleFailed by remember { mutableStateOf(false) }
     var peopleAttempts by remember { mutableIntStateOf(0) }
+    // SCR-005 (TASK-022): closed in this activity, by [시작하기] or [건너뛰기]. It does not come back here even when saving
+    // that failed or the database was not open yet; the next start shows it again then.
+    var introClosed by rememberSaveable { mutableStateOf(false) }
+    // Whether the launcher takes [위젯 추가]: read again on coming back to the app, off after a refused request.
+    var canPin by remember(refreshKey) { mutableStateOf(phone.canPinWidget()) }
     val zone = TimeZone.currentSystemDefault()
 
     suspend fun reload() {
-        val c = core ?: open().also { core = it }
+        val c = core ?: open().also { opened ->
+            // SCR-005 on a first run (intro_seen_at absent, SPEC-002): before the first screen shows any data. A
+            // recreated activity keeps the page it was on, and another screen is never covered.
+            val seen = opened.settings.introSeen()
+            if (!seen && !introClosed && route == Route.Home) route = Route.Welcome(0)
+            if (seen && route is Route.Welcome) route = Route.Home
+            core = opened
+        }
         people = c.people.list()
         board = c.loadStatusBoard()
         failed = false
@@ -258,6 +282,25 @@ fun App(
         go(Route.People)
     }
 
+    /**
+     * SCR-005's `[시작하기]` and `[건너뛰기]`: the first screen at once, and `intro_seen_at` saved behind it (SPEC-002). A save
+     * that fails, or a database not open yet, leaves the intro for the next start.
+     */
+    fun finishIntro() {
+        introClosed = true
+        go(Route.Home)
+        val c = core ?: return
+        scope.launch {
+            try {
+                c.settings.markIntroSeen()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Shown again on the next start.
+            }
+        }
+    }
+
     /** Reads SCR-010's people; a failure shows `#error` only while nothing has been read. */
     suspend fun readPeople(c: DidITakeCore) {
         try {
@@ -274,7 +317,7 @@ fun App(
         message = null
         reloadOrFail()
     }
-    LaunchedEffect(homeRequests) { if (homeRequests > 0) go(Route.Home) }
+    LaunchedEffect(homeRequests) { if (homeRequests > 0 && route !is Route.Welcome) go(Route.Home) }
     // SCR-004#stale (TASK-017): left open across the day start, the app reads the new day at the boundary. It looks
     // at the clock at least once a minute, so a clock set forward is noticed too; coming back to the app reads again
     // anyway (refreshKey). A tap drawn before the boundary records nothing and says so (RecordResult.Stale).
@@ -294,6 +337,17 @@ fun App(
 
     Box(Modifier.fillMaxSize().background(Ui.Surface).safeDrawingPadding().imePadding()) {
         when (val current = route) {
+            is Route.Welcome -> WelcomeScreen(
+                page = current.page,
+                canPin = canPin,
+                actions = WelcomeActions(
+                    next = { go(Route.Welcome(current.page + 1)) },
+                    finish = { finishIntro() },
+                    // The launcher shows its own confirmation; a refused request leaves the steps alone (SCR-005#error).
+                    pin = { if (!phone.pinWidget()) canPin = false },
+                ),
+            )
+
             Route.Home -> HomeScreen(
                 state = when {
                     failed -> HomeState.Failed

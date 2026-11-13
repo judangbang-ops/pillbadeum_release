@@ -59,6 +59,15 @@
                 android:resource="@xml/diditake_widget_info" />
         </receiver>
 
+        <!--
+            The success callback of the intro's [위젯 추가] (SCR-005, TASK-022): the launcher shows no configuration
+            activity for a widget placed on request, so this gives it its choice. Reached only through the app's own
+            pending intent.
+        -->
+        <receiver
+            android:name=".widget.WidgetPinnedReceiver"
+            android:exported="false" />
+
         <!-- Day-boundary alarm (own explicit intent) plus system time/boot broadcasts. -->
         <receiver
             android:name=".boundary.DayBoundaryReceiver"

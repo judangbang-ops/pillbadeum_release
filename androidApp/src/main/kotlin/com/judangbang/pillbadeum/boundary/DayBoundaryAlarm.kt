@@ -63,7 +63,7 @@ class DayBoundaryReceiver : BroadcastReceiver() {
                 } catch (e: Exception) {
                     Log.e("DayBoundaryReceiver", "boundary refresh failed ($action)", e)
                 }
-                if (action in COLLECT) Reminders.collect(context) else Reminders.afterWrite(context)
+                if (action in COLLECT) Reminders.collect(context, alarmRang = false) else Reminders.afterWrite(context)
             } finally {
                 pending.finish()
             }

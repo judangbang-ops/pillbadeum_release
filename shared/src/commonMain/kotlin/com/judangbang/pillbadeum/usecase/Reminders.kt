@@ -110,7 +110,13 @@ class PlanReminders(
             }
         }
 
-    suspend fun fire(): ReminderRun =
+    /**
+     * [alarmRang]: this run is for the alarm itself, not the first run after a boot, clock or time-zone change. Then
+     * a slot's age counts from the time the alarm was planned for (`reminder_alarm_at`) when that time is already
+     * past and not yet collected, so an alarm that comes late still shows the slot it was set for (N-12 늦은 알람):
+     * an inexact alarm may come up to an hour late even outside Doze (PR #20 independent review).
+     */
+    suspend fun fire(alarmRang: Boolean = false): ReminderRun =
         db.useWriterConnection { transactor ->
             transactor.immediateTransaction {
                 val now = clock.now()
@@ -120,13 +126,16 @@ class PlanReminders(
                     return@immediateTransaction ReminderRun(emptyList(), null)
                 }
                 val lastRun = settings.loadReminderLastRunAt(now)
+                val planned = settings.loadReminderAlarmAt()
+                val ageFrom = planned?.takeIf { alarmRang && it > lastRun && it < now } ?: now
                 val items = loadItems(now)
-                val notices = items.mapNotNull { item -> item.due(lastRun, now) }
+                val notices = items.mapNotNull { item -> item.due(lastRun, now, ageFrom) }
                 for (item in items) {
                     val snooze = item.snooze ?: continue
                     if (Instant.fromEpochMilliseconds(snooze.fireAt) <= now) db.reminderDao().deleteSnooze(item.intake.id)
                 }
-                settings.saveReminderLastRunAt(now)
+                // Never back: a clock set back by less than a minute keeps the last run (loadReminderLastRunAt).
+                settings.saveReminderLastRunAt(maxOf(lastRun, now))
                 // A snooze that was just shown is at or before now, so it is no longer a next time.
                 val next = nextAlarmAt(items, now)
                 settings.saveReminderAlarmAt(next)
@@ -230,13 +239,16 @@ class PlanReminders(
         /** Grid slots of this window that a pending snooze does not hold back (N-7). */
         private val gridTimes: List<Instant> = slots.map { it.at }.filter { snoozeAt == null || it >= snoozeAt }
 
-        /** N-12: the latest due time in (lastRun, now], shown only when at most one interval old. */
-        fun due(lastRun: Instant, now: Instant): ReminderNotice? {
+        /**
+         * N-12: the latest due time in (lastRun, now], shown only when at most one interval older than [ageFrom]:
+         * now, or the planned time of an alarm that rang late.
+         */
+        fun due(lastRun: Instant, now: Instant, ageFrom: Instant): ReminderNotice? {
             if (judged) return null
             val grid = gridTimes.filter { it > lastRun && it <= now && (since == null || it > since) }
             val snoozed = snoozeAt?.takeIf { it <= now }
             val latest = (grid + listOfNotNull(snoozed)).maxOrNull() ?: return null
-            if (latest < now - interval) return null
+            if (latest < ageFrom - interval) return null
             return ReminderNotice(
                 intakeId = intake.id,
                 intakeName = intake.name,

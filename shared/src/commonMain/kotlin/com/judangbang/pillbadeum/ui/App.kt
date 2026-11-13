@@ -45,8 +45,10 @@ import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 
@@ -240,20 +242,27 @@ fun App(
         reloadOrFail()
     }
 
-    /** Runs one write at a time: buttons do nothing while one is running (REQ-001). */
+    /**
+     * Runs one write at a time: buttons do nothing while one is running (REQ-001). A write that has started runs to
+     * its end with [afterWrite] (widgets, the reminder alarm and notifications), even when the activity is recreated
+     * meanwhile (rotation, font size, dark mode), which cancels [scope]: otherwise a saved write could leave a new
+     * reminder without its alarm until the next write (PR #20 independent review). No write block waits for the screen.
+     */
     fun write(failure: String = Labels.TRY_AGAIN, block: suspend (DidITakeCore) -> Unit) {
         val c = core ?: return
         if (busy) return
         busy = true
         scope.launch {
-            try {
-                block(c)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                message = failure
-            } finally {
-                busy = false
+            withContext(NonCancellable) {
+                try {
+                    block(c)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    message = failure
+                } finally {
+                    busy = false
+                }
             }
         }
     }

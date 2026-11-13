@@ -17,6 +17,7 @@ import com.judangbang.pillbadeum.widget.RescheduleReceiverKeeper
 import com.judangbang.pillbadeum.widget.WidgetChoices
 import com.judangbang.pillbadeum.widget.WidgetUpdater
 import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -76,6 +77,9 @@ class AppContainer(
 ) {
     /** Process-wide scope for short best-effort work started from receivers. */
     val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /** The injected clock's time, also when [core] cannot open (a reminder retry after a failed collect). */
+    fun now(): Instant = clock.now()
 
     private val database: DidITakeDatabase by lazy(openDatabase)
 

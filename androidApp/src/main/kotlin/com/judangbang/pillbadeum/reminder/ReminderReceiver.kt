@@ -21,7 +21,12 @@ class ReminderReceiver : BroadcastReceiver() {
         context.container.appScope.launch {
             try {
                 when (action) {
-                    ReminderAlarm.ACTION -> Reminders.collect(context)
+                    // The alarm, or its retry after a failed collect, which says whether that collect was an alarm's.
+                    ReminderAlarm.ACTION -> Reminders.collect(
+                        context,
+                        alarmRang = intent.getBooleanExtra(ReminderAlarm.EXTRA_ALARM_RANG, true),
+                        attempt = intent.getIntExtra(ReminderAlarm.EXTRA_ATTEMPT, 0),
+                    )
                     ACTION_TAKE, ACTION_SKIP, ACTION_SNOOZE -> Reminders.onButton(context, intent)
                     ACTION_DISMISSED -> Reminders.onDismissed(context)
                     // Exact alarms were allowed (Android 12+): arm the same alarm again, now exact (SPEC-029, SPEC-032).

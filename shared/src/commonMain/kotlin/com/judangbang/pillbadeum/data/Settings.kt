@@ -2,6 +2,7 @@ package com.judangbang.pillbadeum.data
 
 import com.judangbang.pillbadeum.domain.ReminderSettings
 import com.judangbang.pillbadeum.domain.WindowSettings
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 import kotlinx.datetime.LocalTime
@@ -104,15 +105,20 @@ suspend fun SettingDao.saveReminderSettings(settings: ReminderSettings) {
 }
 
 /**
- * `reminder_last_run_at`, rewritten to [now] when it is missing or after [now] (the clock went back),
- * as supplement N-12 says for every read. Inside the caller's write transaction.
+ * `reminder_last_run_at`, rewritten to [now] when it is missing or more than [CLOCK_STEP_KEPT] after [now] (the
+ * clock went back), as supplement N-12 says for every read. A smaller step back, such as a network time correction
+ * just after a reminder rang, keeps the stored time, so that slot does not ring a second time (PR #20 independent
+ * review). Inside the caller's write transaction.
  */
 suspend fun SettingDao.loadReminderLastRunAt(now: Instant): Instant {
     val stored = get(SettingKeys.REMINDER_LAST_RUN_AT)?.toLongOrNull()?.let(Instant::fromEpochMilliseconds)
-    if (stored != null && stored <= now) return stored
+    if (stored != null && stored <= now + CLOCK_STEP_KEPT) return stored
     saveReminderLastRunAt(now)
     return now
 }
+
+/** How far the clock may go back before `reminder_last_run_at` follows it (supplement N-12, **Claude 기본값**). */
+val CLOCK_STEP_KEPT: Duration = 1.minutes
 
 suspend fun SettingDao.saveReminderLastRunAt(at: Instant) {
     upsert(SettingEntity(SettingKeys.REMINDER_LAST_RUN_AT, at.toEpochMilliseconds().toString()))

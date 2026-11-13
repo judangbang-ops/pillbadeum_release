@@ -51,12 +51,19 @@ object Reminders {
         syncLocked(context, it)
     }
 
-    /** The alarm rang, or the first run after a boot, clock or time zone change: overdue slots, one per item (N-12). */
-    suspend fun collect(context: Context) = step(context, "collect") { core ->
-        val run = core.planReminders.fire()
-        ReminderAlarm.arm(context, run.nextAlarmAt)
-        if (run.notices.isNotEmpty()) show(context, core, run.notices)
-        syncLocked(context, core)
+    /**
+     * The alarm rang ([alarmRang]), or the first run after a boot, clock or time zone change: overdue slots, one per
+     * item (N-12). A failure arms the alarm again a little later ([ReminderAlarm.retry]; [attempt] counts the retries
+     * in a row), since the alarm that rang is used up and nothing else would ring before the next write or start.
+     */
+    suspend fun collect(context: Context, alarmRang: Boolean, attempt: Int = 0) {
+        val collected = step(context, "collect") { core ->
+            val run = core.planReminders.fire(alarmRang)
+            ReminderAlarm.arm(context, run.nextAlarmAt)
+            if (run.notices.isNotEmpty()) show(context, core, run.notices)
+            syncLocked(context, core)
+        }
+        if (!collected) ReminderAlarm.retry(context, context.container.now(), attempt, alarmRang)
     }
 
     /**
@@ -121,6 +128,12 @@ object Reminders {
             }
         }
         ReminderNotifications.syncLockNotice(context, remaining.map { it.content }, showNames, now)
+        // A button's result names its item like the reminder did: it goes when the name setting changed since it was
+        // shown (SPEC-034) and while a restore notice waits (R-3), rather than keep a name on the lock screen.
+        val visibility = ReminderNotifications.visibilityFor(showNames)
+        for (result in ReminderNotifications.shownResults(context)) {
+            if (review.restorePending || result.visibility != visibility) ReminderNotifications.cancelResult(context, result.intakeId)
+        }
     }
 
     private suspend fun record(context: Context, core: DidITakeCore, content: ReminderContent, kind: DoseKind) {
@@ -157,13 +170,15 @@ object Reminders {
         }
     }
 
-    private suspend fun step(context: Context, name: String, block: suspend (DidITakeCore) -> Unit) {
+    /** Runs [block] under the lock; false when it failed (logged, not thrown). */
+    private suspend fun step(context: Context, name: String, block: suspend (DidITakeCore) -> Unit): Boolean =
         try {
             lock.withLock { block(context.container.core()) }
+            true
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.e(TAG, "$name failed", e)
+            false
         }
-    }
 }

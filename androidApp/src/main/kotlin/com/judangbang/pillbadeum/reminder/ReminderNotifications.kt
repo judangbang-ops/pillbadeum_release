@@ -20,6 +20,9 @@ import kotlin.time.Instant
 /** A dose reminder on screen, read back from its notification. */
 internal data class PostedDose(val content: ReminderContent, val visibility: Int)
 
+/** A button's result on screen ([ReminderNotifications.ID_RESULT]): its item and lock-screen visibility. */
+internal data class PostedResult(val intakeId: String, val visibility: Int)
+
 /**
  * The reminder notifications (TASK-025, TASK-040, screens.md SCR-003). Platform `Notification` API only, as
  * in the lock-screen experiment (PR #15).
@@ -32,6 +35,11 @@ internal data class PostedDose(val content: ReminderContent, val visibility: Int
  *   with the public version "복용 시간이에요", so the device's lock-screen setting decides.
  * - The restore notice ([ID_RESTORE], R-3) and a button's result ([ID_RESULT], tag = intake id) go to the
  *   silent channel.
+ * - Item reminders and results carry the group key [GROUP_DOSES], the lock-screen notice [GROUP_LOCK], and no group
+ *   has a summary. Android bundles four or more ungrouped notifications of an app under a summary of its own that
+ *   has no public version, so a lock screen that hides content showed only the app name, not "복용 시간이에요"
+ *   (reminder emulator check, PR #20, API 26·30 with names hidden, API 26·30·34·36 with names shown). Notifications
+ *   with a group key are not bundled, and a group without a summary shows each notification on its own.
  */
 internal object ReminderNotifications {
     const val ID_DOSE: Int = 1
@@ -43,6 +51,11 @@ internal object ReminderNotifications {
     private const val ACCENT: Int = 0xFF15171C.toInt()
 
     private const val KEY = "com.judangbang.pillbadeum.reminder."
+
+    /** Group keys without a summary: they only keep Android from bundling the notifications (see above). */
+    const val GROUP_DOSES: String = KEY + "doses"
+    const val GROUP_LOCK: String = KEY + "lock"
+
     private const val KEY_INTAKE = KEY + "intake_id"
     private const val KEY_PERIOD = KEY + "period_key"
     private const val KEY_NAME = KEY + "name"
@@ -100,10 +113,21 @@ internal object ReminderNotifications {
         manager(context)?.cancel(intakeId, ID_DOSE)
     }
 
-    /** Takes every dose reminder and the lock-screen notice off (restore detected, R-3). Results stay. */
+    /** The buttons' results on screen ([showResult]). */
+    fun shownResults(context: Context): List<PostedResult> =
+        manager(context)?.activeNotifications.orEmpty()
+            .filter { it.id == ID_RESULT && it.tag != null && it.packageName == context.packageName }
+            .map { PostedResult(it.tag, it.notification.visibility) }
+
+    fun cancelResult(context: Context, intakeId: String) {
+        manager(context)?.cancel(intakeId, ID_RESULT)
+    }
+
+    /** Takes every dose reminder, every button's result and the lock-screen notice off (restore detected, R-3). */
     fun cancelAllDoses(context: Context) {
         val manager = manager(context) ?: return
         for (dose in shownDoses(context)) manager.cancel(dose.content.intakeId, ID_DOSE)
+        for (result in shownResults(context)) manager.cancel(result.intakeId, ID_RESULT)
         manager.cancel(ID_LOCK)
     }
 
@@ -154,6 +178,7 @@ internal object ReminderNotifications {
             .setContentTitle(content.name)
             .setContentText(text)
             .setCategory(Notification.CATEGORY_STATUS)
+            .setGroup(GROUP_DOSES)
             .setContentIntent(openApp(context))
             .setAutoCancel(true)
             .setVisibility(visibilityFor(showNames))
@@ -199,6 +224,7 @@ internal object ReminderNotifications {
             // The last dose folded (W-2, W-4); a later skip only unfolded.
             .setContentText(lines.first())
             .setCategory(Notification.CATEGORY_REMINDER)
+            .setGroup(GROUP_DOSES)
             .setShowWhen(true)
             .setWhen(now.toEpochMilliseconds())
             .setOnlyAlertOnce(!alertAgain)
@@ -229,6 +255,7 @@ internal object ReminderNotifications {
             .setColor(ACCENT)
             .setContentTitle(ReminderLabels.LOCK_TITLE)
             .setCategory(Notification.CATEGORY_REMINDER)
+            .setGroup(GROUP_LOCK)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setOnlyAlertOnce(true)
             .setShowWhen(true)

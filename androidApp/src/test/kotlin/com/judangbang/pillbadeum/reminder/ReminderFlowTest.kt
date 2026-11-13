@@ -12,9 +12,11 @@ import android.os.Looper
 import android.service.notification.StatusBarNotification
 import androidx.test.core.app.ApplicationProvider
 import com.judangbang.pillbadeum.MainActivity
+import com.judangbang.pillbadeum.data.SettingKeys
 import com.judangbang.pillbadeum.domain.DoseKind
 import com.judangbang.pillbadeum.domain.DoseSource
 import com.judangbang.pillbadeum.domain.ScheduleRule
+import com.judangbang.pillbadeum.restore.InstallMarker
 import com.judangbang.pillbadeum.status.Labels
 import com.judangbang.pillbadeum.status.ReminderLabels
 import com.judangbang.pillbadeum.usecase.IntakeDraft
@@ -90,11 +92,25 @@ class ReminderFlowTest {
         assertTrue("REQ-081", operation.isImmutable)
         assertEquals(receiver, operation.savedIntent.component)
 
+        assertNull("no second alarm while exact", windowAlarm())
+
         ShadowAlarmManager.setCanScheduleExactAlarms(false)
         runBlocking { Reminders.replan(app) }
         val inexact = reminderAlarm()
         assertEquals(at(8, 0).ms, inexact.triggerAtMs)
         assertEquals("inexact", ShadowAlarmManager.WINDOW_HEURISTIC, inexact.windowLengthMs)
+        // An inexact alarm may come up to an hour late, so a second one rings within ten minutes while not in Doze.
+        val window = windowAlarm()!!
+        assertEquals(at(8, 0).ms, window.triggerAtMs)
+        assertEquals(ReminderAlarm.WINDOW.inWholeMilliseconds, window.windowLengthMs)
+        assertFalse("Doze is the first alarm's", window.isAllowWhileIdle)
+        assertTrue("REQ-081", shadowOf(window.operation).isImmutable)
+        assertEquals(receiver, shadowOf(window.operation).savedIntent.component)
+
+        ShadowAlarmManager.setCanScheduleExactAlarms(true)
+        runBlocking { Reminders.replan(app) }
+        assertEquals(ShadowAlarmManager.WINDOW_EXACT, reminderAlarm().windowLengthMs)
+        assertNull("exact again: the second alarm goes", windowAlarm())
     }
 
     @Test
@@ -129,6 +145,8 @@ class ReminderFlowTest {
             assertEquals(ReminderChannels.DOSES, n.channelId)
             assertEquals("hidden on the lock screen (method 5)", Notification.VISIBILITY_SECRET, n.visibility)
             assertNull(n.publicVersion)
+            assertEquals("a group key keeps Android from bundling them", ReminderNotifications.GROUP_DOSES, n.group)
+            assertEquals("and no summary", 0, n.flags and Notification.FLAG_GROUP_SUMMARY)
             assertEquals("$name 먹어~!", n.title)
             assertEquals(listOf(ReminderLabels.TAKEN, ReminderLabels.SNOOZE, ReminderLabels.SKIP_TODAY), n.actions.map { it.title.toString() })
             val buttons = n.actions.map { shadowOf(it.actionIntent) }
@@ -153,6 +171,9 @@ class ReminderFlowTest {
         assertEquals(Notification.VISIBILITY_PUBLIC, lock.notification.visibility)
         assertEquals(ReminderLabels.LOCK_TITLE, lock.notification.title)
         assertTrue("no button on the lock notice", lock.notification.actions.isNullOrEmpty())
+        assertEquals("its own group, no summary: never bundled with the reminders", ReminderNotifications.GROUP_LOCK, lock.notification.group)
+        assertEquals(0, lock.notification.flags and Notification.FLAG_GROUP_SUMMARY)
+        assertTrue("no summary of either group", active().none { it.notification.flags and Notification.FLAG_GROUP_SUMMARY != 0 })
 
         val notices = notificationManager.getNotificationChannel(ReminderChannels.NOTICES)
         assertNull("the lock notice adds no second sound", notices.sound)
@@ -296,6 +317,64 @@ class ReminderFlowTest {
         assertTrue(doses().isEmpty())
     }
 
+    @Test
+    fun a_failed_collect_rings_again_a_minute_later_and_then_as_planned() {
+        val (a) = seed("PillA")
+        val deviceId = runBlocking { app.container.core().db.settingDao().get(SettingKeys.DEVICE_ID) }!!
+        // A new process on the same phone whose core cannot open for a while (a busy disk, say).
+        val marker = FlakyMarker(deviceId)
+        app.restart(marker)
+        ring(at(8, 0))
+        assertTrue("nothing shown", doses().isEmpty())
+        val retry = reminderAlarm()
+        assertEquals("RETRY_DELAYS: a minute later, not tomorrow", at(8, 1).ms, retry.triggerAtMs)
+        val intent = shadowOf(retry.operation).savedIntent
+        assertEquals(1, intent.getIntExtra(ReminderAlarm.EXTRA_ATTEMPT, 0))
+        assertTrue("it was the alarm's collect", intent.getBooleanExtra(ReminderAlarm.EXTRA_ALARM_RANG, false))
+
+        marker.failing = false
+        runBlocking {
+            app.clock.now = at(8, 1)
+            Reminders.collect(app, alarmRang = true, attempt = 1)
+        }
+        assertEquals("the 08:00 slot comes with the retry", listOf(a), doses().map { it.tag })
+        val next = reminderAlarm()
+        assertEquals(at(9, 0).ms, next.triggerAtMs)
+        val planned = shadowOf(next.operation).savedIntent
+        assertEquals("the retries end", 0, planned.getIntExtra(ReminderAlarm.EXTRA_ATTEMPT, -1))
+        assertTrue(planned.getBooleanExtra(ReminderAlarm.EXTRA_ALARM_RANG, false))
+    }
+
+    @Test
+    fun a_button_result_that_names_its_item_goes_when_names_are_hidden_afterwards() {
+        names(true, at(7, 55))
+        val (a) = seed("PillA")
+        ring(at(8, 0))
+        val take = buttonIntent(a, ReminderLabels.TAKEN)
+        runBlocking {
+            app.clock.now = at(4, 1, day = 13)
+            runCatching { Reminders.onButton(app, take) }
+        }
+        val stale = result(a)!!.notification
+        assertEquals(ReminderLabels.STALE, stale.text)
+        assertEquals("names shown: the device setting decides", Notification.VISIBILITY_PRIVATE, stale.visibility)
+        runBlocking { Reminders.onDismissed(app) }
+        assertNotNull("a sync with the same setting keeps it", result(a))
+
+        names(false, at(4, 5, day = 13))
+        assertNull("SPEC-034: no name stays on the lock screen", result(a))
+    }
+
+    /** This phone's install marker, not readable while [failing] (the core cannot open). */
+    private class FlakyMarker(private val deviceId: String) : InstallMarker {
+        @Volatile
+        var failing = true
+
+        override suspend fun read(): String = if (failing) error("marker not readable") else deviceId
+
+        override suspend fun write(deviceId: String) = Unit
+    }
+
     // ---------------------------------------------------------------------------------------------
     // SCR-003#permission
 
@@ -385,7 +464,7 @@ class ReminderFlowTest {
     /** What [ReminderReceiver] does when the alarm rings, at [time]. */
     private fun ring(time: Instant) = runBlocking {
         app.clock.now = time
-        Reminders.collect(app)
+        Reminders.collect(app, alarmRang = true)
     }
 
     /** The intent of [title] on [id]'s reminder, as the system delivers it to [ReminderReceiver]. */
@@ -426,7 +505,11 @@ class ReminderFlowTest {
     private fun reminderAlarms(): List<ShadowAlarmManager.ScheduledAlarm> =
         alarmManager.scheduledAlarms.filter { alarm -> alarm.operation?.let { shadowOf(it).savedIntent.action } == ReminderAlarm.ACTION }
 
-    private fun reminderAlarm(): ShadowAlarmManager.ScheduledAlarm = reminderAlarms().single()
+    /** The alarm that also rings in Doze (exact, or inexact while exact alarms are not allowed). */
+    private fun reminderAlarm(): ShadowAlarmManager.ScheduledAlarm = reminderAlarms().single { it.isAllowWhileIdle }
+
+    /** The second alarm of the inexact path, within [ReminderAlarm.WINDOW]; null while exact. */
+    private fun windowAlarm(): ShadowAlarmManager.ScheduledAlarm? = reminderAlarms().singleOrNull { !it.isAllowWhileIdle }
 
     private fun active(): List<StatusBarNotification> = notificationManager.activeNotifications.toList()
 

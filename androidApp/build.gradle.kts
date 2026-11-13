@@ -66,7 +66,7 @@ android {
 
     testOptions {
         // 위젯 렌더 시험(WidgetRenderTest, TASK-014)과 앱 화면 시험(AppScreenTest, TASK-015)이 앱의 리소스로 그림.
-        // CI에서는 아직 돌리지 않음: ./gradlew :androidApp:testDebugUnitTest. -Probolectric.repo=<주소>를 주면
+        // CI(ci.yml '앱 화면 시험')가 ./gradlew :androidApp:testDebugUnitTest로 돌림. -Probolectric.repo=<주소>를 주면
         // Robolectric이 Android jar를 Maven Central 대신 그 미러에서 받음
         unitTests.isIncludeAndroidResources = true
         unitTests.all { test ->

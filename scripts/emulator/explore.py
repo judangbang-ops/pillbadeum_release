@@ -138,11 +138,20 @@ def tile(name: str, timeout: float = 15) -> Node | None:
 
 
 def type_into(label: str, text: str) -> None:
-    """Types into the text field read as `label` (`약 이름`, `가족 이름`)."""
-    boxes = [n for n in dump_ui() if n.cls.endswith("EditText")]
-    box = next((n for n in boxes if n.desc == label), None)
+    """Types into the text field read as `label` (`약 이름`, `가족 이름`).
+
+    The field's description may sit on a node of its own with the field's bounds instead of on the EditText
+    (Compose Multiplatform 1.11 on API 34, run 43357220722: the EditText had no text or description and a View
+    with the same bounds read '가족 이름'), so a field also matches by the bounds of a node read as `label`."""
+    nodes = dump_ui()
+    boxes = [n for n in nodes if n.cls.endswith("EditText")]
+    labelled = {n.bounds for n in nodes if n.desc == label}
+    box = next((n for n in boxes if n.desc == label or n.bounds in labelled), None)
     if box is None:
-        raise RuntimeError(f"text field '{label}' not found (fields on screen: {[n.desc for n in boxes]})")
+        raise RuntimeError(
+            f"text field '{label}' not found (fields on screen: {[n.desc for n in boxes]}, "
+            f"read as '{label}': {sorted(labelled)})"
+        )
     tap(box)
     sh(f"input text {text}")
     time.sleep(1)

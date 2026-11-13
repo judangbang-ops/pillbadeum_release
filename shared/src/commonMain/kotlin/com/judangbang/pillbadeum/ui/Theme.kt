@@ -14,7 +14,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -305,7 +307,8 @@ internal fun Modifier.dashedBorder(width: Dp, color: Color, radius: Dp, dash: Dp
 internal fun ConfirmDialog(title: String, body: String, confirm: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     Dialog(onDismissRequest = onDismiss) {
         Column(
-            Modifier.clip(Ui.Tile).background(Ui.Surface).padding(20.dp),
+            // Scrolls when large text makes it taller than the window, so the buttons stay reachable.
+            Modifier.clip(Ui.Tile).background(Ui.Surface).verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Words(title, Ui.type(18, Ui.ExtraBold, lineHeight = 1.3f), heading = true)
@@ -323,7 +326,7 @@ internal fun ConfirmDialog(title: String, body: String, confirm: String, onConfi
 internal fun NoticeDialog(title: String, body: String, onClose: () -> Unit) {
     Dialog(onDismissRequest = onClose) {
         Column(
-            Modifier.clip(Ui.Tile).background(Ui.Surface).padding(20.dp),
+            Modifier.clip(Ui.Tile).background(Ui.Surface).verticalScroll(rememberScrollState()).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Words(title, Ui.type(18, Ui.ExtraBold, lineHeight = 1.3f), heading = true)

@@ -1331,13 +1331,17 @@ def flow(run: Run, api: int) -> None:
         r.note(f"시계 {set_clock(at(1, 8, 30))}")
         ok, alarm = wait_planned(at(1, 9))
         rewritten = last_run()
-        shown = shown_after(marker)
+        # The collect after TIME_SET writes the clock of that moment, which a stalling emulator may deliver late
+        # (settle): any time from 08:30 up to this read shows it followed the clock back.
         low = int(at(1, 8, 30).timestamp() * 1000)
-        high = low + 180_000
+        high = phone_now() * 1000 + 1000
+        shown = shown_after(marker)
         run.check("RR-81 시계를 10:00 → 08:30으로 되돌림",
-                  "reminder_last_run_at(10:00 넘음)을 08:30쯤(3분 안)으로 고쳐 씀, 바로 뜨는 알림 없음, 다음 알람 09:00",
+                  "reminder_last_run_at(10:00 넘음)을 되돌린 시계(08:30부터 읽은 때까지)로 고쳐 씀, 바로 뜨는 알림 없음, "
+                  "다음 알람 09:00",
                   f"되돌리기 전 last_run {moment_text(at_ten, base)}, 알람 {show_alarms(ahead)}; 뒤 last_run "
-                  f"{moment_text(rewritten, base)}, 표지 뒤 띄움 {shown}, 알람 {show_alarms(alarm)}",
+                  f"{moment_text(rewritten, base)}(읽은 때 {moment_text(high - 1000, base)}), 표지 뒤 띄움 {shown}, "
+                  f"알람 {show_alarms(alarm)}",
                   ahead_ok and at_ten is not None and at_ten >= int(at(1, 10).timestamp() * 1000)
                   and rewritten is not None and low <= rewritten <= high and shown == [] and ok)
         marker = mark("rr81-nine")

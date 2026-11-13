@@ -1276,13 +1276,13 @@ def flow(run: Run, api: int) -> None:
         after = last_run()
         shown_now = dose_names(posted())
         run.check("RR-92 08:00 알림 직후 시계가 10초 뒤로 감 (TIME_SET이 모으기를 부름)",
-                  "같은 칸이 다시 뜨지 않음(표지 뒤 'reminder(s) shown' 없음), reminder_last_run_at이 뒤로 가지 않음, "
-                  "떠 있는 알림 그대로, 다음 알람 09:00",
+                  "시계가 reminder_last_run_at 앞으로 감, 같은 칸이 다시 뜨지 않음(표지 뒤 'reminder(s) shown' 없음), "
+                  "reminder_last_run_at이 뒤로 가지 않음, 떠 있는 알림 그대로, 다음 알람 09:00",
                   f"되돌린 시계 {moment_text(back * 1000, base)}; 표지 뒤 띄움 {shown}; last_run {moment_text(before, base)} → "
                   f"{moment_text(early, base)}(5초 뒤) → {moment_text(after, base)}; 알림 {shown_before} → {shown_now}; "
                   f"알람 {show_alarms(alarm)}",
-                  shown == [] and early is not None and early >= before and after is not None and after >= before
-                  and shown_now == shown_before and ok)
+                  back * 1000 < before and shown == [] and early is not None and early >= before
+                  and after is not None and after >= before and shown_now == shown_before and ok)
 
     run.step("RR-92 시계 10초 되돌림", clock_back)
 

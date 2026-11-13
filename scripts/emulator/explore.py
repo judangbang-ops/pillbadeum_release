@@ -257,16 +257,24 @@ def phone_now() -> int:
 
 
 def put_clock(target: int) -> None:
-    """Sets the phone clock to `target` (Unix seconds), or raises."""
-    sh(f"cmd alarm set-time {target * 1000}", check=False)
-    now = phone_now()
-    if abs(now - target) > 120:
-        # On API 26 `cmd alarm set-time` leaves the clock as it was (run 43420227464 came here), so there `date` sets it.
-        utc = datetime.fromtimestamp(target, timezone.utc)
-        sh(f"date -u {utc.strftime('%m%d%H%M%Y.%S')}", check=False)
+    """Sets the phone clock to `target` (Unix seconds), or raises.
+
+    The clock is set when a read right after shows `target` plus no more than the time the setting and the read took.
+    A fixed allowance cannot tell a short move that did not happen from one that did: with 2 minutes, the 10-second
+    step back of RR-92 left the API 26 clock where it was and still counted as set (run 43429029456)."""
+    now = 0
+    for how in ("cmd", "date"):
+        started = time.monotonic()
+        if how == "cmd":
+            sh(f"cmd alarm set-time {target * 1000}", check=False)
+        else:
+            # On API 26 `cmd alarm set-time` leaves the clock as it was (run 43420227464 came here), so there `date` sets it.
+            utc = datetime.fromtimestamp(target, timezone.utc)
+            sh(f"date -u {utc.strftime('%m%d%H%M%Y.%S')}", check=False)
         now = phone_now()
-    if abs(now - target) > 120:
-        raise RuntimeError(f"clock not set: wanted {target}, phone says {now}")
+        if target - 1 <= now <= target + int(time.monotonic() - started) + 1:
+            return
+    raise RuntimeError(f"clock not set: wanted {target}, phone says {now}")
 
 
 def set_clock(at: datetime) -> str:

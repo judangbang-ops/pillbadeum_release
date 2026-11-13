@@ -81,9 +81,15 @@ internal sealed interface SettingsState {
 
 /**
  * What the phone says for SCR-009, read with the settings each time they are read: on opening and on coming back to
- * the app (SCR-009#stale), so a screen lock set meanwhile changes the backup notice.
+ * the app (SCR-009#stale), so a screen lock set meanwhile changes the backup notice, and a permission given in the
+ * system settings changes its row ([access], null until read, TASK-026).
  */
-internal data class PhoneState(val appVersion: String, val backupUnsupported: Boolean, val screenLock: Boolean?)
+internal data class PhoneState(
+    val appVersion: String,
+    val backupUnsupported: Boolean,
+    val screenLock: Boolean?,
+    val access: ReminderAccess? = null,
+)
 
 /** What SCR-009's rows do (screens.md SCR-009 table of actions). */
 internal class SettingsActions(
@@ -103,12 +109,15 @@ internal class SettingsActions(
     val delete: (ArchivedItem) -> Unit,
     /** The privacy policy in a browser (SPEC-036). */
     val openPrivacy: (String) -> Unit,
+    /** `[설정 열기]` and `[허용하기]` of `알림이 오지 않을 때`: the system settings screen (SPEC-028, SPEC-029, SPEC-030). */
+    val openAccess: (AccessSetting) -> Unit,
 )
 
 /**
  * SCR-009 설정, drawn as 09 Settings (TASK-020): the day settings, the common reminder settings and the lock-screen
- * names, people and archived items, the backup notice and the app's information (REQ-011, REQ-015, REQ-036, REQ-042,
- * REQ-046, REQ-053, REQ-054, REQ-063, REQ-077). The section `알림이 오지 않을 때` comes with TASK-026.
+ * names, what keeps reminders from coming (TASK-026), people and archived items, the backup notice and the app's
+ * information (REQ-011, REQ-015, REQ-036, REQ-042, REQ-046, REQ-050, REQ-051, REQ-053, REQ-054, REQ-063, REQ-077,
+ * REQ-089).
  *
  * Every change is saved at once, after its question where one is asked; a failure keeps the old value and says so in
  * the band under the bar ([message], SCR-009#error), where the quiet-hours notice shows too. Pickers and questions are
@@ -181,6 +190,20 @@ private fun SettingsBody(view: SettingsView?, phone: PhoneState, privacyUrl: Str
         ValueRow("하루 최대", view?.reminders?.maxPerDay?.let(Labels::perDay)) { open = Open.PER_DAY }
         ValueRow("방해 금지", view?.reminders?.let(Labels::quiet), view?.reminders?.let(Labels::quietSpoken)) { open = Open.QUIET }
         SwitchRow("잠금 화면에 약 이름 보이기", Labels.SHOW_NAMES_NOTE, view?.showNamesOnLock) { actions.showNamesOnLock(it) }
+
+        // SCR-009#permission (TASK-026): each row says whether it is on; one that is off says what that does and opens
+        // the system screen. The screen itself is never blocked. Shown also while no item has reminders on.
+        SectionTitle(Labels.ACCESS_SECTION)
+        val access = phone.access
+        AccessRow(Labels.NOTIFICATIONS_ROW, access?.notifications, Labels.ACCESS_ON, Labels.NOTIFICATIONS_OFF_NOTE, Labels.OPEN_SETTINGS) {
+            actions.openAccess(AccessSetting.NOTIFICATIONS)
+        }
+        AccessRow(Labels.EXACT_ALARMS_ROW, access?.exactAlarms, Labels.ACCESS_ON, Labels.EXACT_ALARMS_OFF_NOTE, Labels.ALLOW) {
+            actions.openAccess(AccessSetting.EXACT_ALARMS)
+        }
+        AccessRow(Labels.BATTERY_ROW, access?.batteryUnrestricted, Labels.BATTERY_FREE, Labels.BATTERY_NOTE, Labels.OPEN_SETTINGS) {
+            actions.openAccess(AccessSetting.BATTERY)
+        }
 
         SectionTitle("가족과 보관")
         ValueRow("대상자 관리", view?.people?.let(Labels::peopleCount), chevron = true) { actions.people() }
@@ -375,6 +398,48 @@ private fun SwitchRow(name: String, note: String, on: Boolean?, onChange: (Boole
         } else {
             SwitchMark(on)
         }
+    }
+}
+
+/**
+ * A row of `알림이 오지 않을 때` (09 Settings): while [on], its name and [onValue] in ink (`.v.ok`); while off, the name with
+ * [offNote] under it and [button] on the right (or under both when the text is large, as [EndOrBelow]). While the phone
+ * is not read yet, a grey cell. TalkBack reads `알림 권한, 켜짐` or `알림 권한, 꺼져 있어 …`, and the button with the row's
+ * name (`알림 권한 설정 열기`).
+ */
+@Composable
+private fun AccessRow(name: String, on: Boolean?, onValue: String, offNote: String, button: String, onOpen: () -> Unit) {
+    if (on != false) {
+        val sentence = "$name, ${if (on == null) Labels.LOADING else onValue}"
+        Box(
+            Modifier.row().clearAndSetSemantics { contentDescription = sentence }.padding(horizontal = 4.dp, vertical = 8.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            EndOrBelow(
+                start = { Words(name, Ui.type(16, lineHeight = 1.25f)) },
+                end = {
+                    if (on == null) {
+                        Box(Modifier.size(width = 56.dp, height = 20.dp).clip(RoundedCornerShape(6.dp)).background(Ui.Sunken))
+                    } else {
+                        Words(onValue, Ui.type(16, Ui.SemiBold, lineHeight = 1.25f))
+                    }
+                },
+            )
+        }
+        return
+    }
+    Box(Modifier.row().padding(horizontal = 4.dp, vertical = 8.dp), contentAlignment = Alignment.CenterStart) {
+        EndOrBelow(
+            start = {
+                Column(Modifier.clearAndSetSemantics { contentDescription = "$name, $offNote" }) {
+                    Words(name, Ui.type(16, lineHeight = 1.25f))
+                    Words(offNote, Ui.type(14, color = Ui.Muted), Modifier.padding(top = 2.dp))
+                }
+            },
+            end = {
+                ActionButton(button, ButtonLook.LineSmall, onOpen, Modifier.semantics { contentDescription = "$name $button" })
+            },
+        )
     }
 }
 

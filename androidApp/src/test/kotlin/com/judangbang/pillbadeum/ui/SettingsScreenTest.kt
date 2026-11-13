@@ -274,14 +274,15 @@ class SettingsScreenTest {
         runBlocking { assertTrue(core.archiveIntake(seed.morning)) }
         assertEquals(4, judgments(seed.morning))
         openSettings()
-        val archived = row("보관한 항목, 1개")
+        val archived = row("보관한 항목, 1개").performScrollTo()
         archived.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "접힘")).performClick()
         archived.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "펼쳐짐"))
+        compose.onNodeWithContentDescription("나 아침약 완전 삭제").performScrollTo()
         compose.onNodeWithText("나 아침약").assertExists()
         compose.assertTargetsAtLeast48dp()
         save("settings-archived")
 
-        compose.onNodeWithContentDescription("나 아침약 완전 삭제").performClick()
+        compose.onNodeWithContentDescription("나 아침약 완전 삭제").performScrollTo().performClick()
         compose.onNodeWithText("아침약을 완전히 지울까요?").assertExists()
         compose.onNodeWithText(Labels.DELETE_NOTE).assertExists()
         save("settings-delete-ask")
@@ -289,7 +290,7 @@ class SettingsScreenTest {
         compose.waitForIdle()
         assertEquals("kept", 4, judgments(seed.morning))
 
-        compose.onNodeWithContentDescription("나 아침약 완전 삭제").performClick()
+        compose.onNodeWithContentDescription("나 아침약 완전 삭제").performScrollTo().performClick()
         inDialog("완전 삭제").performClick()
         waitForText(Labels.deleted("아침약"))
         assertEquals(0, compose.onAllNodesWithContentDescription("보관한 항목", substring = true).fetchSemanticsNodes().size)
@@ -438,7 +439,7 @@ class SettingsScreenTest {
     @Test
     fun back_goes_from_people_to_settings_and_from_settings_to_the_first_screen() {
         val activity = openSettings()
-        row("대상자 관리, 1명").performClick()
+        row("대상자 관리, 1명").performScrollTo().performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithText(Labels.PEOPLE_NOTE).fetchSemanticsNodes().isNotEmpty() }
         activity.onBackPressedDispatcher.onBackPressed()
         waitForRow("대상자 관리, 1명")

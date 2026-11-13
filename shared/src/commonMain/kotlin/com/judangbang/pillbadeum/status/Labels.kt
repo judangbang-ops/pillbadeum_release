@@ -728,6 +728,44 @@ object Labels {
     /** No browser could open the privacy policy: its address instead (SPEC-036). */
     fun noBrowser(url: String): String = "브라우저를 열 수 없어요. 주소: $url"
 
+    // 알림이 오지 않을 때 (TASK-026: SCR-004#permission, SCR-009, 09 HomeRestored and Settings) -----------------------
+    // No sentence promises minutes (REQ-048).
+
+    /** SCR-004#permission (REQ-089): an item has reminders on, but the app's notifications or its channel are off. */
+    const val NOTIFICATIONS_OFF: String = "알림이 꺼져 있어 알려 드릴 수 없어요"
+
+    /** SCR-004#permission (REQ-050, SPEC-029): an item has reminders on, but exact alarms are not allowed. */
+    const val EXACT_ALARMS_OFF: String = "알림이 늦을 수 있어요"
+
+    /** The button to a system settings screen (SCR-004, SCR-009, 09 HomeRestored and Settings). */
+    const val OPEN_SETTINGS: String = "설정 열기"
+
+    /** The button to the exact-alarm screen (SCR-004, SCR-009, 09 Settings). */
+    const val ALLOW: String = "허용하기"
+
+    /** SCR-009's section between the reminder settings and the people (09 Settings). */
+    const val ACCESS_SECTION: String = "알림이 오지 않을 때"
+
+    const val NOTIFICATIONS_ROW: String = "알림 권한"
+    const val EXACT_ALARMS_ROW: String = "정확한 시각 알람"
+    const val BATTERY_ROW: String = "배터리 사용 제한"
+
+    /** A row's value while nothing there keeps reminders from coming (09 Settings `.v.ok`). */
+    const val ACCESS_ON: String = "켜짐"
+    const val BATTERY_FREE: String = "제한 없음"
+
+    /** Under a row that is off: what that does (SCR-009#permission: the row shows that it is off). */
+    const val NOTIFICATIONS_OFF_NOTE: String = "꺼져 있어 알림이 오지 않아요."
+    const val EXACT_ALARMS_OFF_NOTE: String = "꺼져 있어 알림이 늦을 수 있어요."
+
+    /** Under the battery row while the app is optimized or restricted, with how to leave it out (SPEC-030, REQ-051). */
+    val BATTERY_NOTE: String
+        get() = "제한되어 있어 알림이 늦을 수 있어요. 열리는 화면에서 ${withObject(APP_NAME)} 찾아 배터리 최적화를 꺼 주세요."
+
+    /** No system screen could be opened, not even the app's information (Claude's wording). */
+    val ACCESS_OPEN_FAILED: String
+        get() = "설정 화면을 열지 못했어요. 휴대폰 설정의 앱 목록에서 ${withObject(APP_NAME)} 찾아 주세요"
+
     // SCR-010 대상자 관리 (TASK-021, 09 People and PersonAdd) --------------------------------------------------------
 
     /** Under the bar of the people list (09 People). */

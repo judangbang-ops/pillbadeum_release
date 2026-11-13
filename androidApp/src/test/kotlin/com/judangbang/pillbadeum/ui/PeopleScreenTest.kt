@@ -329,7 +329,7 @@ class PeopleScreenTest {
         }
         try {
             assertTrue(held.await(10, TimeUnit.SECONDS))
-            line("대상자 관리, 1명").performClick()
+            line("대상자 관리, 1명").performScrollTo().performClick()
             compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription(Labels.LOADING).fetchSemanticsNodes().isNotEmpty() }
             assertEquals("no button while reading", 0, compose.onAllNodesWithText("대상자 추가").fetchSemanticsNodes().size)
             save("people-loading")
@@ -343,7 +343,7 @@ class PeopleScreenTest {
         back()
         waitForLine("대상자 관리, 1명")
         runBlocking { core.db.close() }
-        line("대상자 관리, 1명").performClick()
+        line("대상자 관리, 1명").performScrollTo().performClick()
         waitForText(Labels.PEOPLE_LOAD_FAILED)
         compose.onNodeWithText("다시 시도").assertExists()
         compose.assertTargetsAtLeast48dp()
@@ -448,7 +448,7 @@ class PeopleScreenTest {
     /** Opens the app, `[설정]` and `대상자 관리` with [count] people, and waits for the list. */
     private fun openPeople(count: Int): MainActivity {
         val activity = openSettings()
-        line("대상자 관리, ${count}명").performClick()
+        line("대상자 관리, ${count}명").performScrollTo().performClick()
         waitForText("대상자 추가")
         return activity
     }

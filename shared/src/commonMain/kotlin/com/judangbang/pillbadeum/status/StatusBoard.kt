@@ -57,6 +57,12 @@ data class StatusBoard(
 
     /** People who are not archived, oldest first: the choices of the widget's person picker (SCR-002, TASK-012). */
     val people: List<PersonEntity> = emptyList(),
+
+    /**
+     * Some item that is not archived, of a person who is not archived, has reminders on: only then does the first screen
+     * say that reminders cannot come (SCR-004#permission, REQ-089, SPEC-029, TASK-026).
+     */
+    val remindersOn: Boolean = false,
 ) {
     /** `n` of `n / m 완료`: doses only, skips are counted apart (supplement S-1, REQ-020). */
     val doneCount: Int get() = items.count { it.isTaken }
@@ -238,6 +244,7 @@ class LoadStatusBoard(
             clockWarnings = clockWarnings,
             showPeople = showsPeople(people.size),
             people = people.values.toList(),
+            remindersOn = db.reminderDao().listEnabledRules().isNotEmpty(),
         )
     }
 

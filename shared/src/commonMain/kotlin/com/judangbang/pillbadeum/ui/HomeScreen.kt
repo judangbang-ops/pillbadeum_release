@@ -95,14 +95,17 @@ internal class HomeActions(
     val keepClock: (ClockWarning) -> Unit,
     val keepAllClocks: (List<ClockWarning>) -> Unit,
     val cancelClock: (ClockWarning) -> Unit,
+    /** `[설정 열기]` and `[허용하기]` of SCR-004#permission: the system settings screen (SPEC-028, SPEC-029). */
+    val openAccess: (AccessSetting) -> Unit,
 )
 
 /**
  * SCR-004 기록 (오늘·이번 주), drawn as 09 BoxHome, HomeEmpty and HomeRestored. [zone] is the phone's zone, where
- * times are shown (REQ-082).
+ * times are shown (REQ-082). [access] is what the phone said about reminders when the screen came, null until read
+ * (SCR-004#permission, TASK-026).
  */
 @Composable
-internal fun HomeScreen(state: HomeState, message: String?, zone: TimeZone, actions: HomeActions) {
+internal fun HomeScreen(state: HomeState, message: String?, zone: TimeZone, actions: HomeActions, access: ReminderAccess? = null) {
     // The intake or judgment a question is open for; kept when the screen is recreated.
     var askVoid by rememberSaveable { mutableStateOf<String?>(null) }
     var askClock by rememberSaveable { mutableStateOf<String?>(null) }
@@ -121,6 +124,7 @@ internal fun HomeScreen(state: HomeState, message: String?, zone: TimeZone, acti
                 board = state.board,
                 message = message,
                 zone = zone,
+                access = access,
                 actions = actions,
                 onAskVoid = { askVoid = it.intakeId },
                 onAskClock = { askClock = it.judgment.id },
@@ -185,6 +189,7 @@ private fun ReadyBody(
     board: StatusBoard,
     message: String?,
     zone: TimeZone,
+    access: ReminderAccess?,
     actions: HomeActions,
     onAskVoid: (IntakeStatus) -> Unit,
     onAskClock: (ClockWarning) -> Unit,
@@ -196,13 +201,21 @@ private fun ReadyBody(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState())
                 .padding(start = Ui.Side, end = Ui.Side, top = 4.dp, bottom = 24.dp),
         ) {
-            val bands = board.restoreNotice != null || board.clockWarnings.isNotEmpty()
+            val accessNotice = accessNotice(board.remindersOn, access)
+            val bands = board.restoreNotice != null || accessNotice != null || board.clockWarnings.isNotEmpty()
             if (bands) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     board.restoreNotice?.let { notice ->
                         // SCR-004#restored (REQ-073, REQ-074): at the very top until confirmed.
                         Band(Labels.restoreAppNotice(notice, zone)) {
                             ActionButton("확인했어요", ButtonLook.InkSmall, actions.acknowledgeRestore)
+                        }
+                    }
+                    accessNotice?.let { setting ->
+                        // SCR-004#permission (REQ-089, REQ-050, TASK-026): under the restore notice, as 09 HomeRestored.
+                        val off = setting == AccessSetting.NOTIFICATIONS
+                        Band(if (off) Labels.NOTIFICATIONS_OFF else Labels.EXACT_ALARMS_OFF) {
+                            ActionButton(if (off) Labels.OPEN_SETTINGS else Labels.ALLOW, ButtonLook.LineSmall, { actions.openAccess(setting) })
                         }
                     }
                     // Claude's choice (supplement C-3 한계, TASK-016): a clock set far back flags many good doses, so two

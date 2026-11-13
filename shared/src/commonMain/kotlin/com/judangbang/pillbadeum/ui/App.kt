@@ -198,6 +198,9 @@ fun App(
     var introClosed by rememberSaveable { mutableStateOf(false) }
     // Whether the launcher takes [위젯 추가]: read again on coming back to the app, off after a refused request.
     var canPin by remember(refreshKey) { mutableStateOf(phone.canPinWidget()) }
+    // SCR-004#permission (TASK-026): read each time the first screen comes and on coming back to the app, since the
+    // system settings change it (a person back from `[설정 열기]` sees the band gone).
+    var access by remember { mutableStateOf<ReminderAccess?>(null) }
     val zone = TimeZone.currentSystemDefault()
 
     suspend fun reload() {
@@ -258,6 +261,11 @@ fun App(
     fun go(to: Route) {
         message = null
         route = to
+    }
+
+    /** `[설정 열기]`·`[허용하기]` (SCR-004, SCR-009): the system screen, or a message when the phone has none. */
+    fun openAccess(setting: AccessSetting) {
+        message = if (phone.openAccessSettings(setting)) null else Labels.ACCESS_OPEN_FAILED
     }
 
     /** SCR-008 from the first line: opened from the first screen, or another month or person. */
@@ -348,80 +356,85 @@ fun App(
                 ),
             )
 
-            Route.Home -> HomeScreen(
-                state = when {
-                    failed -> HomeState.Failed
-                    else -> board?.let { HomeState.Ready(it) } ?: HomeState.Loading
-                },
-                message = message,
-                zone = zone,
-                actions = HomeActions(
-                    retry = {
-                        failed = false
-                        board = null
-                        retries++
+            Route.Home -> {
+                LaunchedEffect(refreshKey) { access = phone.reminderAccess() }
+                HomeScreen(
+                    state = when {
+                        failed -> HomeState.Failed
+                        else -> board?.let { HomeState.Ready(it) } ?: HomeState.Loading
                     },
-                    history = {
-                        board?.baseDate?.let { today -> openHistory(Route.History(LocalDate(today.year, today.month, 1), null)) }
-                    },
-                    settings = { openSettings() },
-                    add = { go(Route.Item(null)) },
-                    edit = { go(Route.Item(it.intakeId)) },
-                    more = { go(Route.Judge(it.intakeId, it.scheduleVersionId, it.window.periodKey)) },
-                    record = { item ->
-                        write { c ->
-                            val result = c.record(item.intakeId, DoseSource.APP, item.window.periodKey)
-                            message = if (result is RecordResult.Error) Labels.TRY_AGAIN else Labels.recordMessage(result, item.name, c.clock.now(), zone)
-                            afterWrite()
-                        }
-                    },
-                    void = { item ->
-                        val judgment = item.judgment
-                        if (judgment != null) {
+                    message = message,
+                    zone = zone,
+                    access = access,
+                    actions = HomeActions(
+                        retry = {
+                            failed = false
+                            board = null
+                            retries++
+                        },
+                        history = {
+                            board?.baseDate?.let { today -> openHistory(Route.History(LocalDate(today.year, today.month, 1), null)) }
+                        },
+                        settings = { openSettings() },
+                        add = { go(Route.Item(null)) },
+                        edit = { go(Route.Item(it.intakeId)) },
+                        more = { go(Route.Judge(it.intakeId, it.scheduleVersionId, it.window.periodKey)) },
+                        record = { item ->
                             write { c ->
-                                message = when (c.voidDose(judgment.id)) {
-                                    VoidResult.Voided -> Labels.voided(item.name, skip = false)
-                                    VoidResult.NotActive -> "이미 취소된 기록이에요"
-                                    VoidResult.Locked -> Labels.LOCKED
+                                val result = c.record(item.intakeId, DoseSource.APP, item.window.periodKey)
+                                message = if (result is RecordResult.Error) Labels.TRY_AGAIN else Labels.recordMessage(result, item.name, c.clock.now(), zone)
+                                afterWrite()
+                            }
+                        },
+                        void = { item ->
+                            val judgment = item.judgment
+                            if (judgment != null) {
+                                write { c ->
+                                    message = when (c.voidDose(judgment.id)) {
+                                        VoidResult.Voided -> Labels.voided(item.name, skip = false)
+                                        VoidResult.NotActive -> "이미 취소된 기록이에요"
+                                        VoidResult.Locked -> Labels.LOCKED
+                                    }
+                                    afterWrite()
+                                }
+                            }
+                        },
+                        // SCR-004 [확인했어요]: a failed save keeps the notice (screens.md SCR-004).
+                        acknowledgeRestore = {
+                            write(failure = "저장하지 못했어요. 다시 눌러 주세요") { c ->
+                                c.acknowledgeRestore()
+                                message = null
+                                afterWrite()
+                            }
+                        },
+                        keepClock = { warning ->
+                            write { c ->
+                                c.resolveClockFlag.keep(warning.judgment.id)
+                                message = null
+                                afterWrite()
+                            }
+                        },
+                        keepAllClocks = { warnings ->
+                            write { c ->
+                                warnings.forEach { c.resolveClockFlag.keep(it.judgment.id) }
+                                message = null
+                                afterWrite()
+                            }
+                        },
+                        cancelClock = { warning ->
+                            write { c ->
+                                message = when (c.resolveClockFlag.cancel(warning.judgment.id)) {
+                                    ClockFlagResult.Resolved -> Labels.voided(warning.intakeName, skip = warning.judgment.kind == DoseKind.SKIPPED)
+                                    ClockFlagResult.NotFlagged -> null
+                                    ClockFlagResult.Locked -> Labels.LOCKED
                                 }
                                 afterWrite()
                             }
-                        }
-                    },
-                    // SCR-004 [확인했어요]: a failed save keeps the notice (screens.md SCR-004).
-                    acknowledgeRestore = {
-                        write(failure = "저장하지 못했어요. 다시 눌러 주세요") { c ->
-                            c.acknowledgeRestore()
-                            message = null
-                            afterWrite()
-                        }
-                    },
-                    keepClock = { warning ->
-                        write { c ->
-                            c.resolveClockFlag.keep(warning.judgment.id)
-                            message = null
-                            afterWrite()
-                        }
-                    },
-                    keepAllClocks = { warnings ->
-                        write { c ->
-                            warnings.forEach { c.resolveClockFlag.keep(it.judgment.id) }
-                            message = null
-                            afterWrite()
-                        }
-                    },
-                    cancelClock = { warning ->
-                        write { c ->
-                            message = when (c.resolveClockFlag.cancel(warning.judgment.id)) {
-                                ClockFlagResult.Resolved -> Labels.voided(warning.intakeName, skip = warning.judgment.kind == DoseKind.SKIPPED)
-                                ClockFlagResult.NotFlagged -> null
-                                ClockFlagResult.Locked -> Labels.LOCKED
-                            }
-                            afterWrite()
-                        }
-                    },
-                ),
-            )
+                        },
+                        openAccess = ::openAccess,
+                    ),
+                )
+            }
 
             is Route.Item -> key(current.key) {
                 val loaded = board
@@ -673,7 +686,7 @@ fun App(
                 // have been set meanwhile in the system settings.
                 LaunchedEffect(core, reads, settingsAttempts) {
                     val c = core ?: return@LaunchedEffect
-                    phoneState = PhoneState(phone.appVersion, phone.backupUnsupported, phone.screenLock())
+                    phoneState = PhoneState(phone.appVersion, phone.backupUnsupported, phone.screenLock(), phone.reminderAccess())
                     try {
                         settings = c.loadSettings()
                         settingsFailed = false
@@ -759,6 +772,7 @@ fun App(
                             }
                         },
                         openPrivacy = { url -> message = if (phone.openUrl(url)) null else Labels.noBrowser(url) },
+                        openAccess = ::openAccess,
                     ),
                 )
             }
@@ -886,6 +900,7 @@ private fun homeOnlyRetry(retry: () -> Unit) = HomeActions(
     keepClock = {},
     keepAllClocks = {},
     cancelClock = {},
+    openAccess = {},
 )
 
 @Composable

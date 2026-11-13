@@ -8,11 +8,15 @@ import com.judangbang.pillbadeum.testing.DbFixture
 import com.judangbang.pillbadeum.testing.SEOUL
 import com.judangbang.pillbadeum.testing.TEST_DEVICE_ID
 import com.judangbang.pillbadeum.testing.seoul
+import com.judangbang.pillbadeum.usecase.ArchiveIntake
 import com.judangbang.pillbadeum.usecase.IntakeDraft
 import com.judangbang.pillbadeum.usecase.ManagePeople
+import com.judangbang.pillbadeum.usecase.ManageReminders
+import com.judangbang.pillbadeum.usecase.PersonChange
 import com.judangbang.pillbadeum.usecase.RecordResult
 import com.judangbang.pillbadeum.usecase.SaveIntake
 import com.judangbang.pillbadeum.usecase.SaveIntakeResult
+import com.judangbang.pillbadeum.usecase.SaveReminderResult
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -233,5 +237,33 @@ class StatusBoardTest {
         assertEquals("아침약", button.title)
         assertNull(button.who, "only 나: no person name on the tile (REQ-018)")
         assertEquals(Tokens.PEOPLE[0], button.palette, "나 is person 1, blue (09 tokens)")
+    }
+
+    /**
+     * SCR-004#permission (TASK-026, REQ-089): the first screen speaks of reminders that cannot come only while an item
+     * has reminders on. An item switched off, archived, or of an archived person does not count (as `listEnabledRules`).
+     */
+    @Test
+    fun reminders_on_counts_items_with_reminders_that_are_not_archived() = runTest {
+        val people = ManagePeople(fx.db, fx.clock, fx.ids, TEST_DEVICE_ID)
+        val me = people.ensureDefault().first()
+        val mom = people.add("Mom", "#B5562B")
+        val save = SaveIntake(fx.db, fx.clock, fx.ids, TEST_DEVICE_ID)
+        val mine = assertIs<SaveIntakeResult.Saved>(save.create(IntakeDraft(me.id, "아침약"))).intakeId
+        val hers = assertIs<SaveIntakeResult.Saved>(save.create(IntakeDraft(mom.id, "혈압약"))).intakeId
+        val reminders = ManageReminders(fx.db, fx.clock, TEST_DEVICE_ID)
+        assertFalse(load().remindersOn, "no rule yet")
+
+        assertIs<SaveReminderResult.Saved>(reminders.saveRule(mine, enabled = false, start = LocalTime(8, 0)))
+        assertFalse(load().remindersOn, "a rule that is off")
+        assertIs<SaveReminderResult.Saved>(reminders.saveRule(hers, enabled = true, start = LocalTime(8, 0)))
+        assertTrue(load().remindersOn, "Mom's item has reminders on")
+
+        assertEquals(PersonChange.Saved, people.archive(mom.id))
+        assertFalse(load().remindersOn, "Mom archived")
+        assertEquals(PersonChange.Saved, people.restore(mom.id))
+        assertTrue(load().remindersOn, "Mom restored")
+        assertTrue(ArchiveIntake(fx.db, fx.clock)(hers))
+        assertFalse(load().remindersOn, "her item archived")
     }
 }

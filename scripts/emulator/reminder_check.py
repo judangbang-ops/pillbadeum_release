@@ -2,29 +2,38 @@
 """Dose reminder checks on an Android emulator (TASK-024, TASK-025, TASK-027, TASK-040).
 
 Runs against one booted emulator whose image allows `adb root` (google_apis or default) and the debug APK.
-The item screen that switches reminders on (TASK-023) is not built yet, so the items are made by the
-debug-only receiver `androidApp/src/debug/.../ReminderSeedReceiver.kt`, through the app's own use cases.
+The items are made by the debug-only receiver `androidApp/src/debug/.../ReminderSeedReceiver.kt`, through the
+app's own use cases (the item screen's reminder field, TASK-023, is checked by the app test ItemReminderTest).
 What the phone shows is read from `dumpsys alarm`, `dumpsys notification --noredact`, the screen
-(uiautomator) and the app database (root).
+(uiautomator) and the app database (root). Alarm times are read from the epoch in `dumpsys alarm`, which is
+the same on every image (Android 8 prints `when=` in system_server's own time zone).
 
 Flow, on the run's date D in Asia/Seoul (five daily items PillA..PillE, reminders from 08:00, at most 5 a day):
    1. TASK-024 one alarm: with exact alarms refused (Android 12+), then allowed, `dumpsys alarm` holds one
       reminder alarm of the app at 08:00 (RR-54), inexact then exact; the day-boundary alarm is separate.
    2. 08:00 the alarm rings with the screen locked: five item reminders, all VISIBILITY_SECRET with
-      [먹었어] [30분 뒤] [오늘 건너뜀], and one silent PUBLIC "복용 시간이에요" (SPEC-013, RR-54).
+      [먹었어] [30분 뒤] [오늘 건너뜀], and one silent PUBLIC "복용 시간이에요" (SPEC-013, RR-54). They carry
+      group keys without a summary, so Android does not bundle them under the app name (PR #20).
    3. Lock screen, eight cells (TC-013): names off/on x the device setting "show all content" (1) / "hide
       sensitive content" (0) x locked/unlocked. Names off: no item name or button on the lock screen, even
-      expanded. Names on + show all: names and [먹었어], and [먹었어] records PillA without unlocking.
-   4. Buttons (TC-011, TC-012): PillB [오늘 건너뜀], PillC [30분 뒤] from the shade; PillD recorded in the app
-      (RR-86); PillE swiped away. Each reminder goes, and with the last one "복용 시간이에요" goes (N-13).
-   5. 08:30 PillC's snooze rings (RR-51).
+      expanded. Names on + show all: names and [먹었어], and [먹었어] of the first name shown records it without
+      unlocking. On Android 8 and 11 a tap does not expand a lock-screen notification (PR #15, section 3): only
+      the names are checked there, a drag is tried for [먹었어], and when it fails that is a note, not a failure.
+   4. Buttons (TC-011, TC-012): of the four other items, in name order, one [오늘 건너뜀] and one [30분 뒤]
+      from the shade, one recorded in the app (RR-86) and one swiped away. When the lock screen recorded none,
+      PillA is recorded from the shade first. Each reminder goes, and with the last one "복용 시간이에요"
+      goes (N-13).
+   5. 08:30 the snoozed item rings (RR-51), and the next alarm is 09:00.
    6. A missed alarm (N-12): the app is force-stopped before 09:00, so the 09:00 alarm never comes; opening
-      the app at 09:03 shows the 09:00 reminders at once.
+      the app at 09:03 shows the 09:00 reminders of the snoozed and the swiped item at once.
    7. Restore (TASK-040, RR-30, RR-33, RR-73): the install marker is deleted, as after a restore (supplement
       R-1, RR-71). One restore notice, no dose reminder and no reminder alarm, even after 10:00 passes;
       [확인했어요] takes the notice off and plans 11:00 (not 10:00).
-   8. Reboot (TASK-027, RR-18, RR-55): the clock is put at 10:59 and the phone restarts across 11:00; after
-      unlocking, the 11:00 reminders show.
+   8. Reboot (TASK-027, RR-18, RR-55): at 10:59 the app ops are written out (`adb reboot` skips the shutdown
+      that saves them) and the phone restarts. The emulator comes back on the host's clock, on some images in
+      UTC, so the zone and 11:01 are set again before unlocking; the app is not direct-boot aware, so the
+      unlock's BOOT_COMPLETED is its first run. After unlocking, the 11:00 reminders show and the next alarm
+      is 12:00.
    9. Window end (RR-87): at D+1 04:01 the reminders of D are gone and the next alarm is D+1 08:00.
 
 Names are English because `adb shell` arguments stay ASCII. The real Galaxy check is TASK-052.
@@ -133,13 +142,15 @@ class PlannedAlarm:
 
     @property
     def when(self) -> str:
-        """The trigger time in the phone's zone, as dumpsys prints it (`origWhen=` from Android 12, `when=` before)."""
-        m = re.search(r"\b(?:origWhen|when)=(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)", self.block)
-        if m:
-            return m.group(1)
+        """The trigger time in Asia/Seoul, from the epoch of the block head (`Alarm{… when 1794524400000 …}`, `origWhen`
+        from Android 12). The formatted `when=` is the system server's own zone: on API 26 it stayed UTC after the zone
+        was set (run 43360309166), and after a reboot the emulator may start in UTC."""
         m = re.search(r"\b(?:origWhen|when) (\d{12,})", self.block)
         if m:
             return datetime.fromtimestamp(int(m.group(1)) / 1000, ZONE).strftime("%Y-%m-%d %H:%M:%S")
+        m = re.search(r"\b(?:origWhen|when)=(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)", self.block)
+        if m:
+            return m.group(1)
         return "?"
 
     def describe(self) -> str:
@@ -215,7 +226,7 @@ def posted(out: str | None = None) -> list[Posted]:
             continue
         nid = re.search(r"\bid=(-?\d+)", head)
         tag = re.search(r"\btag=(\S+)", head)
-        channel = re.search(r"\bchannel=(\S+)", head)
+        channel = re.search(r"\bchannel=([^\s:]+)", head)  # API 26 prints "channel=dose_reminders: Notification(…"
         vis = re.search(r"\bvis=(\w+)", head)
         # The record's own lines are indented under it; the next section of the dump starts further left.
         lines = part.split("\n")
@@ -440,9 +451,27 @@ def notification_button(name: str, label: str, tries: int = 4) -> Node | None:
             return min(buttons, key=lambda n: n.bounds[1])
         near = [n for n in nodes if n.rid.endswith(":id/expand_button") and abs(n.center[1] - head.center[1]) < 160]
         if not near:
+            # A bundle (Android groups four or more of an app's notifications that carry no group key): its chevron is
+            # on the bundle header above the collapsed line (run 43360309166, API 34).
+            near = sorted((n for n in nodes if n.rid.endswith(":id/expand_button") and "ollapse" not in n.desc
+                           and n.bounds[1] < head.bounds[1]), key=lambda n: -n.bounds[1])
+        if not near:
             return None
         tap(near[0])
     return None
+
+
+def drag_down(name: str) -> bool:
+    """Drags `name`'s reminder down on the lock screen. On API 26 and 30 the expand chevron does nothing there (PR #15
+    experiment, 3장); dragging a notification down opens it in the shade while the phone stays locked."""
+    head = next((n for n in dump_ui() if title(name) in n.text), None)
+    if head is None:
+        return False
+    _, h = screen_size()
+    x, y = head.center
+    sh(f"input swipe {x} {y} {x} {min(h - 40, y + 700)} 600")
+    time.sleep(2)
+    return True
 
 
 def press_in_shade(name: str, label: str) -> None:
@@ -482,6 +511,11 @@ class Run:
         self.apk = apk
         self.ids: dict[str, str] = {}
         self.logs: list[str] = []  # logcat before each reboot (the buffer does not survive one)
+        # Which item the lock screen records depends on which reminders Android shows there; the other four are then
+        # skipped, snoozed, recorded in the app and swiped away, in NAMES order (step 4).
+        self.lock_taken: str | None = None
+        self.snoozed = "PillC"
+        self.swiped = "PillE"
 
     def check(self, case: str, expected: str, actual: str, ok: bool) -> bool:
         return self.r.check(case, expected, actual, ok)
@@ -584,30 +618,46 @@ def flow(run: Run, api: int) -> None:
         sh(f"settings put secure lock_screen_allow_private_notifications {device}")
         lock()
         showing = keyguard_showing()
-        locked = read_screen()
         tag = f"lock-{'on' if names_on else 'off'}-{device}"
-        r.shot(tag)
+        r.shot(tag)  # before any tap: a tap on a hidden-content reminder brings up the PIN pad
+        locked = read_screen()
         save_ui(r, tag)
-        if names_on and device == "1":
+        if names_on and device == "1" and api >= 31:
             ok = len(locked.names) >= 1 and locked.button
             expected = "이름과 [먹었어]가 보임"
+        elif names_on and device == "1":
+            ok = len(locked.names) >= 1
+            expected = "이름이 보임 ([먹었어]는 보지 않음: API 26·30 잠금 화면에서는 펼치기 탭이 먹지 않음, PR #15 실험 3장)"
         else:
             ok = not locked.names and not locked.button and locked.generic
             expected = f"이름·버튼 없이 '{LOCK_TITLE}'만 (펼쳐도)"
         run.check(f"TC-013 잠금 화면: {label}", expected, f"잠금 {showing}; {locked.describe()}", ok and showing is True)
         if tap_taken:
-            button = notification_button("PillA", TAKEN)
-            if button is None:
-                run.check("TC-013 잠금 화면 [먹었어]", "잠금을 풀지 않고 PillA 복용 기록", "PillA의 [먹었어]를 찾지 못함", False)
+            lock()
+            shown = read_once().names
+            name, button = None, None
+            for candidate in shown:
+                button = notification_button(candidate, TAKEN)
+                if button is None and api < 31 and drag_down(candidate):
+                    button = notification_button(candidate, TAKEN)
+                if button is not None:
+                    name = candidate
+                    break
+            if button is None and api < 31:
+                r.note(f"TC-013 잠금 화면 [먹었어]: 잠금 화면의 {shown or '알림'}을 펼치지 못해 누르지 못함(API 26·30, PR #15 실험 3장과 같음). "
+                       "다음 단계는 알림창에서 하나를 기록하고 이어 감")
+            elif button is None:
+                run.check("TC-013 잠금 화면 [먹었어]", "잠금을 풀지 않고 복용 기록", f"잠금 화면의 이름 {shown}, [먹었어]를 찾지 못함", False)
             else:
                 tap(button)
                 time.sleep(4)
                 still = keyguard_showing()
-                done = judgments(run.ids).get("PillA")
-                gone = "PillA" not in dose_names(posted())
+                done = judgments(run.ids).get(name)
+                gone = name not in dose_names(posted())
                 r.shot("lock-taken")
-                run.check("TC-013 잠금 화면 [먹었어]", "잠금을 풀지 않고 PillA 복용(TAKEN, NOTIFICATION), PillA 알림 사라짐",
-                          f"잠금 {still}, 판정 {done}, 알림 {'사라짐' if gone else '남음'}",
+                run.lock_taken = name
+                run.check("TC-013 잠금 화면 [먹었어]", "잠금을 풀지 않고 보이는 항목 하나 복용(TAKEN, NOTIFICATION), 그 알림 사라짐",
+                          f"{name}: 잠금 {still}, 판정 {done}, 알림 {'사라짐' if gone else '남음'}",
                           still is True and done == ("TAKEN", "NOTIFICATION") and gone)
         unlocked = unlock()
         expand_shade()
@@ -644,45 +694,54 @@ def flow(run: Run, api: int) -> None:
     # 4. Buttons, the app and a swipe; the lock-screen notice goes with the last reminder (N-13)
     def buttons() -> None:
         ensure_unlocked()
-        press_in_shade("PillB", SKIP)
-        press_in_shade("PillC", SNOOZE)
+        taken = run.lock_taken
+        skipped, snoozed, in_app, swiped = (n for n in NAMES if n != (taken or NAMES[0]))
+        run.snoozed, run.swiped = snoozed, swiped
+        if taken is None:
+            # The lock screen recorded none (API 26·30, see step 3): one from the shade, so the rest of the flow holds.
+            taken = NAMES[0]
+            press_in_shade(taken, TAKEN)
+            r.note(f"{taken}: 알림창의 [{TAKEN}]로 기록함, 판정 {judgments(run.ids).get(taken)}")
+        press_in_shade(skipped, SKIP)
+        press_in_shade(snoozed, SNOOZE)
         state = judgments(run.ids)
         left = dose_names(posted())
         alarm = alarms(REMINDER_ALARM)
         run.check("TC-011·TC-012 알림 버튼",
-                  "PillB 건너뜀(SKIPPED, NOTIFICATION), PillC 미룸 1건, 둘의 알림 사라짐, 다음 알람 08:30",
-                  f"PillB {state.get('PillB')}, 미룸 {snoozes(run.ids)}, 남은 알림 {left}, 알람 {show_alarms(alarm)}",
-                  state.get("PillB") == ("SKIPPED", "NOTIFICATION") and snoozes(run.ids) == ["PillC"]
-                  and "PillB" not in left and "PillC" not in left
+                  f"{skipped} 건너뜀(SKIPPED, NOTIFICATION), {snoozed} 미룸 1건, 둘의 알림 사라짐, 다음 알람 08:30",
+                  f"{skipped} {state.get(skipped)}, 미룸 {snoozes(run.ids)}, 남은 알림 {left}, 알람 {show_alarms(alarm)}",
+                  state.get(skipped) == ("SKIPPED", "NOTIFICATION") and snoozes(run.ids) == [snoozed]
+                  and skipped not in left and snoozed not in left
                   and len(alarm) == 1 and alarm[0].when.endswith("08:30:00"))
 
         launch_app()
-        tap(row_button("PillD", TAKEN))
+        tap(row_button(in_app, TAKEN))
         time.sleep(4)
-        r.shot("app-pilld")
+        r.shot("app-taken")
         go_home()
         state = judgments(run.ids)
         left = dose_names(posted())
-        run.check("RR-86 앱에서 기록", "PillD 복용(APP), PillD 알림 사라짐",
-                  f"PillD {state.get('PillD')}, 남은 알림 {left}",
-                  state.get("PillD") == ("TAKEN", "APP") and "PillD" not in left)
+        run.check("RR-86 앱에서 기록", f"{in_app} 복용(APP), {in_app} 알림 사라짐",
+                  f"{in_app} {state.get(in_app)}, 남은 알림 {left}",
+                  state.get(in_app) == ("TAKEN", "APP") and in_app not in left)
 
-        swipe_away("PillE")
+        swipe_away(swiped)
         items_ = posted()
-        run.check("N-13 마지막 항목 알림을 밀어서 지움", f"PillE 알림 사라짐, 항목 알림 0개, '{LOCK_TITLE}'도 사라짐, PillE는 판정 없음",
-                  f"{show_posted(items_)}; PillE 판정 {judgments(run.ids).get('PillE')}",
-                  not doses(items_) and not lock_notices(items_) and "PillE" not in judgments(run.ids))
+        run.check("N-13 마지막 항목 알림을 밀어서 지움", f"{swiped} 알림 사라짐, 항목 알림 0개, '{LOCK_TITLE}'도 사라짐, {swiped}는 판정 없음",
+                  f"{show_posted(items_)}; {swiped} 판정 {judgments(run.ids).get(swiped)}",
+                  not doses(items_) and not lock_notices(items_) and swiped not in judgments(run.ids))
 
     run.step("버튼·앱·밀어서 지우기", buttons)
 
     # 5. The snooze rings at 08:30
     def snooze_rings() -> None:
         r.note(f"시계 {set_clock(at(0, 8, 29))}")
-        items_ = wait_posted(lambda p: "PillC" in dose_names(p), timeout=300)
+        items_ = wait_posted(lambda p: run.snoozed in dose_names(p), timeout=300)
+        alarm = alarms(REMINDER_ALARM)
         r.shot("snooze-0830")
-        run.check("RR-51 [30분 뒤]가 08:30에 울림", "PillC 알림 하나 다시 뜸, 다음 알람 09:00",
-                  f"{show_posted(items_)}; 알람 {show_alarms(alarms(REMINDER_ALARM))}",
-                  dose_names(items_) == ["PillC"])
+        run.check("RR-51 [30분 뒤]가 08:30에 울림", f"{run.snoozed} 알림 하나 다시 뜸, 다음 알람 09:00",
+                  f"{show_posted(items_)}; 알람 {show_alarms(alarm)}",
+                  dose_names(items_) == [run.snoozed] and len(alarm) == 1 and alarm[0].when.endswith("09:00:00"))
 
     run.step("08:30 미룬 알림", snooze_rings)
 
@@ -693,12 +752,13 @@ def flow(run: Run, api: int) -> None:
         r.note(f"강제 종료 뒤 알림 알람 {show_alarms(gone)}; 시계 {set_clock(at(0, 9, 3))}")
         quiet = dose_names(posted())
         launch_app()
-        items_ = wait_posted(lambda p: dose_names(p) == ["PillC", "PillE"], timeout=90)
+        due = sorted([run.snoozed, run.swiped])
+        items_ = wait_posted(lambda p: dose_names(p) == due, timeout=90)
         r.shot("missed-0900")
         go_home()
-        run.check("N-12 놓친 09:00 알람", "09:03 앱을 열면 PillC·PillE 알림이 바로 뜸 (그 전에는 없음)",
+        run.check("N-12 놓친 09:00 알람", f"09:03 앱을 열면 {'·'.join(due)} 알림이 바로 뜸 (그 전에는 없음)",
                   f"열기 전 {quiet}, 연 뒤 {show_posted(items_)}",
-                  not gone and not quiet and dose_names(items_) == ["PillC", "PillE"])
+                  not gone and not quiet and dose_names(items_) == due)
 
     run.step("놓친 알람", missed)
 
@@ -742,22 +802,31 @@ def flow(run: Run, api: int) -> None:
 
     # 8. Reboot across 11:00
     def reboot() -> None:
-        put_clock(int(at(0, 10, 59).timestamp()))  # no settling: the phone must go down before 11:00
+        put_clock(int(at(0, 10, 59).timestamp()))
+        # `adb reboot` skips the framework shutdown that writes app ops to disk: without this the exact-alarm allow of
+        # step 1 was gone after the reboot on API 34 (an hour-wide alarm, run 43360309166).
+        sh("cmd appops write-settings", check=False)
         run.logs.append(adb("logcat", "-d", "-v", "time", check=False, timeout=60))
         adb("reboot", check=False)
         time.sleep(10)
         adb("wait-for-device", timeout=300)
         wait_boot(600)
         become_root()
+        # The emulator comes back on the host's clock (API 26·34·36) and, on some images, in UTC (API 34·36); API 30 kept
+        # 10:59 and finished booting before 11:00 (run 43360309166). The app is not direct-boot aware, so nothing reaches
+        # it before the first unlock: set the zone and 11:01 now, and the unlock's BOOT_COMPLETED is the first run.
+        zone = set_zone()
+        clock = set_clock(at(0, 11, 1))
         wake_screen()
-        booted = sh("date '+%H:%M:%S'").strip()
-        unlocked = unlock()  # BOOT_COMPLETED reaches the app only after the first unlock
-        items_ = wait_posted(lambda p: dose_names(p) == ["PillC", "PillE"], timeout=300)
+        unlocked = unlock()
+        due = sorted([run.snoozed, run.swiped])
+        items_ = wait_posted(lambda p: dose_names(p) == due, timeout=300)
+        alarm = wait_alarm(lambda a: len(a) == 1 and a[0].when.endswith("12:00:00"), timeout=60)
         r.shot("after-reboot")
         run.check("RR-18·RR-55 재부팅이 11:00을 넘김",
-                  "잠금을 풀면 PillC·PillE의 11:00 알림이 뜸, 다음 알람 12:00",
-                  f"부팅 끝 {booted}, 풀림 {unlocked}; {show_posted(items_)}; 알람 {show_alarms(alarms(REMINDER_ALARM))}",
-                  booted >= "11:00:00" and unlocked and dose_names(items_) == ["PillC", "PillE"])
+                  f"잠금을 풀면 {'·'.join(due)}의 11:00 알림이 뜸, 다음 알람 12:00",
+                  f"부팅 뒤 {zone} {clock}, 풀림 {unlocked}; {show_posted(items_)}; 알람 {show_alarms(alarm)}",
+                  unlocked and dose_names(items_) == due and len(alarm) == 1 and alarm[0].when.endswith("12:00:00"))
 
     run.step("재부팅", reboot)
 

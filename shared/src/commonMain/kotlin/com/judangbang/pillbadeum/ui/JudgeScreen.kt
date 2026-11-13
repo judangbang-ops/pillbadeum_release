@@ -264,7 +264,8 @@ private fun Choices(cell: JudgeCell, zone: TimeZone, actions: JudgeActions, onPi
 /**
  * The time picker (Claude's design): the dates the range spans when more than one, the hours of the chosen date that have a
  * time, and the minutes in five-minute steps, each a 48 dp cell read as `21시`, `40분`. Nothing is chosen at first, except
- * the stored time for a time edit. [preferLast] starts on the last date (the current window's today).
+ * the stored time for a time edit, which is confirmed only once another time is chosen. [preferLast] starts on the last
+ * date (the current window's today).
  */
 @Composable
 private fun TimePicker(
@@ -286,6 +287,9 @@ private fun TimePicker(
     val hours = date?.let(range::hours).orEmpty()
     val minutes = if (date != null && hour in hours) range.minutes(date, hour) else emptyList()
     val chosen = if (date != null && hour in hours && minute in minutes) range.at(date, hour, minute) else null
+    // A time edit starts on the stored time floored to five minutes: confirming that alone would move the dose (08:02 to
+    // 08:00) without the person changing anything, so the button waits for another time.
+    val unchanged = kind == Picking.EDIT && chosen != null && chosen == initial?.let(range::floor)
 
     Column(Modifier.fillMaxWidth().padding(top = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Words(if (kind == Picking.EDIT) "먹은 시각 고치기" else "먹은 시각 고르기", Ui.type(18, Ui.ExtraBold, lineHeight = 1.3f), heading = true)
@@ -330,7 +334,7 @@ private fun TimePicker(
             Picking.EDIT -> "이 시각으로 고치기"
             Picking.CHANGE -> "이 시각으로 바꾸기"
         }
-        ActionButton(confirm, ButtonLook.person(solid), { chosen?.let(onConfirm) }, enabled = chosen != null)
+        ActionButton(confirm, ButtonLook.person(solid), { chosen?.takeUnless { unchanged }?.let(onConfirm) }, enabled = chosen != null && !unchanged)
         ActionButton("취소", ButtonLook.Line, onCancel)
     }
 }

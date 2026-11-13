@@ -15,7 +15,9 @@ import androidx.compose.runtime.setValue
 import com.judangbang.pillbadeum.boundary.DayBoundaryAlarm
 import com.judangbang.pillbadeum.ui.App
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     /** Bumped on every resume so the screen reloads (the widget may have recorded meanwhile). */
@@ -56,7 +58,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             App(
                 open = { container.core() },
-                onDataChanged = { container.afterWrite() },
+                // Widgets (and reminders, R3) follow every saved write even when this activity is recreated meanwhile
+                // (rotation, font size, dark mode), which cancels the screen's scope after the write was saved.
+                onDataChanged = { withContext(NonCancellable) { container.afterWrite() } },
                 phone = phone,
                 refreshKey = resumeCount,
                 homeRequests = homeRequests,

@@ -1,6 +1,7 @@
 package com.judangbang.pillbadeum.ui
 
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasAnyAncestor
@@ -124,9 +125,12 @@ class JudgeScreenTest {
         compose.onNodeWithText("08:02에 먹음").assertExists()
         click("먹은 시각 고치기")
         waitFor("이 시각으로 고치기")
+        // 08:00 is chosen first (08:02 floored): confirming it unchanged would move the dose (Fable review of PR #19).
+        compose.onNodeWithText("이 시각으로 고치기").assertIsNotEnabled()
         pick("11월 11일 수요일")
         pick("8시")
         pick("30분")
+        compose.onNodeWithText("이 시각으로 고치기").assertIsEnabled()
         click("이 시각으로 고치기")
         waitFor("11/11에 이미 기록됨 (08:00)")
         compose.onNodeWithText("오늘 기록").assertExists()

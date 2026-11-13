@@ -15,21 +15,25 @@ Flow, on the run's date D in Asia/Seoul (five daily items PillA..PillE, reminder
       its flags; allowing exact alarms takes it off.
    2. 08:00 the alarm rings with the screen locked: five item reminders, all VISIBILITY_SECRET with
       [먹었어] [30분 뒤] [오늘 건너뜀], and one silent PUBLIC "복용 시간이에요" (SPEC-013, RR-54). They carry
-      group keys without a summary, so Android does not bundle them under the app name (PR #20).
+      group keys without a summary, so Android does not bundle them under the app name (PR #20); Android 16
+      sometimes still does (run 43370487070, not in run 43365673905), which the report notes.
    3. Lock screen, eight cells (TC-013): names off/on x the device setting "show all content" (1) / "hide
       sensitive content" (0) x locked/unlocked. Names off: no item name or button on the lock screen, even
       expanded, not even in a notification icon's description. Names on + show all: names and [먹었어], and
       [먹었어] of the first name shown records it without unlocking. Names on + hide: no name on the screen; on
       API 30 System UI still puts the private title into the description of an overflow icon (ICON_DESC), which
-      is noted as a platform limit. On Android 8 and 11 a tap does not expand a lock-screen notification (PR #15,
-      section 3): only the names are checked there, a drag is tried for [먹었어], and when it fails that is a
-      note, not a failure.
+      is noted as a platform limit. When Android 16 has moved the reminders into its own bundle
+      (AUTOGROUP_SUMMARY), the lock screen shows one folded app-name line instead of "복용 시간이에요": no
+      name and no button is what counts there, and the report notes it (a limit). On Android 8 and 11 a tap
+      does not expand a lock-screen notification (PR #15, section 3): only the names are checked there, a drag
+      is tried for [먹었어], and when it fails that is a note, not a failure.
    4. Buttons (TC-011, TC-012): of the four other items, in name order, one [오늘 건너뜀] and one [30분 뒤]
       from the shade, one recorded in the app (RR-86) and one swiped away. When the lock screen recorded none,
       PillA is recorded from the shade first. Each reminder goes, and with the last one "복용 시간이에요"
       goes (N-13). The snooze rings 30 minutes after the press (`reminder_snooze.fire_at`), and that is the next
       alarm. A swipe that System UI does not take as a dismissal is tried again (swipe_away), and the report says
-      which try worked.
+      which try worked; when none does, the shade's "Clear all" takes it off (the same delete intent) and the
+      report says so.
    5. 30 minutes after the press the snoozed item rings (RR-51), and the next alarm is 09:00.
    6. A missed alarm (N-12): the app is force-stopped before 09:00, so the 09:00 alarm never comes; opening
       the app at 09:03 shows the 09:00 reminders of the snoozed and the swiped item at once.
@@ -235,6 +239,9 @@ class Posted:
     title: str
     text: str
     actions: list[str] = field(default_factory=list)
+    # The summary Android posts in the app's name when it bundles the app's notifications itself (AUTOGROUP_SUMMARY).
+    # Android 16 also bundles groups that have no summary, as the reminders' groups (run 43370487070, API 36).
+    autogroup: bool = False
 
 
 def notification_dump() -> str:
@@ -270,6 +277,7 @@ def posted(out: str | None = None) -> list[Posted]:
             title=t.group(1) if t else "",
             text=x.group(1) if x else "",
             actions=actions,
+            autogroup=bool(re.search(r"^\s*flags=\S*\bAUTOGROUP_SUMMARY\b", body, re.M)),
         )
         seen[(item.tag, item.id)] = item
     return list(seen.values())
@@ -304,7 +312,7 @@ def channel_sound(channel_id: str, out: str) -> str:
 def show_posted(items: list[Posted]) -> str:
     parts = []
     for p in items:
-        label = p.title or p.text or "(제목 없음)"
+        label = "Android 자동 묶음 요약" if p.autogroup else p.title or p.text or "(제목 없음)"
         parts.append(f"{label} [{p.channel}, {p.vis}{', 공개용 판' if p.public else ''}, 버튼 {len(p.actions)}]")
     return f"{len(items)}개" + (": " + "; ".join(parts) if parts else "")
 
@@ -543,14 +551,21 @@ def shade_title(name: str) -> Node | None:
 SWIPES = ((0.2, 0.995, 300), (0.2, 0.995, 1000), (0.8, 0.005, 1000))
 
 
-def swipe_away(r: Report, name: str, api: int) -> int:
-    """Swipes `name`'s reminder off in the shade, as a person does, and returns the try that took it off (0: none did).
+def swipe_away(r: Report, name: str, api: int) -> tuple[int, str]:
+    """Takes `name`'s reminder off in the shade as a person does, and returns how: (the swipe that took it off, "swipe"),
+    (the tries, "clear-all") when the shade's "Clear all" did it after every swipe failed, or (the tries, "") when
+    nothing did.
 
     On the CI emulator a swipe did not always reach System UI as a dismissal: in run 43365673905 (API 30 and 34) the
     swipe went across the reminder's title in the open shade and the app never heard of it (no log after it, while on
     API 36 the dismissal's re-plan was logged at once). Each try opens the shade again, reads where the title is now,
     keeps a screenshot, and swipes slower or the other way; the report says which try worked. From API 29 a last try
-    moves the finger in steps (`input motionevent`), so the move does not hang on how fast System UI takes events."""
+    moves the finger in steps (`input motionevent`), so the move does not hang on how fast System UI takes events.
+
+    In run 43370487070 no try worked on API 26 (three) or API 30 (four), although the same swipe had worked on API 26 in
+    the run before: the touches were injected (logcat) and the reminder did not move. What the app does after a
+    dismissal does not depend on the gesture: a swipe and "Clear all" both send its delete intent. So after the swipes
+    the shade's "Clear all" is pressed, and the report says so."""
     w, _ = screen_size()
     tries = [*SWIPES, None] if api >= 29 else list(SWIPES)
     for attempt, swipe in enumerate(tries, 1):
@@ -572,11 +587,22 @@ def swipe_away(r: Report, name: str, api: int) -> int:
         time.sleep(3)
         if name not in dose_names(wait_posted(lambda p: name not in dose_names(p), timeout=10)):
             collapse_shade()
-            return attempt
+            return attempt, "swipe"
         dump_ui()
         save_ui(r, f"swipe-{name}-{attempt}-after")
         collapse_shade()
-    return 0
+    expand_shade()
+    r.shot(f"swipe-{name}-clear-all")
+    button = next((n for n in dump_ui() if n.text.strip().lower() == "clear all" or n.desc.lower().startswith("clear all")), None)
+    if button is None:
+        save_ui(r, f"swipe-{name}-clear-all")
+        collapse_shade()
+        return len(tries), ""
+    tap(button)
+    time.sleep(3)
+    gone = name not in dose_names(wait_posted(lambda p: name not in dose_names(p), timeout=10))
+    collapse_shade()  # "Clear all" closes the shade on most images; on the others this does
+    return len(tries), "clear-all" if gone else ""
 
 
 # ------------------------------------------------------------------------------------------------
@@ -685,6 +711,9 @@ def flow(run: Run, api: int) -> None:
     items = posted(dump)
     five = doses(items)
     lock_notice = lock_notices(items)
+    if any(p.autogroup for p in items):
+        r.note("RR-54: Android가 앱 알림을 모두 자기 묶음으로 바꿈(AUTOGROUP_SUMMARY). 항목 알림의 묶음에 요약이 없어서 "
+               "Android 16이 다시 묶은 경우(보충 N-13 '구현'의 한계). 잠금 화면 칸의 판정은 3단계")
     run.check("RR-54 08:00 알람이 울림 (잠금 화면 켠 채)",
               f"항목 알림 5개 모두 SECRET, 버튼 [{TAKEN}] [{SNOOZE}] [{SKIP}]; '{LOCK_TITLE}' 1개 PUBLIC",
               show_posted(items),
@@ -721,6 +750,19 @@ def flow(run: Run, api: int) -> None:
             # an overflow icon is System UI's (API 30, see ICON_DESC): noted, not counted.
             ok = not locked.names and not locked.button and locked.generic
             expected = f"이름·버튼 없이 '{LOCK_TITLE}'만 (펼쳐도)"
+            # Android 16 may move the reminders into its own bundle (AUTOGROUP_SUMMARY, see Posted.autogroup); its summary
+            # has no public version, so the lock screen shows one folded line with the app name and no text, and tapping
+            # its chevron asks for the PIN (run 43370487070, API 36; not in run 43365673905). No name and no button is
+            # what counts there; the missing '복용 시간이에요' is a limit (supplement N-13 '구현'), checked on a Galaxy
+            # in TASK-052.
+            bundled = api >= 36 and any(p.autogroup for p in posted())
+            if bundled:
+                expected += "; Android가 자기 묶음으로 바꾸면 이름·버튼 없이 앱 이름 줄만"
+            if bundled and not ok and not locked.names and not locked.button:
+                ok = True
+                r.note(f"TC-013 {label}: Android 16이 알림을 자기 묶음(AUTOGROUP_SUMMARY)으로 바꿔 잠금 화면에는 "
+                       f"'{LOCK_TITLE}' 없이 앱 이름 줄 하나만 접혀 보임(펼치려면 PIN). 이름·버튼은 없음. "
+                       f"보충 N-13 '구현'의 한계, Galaxy에서 다시 봄(TASK-052). 캡처 {tag}")
             if locked.icon_names:
                 r.note(f"TC-013 {label}: 화면에는 이름이 없고, 잠금 화면 알림 아이콘의 접근성 설명에만 "
                        f"{', '.join(locked.icon_names)}이 있음(API {api} System UI가 숨긴 알림의 제목을 아이콘 설명에 씀, "
@@ -832,15 +874,26 @@ def flow(run: Run, api: int) -> None:
                   f"{in_app} {state.get(in_app)}, 남은 알림 {left}",
                   state.get(in_app) == ("TAKEN", "APP") and in_app not in left)
 
-        tried = swipe_away(r, swiped, api)
+        tried, how = swipe_away(r, swiped, api)
         items_ = wait_posted(lambda p: not doses(p) and not lock_notices(p), timeout=15)
-        run.check("N-13 마지막 항목 알림을 밀어서 지움", f"{swiped} 알림 사라짐, 항목 알림 0개, '{LOCK_TITLE}'도 사라짐, {swiped}는 판정 없음",
-                  f"{f'{tried}번째 밀기에 사라짐' if tried else '밀어도 남음'}; {show_posted(items_)}; "
-                  f"{swiped} 판정 {judgments(run.ids).get(swiped)}",
-                  tried > 0 and not doses(items_) and not lock_notices(items_) and swiped not in judgments(run.ids))
-        if tried > 1:
+        if how == "clear-all":
+            time.sleep(5)  # the app re-plans after the delete intent: it must not put '복용 시간이에요' back
+            items_ = posted()
+        result = {"swipe": f"{tried}번째 밀기에 사라짐",
+                  "clear-all": f"밀기 {tried}번이 먹지 않아 알림창의 '모두 지우기'로 지움"}.get(how, "밀어도, '모두 지우기'로도 남음")
+        run.check("N-13 마지막 항목 알림을 밀어서 지움",
+                  f"{swiped} 알림 사라짐, 항목 알림 0개, '{LOCK_TITLE}'도 사라짐, {swiped}는 판정 없음 (밀기가 먹지 않으면 '모두 지우기')",
+                  f"{result}; {show_posted(items_)}; {swiped} 판정 {judgments(run.ids).get(swiped)}",
+                  bool(how) and not doses(items_) and not lock_notices(items_) and swiped not in judgments(run.ids))
+        if how == "swipe" and tried > 1:
             r.note(f"N-13 밀어서 지우기: 앞의 {tried - 1}번은 System UI가 지우기로 받지 않았음(앱에 아무것도 닿지 않음), "
                    f"{tried}번째({'손가락을 나눠 움직임' if tried > len(SWIPES) else '더 느리게 또는 반대로'})에 지워짐. 캡처 swipe-{swiped}-*")
+        elif how == "clear-all":
+            r.note(f"N-13 밀어서 지우기: 밀기 {tried}번을 System UI가 지우기로 받지 않아(앱에 아무것도 닿지 않음, 캡처 swipe-{swiped}-*) "
+                   f"알림창의 '모두 지우기'로 지움. 앱에는 밀기와 같은 삭제 인텐트가 감({swiped} 판정 없음). '모두 지우기'는 "
+                   f"'{LOCK_TITLE}'도 함께 지우므로, 마지막 알림이 없어지면 앱이 안내를 내리는지는 여기서 보지 못하고 앱 시험 "
+                   "ReminderFlowTest(swiping_reminders_away_keeps_their_slots_and_the_last_takes_the_lock_notice_off)가 봄. "
+                   "여기서는 그 뒤에 앱이 안내를 다시 띄우지 않는지만 봄")
 
     run.step("버튼·앱·밀어서 지우기", buttons)
 

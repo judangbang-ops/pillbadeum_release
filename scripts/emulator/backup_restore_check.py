@@ -133,12 +133,12 @@ CLOSED_DIALOGS: list[str] = []
 UI_XML = "/data/local/tmp/ui.xml"
 
 
-def dump_ui() -> list[Node]:
+def dump_ui(tries: int = 25) -> list[Node]:
     out = ""
     nodes: list[Node] = []
     # "null root node" means no window is ready yet; after a reboot on the CI emulator System UI can
     # take more than a minute (explore run 7, 2026-11-12), so that case waits longer than a busy dump.
-    for _ in range(25):
+    for _ in range(tries):
         out = sh(f"uiautomator dump {UI_XML}", check=False)
         if "dumped" not in out:
             time.sleep(3 if "null root node" in out else 1)
@@ -231,19 +231,36 @@ def tap_text(text: str, timeout: float = 20) -> None:
     tap(node)
 
 
+def app_running() -> bool:
+    """The app has a process (`pidof`, in toybox from Android 7)."""
+    return bool(sh(f"pidof {PKG}", check=False).strip())
+
+
 def launch_app(stop_at_intro: bool = False) -> None:
     """Starts the app and waits for its home. No `am start -W`: right after `pm clear` the system
     can still be removing the old task and kill the new process, and -W then waits forever.
+
+    The same happens right after an uninstall: removing the old task timed out and the system killed the new
+    process of the same name ("Destroy timeout of remove-task", then "Killing <pid> ... remove task"), so only the
+    splash screen stayed and every dump said "null root node" (backup check run 43370486896). So a start whose
+    process is gone, or whose screen cannot be read, is stopped and started again.
 
     On the first start of an install the intro (SCR-005, TASK-022) shows first: it is passed with
     [건너뛰기], which saves that it was seen, or with stop_at_intro the function returns on it."""
     sh("input keyevent KEYCODE_WAKEUP", check=False)
     sh("wm dismiss-keyguard", check=False)
-    for _ in range(2):
+    for attempt in range(3):
+        if attempt:
+            print(f"[note] the app did not come up, starting it again (try {attempt + 1})", flush=True)
+            sh(f"am force-stop {PKG}", check=False)
+            time.sleep(2)
         sh(f"am start -n {ACTIVITY}")
-        end = time.time() + 30
-        while time.time() < end:
-            texts = {n.text for n in dump_ui()}
+        start = time.time()
+        while time.time() < start + 30:
+            try:
+                texts = {n.text for n in dump_ui(tries=4)}
+            except RuntimeError:
+                texts = set()
             if HOME_MARK in texts:
                 return
             if INTRO_MARK in texts:
@@ -251,6 +268,8 @@ def launch_app(stop_at_intro: bool = False) -> None:
                     return
                 tap_text(INTRO_MARK)
                 continue
+            if time.time() > start + 5 and not app_running():
+                break
             time.sleep(1)
     raise RuntimeError("app home did not show")
 
@@ -568,8 +587,7 @@ def short(value: str | None) -> str:
 
 
 def fresh_install_with_record(apk: Path, r: Report, name: str = ITEM_A) -> AppState:
-    uninstall()
-    install(apk)
+    reinstall(apk)  # with the pause after the uninstall, see launch_app
     launch_app()
     add_item_and_record(name, r)
     state = read_state()

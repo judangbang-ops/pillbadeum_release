@@ -1,0 +1,193 @@
+{
+  "v": 3,
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-11-12T08:30:00Z"
+  },
+  "title": "필받음 1차 목업 (2안 요일 약통)",
+  "launch": {
+    "view": "canvas"
+  },
+  "pages": [],
+  "boards": {
+    "BoxWidget.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 350,
+      "h": 213,
+      "title": "SCR-001 홈 화면 위젯 4×2 · 글자 100%"
+    },
+    "BoxWidget200.dc.html": {
+      "x": 0,
+      "y": 293,
+      "w": 350,
+      "h": 213,
+      "title": "SCR-001 홈 화면 위젯 4×2 · 글자 200%"
+    },
+    "WidgetPick.dc.html": {
+      "x": 430,
+      "y": 0,
+      "w": 360,
+      "h": 800,
+      "title": "SCR-002 위젯 대상자 고르기"
+    },
+    "Notif.dc.html": {
+      "x": 870,
+      "y": 0,
+      "w": 360,
+      "h": 560,
+      "title": "SCR-003 반복 알림 (기기가 그림)"
+    },
+    "Welcome1.dc.html": {
+      "x": 1310,
+      "y": 0,
+      "w": 360,
+      "h": 800,
+      "title": "SCR-005 첫 실행 안내 1쪽"
+    },
+    "Welcome2.dc.html": {
+      "x": 1750,
+      "y": 0,
+      "w": 360,
+      "h": 800,
+      "title": "SCR-005 첫 실행 안내 2쪽"
+    },
+    "BoxHome.dc.html": {
+      "x": 0,
+      "y": 960,
+      "w": 360,
+      "h": 800,
+      "title": "SCR-004 기록 (오늘·이번 주)"
+    },
+    "HomeEmpty.dc.html": {
+      "x": 440,
+      "y": 960,
+      "w": 360,
+      "h": 800,
+      "title": "SCR-004 · 항목 없음 (#empty)"
+    },
+    "HomeRestored.dc.html": {
+      "x": 880,
+      "y": 960,
+      "w": 360,
+      "h": 1010,
+      "title": "SCR-004 · 복원 뒤와 알림 꺼짐 (#restored, #permission) · 스크롤 전체"
+    },
+    "ItemForm.dc.html": {
+      "x": 1320,
+      "y": 960,
+      "w": 360,
+      "h": 1010,
+      "title": "SCR-006 항목 추가 · 스크롤 전체"
+    },
+    "ItemFormError.dc.html": {
+      "x": 1760,
+      "y": 960,
+      "w": 360,
+      "h": 1040,
+      "title": "SCR-006 · 이름 없이 저장 (#error)"
+    },
+    "ItemForm200.dc.html": {
+      "x": 2200,
+      "y": 960,
+      "w": 360,
+      "h": 1380,
+      "title": "SCR-006 · 글자 200% · 스크롤 전체"
+    },
+    "Judge.dc.html": {
+      "x": 0,
+      "y": 2500,
+      "w": 360,
+      "h": 800,
+      "title": "SCR-007 판정 고치기 · 기록 없음"
+    },
+    "JudgeTaken.dc.html": {
+      "x": 440,
+      "y": 2500,
+      "w": 360,
+      "h": 800,
+      "title": "SCR-007 판정 고치기 · 먹음"
+    },
+    "History.dc.html": {
+      "x": 880,
+      "y": 2500,
+      "w": 360,
+      "h": 880,
+      "title": "SCR-008 지난 기록 · 스크롤 전체"
+    },
+    "Settings.dc.html": {
+      "x": 1320,
+      "y": 2500,
+      "w": 360,
+      "h": 1190,
+      "title": "SCR-009 설정 · 스크롤 전체"
+    },
+    "People.dc.html": {
+      "x": 1760,
+      "y": 2500,
+      "w": 360,
+      "h": 800,
+      "title": "SCR-010 대상자 관리"
+    },
+    "PersonAdd.dc.html": {
+      "x": 2200,
+      "y": 2500,
+      "w": 360,
+      "h": 800,
+      "title": "SCR-010 · 대상자 추가"
+    }
+  },
+  "order": [
+    "BoxWidget.dc.html",
+    "BoxWidget200.dc.html",
+    "WidgetPick.dc.html",
+    "Notif.dc.html",
+    "Welcome1.dc.html",
+    "Welcome2.dc.html",
+    "BoxHome.dc.html",
+    "HomeEmpty.dc.html",
+    "HomeRestored.dc.html",
+    "ItemForm.dc.html",
+    "ItemFormError.dc.html",
+    "ItemForm200.dc.html",
+    "Judge.dc.html",
+    "JudgeTaken.dc.html",
+    "History.dc.html",
+    "Settings.dc.html",
+    "People.dc.html",
+    "PersonAdd.dc.html"
+  ],
+  "notes": {
+    "rowBox": {
+      "x": 0,
+      "y": -120,
+      "text": "2안 요일 약통 · 고름 (동희님, 2026-11-12 18:27 결정 카드)",
+      "kind": "title1",
+      "maxW": 2400
+    },
+    "aboutBox": {
+      "x": 2640,
+      "y": 0,
+      "w": 400,
+      "fill": "yellow",
+      "size": "m",
+      "text": "값은 모두 design/base.tokens.json(DTCG)의 이름으로 씀. 보드는 tokens.css(토큰에서 만듦)와 box.css(공통 조각)를 읽음.\n\n색: 바탕 흰색, 글자 #15171C, 보조 글자 #5C6270, 사람 뚜껑 여섯 색(파랑·주황·초록·보라·장미·청록, 각 채움·옅은 면·글자). 건너뜀 회색, 빠짐은 진한 테두리.\n글꼴: 기기 기본 글꼴(앱에 넣지 않음). 보드는 Pixel처럼 Roboto·Noto Sans KR 400·600·800으로 그림.\n누르는 곳 48 이상, 큰 버튼 52, 입력 칸 56.\n\n흰 글자/채운 칸 4.7:1 이상, 옅은 면 글자 6.7:1 이상, 테두리 3.2:1."
+    },
+    "states": {
+      "x": 2640,
+      "y": 960,
+      "w": 400,
+      "fill": "yellow",
+      "size": "m",
+      "text": "그린 상태: 위젯 normal(100·200%), SCR-004 normal·empty·restored·permission, SCR-006 normal·error·200%, SCR-007 기록 없음·먹음, 나머지 화면 normal. 알림은 펼친 모양·잠금 화면·주 1회.\n\n아직 안 그린 상태: 위젯 empty·restored·reconfigure·clock, 각 화면 loading·stale, SCR-006 quiet·gone, SCR-007 already·locked·future. 08 화면 정의 4장대로 그 화면 작업(TASK-044 먼저)에서 그림.\n\n'스크롤 전체' 보드는 휴대폰 한 화면(800)보다 길어 아래를 스크롤해서 봄. 저장 버튼은 화면 아래에 붙어 있음."
+    },
+    "open": {
+      "x": 2640,
+      "y": 2500,
+      "w": 400,
+      "fill": "yellow",
+      "size": "m",
+      "text": "정할 것\n· 위젯 '더 있음': 지금은 넘칠 때 늘 보이는 작은 아래 화살표. 글자로 쓸지(REQ-078)\n· 위젯 최소 높이: 250×110이면 목록이 한 줄 남짓(REQ-026)\n· 글꼴을 앱에 넣을지(넣지 않으면 기기 기본 한글 글꼴)\n· 대상자 되살리기(04 열린 질문). 보드에는 [되살리기]를 그려 둠\n\n바꾼 것: [항목 추가]를 머리글이 아니라 목록 아래 큰 버튼으로 둠. 머리글은 지난 기록·설정."
+    }
+  }
+}

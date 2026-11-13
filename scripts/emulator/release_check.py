@@ -199,9 +199,20 @@ def place_widget(r: Report, tag: str) -> None:
 
 def try_place_widget(r: Report, tag: str) -> bool:
     """Places the widget; a failure is one failed check, and the flow goes on with in-app records
-    so the backup and update checks still run."""
+    so the backup and update checks still run.
+
+    Right after a boot or an install the launcher may not list the app's widget yet, or its long-press
+    menu may lack Widgets (PR #16 failed three times this way on 2026-11-12, and a rerun passed). So a
+    first failure waits 20 seconds on a fresh home screen and tries once more.
+    """
     try:
-        place_widget(r, tag)
+        try:
+            place_widget(r, tag)
+        except Exception as first:  # the launcher UI differs between images
+            r.note(f"위젯 놓기 ({tag}) 첫 시도 실패, 20초 뒤 한 번 더: {type(first).__name__}: {first}")
+            go_home()
+            time.sleep(20)
+            place_widget(r, f"{tag}-retry")
         return True
     except Exception as exc:  # the launcher UI differs between images
         r.check(f"위젯 놓기 ({tag})", f"홈 화면에 {WIDGET_LABEL} 위젯", f"{type(exc).__name__}: {exc}", False)

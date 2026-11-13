@@ -1,0 +1,74 @@
+# 에뮬레이터에서 앱을 사람처럼 써 보고 단계마다 화면을 찍음 (실사용 둘러보기).
+# 팀에 지금 쓸 Android 폰이 없어서(2026-11-12, 동희님은 아이폰) 화면을 보는 대신 씀.
+# 흐름과 이유는 scripts/emulator/explore.py 첫 주석. 출시 판정 검사가 아니라 둘러보기라서
+# 단계를 아예 못 할 때만 실패로 표시함. 화면이 어떤지는 사람이 캡처를 보고 docs/07-qa/에 씀.
+#
+# - 이 스크립트·워크플로를 바꾼 PR과 수동 실행에서만 돎 (약 25분, 무료 분 한도)
+# - 서명 키·비밀값을 쓰지 않음. 디버그 APK로 봄(DB를 root로 읽어 기록 수를 셈)
+name: 에뮬레이터 둘러보기
+
+on:
+  pull_request:
+    paths:
+      - scripts/emulator/explore.py
+      - .github/workflows/explore.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: explore-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  explore:
+    name: 둘러보기 (API 34)
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: gradle/actions/wrapper-validation@0723195856401067f7a2779048b490ace7a47d7c # v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: 디버그 APK (./gradlew :androidApp:assembleDebug)
+        run: |
+          ./gradlew :androidApp:assembleDebug
+          # 에뮬레이터와 CPU·메모리를 나누지 않게 Gradle 데몬을 끔 (2026-11-12 5회차의 시스템 ANR)
+          ./gradlew --stop
+
+      # KVM, 시스템 이미지, AVD를 준비하고 부팅을 기다림 (백업·복원 확인과 같은 액션)
+      - uses: ./.github/actions/android-emulator
+        with:
+          api: "34"
+          cores: "4"
+
+      - name: 둘러보기 (scripts/emulator/explore.py)
+        run: |
+          python3 scripts/emulator/explore.py \
+            --apk androidApp/build/outputs/apk/debug/androidApp-debug.apk \
+            --out "$RUNNER_TEMP/explore"
+
+      - name: 결과 표
+        if: ${{ !cancelled() }}
+        run: |
+          report="$RUNNER_TEMP/explore/report.md"
+          if [ -f "$report" ]; then cat "$report" >> "$GITHUB_STEP_SUMMARY"; else echo "보고서 없음" >> "$GITHUB_STEP_SUMMARY"; fi
+          cp "$RUNNER_TEMP/emulator.log" "$RUNNER_TEMP/explore/" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() }}
+        with:
+          name: explore-api34
+          path: ${{ runner.temp }}/explore/
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: ignore

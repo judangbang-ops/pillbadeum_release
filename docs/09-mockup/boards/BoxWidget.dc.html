@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>SCR-001 홈 화면 위젯 (4×2)</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;800&amp;family=Roboto:wght@400;600;800&amp;display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="box.css">
+<style>
+.w{width:350px;height:213px;box-sizing:border-box;padding:10px 12px;border-radius:var(--radius-widget);background:var(--color-surface-default);
+  font-family:Roboto,'Noto Sans KR',var(--font-family-base);font-size:var(--font-size-body-sm);color:var(--color-ink-default);word-break:keep-all;overflow-wrap:break-word;font-variant-numeric:tabular-nums;
+  display:flex;flex-direction:column;gap:var(--space-xs);overflow:hidden;position:relative}
+.w *{box-sizing:border-box}
+.hd{display:flex;flex-wrap:wrap;align-items:center;column-gap:var(--space-sm);row-gap:2px;padding:0 var(--space-2xs);flex-shrink:0}
+.w .dow{width:auto;height:auto;min-width:28px;min-height:28px;padding:0 var(--space-xs);line-height:1.2;border-radius:var(--radius-cell);font-size:var(--font-size-body-sm)}
+.date{font-weight:var(--font-weight-semibold)}
+.cnt{margin-left:auto;color:var(--color-ink-muted);white-space:nowrap}
+.cnt b{color:var(--color-ink-default);font-weight:var(--font-weight-extrabold)}
+.grid{display:grid;grid-auto-rows:max-content;gap:var(--space-xs);flex-grow:1;min-height:0;align-content:start}
+.t{position:relative;border:0;border-radius:var(--radius-tile);padding:var(--space-sm) 38px var(--space-sm) var(--space-md);text-align:left;display:flex;flex-direction:column;justify-content:center;gap:2px;min-height:64px;
+  background:var(--p-tint);color:var(--p-ink)}
+.t .who{font-weight:var(--font-weight-semibold);margin-right:5px;font-size:var(--font-size-body-sm)}
+.t .nm{font-weight:var(--font-weight-extrabold);line-height:var(--font-line-height-tight);font-size:var(--font-size-body)}
+.t .sub{line-height:var(--font-line-height-tight)}
+.t .ic{position:absolute;top:var(--space-sm);right:var(--space-sm);width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.t.todo .ic{border:var(--border-focus) dashed currentColor}
+.t.done{background:var(--p-solid);color:var(--color-ink-on-solid)}
+.t.done .ic{background:var(--color-ink-on-solid);color:var(--p-solid)}
+.t.skip{background:var(--color-surface-skip);color:var(--color-ink-muted)}
+.t.skip .ic{background:var(--color-line-strong);color:var(--color-ink-on-solid)}
+.more{position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:44px;height:18px;display:flex;align-items:center;justify-content:center;
+  background:var(--color-surface-default);border-radius:9px 9px 0 0;box-shadow:0 -1px 0 var(--color-line-subtle);color:var(--color-ink-muted)}
+</style>
+</helmet>
+<div class="w {{fs}}">
+  <div class="hd">
+    <span class="dow">목</span>
+    <span class="date">필받음 · 11/12</span>
+    <span class="cnt"><b>2 / 4</b> 완료 · 건너뜀 1</span>
+  </div>
+  <div class="grid" style="grid-template-columns: {{cols}}">
+    <div role="button" tabindex="0" class="t p1 done" aria-label="나, 아침약, 복용함, 오늘 08:02">
+      <span class="nm"><span class="who">나</span>아침약</span>
+      <span class="sub">08:02 먹음</span>
+      <span class="ic" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 7.3l2.6 2.6L11 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    </div>
+    <div role="button" tabindex="0" class="t p1 skip" aria-label="나, 비타민D, 건너뜀">
+      <span class="nm"><span class="who">나</span>비타민D</span>
+      <span class="sub">건너뜀</span>
+      <span class="ic" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 6h6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></span>
+    </div>
+    <div role="button" tabindex="0" class="t p2 todo" aria-label="엄마, 혈압약, 미완료, 마지막 복용 어제 21:40">
+      <span class="nm"><span class="who">엄마</span>혈압약</span>
+      <span class="sub">마지막 복용 어제&nbsp;21:40</span>
+      <span class="ic" aria-hidden="true"></span>
+    </div>
+    <div role="button" tabindex="0" class="t p2 todo" aria-label="엄마, 골다공증약, 주 1회, 미완료, 마지막 복용 11월 2일 월요일 08:10">
+      <span class="nm"><span class="who">엄마</span>골다공증약</span>
+      <span class="sub" style="font-weight: var(--font-weight-semibold)">마지막 복용 11/02(월) 08:10</span>
+      <span class="ic" aria-hidden="true"></span>
+    </div>
+  </div>
+  <div class="more" role="img" aria-label="더 있음" style="display: {{moreShow}}">
+    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"fontScale":{"editor":"enum","options":["100","200"],"default":"100"},"$preview":{"width":350,"height":213}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const big = (this.props.fontScale ?? '100') === '200';
+    return { fs: big ? 'fs200' : '', cols: big ? '1fr' : '1fr 1fr', moreShow: big ? 'flex' : 'none' };
+  }
+}
+</script>
+</body>
+</html>

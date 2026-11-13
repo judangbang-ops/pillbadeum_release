@@ -3,7 +3,8 @@
 
 Usage: python3 .github/scripts/check_docs.py [repository root]
 
-Reads docs/01-planning/requirements.md, docs/04-spec/record-rules-supplement.md,
+Reads docs/01-planning/requirements.md, docs/01-domain/domain.md (context IDs), docs/03-user-flow/FL-*.md
+(flows), docs/04-functional-spec/spec.md, docs/04-spec/record-rules-supplement.md,
 docs/05-ui/sitemap.yaml, docs/05-ui/screens.md, docs/08-wbs/wbs.md and every Markdown file
 under docs/ plus README.md. Standard library only. Prints the counts, then every problem it
 found, and exits with 1 when there is a problem. It changes nothing.
@@ -81,8 +82,8 @@ for line in req_md.splitlines():
         c = cells(line)
         if m.group(1) in rows:
             problem(f"requirements: duplicate {m.group(1)}")
-        if len(c) != 7:
-            problem(f"requirements: {m.group(1)} has {len(c)} cells, expected 7")
+        if len(c) != 8:
+            problem(f"requirements: {m.group(1)} has {len(c)} cells, expected 8")
         rows[m.group(1)] = c
 ids = sorted(rows)
 nums = [int(i[4:]) for i in ids]
@@ -99,10 +100,19 @@ for rid, r in rows.items():
         problem(f"requirements: {rid} kind '{r[2]}'")
     if not re.match(r"(Must|Should|Could)\b", r[3]):
         problem(f"requirements: {rid} priority '{r[3]}'")
-empty = [i for i, r in rows.items() if not all(r[k] for k in range(1, min(len(r), 7)))]
+empty = [i for i, r in rows.items() if not all(r[k] for k in range(1, min(len(r), 8)))]
 print("  rows with an empty cell:", empty or "none")
 if empty:
     problem(f"requirements: empty cells in {empty}")
+# The context column (02 stage, 2026-11-12) holds CTX IDs from the domain document, or 없음
+domain_ctx = set(re.findall(r"^\| (CTX-\d{3}) ", read("docs/01-domain/domain.md"), re.M))
+contexts = Counter()
+for rid, r in rows.items():
+    for ctx in r[4].split(", "):
+        contexts[ctx] += 1
+        if ctx != "없음" and ctx not in domain_ctx:
+            problem(f"requirements: {rid} context '{ctx}' is not a context in docs/01-domain/domain.md")
+print("  context:", dict(sorted(contexts.items())))
 functional = {i for i, r in rows.items() if r[2] == "기능"}
 must = {i for i, r in rows.items() if r[3].startswith("Must")}
 
@@ -113,7 +123,7 @@ expected_rr = list(range(26, defined_rr[-1] + 1)) if defined_rr else []
 print(f"supplement: counterexamples RR-{defined_rr[0]}..RR-{defined_rr[-1]}, {len(defined_rr)} rows")
 if defined_rr != expected_rr:
     problem(f"supplement: counterexample numbers are not RR-26.. without gaps: {defined_rr}")
-rr_in_reqs = set().union(*(rr_refs(r[5]) for r in rows.values()))
+rr_in_reqs = set().union(*(rr_refs(r[6]) for r in rows.values()))
 original_unlinked = sorted(set(range(1, 26)) - rr_in_reqs)
 supplement_unlinked = sorted(set(defined_rr) - rr_in_reqs)
 print(f"  RR-1..25 not linked from acceptance criteria: {original_unlinked}")
@@ -202,6 +212,234 @@ dupe_states = {s: [x for x, n in Counter(v).items() if n > 1] for s, v in states
 if any(dupe_states.values()):
     problem(f"screens: duplicate states {dupe_states}")
 
+# --- user flows (stage 03) ------------------------------------------------------------------
+flow_dir = root / "docs/03-user-flow"
+flow_files = sorted(flow_dir.glob("FL-*.md"))
+flow_reqs, flow_text, flow_ids = {}, "", []
+for path in flow_files:
+    text = path.read_text(encoding="utf-8")
+    flow_text += text + "\n"
+    rel = path.relative_to(root)
+    title = re.match(r"# (FL-\d{3}) ", text)
+    if not title or not path.name.startswith(title.group(1) + "-"):
+        problem(f"flows: {rel} title does not start with the FL id in its file name")
+        continue
+    fid = title.group(1)
+    flow_ids.append(fid)
+    blocks = re.findall(r"```mermaid\n(.*?)```", text, re.S)
+    if len(blocks) != 1:
+        problem(f"flows: {fid} has {len(blocks)} mermaid blocks, expected 1")
+        continue
+    diagram = blocks[0]
+    in_diagram = set(re.findall(r"REQ-\d{3}", diagram))
+    head = re.search(r"^- 쓰는 요구: (.*)$", text, re.M)
+    listed = set(re.findall(r"REQ-\d{3}", head.group(1))) if head else set()
+    if in_diagram != listed:
+        problem(f"flows: {fid} header and diagram name different requirements "
+                f"(diagram only {sorted(in_diagram - listed)}, header only {sorted(listed - in_diagram)})")
+    flow_reqs[fid] = in_diagram
+    # nodes and edges: A[...], B{...}, C([...]); edges 'X --> Y' or 'X -- label --> Y'
+    kinds_of = {}
+    for m in re.finditer(r"\b([A-Z][A-Z0-9]*)(\(\[|\[|\{)", diagram):
+        kinds_of.setdefault(m.group(1), {"([": "end", "[": "step", "{": "decision"}[m.group(2)])
+    out = Counter()
+    for line in diagram.splitlines():
+        m = re.match(r"\s*([A-Z][A-Z0-9]*)\b.*?(?:-->|-- .*? -->)\s*([A-Z][A-Z0-9]*)\b", line)
+        if m:
+            out[m.group(1)] += 1
+    for node, kind in kinds_of.items():
+        if kind == "decision" and out[node] < 2:
+            problem(f"flows: {fid} decision {node} has {out[node]} branch(es)")
+        if kind != "end" and out[node] == 0:
+            problem(f"flows: {fid} step {node} leads nowhere and is not an end")
+    if not any(k == "end" and out[n] == 0 for n, k in kinds_of.items()):
+        problem(f"flows: {fid} has no end")
+fnums = sorted(int(f[3:]) for f in flow_ids)
+print(f"flows: {len(flow_ids)} files" + (f", FL-{fnums[0]:03d}..FL-{fnums[-1]:03d}" if fnums else ""))
+if flow_files:
+    in_flows = set().union(*flow_reqs.values())
+    if in_flows - set(rows):
+        problem(f"flows: unknown requirement ids {sorted(in_flows - set(rows))}")
+    functional = {k for k, c in rows.items() if c[2] == "기능"}
+    no_flow_fn = sorted(functional - in_flows)
+    print(f"  functional requirements in no flow: {no_flow_fn or 'none'}")
+    if no_flow_fn:
+        problem(f"flows: functional requirements in no flow {no_flow_fn}")
+    readme = (flow_dir / "README.md").read_text(encoding="utf-8") if (flow_dir / "README.md").exists() else ""
+    # Only the "흐름 밖" section itself, up to the next "## " heading, lists outside requirements;
+    # later sections such as the confirmation record may name flow requirements.
+    outside_section = re.split(r"\n## ", readme.split("## 흐름 밖", 1)[1], maxsplit=1)[0] if "## 흐름 밖" in readme else ""
+    outside = set(re.findall(r"REQ-\d{3}", outside_section))
+    no_flow = sorted(set(rows) - in_flows)
+    unexplained = sorted(set(no_flow) - outside)
+    print(f"  requirements in no flow: {len(no_flow)}, not listed under '흐름 밖' in the README: {unexplained or 'none'}")
+    if unexplained:
+        problem(f"flows: requirements in no flow and not listed as outside {unexplained}")
+    wrongly_outside = sorted(outside & in_flows)
+    if wrongly_outside:
+        problem(f"flows: listed as outside but used by a flow {wrongly_outside}")
+    flow_scr = set(re.findall(r"SCR-\d{3}", flow_text))
+    if flow_scr - set(scr):
+        problem(f"flows: unknown screen ids {sorted(flow_scr - set(scr))}")
+
+# --- sitemap against flows and the glossary (stage 07) --------------------------------------
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import draw_sitemap  # noqa: E402
+
+site = draw_sitemap.parse(sitemap)
+scr_in_flow = {}
+for path in flow_files:
+    fid = path.name[:6]
+    for sid in set(re.findall(r"SCR-\d{3}", path.read_text(encoding="utf-8"))):
+        scr_in_flow.setdefault(sid, set()).add(fid)
+domain_md = read("docs/01-domain/domain.md")
+glossary = set(re.findall(r"^\| (TERM-\d{3}) ", domain_md, re.M))
+screen_terms = set()
+for s in site:
+    sid = s["id"]
+    if not s.get("access"):
+        problem(f"sitemap: {sid} does not say who can see it")
+    named = set(s.get("flows", []))
+    if flow_files and named != scr_in_flow.get(sid, set()):
+        problem(f"sitemap: {sid} flows {sorted(named)} differ from the flows that name it "
+                f"{sorted(scr_in_flow.get(sid, set()))}")
+    terms = s.get("terms", "none")
+    if terms != "none":
+        unknown = {t for t in terms if t not in glossary and t not in domain_ctx}
+        if unknown or not isinstance(terms, list):
+            problem(f"sitemap: {sid} terms {terms}")
+        screen_terms |= set(terms)
+    for link in s.get("links", []):
+        if link.partition(":")[0].strip() not in scr:
+            problem(f"sitemap: {sid} links to an unknown screen '{link}'")
+without_screen = re.search(r"^# without a screen: (.*?)(?=^#\s*$|^[^#])", sitemap, re.M | re.S)
+without_screen = set(re.findall(r"TERM-\d{3}", without_screen.group(1))) if without_screen else set()
+no_screen = sorted(glossary - screen_terms - without_screen)
+print(f"  sitemap: glossary terms with neither a screen nor a 'without a screen' line: {no_screen or 'none'}")
+if no_screen:
+    problem(f"sitemap: terms with no screen and no 'without a screen' entry {no_screen}")
+m = re.search(r"<!-- sitemap:start -->\n(.*?)\n<!-- sitemap:end -->", screens, re.S)
+if not m or m.group(1) != draw_sitemap.draw(site):
+    problem("screens: section 1 is not drawn from sitemap.yaml (run .github/scripts/draw_sitemap.py)")
+
+# --- functional spec (stage 04) -------------------------------------------------------------
+spec_path = root / "docs/04-functional-spec/spec.md"
+spec_text = ""
+if spec_path.exists():
+    spec_text = spec_path.read_text(encoding="utf-8")
+    specs = {}
+    for line in spec_text.splitlines():
+        m = re.match(r"\|\s*(SPEC-\d{3})\s*\|", line)
+        if not m:
+            continue
+        c = cells(line)
+        if m.group(1) in specs:
+            problem(f"spec: duplicate {m.group(1)}")
+        if len(c) != 8:
+            problem(f"spec: {m.group(1)} has {len(c)} cells, expected 8")
+            continue
+        specs[m.group(1)] = c
+    snums = sorted(int(s[5:]) for s in specs)
+    smissing = sorted(set(range(1, snums[-1] + 1)) - set(snums)) if snums else []
+    print(f"spec: {len(specs)} rows" + (f", SPEC-{snums[0]:03d}..SPEC-{snums[-1]:03d}" if snums else "")
+          + f", missing numbers: {smissing or 'none'}")
+    if smissing:
+        problem(f"spec: missing numbers {smissing}")
+    spec_reqs = set()
+    for sid, c in specs.items():
+        reqs_here = set(re.findall(r"REQ-\d{3}", c[2]))
+        flows_here = set(re.findall(r"FL-\d{3}", c[2]))
+        if not reqs_here or not flows_here:
+            problem(f"spec: {sid} needs at least one REQ and one FL in its source cell")
+        if reqs_here - set(rows):
+            problem(f"spec: {sid} names unknown requirements {sorted(reqs_here - set(rows))}")
+        if flows_here - set(flow_ids):
+            problem(f"spec: {sid} names unknown flows {sorted(flows_here - set(flow_ids))}")
+        if not c[5] or not c[6]:
+            problem(f"spec: {sid} has no exceptions or no acceptance criteria")
+        if c[7] not in {"초안", "고정", "제외"}:
+            problem(f"spec: {sid} status '{c[7]}'")
+        bad_rr = sorted(n for n in rr_refs(c[6]) if n > 25 and n not in defined_rr)
+        if bad_rr:
+            problem(f"spec: {sid} names counterexamples that do not exist {bad_rr}")
+        spec_reqs |= reqs_here
+    fn_must = {k for k, c in rows.items() if c[2] == "기능" and c[3].startswith("Must")}
+    no_spec = sorted(fn_must - spec_reqs)
+    print(f"  functional Must requirements without a SPEC row: {no_spec or 'none'}")
+    if no_spec:
+        problem(f"spec: functional Must requirements without a SPEC row {no_spec}")
+    fn_other = sorted({k for k, c in rows.items() if c[2] == "기능"} - fn_must - spec_reqs)
+    print(f"  other functional requirements without a SPEC row: {fn_other or 'none'}")
+    # Stage 08: each screen names the SPEC rows it shows; the rest run in the background
+    on_screens = set()
+    for sid, body in zip(sections[1::2], sections[2::2]):
+        line = re.search(r"^명세: (.*)$", body.split("\n## ")[0], re.M)
+        if not line:
+            problem(f"screens: {sid} has no '명세:' line")
+            continue
+        named = set(re.findall(r"SPEC-\d{3}", line.group(1)))
+        if named - set(specs):
+            problem(f"screens: {sid} names unknown specs {sorted(named - set(specs))}")
+        on_screens |= named
+    background = re.search(r"화면 없이 뒤에서 도는 명세는 (.*?)임", screens)
+    background = set(re.findall(r"SPEC-\d{3}", background.group(1))) if background else set()
+    unplaced = sorted(set(specs) - on_screens - background)
+    print(f"  spec rows on no screen and not listed as background: {unplaced or 'none'}")
+    if unplaced:
+        problem(f"screens: spec rows on no screen and not listed as background {unplaced}")
+
+# --- data model (stage 05) ------------------------------------------------------------------
+# db/schema.sql copies the CREATE statements of the newest Room schema export word for word and
+# adds a TBL comment per table; this keeps the two from drifting apart.
+schema_path = root / "db/schema.sql"
+if schema_path.exists():
+    schema_sql = schema_path.read_text(encoding="utf-8")
+    exports = sorted((root / "shared/schemas/com.judangbang.pillbadeum.data.DidITakeDatabase").glob("*.json"),
+                     key=lambda p: int(p.stem))
+    room = json.loads(exports[-1].read_text(encoding="utf-8"))["database"]
+    room_tables = {e["tableName"]: e for e in room["entities"]}
+    for name, e in room_tables.items():
+        for stmt in [e["createSql"]] + [i["createSql"] for i in e.get("indices", [])]:
+            if stmt.replace("${TABLE_NAME}", name) + ";" not in schema_sql:
+                problem(f"schema: {name} differs from {exports[-1].name}: {stmt[:60]}...")
+    sql_tables = re.findall(r"^CREATE TABLE IF NOT EXISTS `(\w+)`", schema_sql, re.M)
+    if sorted(sql_tables) != sorted(room_tables):
+        problem(f"schema: tables {sorted(sql_tables)} differ from {exports[-1].name} {sorted(room_tables)}")
+    domain_terms = set(re.findall(r"^\| (TERM-\d{3}) ", read("docs/01-domain/domain.md"), re.M))
+    tbl_re = re.compile(r"^-- (TBL-\d{3}) (\w+) \(([^)]*)\) ← (.*?) \| terms: (.*)$", re.M)
+    tbls = tbl_re.findall(schema_sql)
+    print(f"schema: {len(tbls)} tables from {exports[-1].name} (version {room['version']})")
+    seen_terms = set()
+    for tid, name, ctx, spec_list, terms in tbls:
+        after = schema_sql[schema_sql.index(f"-- {tid} "):]
+        if not re.search(rf"^CREATE TABLE IF NOT EXISTS `{name}`", after.split("\n\n")[0], re.M):
+            problem(f"schema: {tid} comment is not right above CREATE TABLE `{name}`")
+        if ctx != "2차" and set(re.findall(r"CTX-\d{3}", ctx)) - domain_ctx:
+            problem(f"schema: {tid} names unknown contexts {ctx}")
+        if spec_list != "없음":
+            bad = set(re.findall(r"SPEC-\d{3}", spec_list)) - set(specs)
+            if bad or not re.findall(r"SPEC-\d{3}", spec_list):
+                problem(f"schema: {tid} names unknown or no specs {sorted(bad)}")
+        tt = set(re.findall(r"TERM-\d{3}", terms))
+        if tt - domain_terms or (not tt and terms != "none"):
+            problem(f"schema: {tid} terms '{terms}'")
+        seen_terms |= tt
+    if [t[0] for t in tbls] != [f"TBL-{n:03d}" for n in range(1, len(tbls) + 1)]:
+        problem(f"schema: TBL numbers out of order {[t[0] for t in tbls]}")
+    if sorted(t[1] for t in tbls) != sorted(room_tables):
+        problem("schema: not every table has exactly one TBL comment")
+    without = re.search(r"^-- without a table: (.*?)(?=^--\s*$|^\s*$)", schema_sql, re.M | re.S)
+    without_terms = set(re.findall(r"TERM-\d{3}", without.group(1))) if without else set()
+    no_home = sorted(domain_terms - seen_terms - without_terms)
+    print(f"  glossary terms with neither a table nor a 'without a table' line: {no_home or 'none'}")
+    if no_home:
+        problem(f"schema: terms with no table and no 'without a table' entry {no_home}")
+    if without_terms - domain_terms:
+        problem(f"schema: unknown terms in 'without a table' {sorted(without_terms - domain_terms)}")
+    erd_map = set(re.findall(r"^\| (SPEC-\d{3}) \|", read("docs/05-erd/README.md"), re.M))
+    if set(specs) - erd_map:
+        problem(f"erd: docs/05-erd/README.md 3장 lacks {sorted(set(specs) - erd_map)}")
+
 # --- work breakdown -------------------------------------------------------------------------
 wbs = read("docs/08-wbs/wbs.md")
 tasks = {}
@@ -239,8 +477,22 @@ untested = sorted(set(defined_rr) - rr_in_wbs)
 print(f"  RR-26..{defined_rr[-1]} not named by any task: {untested or 'none'}")
 if untested:
     problem(f"wbs: counterexamples no task tests {untested}")
+# Stage 10: wbs.md section 2 maps every SPEC row to the tasks that build or check it
+if spec_text:
+    spec_task = {}
+    for line in wbs.splitlines():
+        m = re.match(r"\|\s*(SPEC-\d{3})\s*\|(.*)\|\s*$", line)
+        if m:
+            spec_task[m.group(1)] = set(re.findall(r"TASK-\d{3}", m.group(2)))
+    no_task_spec = sorted(s for s in specs if not spec_task.get(s))
+    print(f"  spec rows without a task in wbs.md section 2: {no_task_spec or 'none'}")
+    if no_task_spec:
+        problem(f"wbs: spec rows without a task {no_task_spec}")
+    for s, named in spec_task.items():
+        if s not in specs or named - set(tasks):
+            problem(f"wbs: section 2 row {s} names unknown ids {sorted(named - set(tasks))}")
 state_refs = set()
-for text in (wbs, req_md, screens, supplement):
+for text in (wbs, req_md, screens, supplement, flow_text, spec_text):
     state_refs |= set(re.findall(r"(SCR-\d{3})#([a-z]+)", text))
 unknown_states = sorted(f"{s}#{x}" for s, x in state_refs if x not in states.get(s, []))
 print(f"  state references that screens.md does not define: {unknown_states or 'none'}")
@@ -295,6 +547,33 @@ for end in ("TASK-038", "TASK-039"):
         days, chain = longest(end)
         print(f"  longest dependency chain ending at {end} (open-ended tasks count 0): {days}일 = {' > '.join(chain)}")
 
+# --- QA test plan (stage 12) ---------------------------------------------------------------
+plan_path = root / "docs/12-qa/test-plan.md"
+if plan_path.exists():
+    plan = plan_path.read_text(encoding="utf-8")
+    tcs = {}
+    for line in plan.splitlines():
+        m = re.match(r"\|\s*(TC-\d{3})\s*\|", line)
+        if m:
+            c = cells(line)
+            if m.group(1) in tcs:
+                problem(f"qa: duplicate {m.group(1)}")
+            if len(c) != 5 or not all(c):
+                problem(f"qa: {m.group(1)} needs 5 filled cells")
+            tcs[m.group(1)] = c
+    basis = " ".join(c[2] for c in tcs.values())
+    nf_must = {k for k, c in rows.items() if c[2] == "비기능" and c[3].startswith("Must")}
+    gaps = {
+        "spec rows": sorted(set(specs) - set(re.findall(r"SPEC-\d{3}", basis))) if spec_text else [],
+        "flows": sorted(set(flow_ids) - set(re.findall(r"FL-\d{3}", basis))),
+        "non-functional Must requirements": sorted(nf_must - set(re.findall(r"REQ-\d{3}", basis))),
+        "screen states": sorted(f"{s}#{x}" for s, v in states.items() for x in v if f"{s}#{x}" not in basis),
+    }
+    print(f"qa: {len(tcs)} test cases; " + ", ".join(f"{k} without a case: {v or 'none'}" for k, v in gaps.items()))
+    for k, v in gaps.items():
+        if v:
+            problem(f"qa: {k} without a test case {v}")
+
 # --- project settings -----------------------------------------------------------------------
 project = json.loads(read(".corthex/project.json"))
 for key, stage in project.get("stages", {}).items():
@@ -316,6 +595,57 @@ def slugs(path):
             seen[s] += 1
     return found
 
+
+# 09 design tokens (DTCG 2025.10) and the mockup boards that use them
+tokens_path = root / "design" / "base.tokens.json"
+token_vars = set()
+if tokens_path.exists():
+    tokens = json.loads(tokens_path.read_text(encoding="utf-8"))
+
+    def walk_tokens(node, trail, inherited):
+        kind = node.get("$type", inherited)
+        if "$value" in node:
+            name = ".".join(trail)
+            value = node["$value"]
+            if kind is None:
+                problem(f"tokens: {name} has no $type")
+            elif kind == "color":
+                comps = value.get("components") if isinstance(value, dict) else None
+                if not (isinstance(value, dict) and value.get("colorSpace") == "srgb" and isinstance(comps, list)
+                        and len(comps) == 3 and all(isinstance(c, (int, float)) and 0 <= c <= 1 for c in comps)):
+                    problem(f"tokens: {name} is not an srgb colour object")
+            elif kind == "dimension":
+                if not (isinstance(value, dict) and isinstance(value.get("value"), (int, float)) and value.get("unit") in ("px", "rem")):
+                    problem(f"tokens: {name} is not a dimension with value and px/rem unit")
+            token_vars.add("--" + "-".join(trail))
+            for key in node:
+                if not key.startswith("$"):
+                    problem(f"tokens: {name} has $value and also a child '{key}'")
+            return
+        for key, child in node.items():
+            if not key.startswith("$"):
+                if isinstance(child, dict):
+                    walk_tokens(child, trail + [key], kind)
+                else:
+                    problem(f"tokens: {'.'.join(trail + [key])} is neither a group nor a token")
+
+    walk_tokens(tokens, [], None)
+    boards = root / "docs" / "09-mockup" / "boards"
+    if boards.is_dir():
+        css_vars = set(re.findall(r"(--[a-z0-9-]+):", (boards / "tokens.css").read_text(encoding="utf-8")))
+        if css_vars != token_vars:
+            problem(f"tokens: boards/tokens.css is out of date (run gen_css.py): differs in {sorted(css_vars ^ token_vars)[:5]}")
+        # Boards use token names. Local helpers are --p-* (person colour picked per row).
+        # Notif.dc.html draws the system notification shade, whose colours the device sets.
+        for page in sorted(boards.glob("*.dc.html")) + [boards / "box.css"]:
+            text = page.read_text(encoding="utf-8")
+            for used in sorted(set(re.findall(r"var\((--[a-z0-9-]+)\)", text))):
+                if used not in token_vars and not used.startswith("--p-"):
+                    problem(f"tokens: {page.relative_to(root)} uses {used}, which is not a token")
+            if page.name != "Notif.dc.html":
+                for hex_value in sorted(set(re.findall(r"#[0-9A-Fa-f]{6}\b|#[0-9A-Fa-f]{3}\b", re.sub(r"<title>.*?</title>", "", text)))):
+                    problem(f"tokens: {page.relative_to(root)} uses the raw colour {hex_value} instead of a token")
+    print(f"tokens: {len(token_vars)} tokens in design/base.tokens.json, boards checked")
 
 md_files = sorted((root / "docs").rglob("*.md")) + [root / "README.md"]
 link_count, table_count = 0, 0

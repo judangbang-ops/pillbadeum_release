@@ -1,0 +1,409 @@
+[
+ {
+  "board": "JudgeSheet",
+  "fontsLoaded": 36,
+  "pageCheck": {
+   "error": 0,
+   "warn": 0
+  },
+  "issues": [],
+  "variants": [
+   {
+    "v": "none-100",
+    "clipped": [],
+    "frameCut": null,
+    "list": null
+   },
+   {
+    "v": "none-200",
+    "clipped": [],
+    "frameCut": null,
+    "list": null
+   },
+   {
+    "v": "taken-100",
+    "clipped": [],
+    "frameCut": null,
+    "list": null
+   },
+   {
+    "v": "taken-200",
+    "clipped": [],
+    "frameCut": null,
+    "list": null
+   },
+   {
+    "v": "skipped-100",
+    "clipped": [],
+    "frameCut": null,
+    "list": null
+   },
+   {
+    "v": "skipped-200",
+    "clipped": [],
+    "frameCut": null,
+    "list": null
+   },
+   {
+    "v": "locked-100",
+    "clipped": [],
+    "frameCut": null,
+    "list": null
+   },
+   {
+    "v": "locked-200",
+    "clipped": [],
+    "frameCut": null,
+    "list": null
+   }
+  ]
+ },
+ {
+  "board": "LockSheet",
+  "fontsLoaded": 51,
+  "pageCheck": {
+   "error": 0,
+   "warn": 8
+  },
+  "issues": [
+   "warn contrast-image: Text over an image, a gradient or another box: check by hand at the worst spot \"8:00\"",
+   "warn contrast-image: Text over an image, a gradient or another box: check by hand at the worst spot \"11월 12일 목요일\"",
+   "warn contrast-image: Text over an image, a gradient or another box: check by hand at the worst spot \"8:00\"",
+   "warn contrast-image: Text over an image, a gradient or another box: check by hand at the worst spot \"11월 12일 목요일\"",
+   "warn contrast-image: Text over an image, a gradient or another box: check by hand at the worst spot \"8:00\"",
+   "warn contrast-image: Text over an image, a gradient or another box: check by hand at the worst spot \"11월 12일 목요일\"",
+   "warn contrast-image: Text over an image, a gradient or another box: check by hand at the worst spot \"8:00\"",
+   "warn contrast-image: Text over an image, a gradient or another box: check by hand at the worst spot \"11월 12일 목요일\""
+  ],
+  "variants": [
+   {
+    "v": "lock-off-show-locked",
+    "clipped": [],
+    "frameCut": null,
+    "list": null
+   },
+   {
+    "v": "lock-off-show-open",
+    "clipped": [],
+    "frameCut": null,
+    "list": null
+   },
+   {
+    "v": "lock-off-hide-locked",
+    "clipped": [],
+    "frameCut": null,
+    "list": null
+   },
+   {
+    "v": "lock-off-hide-open",
+    "clipped": [],
+    "frameCut": null,
+    "list": null
+   },
+   {
+    "v": "lock-on-show-locked",
+    "clipped": [],
+    "frameCut": null,
+    "list": null
+   },
+   {
+    "v": "lock-on-show-open",
+    "clipped": [],
+    "frameCut": null,
+    "list": null
+   },
+   {
+    "v": "lock-on-hide-locked",
+    "clipped": [],
+    "frameCut": null,
+    "list": null
+   },
+   {
+    "v": "lock-on-hide-open",
+    "clipped": [],
+    "frameCut": null,
+    "list": null
+   }
+  ]
+ },
+ {
+  "board": "WidgetSheet",
+  "fontsLoaded": 39,
+  "pageCheck": {
+   "error": 20,
+   "warn": 20
+  },
+  "issues": [
+   "warn orphan: Heading or short text ends with one short word on its last line (orphan): 건너뜀 \"마지막 복용 11/10(화) 21:40 어제 건너뜀\"",
+   "error text-clipped: Text cut off by a box around it (overflow hidden): div.cols > figure:nth-of-type(2) > div.w.fs200 > div.list:nth-of-type(2) \"08:02 먹음\"",
+   "error hangul-split: Korean word split at a line end: 건너|뜀 \"건너뜀\"",
+   "error text-clipped: Text cut off by a box around it (overflow hidden): div.cols > figure:nth-of-type(2) > div.w.fs200 > div.list:nth-of-type(2) \"건너뜀\"",
+   "error hangul-split: Korean word split at a line end: 마지|막 복용 1 \"마지막 복용 11/10(화) 21:40 어제 건너뜀\"",
+   "warn latin-split: Latin or digit run split at a line end: 용 11/1|0(화) 2 \"마지막 복용 11/10(화) 21:40 어제 건너뜀\"",
+   "error hangul-split: Korean word split at a line end:  어제 건너|뜀 \"마지막 복용 11/10(화) 21:40 어제 건너뜀\"",
+   "error text-clipped: Text cut off by a box around it (overflow hidden): div.cols > figure:nth-of-type(2) > div.w.fs200 > div.list:nth-of-type(2) \"마지막 복용 11/10(화) 21:40 어제 건너뜀\"",
+   "warn orphan: Heading or short text ends with one short word on its last line (orphan): 뜀 \"마지막 복용 11/10(화) 21:40 어제 건너뜀\"",
+   "error hangul-split: Korean word split at a line end: 마지|막 복용 1 \"마지막 복용 11/02(월) 08:10\"",
+   "warn latin-split: Latin or digit run split at a line end: 용 11/0|2(월) 0 \"마지막 복용 11/02(월) 08:10\"",
+   "warn latin-split: Latin or digit run split at a line end: ) 08:1|0 \"마지막 복용 11/02(월) 08:10\"",
+   "error text-clipped: Text cut off by a box around it (overflow hidden): div.cols > figure:nth-of-type(2) > div.w.fs200 > div.list:nth-of-type(2) \"마지막 복용 11/02(월) 08:10\"",
+   "warn orphan: Heading or short text ends with one short word on its last line (orphan): 0 \"마지막 복용 11/02(월) 08:10\"",
+   "warn orphan: Heading or short text ends with one short word on its last line (orphan): 건너뜀 \"마지막 복용 11/10(화) 21:40 어제 건너뜀\"",
+   "error text-clipped: Text cut off by a box around it (overflow hidden): div.cols > figure:nth-of-type(4) > div.w.fs200 > div.list:nth-of-type(2) \"08:02 먹음\"",
+   "error hangul-split: Korean word split at a line end: 건너|뜀 \"건너뜀\"",
+   "error text-clipped: Text cut off by a box around it (overflow hidden): div.cols > figure:nth-of-type(4) > div.w.fs200 > div.list:nth-of-type(2) \"건너뜀\"",
+   "error hangul-split: Korean word split at a line end: 마지|막 복용 1 \"마지막 복용 11/10(화) 21:40 어제 건너뜀\"",
+   "warn latin-split: Latin or digit run split at a line end: 용 11/1|0(화) 2 \"마지막 복용 11/10(화) 21:40 어제 건너뜀\"",
+   "error hangul-split: Korean word split at a line end:  어제 건너|뜀 \"마지막 복용 11/10(화) 21:40 어제 건너뜀\"",
+   "error text-clipped: Text cut off by a box around it (overflow hidden): div.cols > figure:nth-of-type(4) > div.w.fs200 > div.list:nth-of-type(2) \"마지막 복용 11/10(화) 21:40 어제 건너뜀\"",
+   "warn orphan: Heading or short text ends with one short word on its last line (orphan): 뜀 \"마지막 복용 11/10(화) 21:40 어제 건너뜀\"",
+   "error hangul-split: Korean word split at a line end: 마지|막 복용 1 \"마지막 복용 11/02(월) 08:10\"",
+   "warn latin-split: Latin or digit run split at a line end: 용 11/0|2(월) 0 \"마지막 복용 11/02(월) 08:10\"",
+   "warn latin-split: Latin or digit run split at a line end: ) 08:1|0 \"마지막 복용 11/02(월) 08:10\"",
+   "error text-clipped: Text cut off by a box around it (overflow hidden): div.cols > figure:nth-of-type(4) > div.w.fs200 > div.list:nth-of-type(2) \"마지막 복용 11/02(월) 08:10\"",
+   "warn orphan: Heading or short text ends with one short word on its last line (orphan): 0 \"마지막 복용 11/02(월) 08:10\"",
+   "error text-clipped: Text cut off by a box around it (overflow hidden): div.cols > figure:nth-of-type(6) > div.w.fs200 > div.list:nth-of-type(2) \"나비타민D\"",
+   "error text-clipped: Text cut off by a box around it (overflow hidden): div.sheet > div.cols > figure:nth-of-type(7) > div.w \"어제 건너뜀\"",
+   "error text-clipped: Text cut off by a box around it (overflow hidden): div.cols > figure:nth-of-type(7) > div.w > div.list:nth-of-type(2) \"마지막 복용 11/02(월) 08:10\"",
+   "error text-clipped: Text cut off by a box around it (overflow hidden): div.cols > figure:nth-of-type(8) > div.w.fs200 > div.list:nth-of-type(2) \"나비타민D\"",
+   "warn contrast-image: Text over an image, a gradient or another box: check by hand at the worst spot \"나비타민D\"",
+   "warn contrast-image: Text over an image, a gradient or another box: check by hand at the worst spot \"엄마\"",
+   "warn contrast-image: Text over an image, a gradient or another box: check by hand at the worst spot \"엄마혈압약\"",
+   "warn contrast-image: Text over an image, a gradient or another box: check by hand at the worst spot \"마지막 복용 11/10(화) 21:40\"",
+   "warn contrast-image: Text over an image, a gradient or another box: check by hand at the worst spot \"어제 건너뜀\"",
+   "warn contrast-image: Text over an image, a gradient or another box: check by hand at the worst spot \"엄마\"",
+   "warn contrast-image: Text over an image, a gradient or another box: check by hand at the worst spot \"엄마골다공증약\"",
+   "warn contrast-image: Text over an image, a gradient or another box: check by hand at the worst spot \"나비타민D\""
+  ],
+  "variants": [
+   {
+    "v": "four-100",
+    "clipped": [
+     {
+      "axis": "y",
+      "text": "마지막 복용 11/10(화) 21:40 어제 건너뜀"
+     },
+     {
+      "axis": "x",
+      "text": "골다공증약"
+     },
+     {
+      "axis": "y",
+      "text": "마지막 복용 11/02(월) 08:10"
+     }
+    ],
+    "frameCut": null,
+    "list": {
+     "height": 159,
+     "content": 159,
+     "tiles": 4,
+     "full": 4,
+     "partly": 0
+    },
+    "head": 28,
+    "longestUnit": {
+     "unit": "11/02(월) 08:10",
+     "width": 113,
+     "room": 69,
+     "over": 44
+    }
+   },
+   {
+    "v": "four-200",
+    "clipped": [
+     {
+      "axis": "x",
+      "text": "아침약"
+     },
+     {
+      "axis": "x",
+      "text": "비타민D"
+     },
+     {
+      "axis": "x",
+      "text": "혈압약"
+     },
+     {
+      "axis": "y",
+      "text": "마지막 복용 11/10(화) 21:40 어제 건너뜀"
+     },
+     {
+      "axis": "x",
+      "text": "골다공증약"
+     },
+     {
+      "axis": "y",
+      "text": "마지막 복용 11/02(월) 08:10"
+     }
+    ],
+    "frameCut": null,
+    "list": {
+     "height": 111,
+     "content": 165,
+     "tiles": 4,
+     "full": 0,
+     "partly": 4
+    },
+    "head": 76,
+    "longestUnit": {
+     "unit": "11/02(월) 08:10",
+     "width": 199,
+     "room": 69,
+     "over": 130
+    }
+   },
+   {
+    "v": "four-100-msg",
+    "clipped": [
+     {
+      "axis": "y",
+      "text": "마지막 복용 11/10(화) 21:40 어제 건너뜀"
+     },
+     {
+      "axis": "x",
+      "text": "골다공증약"
+     },
+     {
+      "axis": "y",
+      "text": "마지막 복용 11/02(월) 08:10"
+     }
+    ],
+    "frameCut": null,
+    "list": {
+     "height": 136,
+     "content": 136,
+     "tiles": 4,
+     "full": 4,
+     "partly": 0
+    },
+    "head": 51,
+    "longestUnit": {
+     "unit": "11/02(월) 08:10",
+     "width": 113,
+     "room": 69,
+     "over": 44
+    }
+   },
+   {
+    "v": "four-200-msg",
+    "clipped": [
+     {
+      "axis": "x",
+      "text": "아침약"
+     },
+     {
+      "axis": "x",
+      "text": "비타민D"
+     },
+     {
+      "axis": "x",
+      "text": "혈압약"
+     },
+     {
+      "axis": "y",
+      "text": "마지막 복용 11/10(화) 21:40 어제 건너뜀"
+     },
+     {
+      "axis": "x",
+      "text": "골다공증약"
+     },
+     {
+      "axis": "y",
+      "text": "마지막 복용 11/02(월) 08:10"
+     }
+    ],
+    "frameCut": null,
+    "list": {
+     "height": 102,
+     "content": 165,
+     "tiles": 4,
+     "full": 0,
+     "partly": 4
+    },
+    "head": 85,
+    "longestUnit": {
+     "unit": "11/02(월) 08:10",
+     "width": 199,
+     "room": 69,
+     "over": 130
+    }
+   },
+   {
+    "v": "box-100",
+    "clipped": [],
+    "frameCut": null,
+    "list": {
+     "height": 159,
+     "content": 167,
+     "tiles": 4,
+     "full": 2,
+     "partly": 2
+    },
+    "head": 28,
+    "longestUnit": {
+     "unit": "11/02(월) 08:10",
+     "width": 113,
+     "room": 140,
+     "over": -27
+    }
+   },
+   {
+    "v": "box-200",
+    "clipped": [],
+    "frameCut": null,
+    "list": {
+     "height": 111,
+     "content": 465,
+     "tiles": 4,
+     "full": 1,
+     "partly": 1
+    },
+    "head": 76,
+    "longestUnit": {
+     "unit": "11/02(월) 08:10",
+     "width": 199,
+     "room": 306,
+     "over": -107
+    }
+   },
+   {
+    "v": "box-100-msg",
+    "clipped": [],
+    "frameCut": null,
+    "list": {
+     "height": 136,
+     "content": 167,
+     "tiles": 4,
+     "full": 2,
+     "partly": 2
+    },
+    "head": 51,
+    "longestUnit": {
+     "unit": "11/02(월) 08:10",
+     "width": 113,
+     "room": 140,
+     "over": -27
+    }
+   },
+   {
+    "v": "box-200-msg",
+    "clipped": [],
+    "frameCut": null,
+    "list": {
+     "height": 102,
+     "content": 465,
+     "tiles": 4,
+     "full": 1,
+     "partly": 1
+    },
+    "head": 85,
+    "longestUnit": {
+     "unit": "11/02(월) 08:10",
+     "width": 199,
+     "room": 306,
+     "over": -107
+    }
+   }
+  ]
+ }
+]

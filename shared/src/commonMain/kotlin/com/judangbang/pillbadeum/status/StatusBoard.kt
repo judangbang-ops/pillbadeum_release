@@ -8,19 +8,30 @@ import com.judangbang.pillbadeum.data.ScheduleParams
 import com.judangbang.pillbadeum.data.SettingDao
 import com.judangbang.pillbadeum.data.SettingKeys
 import com.judangbang.pillbadeum.data.loadWindowSettings
+import com.judangbang.pillbadeum.domain.DoseKind
 import com.judangbang.pillbadeum.domain.ScheduleRule
 import com.judangbang.pillbadeum.domain.SlotLabel
 import com.judangbang.pillbadeum.domain.Window
 import com.judangbang.pillbadeum.domain.WindowSettings
 import com.judangbang.pillbadeum.domain.logicalDateOf
 import com.judangbang.pillbadeum.domain.mondayToSunday
+import com.judangbang.pillbadeum.domain.nextDayBoundary
 import com.judangbang.pillbadeum.domain.windowOf
 import com.judangbang.pillbadeum.restore.CheckInstall
 import com.judangbang.pillbadeum.usecase.FlagClockMismatch
+import com.judangbang.pillbadeum.usecase.ReminderChoice
 import com.judangbang.pillbadeum.usecase.findActiveIn
 import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
+
+/**
+ * One rule for the widget, the app screens and history (REQ-018, SPEC-005, SPEC-027, TASK-015): person
+ * badges, the person filters and the person's name in TalkBack sentences appear only while two or more
+ * people are not archived. [activePeople] counts the people that are not archived.
+ */
+fun showsPeople(activePeople: Int): Boolean = activePeople >= 2
 
 /** Read-only snapshot for the widget and the app's "오늘 · 이번 주" screen. */
 data class StatusBoard(
@@ -39,9 +50,34 @@ data class StatusBoard(
      * supplement C-2). The app shows each one until [그대로 두기] or [기록 취소], even after its day comes.
      */
     val clockWarnings: List<ClockWarning> = emptyList(),
+
+    /**
+     * Two or more people are not archived: badges are shown and TalkBack reads the person before the item
+     * (REQ-018, supplement S-4). Counted over every active person, also on a widget that shows one person.
+     */
+    val showPeople: Boolean = true,
+
+    /** People who are not archived, oldest first: the choices of the widget's person picker (SCR-002, TASK-012). */
+    val people: List<PersonEntity> = emptyList(),
+
+    /**
+     * Some item that is not archived, of a person who is not archived, has reminders on: only then does the first screen
+     * say that reminders cannot come (SCR-004#permission, REQ-089, SPEC-029, TASK-026).
+     */
+    val remindersOn: Boolean = false,
 ) {
-    val doneCount: Int get() = items.count { it.isDone }
+    /** `n` of `n / m 완료`: doses only, skips are counted apart (supplement S-1, REQ-020). */
+    val doneCount: Int get() = items.count { it.isTaken }
+
+    /** `k` of `· 건너뜀 k` (S-1). */
+    val skippedCount: Int get() = items.count { it.isSkipped }
     val totalCount: Int get() = items.size
+
+    /**
+     * The next day start after [now] in the base zone: from then on this board shows the wrong day (SCR-004#stale,
+     * TASK-017). Daily and weekly windows both end at a day start, so the board needs no other timer.
+     */
+    val staleAt: Instant get() = nextDayBoundary(now, settings)
 }
 
 data class IntakeStatus(
@@ -51,11 +87,16 @@ data class IntakeStatus(
     val slotLabel: SlotLabel?,
     val person: PersonEntity,
     val rule: ScheduleRule,
+    /**
+     * The schedule version in effect now, whose window [window] is. With the period key it names the cell `[⋯]` opens on
+     * SCR-007 (supplement P-1, TASK-018).
+     */
+    val scheduleVersionId: String,
     /** Current window; its period key is the one a widget button is rendered with. */
     val window: Window,
     /** Active judgment of [window], null while pending. */
     val judgment: DoseRecordEntity?,
-    /** Latest active judgment taken before [window] started ("마지막 ..."). */
+    /** Latest active judgment of either kind taken before [window] started. */
     val lastBefore: DoseRecordEntity?,
     /** Mon..Sun cells for daily items; empty for weekly items. */
     val weekCells: List<DayCell>,
@@ -64,14 +105,35 @@ data class IntakeStatus(
      * a tap still changes nothing (`Already`). Only the current window's judgment can set it (C-2).
      */
     val clockWarning: Boolean = false,
+    /** Latest active dose (not a skip) taken before [window] started: "마지막 복용" (supplement S-2, W-2). */
+    val lastTaken: DoseRecordEntity? = lastBefore?.takeIf { it.kind == DoseKind.TAKEN },
+    /**
+     * The item's saved reminder switch and first time, which the item screen starts from (SCR-006, TASK-023). Null while
+     * the item has no `reminder_rule` row: off, with the time of its label (supplement N-3).
+     */
+    val reminder: ReminderChoice? = null,
 ) {
+    /** The window has an active judgment, a dose or a skip; a widget tap then changes nothing (`Already`). */
     val isDone: Boolean get() = judgment != null
+
+    /** The window's judgment is a dose (S-1: counted as 완료). */
+    val isTaken: Boolean get() = judgment?.kind == DoseKind.TAKEN
+
+    /** The window's judgment is a skip (S-3: grey filled circle and `건너뜀`, counted apart). */
+    val isSkipped: Boolean get() = judgment?.kind == DoseKind.SKIPPED
+
+    /** [lastBefore] when it is a skip later than [lastTaken]: the `어제 건너뜀` line (S-2, W-2). */
+    val laterSkip: DoseRecordEntity?
+        get() = lastBefore?.takeIf { it.kind == DoseKind.SKIPPED && (lastTaken == null || it.takenAt > lastTaken.takenAt) }
 
     /** Short name for the widget: the alias when set. */
     val displayName: String get() = widgetAlias ?: name
 
     /** When the next window opens (weekly: the next anchor day at the day start). */
     val nextWindowStart: Instant get() = window.end
+
+    /** The window's first day, its period key: the base date of a daily item, the anchor day of a weekly one. */
+    val windowDay: LocalDate get() = LocalDate.parse(window.periodKey)
 }
 
 /** One unanswered clock warning (supplement C-2, SCR-004#future). */
@@ -81,9 +143,13 @@ data class ClockWarning(
     val person: PersonEntity,
 )
 
+/** A day of a daily item in the app's week box (SCR-004 `이번 주 약통`, 09 BoxHome). */
 enum class DayState {
-    /** An active judgment exists for that day. */
+    /** The day has an active dose: a cell filled with the person's color. */
     DONE,
+
+    /** The day has an active skip: a striped cell, read `건너뜀` (supplement S-1, S-3). */
+    SKIPPED,
 
     /** Past day without a judgment. */
     EMPTY,
@@ -160,11 +226,14 @@ class LoadStatusBoard(
                 slotLabel = intake.slotLabel,
                 person = person,
                 rule = rule,
+                scheduleVersionId = schedule.id,
                 window = window,
                 judgment = judgment,
                 lastBefore = records.findLastActiveBefore(intake.id, window.start.toEpochMilliseconds()),
+                lastTaken = records.findLastActiveTakenBefore(intake.id, window.start.toEpochMilliseconds()),
                 weekCells = if (rule is ScheduleRule.Daily) weekCells(cells, intake, person, week, baseDate, flaggedIds) else emptyList(),
                 clockWarning = judgment != null && judgment.id in flaggedIds,
+                reminder = db.reminderDao().findRule(intake.id)?.let { ReminderChoice(it.enabled, LocalTime.parse(it.startTime)) },
             )
         }
         val shown = intakes.associateBy { it.id }
@@ -173,7 +242,18 @@ class LoadStatusBoard(
             val person = people[intake.personId] ?: return@mapNotNull null
             ClockWarning(judgment = record, intakeName = intake.name, person = person)
         }
-        return StatusBoard(now, settings, baseDate, week, items, db.settingDao().loadRestoreNotice(), clockWarnings)
+        return StatusBoard(
+            now = now,
+            settings = settings,
+            baseDate = baseDate,
+            week = week,
+            items = items,
+            restoreNotice = db.settingDao().loadRestoreNotice(),
+            clockWarnings = clockWarnings,
+            showPeople = showsPeople(people.size),
+            people = people.values.toList(),
+            remindersOn = db.reminderDao().listEnabledRules().isNotEmpty(),
+        )
     }
 
     /**
@@ -194,6 +274,7 @@ class LoadStatusBoard(
             val state = when {
                 date > today -> DayState.FUTURE
                 cell == null -> DayState.NOT_SCHEDULED
+                cell.judgment?.kind == DoseKind.SKIPPED -> DayState.SKIPPED
                 cell.judgment != null -> DayState.DONE
                 date == today -> DayState.TODAY_PENDING
                 else -> DayState.EMPTY

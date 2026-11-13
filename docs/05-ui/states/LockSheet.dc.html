@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>TASK-044 SCR-003 잠금 화면 여덟 칸</title>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;800&amp;family=Roboto:wght@400;600;800&amp;display=swap">
+<link rel="stylesheet" href="../../09-mockup/boards/tokens.css">
+<link rel="stylesheet" href="../../09-mockup/boards/box.css">
+<style>
+.sheet{box-sizing:border-box;padding:var(--space-xl);background:var(--color-surface-sunken);color:var(--color-ink-default);
+  font-family:Roboto,'Noto Sans KR',var(--font-family-base);font-size:var(--font-size-body);word-break:keep-all;overflow-wrap:break-word}
+.sheet *{box-sizing:border-box}
+.sheet p{margin:0}
+.sheet .st{font-size:var(--font-size-title-md);font-weight:var(--font-weight-extrabold);line-height:var(--font-line-height-tight)}
+.sheet .sd{margin:var(--space-xs) 0 var(--space-xl);font-size:var(--font-size-body-sm);line-height:var(--font-line-height-normal);color:var(--color-ink-muted)}
+.sheet figure{margin:0}
+.sheet figcaption{font-size:var(--font-size-body-sm);font-weight:var(--font-weight-semibold);line-height:var(--font-line-height-tight);margin-bottom:var(--space-xs)}
+
+.pair{display:grid;grid-template-columns:360px 360px;gap:var(--space-lg)}
+.pair.head p{font-size:var(--font-size-label);font-weight:var(--font-weight-extrabold)}
+.sheet .rt{margin:var(--space-xl) 0 var(--space-sm);font-size:var(--font-size-label);font-weight:var(--font-weight-extrabold);line-height:var(--font-line-height-tight)}
+.cap{margin:var(--space-xs) var(--space-2xs) 0!important;font-weight:var(--font-weight-regular)!important;line-height:var(--font-line-height-normal)!important;color:var(--color-ink-muted)}
+.cellwrap{width:360px;height:380px;border-radius:var(--radius-tile);overflow:hidden}
+/* 기기가 그리는 부분: 색과 크기는 Pixel 시스템 화면을 흉내 냄 */
+.ph{width:360px;height:380px;font-family:Roboto,'Noto Sans KR',sans-serif;padding-bottom:12px}
+.ph.lock{background:linear-gradient(180deg,#24395E 0%,#0E1424 62%);color:#DCE6F5}
+.ph.shade{background:#E9EAEE;color:#1B1B1F;padding-top:12px}
+.clk{font-size:56px;line-height:1;padding:28px 24px 6px;font-weight:400}
+.day{font-size:14px;padding:0 24px 16px}
+.n{margin:0 12px 4px;background:#F3F3F7;border-radius:20px;padding:12px 16px 4px;color:#1B1B1F}
+.n.f{display:flex;align-items:center;gap:12px;padding:12px 12px 12px 16px}
+.n .tx{display:flex;flex-direction:column;gap:2px;flex-grow:1;min-width:0}
+.n .tx b{font-size:15px;font-weight:600}
+.n .tx small{font-size:14px;color:#46464F}
+.cv{width:28px;height:28px;border-radius:50%;background:#E3E3E9;display:flex;align-items:center;justify-content:center;color:#1B1B1F;flex-shrink:0}
+.nh{display:flex;align-items:center;gap:8px;font-size:13px;color:#46464F}
+.ai{width:24px;height:24px;border-radius:50%;background:var(--color-ink-default);color:var(--color-ink-on-solid);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.nt{font-size:15px;font-weight:600;margin-top:8px!important}
+.nb{font-size:14px;color:#46464F;margin-top:2px!important}
+.na{display:flex;gap:4px;margin:0 -8px}
+.na span{min-height:48px;display:flex;align-items:center;padding:0 8px;font-size:14px;font-weight:600;color:var(--color-ink-default)}
+.n.g{padding-bottom:0}
+.ch{border-top:1px solid #E3E3E9;margin:8px -16px 0;padding:6px 16px 0}
+.ch .cn{font-size:12px;color:#46464F}
+.ch .nt{margin-top:2px!important}
+.ch:nth-of-type(2) .nt{padding-bottom:10px}
+</style>
+</helmet>
+<div class="sheet" style="width: 784px">
+  <p class="st">SCR-003 잠금 화면 여덟 칸 (SPEC-013, REQ-046·REQ-076)</p>
+  <p class="sd">이름 표시 끔·켬 × 기기의 잠금 화면 알림 설정 둘 × 잠금·잠금을 푼 알림창. 방법과 모양은 PR #15 실험(에뮬레이터 API 26·30·34·36, Pixel 화면)의 방법 5(끔)와 방법 1(켬) 결과를 옮김. 항목 알림 둘(아침약·혈압약)이 같은 시각에 뜬 때. 갤럭시(One UI)는 다를 수 있어 TASK-052에서 실기기로 봄</p>
+  <div class="pair head"><p>잠금 화면</p><p>잠금을 푼 알림창</p></div>
+  <p class="rt">이름 표시 끔 (기본) · 기기 '내용 표시' (Android 기본)</p><div class="pair"><figure><div data-v="lock-off-show-locked" class="cellwrap"><div class="ph lock"><p class="clk">8:00</p><p class="day">11월 12일 목요일</p><div class="n f"><span class="ai" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7.3l2.6 2.6L11 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="tx"><b>복용 시간이에요</b></span><span class="cv" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div></div><figcaption class="cap">항목 알림은 SECRET이라 보이지 않음. 따로 띄운 PUBLIC 알림 하나: 제목 '복용 시간이에요'만, 본문·버튼 없음. 누르면 잠금을 푼 뒤 앱(SCR-004)</figcaption></figure><figure><div data-v="lock-off-show-open" class="cellwrap"><div class="ph shade"><div class="n g"><div class="nh"><span class="ai" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7.3l2.6 2.6L11 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>필받음</span></div><div class="ch"><p class="cn">지금</p><p class="nt">복용 시간이에요</p></div><div class="ch"><p class="cn">지금</p><p class="nt">아침약 먹어~!</p><p class="nb">마지막 복용 어제 08:02</p><div class="na"><span>먹었어</span><span>30분 뒤</span><span>오늘 건너뜀</span></div></div><div class="ch"><p class="cn">지금</p><p class="nt">혈압약 먹어~!</p><p class="nb">마지막 복용 어제 08:02</p><div class="na"><span>먹었어</span><span>30분 뒤</span><span>오늘 건너뜀</span></div></div></div></div></div><figcaption class="cap">항목 알림마다 제목·본문·버튼 셋. '복용 시간이에요' 줄이 하나 더 보임(방법 5의 대가)</figcaption></figure></div><p class="rt">이름 표시 끔 (기본) · 기기 '내용 숨김'</p><div class="pair"><figure><div data-v="lock-off-hide-locked" class="cellwrap"><div class="ph lock"><p class="clk">8:00</p><p class="day">11월 12일 목요일</p><div class="n f"><span class="ai" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7.3l2.6 2.6L11 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="tx"><b>복용 시간이에요</b></span><span class="cv" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div></div><figcaption class="cap">항목 알림은 SECRET이라 보이지 않음. 따로 띄운 PUBLIC 알림 하나: 제목 '복용 시간이에요'만, 본문·버튼 없음. 누르면 잠금을 푼 뒤 앱(SCR-004). 기기 설정과 상관없이 같음</figcaption></figure><figure><div data-v="lock-off-hide-open" class="cellwrap"><div class="ph shade"><div class="n g"><div class="nh"><span class="ai" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7.3l2.6 2.6L11 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>필받음</span></div><div class="ch"><p class="cn">지금</p><p class="nt">복용 시간이에요</p></div><div class="ch"><p class="cn">지금</p><p class="nt">아침약 먹어~!</p><p class="nb">마지막 복용 어제 08:02</p><div class="na"><span>먹었어</span><span>30분 뒤</span><span>오늘 건너뜀</span></div></div><div class="ch"><p class="cn">지금</p><p class="nt">혈압약 먹어~!</p><p class="nb">마지막 복용 어제 08:02</p><div class="na"><span>먹었어</span><span>30분 뒤</span><span>오늘 건너뜀</span></div></div></div></div></div><figcaption class="cap">항목 알림마다 제목·본문·버튼 셋. '복용 시간이에요' 줄이 하나 더 보임(방법 5의 대가)</figcaption></figure></div><p class="rt">이름 표시 켬 · 기기 '내용 표시'</p><div class="pair"><figure><div data-v="lock-on-show-locked" class="cellwrap"><div class="ph lock"><p class="clk">8:00</p><p class="day">11월 12일 목요일</p><div class="n"><div class="nh"><span class="ai" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7.3l2.6 2.6L11 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>필받음 · 지금</span></div><p class="nt">아침약 먹어~!</p><p class="nb">마지막 복용 어제 08:02</p><div class="na"><span>먹었어</span><span>30분 뒤</span><span>오늘 건너뜀</span></div></div><div class="n f"><span class="ai" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7.3l2.6 2.6L11 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="tx"><b>혈압약 먹어~!</b><small>마지막 복용 어제 08:02</small></span><span class="cv" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div></div><figcaption class="cap">항목 알림(PRIVATE)이 그대로 보임: 제목·본문, 펼치면 버튼 셋. 버튼은 잠금을 풀지 않고 기록함(화면 5장 6번)</figcaption></figure><figure><div data-v="lock-on-show-open" class="cellwrap"><div class="ph shade"><div class="n"><div class="nh"><span class="ai" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7.3l2.6 2.6L11 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>필받음 · 지금</span></div><p class="nt">아침약 먹어~!</p><p class="nb">마지막 복용 어제 08:02</p><div class="na"><span>먹었어</span><span>30분 뒤</span><span>오늘 건너뜀</span></div></div><div class="n"><div class="nh"><span class="ai" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7.3l2.6 2.6L11 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>필받음 · 지금</span></div><p class="nt">혈압약 먹어~!</p><p class="nb">마지막 복용 어제 08:02</p><div class="na"><span>먹었어</span><span>30분 뒤</span><span>오늘 건너뜀</span></div></div></div></div><figcaption class="cap">항목 알림마다 제목·본문·버튼 셋</figcaption></figure></div><p class="rt">이름 표시 켬 · 기기 '내용 숨김'</p><div class="pair"><figure><div data-v="lock-on-hide-locked" class="cellwrap"><div class="ph lock"><p class="clk">8:00</p><p class="day">11월 12일 목요일</p><div class="n f"><span class="ai" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7.3l2.6 2.6L11 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="tx"><b>복용 시간이에요</b></span><span class="cv" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div><div class="n f"><span class="ai" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7.3l2.6 2.6L11 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span class="tx"><b>복용 시간이에요</b></span><span class="cv" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 4l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div></div></div><figcaption class="cap">항목마다 공개용 판 '복용 시간이에요'(본문·버튼 없음). 기기 설정을 따름(SPEC-013)</figcaption></figure><figure><div data-v="lock-on-hide-open" class="cellwrap"><div class="ph shade"><div class="n"><div class="nh"><span class="ai" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7.3l2.6 2.6L11 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>필받음 · 지금</span></div><p class="nt">아침약 먹어~!</p><p class="nb">마지막 복용 어제 08:02</p><div class="na"><span>먹었어</span><span>30분 뒤</span><span>오늘 건너뜀</span></div></div><div class="n"><div class="nh"><span class="ai" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M3 7.3l2.6 2.6L11 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><span>필받음 · 지금</span></div><p class="nt">혈압약 먹어~!</p><p class="nb">마지막 복용 어제 08:02</p><div class="na"><span>먹었어</span><span>30분 뒤</span><span>오늘 건너뜀</span></div></div></div></div><figcaption class="cap">항목 알림마다 제목·본문·버튼 셋</figcaption></figure></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview": {"width": 784, "height": 2200}}'>
+class Component extends DCLogic {}
+</script>
+</body>
+</html>

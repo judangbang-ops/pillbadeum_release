@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Message and restore bands: color.surface.notice, radius.button (TASK-044 drawing). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#FFF1CC" />
+    <corners android:radius="12dp" />
+</shape>

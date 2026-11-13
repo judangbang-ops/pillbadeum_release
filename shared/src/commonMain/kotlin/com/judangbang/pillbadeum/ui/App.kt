@@ -1,611 +1,941 @@
 package com.judangbang.pillbadeum.ui
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import com.judangbang.pillbadeum.DidITakeCore
 import com.judangbang.pillbadeum.data.PersonEntity
+import com.judangbang.pillbadeum.domain.DoseKind
 import com.judangbang.pillbadeum.domain.DoseSource
-import com.judangbang.pillbadeum.domain.ScheduleRule
-import com.judangbang.pillbadeum.domain.SlotLabel
-import com.judangbang.pillbadeum.status.DayState
-import com.judangbang.pillbadeum.status.IntakeStatus
+import com.judangbang.pillbadeum.status.HistoryMonth
+import com.judangbang.pillbadeum.status.JudgeCell
+import com.judangbang.pillbadeum.status.JudgeLoad
 import com.judangbang.pillbadeum.status.Labels
+import com.judangbang.pillbadeum.status.PeopleView
+import com.judangbang.pillbadeum.status.SettingsView
 import com.judangbang.pillbadeum.status.StatusBoard
-import com.judangbang.pillbadeum.usecase.IntakeDraft
-import com.judangbang.pillbadeum.usecase.PersonColors
+import com.judangbang.pillbadeum.status.showsPeople
+import com.judangbang.pillbadeum.usecase.ClockFlagResult
+import com.judangbang.pillbadeum.usecase.DeleteIntakeResult
+import com.judangbang.pillbadeum.usecase.PersonChange
+import com.judangbang.pillbadeum.usecase.RecordResult
 import com.judangbang.pillbadeum.usecase.SaveIntakeResult
+import com.judangbang.pillbadeum.usecase.SaveReminderSettingsResult
+import com.judangbang.pillbadeum.usecase.SaveSettingsResult
 import com.judangbang.pillbadeum.usecase.VoidResult
+import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
 
-private object Palette {
-    val Background = Color(0xFFEEF1F4)
-    val Card = Color(0xFFFFFFFF)
-    val Ink = Color(0xFF1C2129)
-    val Muted = Color(0xFF5A6372)
-    val Primary = Color(0xFF1D4E89)
-    val Line = Color(0xFFC3CAD3)
-    val Dashed = Color(0xFF8E98A6)
-    val Cell = Color(0xFFE1E5EA)
-    val CellOff = Color(0xFFF4F6F8)
-    val Warn = Color(0xFFFCEBD9)
-    val WarnInk = Color(0xFF7A3E06)
-}
+/**
+ * The app's screens, one at a time (07 sitemap). [key] is what is saved when the screen is recreated (BUG-003).
+ * [back] is where system back goes (REQ-094, SPEC-021): every screen to the first, the people screen to settings and its
+ * person form to the people screen (TASK-021), SCR-007 opened from SCR-008 back to that month (TASK-019), the intro's
+ * second page to its first (TASK-022), and null on the first screen and on the intro's first page, where back closes the
+ * app.
+ */
+internal sealed interface Route {
+    val key: String
+    val back: Route?
 
-private fun personColor(hex: String): Color = Color(PersonColors.argb(hex))
+    /** SCR-004 */
+    data object Home : Route {
+        override val key = "home"
+        override val back: Route? = null
+    }
 
-private sealed interface Screen {
-    data object Home : Screen
+    /** SCR-006; [intakeId] null adds a new item. */
+    data class Item(val intakeId: String?) : Route {
+        override val key get() = "item:${intakeId ?: ""}"
+        override val back: Route get() = Home
+    }
 
-    /** [editing] null = new item. */
-    data class Edit(val editing: IntakeStatus?) : Screen
+    /**
+     * SCR-007 for one cell: a schedule version's window with its period key (supplement P-1, TASK-018). [from] is the
+     * SCR-008 month it was opened from: back returns there, to the same person and line (Claude's choice, TASK-019).
+     */
+    data class Judge(val intakeId: String, val versionId: String, val periodKey: String, val from: History? = null) : Route {
+        override val key get() = "judge:$intakeId:$versionId:$periodKey" + (from?.let { "@${it.key}" } ?: "")
+        override val back: Route get() = from ?: Home
+    }
+
+    /** SCR-008 for the month of [month] (its first day) and one person, or everyone with [personId] null (TASK-019). */
+    data class History(val month: LocalDate, val personId: String?) : Route {
+        override val key get() = "history:$month:${personId ?: ""}"
+        override val back: Route get() = Home
+    }
+
+    /** SCR-009 (TASK-020) */
+    data object Settings : Route {
+        override val key = "settings"
+        override val back: Route = Home
+    }
+
+    /** SCR-010 (TASK-021) */
+    data object People : Route {
+        override val key = "people"
+        override val back: Route = Settings
+    }
+
+    /** SCR-010's form for one person, or a new one with [personId] null; back returns to the list (TASK-021). */
+    data class Person(val personId: String?) : Route {
+        override val key get() = "person:${personId ?: ""}"
+        override val back: Route get() = People
+    }
+
+    /**
+     * SCR-005, the first-run intro on its [page] (0 or 1, TASK-022). Back on the first page closes the app without
+     * finishing the intro, so the next start shows it again (Claude's choice).
+     */
+    data class Welcome(val page: Int) : Route {
+        override val key get() = "welcome:$page"
+        override val back: Route? get() = if (page > 0) Welcome(page - 1) else null
+    }
+
+    companion object {
+        fun parse(key: String): Route {
+            if ('@' in key) {
+                val from = parse(key.substringAfter('@')) as? History
+                return when (val route = parse(key.substringBefore('@'))) {
+                    is Judge -> route.copy(from = from)
+                    else -> route
+                }
+            }
+            val parts = key.split(':')
+            return when (parts[0]) {
+                "item" -> Item(parts.getOrNull(1)?.takeIf { it.isNotEmpty() })
+                "judge" -> if (parts.size == 4) Judge(parts[1], parts[2], parts[3]) else Home
+                "history" -> parts.getOrNull(1)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+                    ?.let { History(LocalDate(it.year, it.month, 1), parts.getOrNull(2)?.takeIf(String::isNotEmpty)) }
+                    ?: Home
+                "settings" -> Settings
+                "people" -> People
+                "person" -> Person(parts.getOrNull(1)?.takeIf { it.isNotEmpty() })
+                "welcome" -> Welcome((parts.getOrNull(1)?.toIntOrNull() ?: 0).coerceIn(0, WELCOME_PAGES - 1))
+                else -> Home
+            }
+        }
+
+        val Saver: Saver<Route, String> = Saver(save = { it.key }, restore = { parse(it) })
+    }
 }
 
 /**
- * Root screen shared by every platform.
+ * Root of the app, shared by every platform.
  *
- * @param onDataChanged called after every write (record, void, item save/archive) so the platform
- *   can refresh its widgets from the database.
- * @param refreshKey bump to reload (e.g. on resume, after the widget recorded something).
+ * @param open opens the core (the database); a failure shows SCR-004#error with `[다시 시도]`.
+ * @param onDataChanged called after every write (record, cancel, item, person, restore notice, settings) so the
+ *   platform can redraw its widgets and plan its reminders again.
+ * @param phone what the settings screen and the intro read from and ask of the phone (SCR-009, TASK-020; SCR-005, TASK-022).
+ * @param privacyPolicyUrl the privacy policy's address, null until TASK-035 decides it (REQ-063).
+ * @param refreshKey bump to read the database again (on resume: the widget may have recorded meanwhile).
+ * @param homeRequests bump to show the first screen (a notification or the widget opened the app, R3 memo); the intro
+ *   stays until it is finished.
+ * @param backHandler the platform's system back: called with whether back stays in the app, and what it does.
  */
 @Composable
-fun App(core: DidITakeCore, onDataChanged: suspend () -> Unit, refreshKey: Int = 0) {
+fun App(
+    open: suspend () -> DidITakeCore,
+    onDataChanged: suspend () -> Unit,
+    phone: Phone,
+    privacyPolicyUrl: String? = PRIVACY_POLICY_URL,
+    refreshKey: Int = 0,
+    homeRequests: Int = 0,
+    backHandler: @Composable (enabled: Boolean, onBack: () -> Unit) -> Unit = { _, _ -> },
+) {
     val scope = rememberCoroutineScope()
+    var core by remember { mutableStateOf<DidITakeCore?>(null) }
     var board by remember { mutableStateOf<StatusBoard?>(null) }
     var people by remember { mutableStateOf<List<PersonEntity>>(emptyList()) }
-    var screen by remember { mutableStateOf<Screen>(Screen.Home) }
+    var failed by remember { mutableStateOf(false) }
+    var retries by remember { mutableIntStateOf(0) }
     var message by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var route by rememberSaveable(stateSaver = Route.Saver) { mutableStateOf<Route>(Route.Home) }
+    // Counts the reads, so a screen with data of its own (SCR-007, SCR-008) reads it again after every read of the board.
+    var reads by remember { mutableIntStateOf(0) }
+    // SCR-008 (TASK-019): the last month read, with the screen it was read for, and where its list was. Both stay while
+    // SCR-007 is open on top, so back shows the same lines at the same place at once (and reads them again).
+    var history by remember { mutableStateOf<Pair<Route.History, HistoryMonth>?>(null) }
+    var historyFailed by remember { mutableStateOf(false) }
+    var historyAttempts by remember { mutableIntStateOf(0) }
+    var historyList by rememberSaveable(stateSaver = ListPlace) { mutableStateOf(LazyListState()) }
+    // SCR-009 (TASK-020): the settings last read and the phone's state read with them. They stay while SCR-010 is open
+    // on top, so back shows them at once (and reads them again).
+    var settings by remember { mutableStateOf<SettingsView?>(null) }
+    var phoneState by remember { mutableStateOf<PhoneState?>(null) }
+    var settingsFailed by remember { mutableStateOf(false) }
+    var settingsAttempts by remember { mutableIntStateOf(0) }
+    // SCR-010 (TASK-021): the people last read. They stay while a person's form is open on top, so back shows them at once.
+    var peopleView by remember { mutableStateOf<PeopleView?>(null) }
+    var peopleFailed by remember { mutableStateOf(false) }
+    var peopleAttempts by remember { mutableIntStateOf(0) }
+    // SCR-005 (TASK-022): closed in this activity, by [시작하기] or [건너뛰기]. It does not come back here even when saving
+    // that failed or the database was not open yet; the next start shows it again then.
+    var introClosed by rememberSaveable { mutableStateOf(false) }
+    // Whether the launcher takes [위젯 추가]: read again on coming back to the app, off after a refused request.
+    var canPin by remember(refreshKey) { mutableStateOf(phone.canPinWidget()) }
+    // SCR-004#permission (TASK-026): read each time the first screen comes and on coming back to the app, since the
+    // system settings change it (a person back from `[설정 열기]` sees the band gone).
+    var access by remember { mutableStateOf<ReminderAccess?>(null) }
+    val zone = TimeZone.currentSystemDefault()
 
     suspend fun reload() {
-        people = core.people.list()
-        board = core.loadStatusBoard()
+        val c = core ?: open().also { opened ->
+            // SCR-005 on a first run (intro_seen_at absent, SPEC-002): before the first screen shows any data. A
+            // recreated activity keeps the page it was on, and another screen is never covered.
+            val seen = opened.settings.introSeen()
+            if (!seen && !introClosed && route == Route.Home) route = Route.Welcome(0)
+            if (seen && route is Route.Welcome) route = Route.Home
+            core = opened
+        }
+        people = c.people.list()
+        board = c.loadStatusBoard()
+        failed = false
+        reads++
     }
 
-    LaunchedEffect(refreshKey) { reload() }
+    suspend fun reloadOrFail() {
+        try {
+            reload()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            failed = true
+        }
+    }
 
-    Box(Modifier.fillMaxSize().background(Palette.Background).safeDrawingPadding()) {
-        when (val current = screen) {
-            Screen.Home -> HomeScreen(
-                board = board,
-                message = message,
-                onAdd = { message = null; screen = Screen.Edit(null) },
-                onEdit = { message = null; screen = Screen.Edit(it) },
-                onRecord = { item ->
-                    scope.launch {
-                        val result = core.record(item.intakeId, DoseSource.APP, item.window.periodKey)
-                        val b = board
-                        message = if (b == null) null else Labels.recordMessage(result, item.name, core.clock.now(), b.settings.baseZone)
-                        onDataChanged()
-                        reload()
-                    }
-                },
-                onAcknowledgeRestore = {
-                    scope.launch {
-                        // SCR-004 [확인했어요]: a failed save keeps the notice (screens.md 4장).
-                        message = if (runCatching { core.acknowledgeRestore() }.isSuccess) null else "저장하지 못했어요. 다시 눌러 주세요"
-                        onDataChanged()
-                        reload()
-                    }
-                },
-                onVoid = { item ->
-                    val judgment = item.judgment ?: return@HomeScreen
-                    scope.launch {
-                        message = when (core.voidDose(judgment.id)) {
-                            VoidResult.Voided -> "${item.name} 기록을 취소했어요. 기록은 무효로 남아요"
-                            VoidResult.NotActive -> "이미 취소된 기록이에요"
-                            VoidResult.Locked -> Labels.LOCKED
-                        }
-                        onDataChanged()
-                        reload()
-                    }
-                },
+    /** After a write: the widgets and reminders first, then this screen. */
+    suspend fun afterWrite() {
+        try {
+            onDataChanged()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // The widget redraws on its own next time; the record itself is saved.
+        }
+        reloadOrFail()
+    }
+
+    /** Runs one write at a time: buttons do nothing while one is running (REQ-001). */
+    fun write(failure: String = Labels.TRY_AGAIN, block: suspend (DidITakeCore) -> Unit) {
+        val c = core ?: return
+        if (busy) return
+        busy = true
+        scope.launch {
+            try {
+                block(c)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                message = failure
+            } finally {
+                busy = false
+            }
+        }
+    }
+
+    fun go(to: Route) {
+        message = null
+        route = to
+    }
+
+    /** `[설정 열기]`·`[허용하기]` (SCR-004, SCR-009): the system screen, or a message when the phone has none. */
+    fun openAccess(setting: AccessSetting) {
+        message = if (phone.openAccessSettings(setting)) null else Labels.ACCESS_OPEN_FAILED
+    }
+
+    /** SCR-008 from the first line: opened from the first screen, or another month or person. */
+    fun openHistory(to: Route.History) {
+        history = null
+        historyFailed = false
+        historyList = LazyListState()
+        go(to)
+    }
+
+    /** SCR-009 from the first screen: read anew. */
+    fun openSettings() {
+        settings = null
+        settingsFailed = false
+        go(Route.Settings)
+    }
+
+    /** SCR-010 from the settings: read anew. */
+    fun openPeople() {
+        peopleView = null
+        peopleFailed = false
+        go(Route.People)
+    }
+
+    /**
+     * SCR-005's `[시작하기]` and `[건너뛰기]`: the first screen at once, and `intro_seen_at` saved behind it (SPEC-002). A save
+     * that fails, or a database not open yet, leaves the intro for the next start.
+     */
+    fun finishIntro() {
+        introClosed = true
+        go(Route.Home)
+        val c = core ?: return
+        scope.launch {
+            try {
+                c.settings.markIntroSeen()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Shown again on the next start.
+            }
+        }
+    }
+
+    /** Reads SCR-010's people; a failure shows `#error` only while nothing has been read. */
+    suspend fun readPeople(c: DidITakeCore) {
+        try {
+            peopleView = c.loadPeople()
+            peopleFailed = false
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            peopleFailed = true
+        }
+    }
+
+    LaunchedEffect(refreshKey, retries) {
+        message = null
+        reloadOrFail()
+    }
+    LaunchedEffect(homeRequests) { if (homeRequests > 0 && route !is Route.Welcome) go(Route.Home) }
+    // SCR-004#stale (TASK-017): left open across the day start, the app reads the new day at the boundary. It looks
+    // at the clock at least once a minute, so a clock set forward is noticed too; coming back to the app reads again
+    // anyway (refreshKey). A tap drawn before the boundary records nothing and says so (RecordResult.Stale).
+    val staleAt = board?.staleAt
+    LaunchedEffect(staleAt) {
+        val at = staleAt ?: return@LaunchedEffect
+        val clock = core?.clock ?: return@LaunchedEffect
+        while (true) {
+            val left = at - clock.now()
+            if (left <= Duration.ZERO) break
+            delay(left.coerceAtMost(1.minutes))
+        }
+        message = null
+        reloadOrFail()
+    }
+    backHandler(route.back != null) { route.back?.let(::go) }
+
+    Box(Modifier.fillMaxSize().background(Ui.Surface).safeDrawingPadding().imePadding()) {
+        when (val current = route) {
+            is Route.Welcome -> WelcomeScreen(
+                page = current.page,
+                canPin = canPin,
+                actions = WelcomeActions(
+                    next = { go(Route.Welcome(current.page + 1)) },
+                    finish = { finishIntro() },
+                    // The launcher shows its own confirmation; a refused request leaves the steps alone (SCR-005#error).
+                    pin = { if (!phone.pinWidget()) canPin = false },
+                ),
             )
-            is Screen.Edit -> EditScreen(
-                editing = current.editing,
-                people = people,
-                onAddPerson = { name, color ->
-                    scope.launch {
-                        runCatching { core.people.add(name, color) }
-                        people = core.people.list()
-                    }
-                },
-                onCancel = { screen = Screen.Home },
-                onSave = { draft ->
-                    scope.launch {
-                        val editing = current.editing
-                        val result = if (editing == null) core.saveIntake.create(draft) else core.saveIntake.update(editing.intakeId, draft)
-                        message = when (result) {
-                            is SaveIntakeResult.Saved -> null
-                            is SaveIntakeResult.Invalid -> "이름과 대상자를 확인해 주세요"
-                            SaveIntakeResult.Gone -> "이미 삭제된 항목이에요"
-                        }
-                        if (result !is SaveIntakeResult.Invalid) {
-                            onDataChanged()
-                            reload()
-                            screen = Screen.Home
-                        }
-                    }
-                },
-                onArchive = { item ->
-                    scope.launch {
-                        core.archiveIntake(item.intakeId)
-                        message = "${item.name} 항목을 삭제했어요. 지난 기록은 남아요"
-                        onDataChanged()
-                        reload()
-                        screen = Screen.Home
-                    }
-                },
-                error = message,
-            )
-        }
-    }
-}
 
-// ---------------------------------------------------------------------------------------------
-// Home: 오늘 · 이번 주
-
-@Composable
-private fun HomeScreen(
-    board: StatusBoard?,
-    message: String?,
-    onAdd: () -> Unit,
-    onEdit: (IntakeStatus) -> Unit,
-    onRecord: (IntakeStatus) -> Unit,
-    onAcknowledgeRestore: () -> Unit,
-    onVoid: (IntakeStatus) -> Unit,
-) {
-    var confirmVoid by remember { mutableStateOf<IntakeStatus?>(null) }
-
-    Column(
-        Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("기록", size = 26, bold = true, modifier = Modifier.weight(1f))
-            DarkButton("항목 추가", onAdd)
-        }
-        if (board == null) {
-            Text("불러오는 중…", color = Palette.Muted)
-            return@Column
-        }
-        board.restoreNotice?.let { notice ->
-            // SCR-004#restored (supplement R-3, REQ-073, REQ-074): at the very top until confirmed.
-            RestoreNoticeCard(Labels.restoreAppNotice(notice, board.settings.baseZone), onAcknowledgeRestore)
-        }
-        Text("${Labels.date(board.baseDate)} 기준 · ${Labels.count(board)}", color = Palette.Primary, bold = true)
-        message?.let { Notice(it) }
-
-        Text("오늘 · 이번 주", color = Palette.Muted)
-        if (board.items.isEmpty()) {
-            Card { Text("아직 복용 항목이 없어요. [항목 추가]로 등록해 주세요.", color = Palette.Muted) }
-        }
-        board.items.forEach { item ->
-            IntakeRow(
-                item = item,
-                detail = Labels.appDetail(item, board),
-                onClick = { onEdit(item) },
-                onRecord = { onRecord(item) },
-                onVoid = { confirmVoid = item },
-            )
-        }
-
-        val daily = board.items.filter { it.rule is ScheduleRule.Daily }
-        if (daily.isNotEmpty()) {
-            Text("이번 주", color = Palette.Muted)
-            WeekGrid(board, daily)
-        }
-
-        Card {
-            Row(Modifier.fillMaxWidth()) {
-                Text("하루 시작 ${board.settings.dayStart}", color = Palette.Muted, size = 13, modifier = Modifier.weight(1f))
-                Text("기준 시간대 ${board.settings.baseZone.id}", color = Palette.Muted, size = 13)
-            }
-        }
-        Text(
-            "기록 취소는 앱에서만 할 수 있어요. 취소해도 기록은 지워지지 않고 무효로 남아요. " +
-                "이 앱은 기록 도구이며 복용 방법은 의사·약사와 상의해 주세요.",
-            color = Palette.Muted,
-            size = 12,
-        )
-    }
-
-    confirmVoid?.let { item ->
-        ConfirmDialog(
-            title = "기록을 취소할까요?",
-            body = "${item.name}의 이번 기록(${stampOf(item, board)})을 무효로 바꿔요. " +
-                "기록은 지워지지 않고 이력에 남아요.",
-            confirm = "기록 취소",
-            onConfirm = { confirmVoid = null; onVoid(item) },
-            onDismiss = { confirmVoid = null },
-        )
-    }
-}
-
-private fun stampOf(item: IntakeStatus, board: StatusBoard?): String {
-    val judgment = item.judgment ?: return ""
-    if (board == null) return ""
-    return Labels.stamp(Instant.fromEpochMilliseconds(judgment.takenAt), board.now, board.settings.baseZone)
-}
-
-@Composable
-private fun IntakeRow(
-    item: IntakeStatus,
-    detail: String,
-    onClick: () -> Unit,
-    onRecord: () -> Unit,
-    onVoid: () -> Unit,
-) {
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Palette.Card)
-            .clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        StatusDot(done = item.isDone)
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                PersonTag(item.person)
-                Spacer(Modifier.width(4.dp))
-                Text(item.name, bold = true, size = 15)
-            }
-            Text(detail, color = Palette.Muted, size = 12)
-        }
-        if (item.isDone) LineButton("기록 취소", onVoid) else LineButton("먹었어", onRecord, primary = true)
-    }
-}
-
-@Composable
-private fun StatusDot(done: Boolean) {
-    if (done) {
-        Box(Modifier.size(36.dp).clip(CircleShape).background(Palette.Primary), contentAlignment = Alignment.Center) {
-            Text("✓", color = Color.White, bold = true)
-        }
-    } else {
-        Canvas(Modifier.size(36.dp)) {
-            val stroke = 2.dp.toPx()
-            drawCircle(
-                color = Palette.Dashed,
-                radius = size.minDimension / 2 - stroke,
-                style = Stroke(width = stroke, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 5f))),
-            )
-        }
-    }
-}
-
-@Composable
-private fun PersonTag(person: PersonEntity) {
-    Box(
-        Modifier.clip(RoundedCornerShape(6.dp)).background(personColor(person.color)).padding(horizontal = 6.dp, vertical = 1.dp),
-    ) {
-        Text(person.name, color = Color.White, size = 11, bold = true)
-    }
-}
-
-@Composable
-private fun WeekGrid(board: StatusBoard, daily: List<IntakeStatus>) {
-    Card {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Spacer(Modifier.width(64.dp))
-                board.week.forEach { day ->
-                    Text(Labels.weekday(day.dayOfWeek), color = Palette.Muted, size = 12, align = TextAlign.Center, modifier = Modifier.weight(1f))
-                }
-            }
-            daily.forEach { item ->
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(item.displayName, size = 13, modifier = Modifier.width(64.dp))
-                    item.weekCells.forEach { cell ->
-                        val color = when (cell.state) {
-                            DayState.DONE -> Palette.Primary
-                            DayState.EMPTY, DayState.TODAY_PENDING -> Palette.Cell
-                            DayState.FUTURE, DayState.NOT_SCHEDULED -> Palette.CellOff
-                        }
-                        var cellModifier = Modifier.weight(1f).aspectRatio(1f).clip(RoundedCornerShape(6.dp)).background(color)
-                        if (cell.isToday) cellModifier = cellModifier.border(2.dp, Palette.Ink, RoundedCornerShape(6.dp))
-                        Box(cellModifier)
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------------------------
-// Registration / edit
-
-@Composable
-private fun EditScreen(
-    editing: IntakeStatus?,
-    people: List<PersonEntity>,
-    onAddPerson: (name: String, color: String) -> Unit,
-    onCancel: () -> Unit,
-    onSave: (IntakeDraft) -> Unit,
-    onArchive: (IntakeStatus) -> Unit,
-    error: String?,
-) {
-    var name by remember { mutableStateOf(editing?.name ?: "") }
-    var alias by remember { mutableStateOf(editing?.widgetAlias ?: "") }
-    var personId by remember { mutableStateOf(editing?.person?.id ?: people.firstOrNull()?.id) }
-    var weekly by remember { mutableStateOf(editing?.rule is ScheduleRule.Weekly) }
-    var anchor by remember { mutableStateOf((editing?.rule as? ScheduleRule.Weekly)?.anchor ?: DayOfWeek.MONDAY) }
-    var slot by remember { mutableStateOf(editing?.slotLabel) }
-    var addingPerson by remember { mutableStateOf(false) }
-    var newPersonName by remember { mutableStateOf("") }
-    var newPersonColor by remember { mutableStateOf(PersonColors.PALETTE[1]) }
-    var confirmArchive by remember { mutableStateOf(false) }
-    if (personId == null && people.isNotEmpty()) personId = people.first().id
-
-    Column(
-        Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Text(if (editing == null) "항목 추가" else "항목 수정", size = 26, bold = true)
-        error?.let { Notice(it) }
-
-        Field("이름", name, { name = it }, "예: 아침약")
-        Field("위젯 별칭 (선택)", alias, { alias = it }, "위젯에 짧게 보일 이름")
-
-        Text("대상자", color = Palette.Muted)
-        Chips {
-            people.forEach { p ->
-                Chip(p.name, selected = p.id == personId, accent = personColor(p.color)) { personId = p.id }
-            }
-            Chip("+ 사람 추가", selected = addingPerson) { addingPerson = !addingPerson }
-        }
-        if (addingPerson) {
-            Card {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Field("이름", newPersonName, { newPersonName = it }, "예: 엄마")
-                    Chips {
-                        PersonColors.PALETTE.forEach { hex ->
-                            val selected = hex == newPersonColor
-                            Box(
-                                Modifier.size(32.dp).clip(CircleShape).background(personColor(hex))
-                                    .border(if (selected) 3.dp else 0.dp, Palette.Ink, CircleShape)
-                                    .clickable { newPersonColor = hex },
-                            )
-                        }
-                    }
-                    DarkButton("추가") {
-                        if (newPersonName.isNotBlank()) {
-                            onAddPerson(newPersonName, newPersonColor)
-                            newPersonName = ""
-                            addingPerson = false
-                        }
-                    }
-                }
-            }
-        }
-
-        Text("주기", color = Palette.Muted)
-        Chips {
-            Chip("매일", selected = !weekly) { weekly = false }
-            Chip("주 1회", selected = weekly) { weekly = true }
-        }
-        if (weekly) {
-            Text("기준 요일 (그 요일 하루 시작부터 7일)", color = Palette.Muted, size = 13)
-            Chips {
-                DayOfWeek.entries.forEach { day ->
-                    Chip(Labels.weekday(day), selected = day == anchor) { anchor = day }
-                }
-            }
-        } else {
-            Text("시간대 (표시용)", color = Palette.Muted, size = 13)
-            Chips {
-                Chip("없음", selected = slot == null) { slot = null }
-                SlotLabel.entries.forEach { s -> Chip(Labels.slot(s), selected = s == slot) { slot = s } }
-            }
-        }
-        if (editing != null) {
-            Text("주기를 바꾸면 지금부터 새 일정이 적용돼요. 이번 창의 기록은 그대로 인정돼요.", color = Palette.Muted, size = 12)
-        }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            LineButton("닫기", onCancel)
-            DarkButton("저장") {
-                val pid = personId ?: return@DarkButton
-                onSave(
-                    IntakeDraft(
-                        personId = pid,
-                        name = name,
-                        widgetAlias = alias,
-                        rule = if (weekly) ScheduleRule.Weekly(anchor) else ScheduleRule.Daily,
-                        slotLabel = slot,
+            Route.Home -> {
+                LaunchedEffect(refreshKey) { access = phone.reminderAccess() }
+                HomeScreen(
+                    state = when {
+                        failed -> HomeState.Failed
+                        else -> board?.let { HomeState.Ready(it) } ?: HomeState.Loading
+                    },
+                    message = message,
+                    zone = zone,
+                    access = access,
+                    actions = HomeActions(
+                        retry = {
+                            failed = false
+                            board = null
+                            retries++
+                        },
+                        history = {
+                            board?.baseDate?.let { today -> openHistory(Route.History(LocalDate(today.year, today.month, 1), null)) }
+                        },
+                        settings = { openSettings() },
+                        add = { go(Route.Item(null)) },
+                        edit = { go(Route.Item(it.intakeId)) },
+                        more = { go(Route.Judge(it.intakeId, it.scheduleVersionId, it.window.periodKey)) },
+                        record = { item ->
+                            write { c ->
+                                val result = c.record(item.intakeId, DoseSource.APP, item.window.periodKey)
+                                message = if (result is RecordResult.Error) Labels.TRY_AGAIN else Labels.recordMessage(result, item.name, c.clock.now(), zone)
+                                afterWrite()
+                            }
+                        },
+                        void = { item ->
+                            val judgment = item.judgment
+                            if (judgment != null) {
+                                write { c ->
+                                    message = when (c.voidDose(judgment.id)) {
+                                        VoidResult.Voided -> Labels.voided(item.name, skip = false)
+                                        VoidResult.NotActive -> "이미 취소된 기록이에요"
+                                        VoidResult.Locked -> Labels.LOCKED
+                                    }
+                                    afterWrite()
+                                }
+                            }
+                        },
+                        // SCR-004 [확인했어요]: a failed save keeps the notice (screens.md SCR-004).
+                        acknowledgeRestore = {
+                            write(failure = "저장하지 못했어요. 다시 눌러 주세요") { c ->
+                                c.acknowledgeRestore()
+                                message = null
+                                afterWrite()
+                            }
+                        },
+                        keepClock = { warning ->
+                            write { c ->
+                                c.resolveClockFlag.keep(warning.judgment.id)
+                                message = null
+                                afterWrite()
+                            }
+                        },
+                        keepAllClocks = { warnings ->
+                            write { c ->
+                                warnings.forEach { c.resolveClockFlag.keep(it.judgment.id) }
+                                message = null
+                                afterWrite()
+                            }
+                        },
+                        cancelClock = { warning ->
+                            write { c ->
+                                message = when (c.resolveClockFlag.cancel(warning.judgment.id)) {
+                                    ClockFlagResult.Resolved -> Labels.voided(warning.intakeName, skip = warning.judgment.kind == DoseKind.SKIPPED)
+                                    ClockFlagResult.NotFlagged -> null
+                                    ClockFlagResult.Locked -> Labels.LOCKED
+                                }
+                                afterWrite()
+                            }
+                        },
+                        openAccess = ::openAccess,
                     ),
                 )
             }
-        }
-        if (editing != null) {
-            LineButton("항목 삭제", onClick = { confirmArchive = true })
-            Text("삭제해도 지난 기록은 지워지지 않아요.", color = Palette.Muted, size = 12)
-        }
-    }
 
-    if (confirmArchive && editing != null) {
-        ConfirmDialog(
-            title = "항목을 삭제할까요?",
-            body = "${editing.name}이(가) 위젯과 목록에서 사라져요. 지난 기록은 남아요.",
-            confirm = "삭제",
-            onConfirm = { confirmArchive = false; onArchive(editing) },
-            onDismiss = { confirmArchive = false },
-        )
-    }
-}
-
-// ---------------------------------------------------------------------------------------------
-// Small building blocks (foundation only, no Material dependency)
-
-@Composable
-private fun Text(
-    text: String,
-    modifier: Modifier = Modifier,
-    color: Color = Palette.Ink,
-    size: Int = 15,
-    bold: Boolean = false,
-    align: TextAlign = TextAlign.Start,
-) {
-    BasicText(
-        text = text,
-        modifier = modifier,
-        style = TextStyle(
-            color = color,
-            fontSize = size.sp,
-            fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
-            textAlign = align,
-            lineHeight = (size * 1.4).sp,
-        ),
-    )
-}
-
-@Composable
-private fun Card(content: @Composable () -> Unit) {
-    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Palette.Card).padding(14.dp)) { content() }
-}
-
-@Composable
-private fun Notice(text: String) {
-    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Palette.Warn).padding(12.dp)) {
-        Text(text, color = Palette.WarnInk, size = 13)
-    }
-}
-
-@Composable
-private fun RestoreNoticeCard(text: String, onAcknowledge: () -> Unit) {
-    Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Palette.Warn).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Text(text, color = Palette.WarnInk, size = 15, bold = true)
-        DarkButton("확인했어요", onAcknowledge)
-    }
-}
-
-@Composable
-private fun DarkButton(label: String, onClick: () -> Unit) {
-    Box(
-        Modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(12.dp)).background(Palette.Ink)
-            .clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 12.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(label, color = Color.White, bold = true)
-    }
-}
-
-@Composable
-private fun LineButton(label: String, onClick: () -> Unit, primary: Boolean = false) {
-    Box(
-        Modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(10.dp))
-            .background(if (primary) Palette.Primary else Palette.Card)
-            .border(1.dp, if (primary) Palette.Primary else Palette.Line, RoundedCornerShape(10.dp))
-            .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 12.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(label, color = if (primary) Color.White else Palette.Muted, size = 13, bold = primary)
-    }
-}
-
-@Composable
-private fun Chips(content: @Composable () -> Unit) {
-    // Horizontal scroll instead of a wrapping row keeps narrow screens usable.
-    Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) { content() }
-}
-
-@Composable
-private fun Chip(label: String, selected: Boolean, accent: Color = Palette.Primary, onClick: () -> Unit) {
-    Box(
-        Modifier.heightIn(min = 40.dp).clip(RoundedCornerShape(20.dp))
-            .background(if (selected) accent else Palette.Card)
-            .border(1.dp, if (selected) accent else Palette.Line, RoundedCornerShape(20.dp))
-            .clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 10.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(label, color = if (selected) Color.White else Palette.Ink, size = 14, bold = selected)
-    }
-}
-
-@Composable
-private fun Field(label: String, value: String, onChange: (String) -> Unit, placeholder: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(label, color = Palette.Muted, size = 13)
-        BasicTextField(
-            value = value,
-            onValueChange = onChange,
-            singleLine = true,
-            textStyle = TextStyle(color = Palette.Ink, fontSize = 16.sp),
-            decorationBox = { inner ->
-                Box(
-                    Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(10.dp)).background(Palette.Card)
-                        .border(1.dp, Palette.Line, RoundedCornerShape(10.dp)).padding(horizontal = 12.dp, vertical = 12.dp),
-                    contentAlignment = Alignment.CenterStart,
-                ) {
-                    if (value.isEmpty()) Text(placeholder, color = Palette.Dashed, size = 16)
-                    inner()
+            is Route.Item -> key(current.key) {
+                // SCR-006#permission (TASK-023): read on opening, on coming back from the system settings and after the
+                // permission window. While that window is open nothing is said under the switch.
+                LaunchedEffect(refreshKey) { access = phone.reminderAccess() }
+                var asking by remember { mutableStateOf(false) }
+                // SCR-006#quiet (REQ-077): what quiet hours take from the reminder just saved, said before going back.
+                var quiet by rememberSaveable { mutableStateOf<String?>(null) }
+                val loaded = board
+                val editing = current.intakeId?.let { id -> loaded?.items?.firstOrNull { it.intakeId == id } }
+                when {
+                    loaded == null && failed -> HomeScreen(HomeState.Failed, null, zone, homeOnlyRetry { failed = false; retries++ })
+                    loaded == null -> Loading()
+                    current.intakeId != null && editing == null -> LaunchedEffect(current) {
+                        // SCR-006#gone: archived or deleted meanwhile.
+                        go(Route.Home)
+                        message = Labels.GONE
+                    }
+                    else -> ItemScreen(
+                        editing = editing,
+                        people = people,
+                        message = message,
+                        access = access.takeUnless { asking },
+                        reminders = ItemReminderActions(
+                            pickTime = { initial, onPicked -> phone.pickTime(initial, onPicked) },
+                            switchedOn = {
+                                if (!asking) {
+                                    asking = phone.askNotifications {
+                                        asking = false
+                                        access = phone.reminderAccess()
+                                    }
+                                }
+                            },
+                            openSettings = { openAccess(AccessSetting.NOTIFICATIONS) },
+                        ),
+                        onAddPerson = { name, color, onAdded ->
+                            write(failure = "저장하지 못했어요. 다시 눌러 주세요") { c ->
+                                val added = c.people.add(name, color)
+                                onAdded(added.id)
+                                afterWrite()
+                            }
+                        },
+                        onClose = { go(Route.Home) },
+                        onSave = { draft ->
+                            write(failure = "저장하지 못했어요. 다시 눌러 주세요") { c ->
+                                val id = current.intakeId
+                                val result = if (id == null) c.saveIntake.create(draft) else c.saveIntake.update(id, draft)
+                                when (result) {
+                                    is SaveIntakeResult.Saved -> {
+                                        val saved = result.quiet
+                                        if (saved == null) {
+                                            go(Route.Home)
+                                        } else {
+                                            message = null
+                                            quiet = Labels.itemQuiet(saved.notice, saved.settings)
+                                        }
+                                        afterWrite()
+                                    }
+                                    is SaveIntakeResult.Invalid -> message = when (result.reason) {
+                                        SaveIntakeResult.Invalid.BLANK_NAME -> Labels.NAME_REQUIRED
+                                        else -> "누구 약인지 다시 골라 주세요"
+                                    }
+                                    SaveIntakeResult.Gone -> {
+                                        go(Route.Home)
+                                        message = Labels.GONE
+                                        afterWrite()
+                                    }
+                                }
+                            }
+                        },
+                        onArchive = { item ->
+                            write(failure = "보관하지 못했어요. 다시 눌러 주세요") { c ->
+                                c.archiveIntake(item.intakeId)
+                                go(Route.Home)
+                                message = "${Labels.withObject(item.name)} 보관했어요. 지난 기록은 남아요"
+                                afterWrite()
+                            }
+                        },
+                    )
                 }
-            },
-        )
-    }
-}
+                quiet?.let { text ->
+                    // Saved already: `[확인]`, back or a tap outside all go to the first screen (screens.md SCR-006#quiet).
+                    NoticeDialog(Labels.ITEM_SAVED, text) {
+                        quiet = null
+                        go(Route.Home)
+                    }
+                }
+            }
 
-@Composable
-private fun ConfirmDialog(title: String, body: String, confirm: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
-    Dialog(onDismissRequest = onDismiss) {
-        Column(
-            Modifier.clip(RoundedCornerShape(20.dp)).background(Palette.Card).padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Text(title, size = 18, bold = true)
-            Text(body, color = Palette.Muted, size = 14)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End)) {
-                LineButton("아니요", onDismiss)
-                DarkButton(confirm, onConfirm)
+            is Route.Judge -> key(current.key) {
+                var cell by remember { mutableStateOf<JudgeCell?>(null) }
+                var cellFailed by remember { mutableStateOf(false) }
+                var attempts by remember { mutableIntStateOf(0) }
+                // When this screen first read its cell. A screen opened on the current window closes when that window
+                // ends (SCR-007#stale), even across a recreated activity.
+                var openedAt by rememberSaveable { mutableStateOf<Long?>(null) }
+
+                fun openedCurrent(shown: JudgeCell): Boolean =
+                    openedAt?.let { Instant.fromEpochMilliseconds(it) in shown.window } == true
+
+                LaunchedEffect(core, reads, attempts) {
+                    val c = core ?: return@LaunchedEffect
+                    val result = try {
+                        c.loadJudgeCell(current.intakeId, current.versionId, current.periodKey)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        cellFailed = true
+                        return@LaunchedEffect
+                    }
+                    cellFailed = false
+                    when (result) {
+                        JudgeLoad.Gone -> {
+                            go(current.back)
+                            message = Labels.GONE
+                        }
+                        // A schedule change gave the window to another version (P-8): nothing left to fix here.
+                        JudgeLoad.Missing -> go(current.back)
+                        is JudgeLoad.Ready -> {
+                            val read = result.cell
+                            if (openedAt == null) openedAt = read.now.toEpochMilliseconds()
+                            if (openedCurrent(read) && !read.current) {
+                                go(current.back)
+                                message = Labels.DAY_CHANGED
+                            } else {
+                                cell = read
+                            }
+                        }
+                    }
+                }
+
+                /** Applies what a write led to (screens.md SCR-007 tables). */
+                suspend fun settle(after: JudgeAfter, shown: JudgeCell, c: DidITakeCore) {
+                    when (after) {
+                        is JudgeAfter.Stay -> {
+                            message = after.message
+                            if (after.wrote) afterWrite() else reloadOrFail()
+                        }
+                        is JudgeAfter.Move -> {
+                            message = after.message
+                            route = Route.Judge(shown.intakeId, after.versionId, after.periodKey, from = current.from)
+                            afterWrite()
+                        }
+                        is JudgeAfter.Home -> {
+                            go(current.back)
+                            message = after.message
+                            afterWrite()
+                        }
+                        JudgeAfter.Stale -> {
+                            if (openedCurrent(shown) && c.clock.now() >= shown.window.end) {
+                                go(current.back)
+                                message = Labels.STALE
+                            } else {
+                                message = Labels.RELOADED
+                            }
+                            reloadOrFail()
+                        }
+                    }
+                }
+
+                /** One write from this screen; a screen whose window ended meanwhile writes nothing (SCR-007#stale). */
+                fun judge(block: suspend (DidITakeCore, JudgeCell) -> JudgeAfter) {
+                    val shown = cell ?: return
+                    write { c ->
+                        val after = if (openedCurrent(shown) && c.clock.now() >= shown.window.end) JudgeAfter.Stale else block(c, shown)
+                        settle(after, shown, c)
+                    }
+                }
+
+                val shown = cell
+                JudgeScreen(
+                    state = when {
+                        shown != null -> JudgeState.Ready(shown)
+                        cellFailed || failed -> JudgeState.Failed
+                        else -> JudgeState.Loading
+                    },
+                    message = message,
+                    zone = zone,
+                    clock = { (core?.clock ?: Clock.System).now() },
+                    actions = JudgeActions(
+                        back = { go(current.back) },
+                        retry = {
+                            failed = false
+                            retries++
+                            attempts++
+                        },
+                        recordNow = {
+                            judge { c, x -> JudgeOutcomes.of(c.record(x.intakeId, DoseSource.APP, x.window.periodKey), c.clock.now(), zone) }
+                        },
+                        recordAt = { at ->
+                            judge { c, x -> JudgeOutcomes.of(c.recordIn(x, DoseKind.TAKEN, takenAt = at), x, edit = false, c.clock.now(), zone) }
+                        },
+                        skip = {
+                            judge { c, x -> JudgeOutcomes.of(c.recordIn(x, DoseKind.SKIPPED), x, edit = false, c.clock.now(), zone) }
+                        },
+                        editTime = { at ->
+                            judge { c, x ->
+                                val dose = x.judgment ?: return@judge JudgeAfter.Stale
+                                JudgeOutcomes.of(c.editTime(x, dose.id, at), x, edit = true, c.clock.now(), zone)
+                            }
+                        },
+                        takeInstead = { at ->
+                            judge { c, x ->
+                                val skip = x.judgment ?: return@judge JudgeAfter.Stale
+                                JudgeOutcomes.of(c.recordIn(x, DoseKind.TAKEN, takenAt = at, replacing = skip.id), x, edit = false, c.clock.now(), zone)
+                            }
+                        },
+                        void = {
+                            judge { c, x ->
+                                val judgment = x.judgment ?: return@judge JudgeAfter.Stale
+                                JudgeOutcomes.of(c.voidDose(judgment.id), x)
+                            }
+                        },
+                        keepClock = {
+                            judge { c, x ->
+                                val judgment = x.judgment ?: return@judge JudgeAfter.Stale
+                                JudgeOutcomes.ofKeep(c.resolveClockFlag.keep(judgment.id))
+                            }
+                        },
+                        cancelClock = {
+                            judge { c, x ->
+                                val judgment = x.judgment ?: return@judge JudgeAfter.Stale
+                                JudgeOutcomes.ofCancel(c.resolveClockFlag.cancel(judgment.id), x)
+                            }
+                        },
+                    ),
+                )
+            }
+
+            is Route.History -> {
+                // The chosen person while the picker is shown, else everyone (REQ-018, REQ-040).
+                val chosen = current.personId?.takeIf { id -> showsPeople(people.size) && people.any { it.id == id } }
+                LaunchedEffect(core, reads, historyAttempts, current) {
+                    val c = core ?: return@LaunchedEffect
+                    try {
+                        history = current to c.loadHistory(current.month, chosen)
+                        historyFailed = false
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        historyFailed = true
+                    }
+                }
+                val shown = history?.takeIf { it.first == current }?.second
+                HistoryScreen(
+                    state = when {
+                        shown != null -> HistoryState.Ready(shown)
+                        historyFailed || (failed && core == null) -> HistoryState.Failed
+                        else -> HistoryState.Loading
+                    },
+                    month = current.month,
+                    personId = chosen,
+                    people = people,
+                    message = message,
+                    zone = zone,
+                    list = historyList,
+                    actions = HistoryActions(
+                        back = { go(Route.Home) },
+                        retry = {
+                            failed = false
+                            historyFailed = false
+                            retries++
+                            historyAttempts++
+                        },
+                        month = { openHistory(current.copy(month = it)) },
+                        person = { openHistory(current.copy(personId = it)) },
+                        open = { cell ->
+                            if (cell.archived) {
+                                // SCR-007#gone at once: an archived item's past judgments are not changed (REQ-014).
+                                message = Labels.GONE
+                            } else {
+                                go(Route.Judge(cell.intakeId, cell.scheduleVersionId, cell.window.periodKey, from = current))
+                            }
+                        },
+                    ),
+                )
+            }
+
+            Route.Settings -> {
+                // Read on opening, after every write and on coming back to the app (SCR-009#stale): the screen lock may
+                // have been set meanwhile in the system settings.
+                LaunchedEffect(core, reads, settingsAttempts) {
+                    val c = core ?: return@LaunchedEffect
+                    phoneState = PhoneState(phone.appVersion, phone.backupUnsupported, phone.screenLock(), phone.reminderAccess())
+                    try {
+                        settings = c.loadSettings()
+                        settingsFailed = false
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        settingsFailed = true
+                    }
+                }
+                val shown = settings
+                SettingsScreen(
+                    state = when {
+                        shown != null -> SettingsState.Ready(shown)
+                        settingsFailed || (failed && core == null) -> SettingsState.Failed
+                        else -> SettingsState.Loading
+                    },
+                    phone = phoneState ?: PhoneState(phone.appVersion, phone.backupUnsupported, screenLock = null),
+                    privacyUrl = privacyPolicyUrl,
+                    message = message,
+                    now = { (core?.clock ?: Clock.System).now() },
+                    actions = SettingsActions(
+                        back = { go(Route.Home) },
+                        retry = {
+                            failed = false
+                            settingsFailed = false
+                            retries++
+                            settingsAttempts++
+                        },
+                        pickDayStart = { initial, onPicked -> phone.pickTime(initial, onPicked) },
+                        saveWindow = { new ->
+                            write(failure = Labels.SAVE_FAILED) { c ->
+                                when (c.settings.saveWindowSettings(new)) {
+                                    SaveSettingsResult.Changed -> {
+                                        // Shown at once; the read after the write follows.
+                                        settings = settings?.copy(window = new)
+                                        message = null
+                                        try {
+                                            phone.windowSettingsChanged()
+                                        } catch (e: CancellationException) {
+                                            throw e
+                                        } catch (_: Exception) {
+                                            // The boundary refresh is set again on the next start; the setting is saved.
+                                        }
+                                        afterWrite()
+                                    }
+                                    SaveSettingsResult.Unchanged -> message = null
+                                    SaveSettingsResult.Invalid -> message = Labels.SAVE_FAILED
+                                }
+                            }
+                        },
+                        saveReminders = { new ->
+                            write(failure = Labels.SAVE_FAILED) { c ->
+                                when (val result = c.reminders.saveSettings(new)) {
+                                    is SaveReminderSettingsResult.Saved -> {
+                                        settings = settings?.copy(reminders = new)
+                                        // REQ-077: how many repeats quiet hours drop, over the items with reminders on.
+                                        message = if (result.notices.isEmpty()) null else Labels.quietSaved(result.dropped, result.notices.size)
+                                        afterWrite()
+                                    }
+                                    SaveReminderSettingsResult.Invalid -> message = Labels.SAVE_FAILED
+                                }
+                            }
+                        },
+                        showNamesOnLock = { on ->
+                            write(failure = Labels.SAVE_FAILED) { c ->
+                                if (c.settings.setShowNamesOnLock(on) == SaveSettingsResult.Changed) {
+                                    settings = settings?.copy(showNamesOnLock = on)
+                                    message = if (on) Labels.SHOW_NAMES_ON else null
+                                    afterWrite()
+                                }
+                            }
+                        },
+                        people = { openPeople() },
+                        delete = { item ->
+                            write(failure = Labels.DELETE_FAILED) { c ->
+                                message = when (c.deleteArchivedIntake(item.intakeId)) {
+                                    DeleteIntakeResult.Deleted -> Labels.deleted(item.name)
+                                    DeleteIntakeResult.Gone -> Labels.DELETE_GONE
+                                    DeleteIntakeResult.NotArchived -> null
+                                }
+                                settings = settings?.let { view -> view.copy(archived = view.archived.filterNot { it.intakeId == item.intakeId }) }
+                                afterWrite()
+                            }
+                        },
+                        openPrivacy = { url -> message = if (phone.openUrl(url)) null else Labels.noBrowser(url) },
+                        openAccess = ::openAccess,
+                    ),
+                )
+            }
+
+            Route.People -> {
+                // Read on opening; a write here reads them again itself. Nothing else changes people (no widget does).
+                LaunchedEffect(core, peopleAttempts) { core?.let { readPeople(it) } }
+                val shown = peopleView
+                PeopleScreen(
+                    state = when {
+                        shown != null -> PeopleState.Ready(shown)
+                        peopleFailed || (failed && core == null) -> PeopleState.Failed
+                        else -> PeopleState.Loading
+                    },
+                    message = message,
+                    actions = PeopleActions(
+                        back = { go(Route.Settings) },
+                        retry = {
+                            failed = false
+                            peopleFailed = false
+                            retries++
+                            peopleAttempts++
+                        },
+                        add = { go(Route.Person(null)) },
+                        edit = { go(Route.Person(it.person.id)) },
+                        restore = { row ->
+                            write(failure = Labels.RESTORE_FAILED) { c ->
+                                val restored = c.people.restore(row.person.id) == PersonChange.Saved
+                                // The widgets and reminders first; the list shows the result once the write is over.
+                                afterWrite()
+                                readPeople(c)
+                                // Restored already (another tap): the list is only read again (screens.md SCR-010).
+                                if (restored) message = Labels.personRestored(row.person.name)
+                            }
+                        },
+                    ),
+                )
+            }
+
+            is Route.Person -> key(current.key) {
+                LaunchedEffect(core, peopleAttempts) { core?.let { readPeople(it) } }
+                val view = peopleView
+                val editing = current.personId?.let { id -> view?.active?.firstOrNull { it.person.id == id } }
+                when {
+                    view == null && (peopleFailed || (failed && core == null)) -> PeopleScreen(
+                        PeopleState.Failed,
+                        message,
+                        PeopleActions(
+                            back = { go(Route.People) },
+                            retry = {
+                                failed = false
+                                peopleFailed = false
+                                retries++
+                                peopleAttempts++
+                            },
+                            add = {},
+                            edit = {},
+                            restore = {},
+                        ),
+                    )
+                    view == null -> Loading()
+                    current.personId != null && editing == null -> LaunchedEffect(current) {
+                        // Archived meanwhile, or an old saved screen.
+                        go(Route.People)
+                        message = Labels.PERSON_GONE
+                    }
+                    else -> PersonFormScreen(
+                        editing = editing,
+                        view = view,
+                        message = message,
+                        onClose = { go(Route.People) },
+                        // The form stays until the write is over (widgets and reminders included), then the list shows it.
+                        onSave = { name, color ->
+                            write(failure = Labels.SAVE_FAILED) { c ->
+                                val id = current.personId
+                                val gone = if (id == null) {
+                                    c.people.add(name, color)
+                                    false
+                                } else {
+                                    c.people.update(id, name, color) != PersonChange.Saved
+                                }
+                                afterWrite()
+                                readPeople(c)
+                                go(Route.People)
+                                if (gone) message = Labels.PERSON_GONE
+                            }
+                        },
+                        onArchive = { row ->
+                            write(failure = Labels.ARCHIVE_FAILED) { c ->
+                                val result = c.people.archive(row.person.id)
+                                afterWrite()
+                                readPeople(c)
+                                go(Route.People)
+                                message = when (result) {
+                                    PersonChange.Saved -> Labels.personArchived(row.person.name)
+                                    PersonChange.LastPerson -> Labels.LAST_PERSON
+                                    PersonChange.Gone -> Labels.PERSON_GONE
+                                }
+                            }
+                        },
+                    )
+                }
             }
         }
     }
+}
+
+/** Where SCR-008's list was (first line and offset), kept when the activity is recreated (BUG-003). */
+private val ListPlace: Saver<LazyListState, List<Int>> = Saver(
+    save = { listOf(it.firstVisibleItemIndex, it.firstVisibleItemScrollOffset) },
+    restore = { LazyListState(it[0], it[1]) },
+)
+
+/** Actions for SCR-004#error shown on another screen: only `[다시 시도]` does something. */
+private fun homeOnlyRetry(retry: () -> Unit) = HomeActions(
+    retry = retry,
+    history = {},
+    settings = {},
+    add = {},
+    edit = {},
+    more = {},
+    record = {},
+    void = {},
+    acknowledgeRestore = {},
+    keepClock = {},
+    keepAllClocks = {},
+    cancelClock = {},
+    openAccess = {},
+)
+
+@Composable
+private fun Loading() {
+    Words(Labels.LOADING, Ui.type(16, color = Ui.Muted), Modifier.padding(horizontal = 20.dp, vertical = 16.dp))
 }

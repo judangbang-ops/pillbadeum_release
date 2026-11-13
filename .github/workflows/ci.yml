@@ -1,4 +1,4 @@
-# PR마다 공통 코드 JVM 테스트와 디버그 APK 빌드를 돌림 (TASK-033, 릴리즈 단계 R0).
+# PR마다 공통 코드 JVM 테스트, 앱 화면 시험(Robolectric)과 디버그 APK 빌드를 돌림 (TASK-033, 릴리즈 단계 R0).
 # build 작업 끝에서 릴리즈 변형도 빌드해, 그 실행에서만 쓰는 임시 키로 서명 경로를 시험하고 버전 번호·권한을 확인함 (TASK-002).
 # 같은 실행에서 설계 문서끼리의 대조(.github/scripts/check_docs.py)도 따로 돌림.
 # 업로드 키·앱 서명 키는 여기서 쓰지 않음. 업로드 키 서명은 release.yml, Play 업로드는 TASK-038.
@@ -45,7 +45,7 @@ jobs:
     # 늦게 끝난 쪽(Android 의존성)이 저장되지 않음 (2026-11-11 첫 실행에서 확인).
     name: JVM 테스트 + 디버그·릴리즈 APK
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
         with:
@@ -81,6 +81,34 @@ jobs:
           path: |
             shared/build/reports/tests/jvmTest/
             shared/build/test-results/jvmTest/
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: ignore
+
+      # 앱 화면 시험: Robolectric이 Android 15의 Compose·뷰·글꼴로 앱 화면과 위젯을 메모리 DB 위에 그려 동작과
+      # TalkBack이 읽는 값을 확인하고 PNG를 남김 (TASK-012 이후). 저장소가 공개로 바뀐 2026-11-13부터 PR마다 돌림.
+      # 같은 Gradle 캐시를 쓰려고 이 작업 안에서 돌림(위 build 설명). Robolectric의 Android jar는 실행마다 받음.
+      - name: 앱 화면 시험 (./gradlew :androidApp:testDebugUnitTest)
+        id: app-test
+        if: ${{ !cancelled() && steps.jvm-test.outcome != 'skipped' }}
+        run: ./gradlew :androidApp:testDebugUnitTest --rerun
+
+      - name: 앱 화면 시험 결과 요약
+        if: ${{ !cancelled() && steps.app-test.outcome != 'skipped' }}
+        shell: bash
+        run: python3 .github/scripts/junit_summary.py androidApp/build/test-results/testDebugUnitTest | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # 화면 PNG와 의미 트리는 검토와 캡처 확인에 쓰므로 통과해도 올림. 실패하면 보고서도 함께.
+      - name: 앱 화면 그림 올리기
+        if: ${{ !cancelled() && steps.app-test.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: app-render-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            androidApp/build/app-render/
+            androidApp/build/widget-render/
+            androidApp/build/reports/tests/testDebugUnitTest/
+            androidApp/build/test-results/testDebugUnitTest/
           retention-days: 7
           overwrite: true
           if-no-files-found: ignore

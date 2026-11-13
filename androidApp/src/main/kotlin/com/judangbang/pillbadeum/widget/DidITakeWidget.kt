@@ -2,6 +2,7 @@ package com.judangbang.pillbadeum.widget
 
 import android.content.Context
 import android.util.Log
+import android.util.TypedValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -19,15 +20,22 @@ import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.Image
 import androidx.glance.ImageProvider
+import androidx.glance.LocalContext
+import androidx.glance.LocalSize
+import androidx.glance.Visibility
+import androidx.glance.action.Action
 import androidx.glance.action.ActionParameters
 import androidx.glance.action.actionParametersOf
-import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
+import androidx.glance.appwidget.action.actionStartActivity
+import androidx.glance.appwidget.lazy.LazyColumn
+import androidx.glance.appwidget.lazy.itemsIndexed
 import androidx.glance.appwidget.provideContent
 import androidx.glance.appwidget.state.updateAppWidgetState
 import androidx.glance.appwidget.updateAll
@@ -36,8 +44,10 @@ import androidx.glance.currentState
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.Column
+import androidx.glance.layout.ContentScale
 import androidx.glance.layout.Row
 import androidx.glance.layout.Spacer
+import androidx.glance.layout.fillMaxHeight
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
@@ -50,21 +60,27 @@ import androidx.glance.state.GlanceStateDefinition
 import androidx.glance.state.PreferencesGlanceStateDefinition
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
-import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import androidx.glance.visibility
 import com.judangbang.pillbadeum.MainActivity
 import com.judangbang.pillbadeum.R
 import com.judangbang.pillbadeum.boundary.DayBoundaryAlarm
 import com.judangbang.pillbadeum.container
+import com.judangbang.pillbadeum.design.Tokens
 import com.judangbang.pillbadeum.domain.DoseSource
 import com.judangbang.pillbadeum.status.Labels
+import com.judangbang.pillbadeum.status.TileState
 import com.judangbang.pillbadeum.status.WidgetButton
+import com.judangbang.pillbadeum.status.WidgetChoice
+import com.judangbang.pillbadeum.status.WidgetLayout
 import com.judangbang.pillbadeum.status.WidgetModel
-import com.judangbang.pillbadeum.usecase.PersonColors
+import com.judangbang.pillbadeum.status.WidgetView
+import com.judangbang.pillbadeum.status.view
 import com.judangbang.pillbadeum.usecase.RecordResult
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.datetime.TimeZone
 
 /** Per-widget Glance state (Preferences). */
 private object WidgetState {
@@ -72,7 +88,6 @@ private object WidgetState {
     val REFRESH = longPreferencesKey("refresh_at")
     val MESSAGE = stringPreferencesKey("message")
     val MESSAGE_AT = longPreferencesKey("message_at")
-    val MESSAGE_WARN = longPreferencesKey("message_warn")
 
     /** A message older than this is not drawn (it also clears itself while the session is alive). */
     const val MESSAGE_TTL_MS: Long = 10_000
@@ -85,32 +100,34 @@ private object WidgetParams {
     val NAME = ActionParameters.Key<String>("name")
 }
 
-private object WidgetColors {
-    val Ink = Color(0xFF1C2129)
-    val Muted = Color(0xFF5A6372)
-    val Primary = Color(0xFF1D4E89)
-    val WarnBg = Color(0xFFFCEBD9)
-    val WarnInk = Color(0xFF7A3E06)
-    val InfoBg = Color(0xFFE3ECF8)
-    val InfoInk = Color(0xFF173E6C)
-}
-
 /**
- * Home screen widget. It renders [WidgetModel] (computed by the shared module) and sends taps to
- * [RecordFromWidget]; it never decides a judgment on its own.
+ * Home screen widget (SCR-001), drawn as the 09 mockup's 요일 약통 (TASK-014): a fixed header with the weekday chip,
+ * tiles two or one a row in a list that scrolls on its own, and a down arrow while the list overflows. It renders
+ * [WidgetModel] (computed by the shared module), arranges it with [WidgetLayout] for each size the launcher gives,
+ * and sends taps to [RecordFromWidget]; it never decides a judgment on its own.
  */
 class DidITakeWidget : GlanceAppWidget() {
+    /** One composition per launcher size: the arrangement depends on the exact width and height. */
+    override val sizeMode: SizeMode = SizeMode.Exact
+
     override val stateDefinition: GlanceStateDefinition<*> = PreferencesGlanceStateDefinition
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val container = context.container
-        val initial = loadOrNull { container.widgetModel() }
+        // The board first: opening the core fills in the choice of widgets placed before the picker (RR-74).
+        val initial = loadOrNull { container.statusBoard() }
+        // Read here as well as from the session's state, which may have been read before that fill.
+        val savedChoice = loadOrNull { WidgetChoices.read(context, id) }
+        val setUp = actionStartActivity(WidgetPickActivity.intentFor(context, GlanceAppWidgetManager(context).getAppWidgetId(id)))
         provideContent {
             val prefs = currentState<Preferences>()
             val refreshAt = prefs[WidgetState.REFRESH] ?: 0L
-            var model by remember { mutableStateOf(initial) }
+            var board by remember { mutableStateOf(initial) }
             // update()/updateAll() on a live session only recomposes; reload from DB explicitly.
-            LaunchedEffect(refreshAt) { loadOrNull { container.widgetModel() }?.let { model = it } }
+            LaunchedEffect(refreshAt) { loadOrNull { container.statusBoard() }?.let { board = it } }
+            val choice = WidgetChoice.decode(prefs[WidgetChoices.KEY]) ?: savedChoice
+            // Times in the phone's own zone, windows in the base zone (REQ-082, TASK-043).
+            val model = board?.let { WidgetModel.from(it, TimeZone.currentSystemDefault(), choice) }
 
             val message = prefs[WidgetState.MESSAGE]
             val messageAt = prefs[WidgetState.MESSAGE_AT] ?: 0L
@@ -124,7 +141,7 @@ class DidITakeWidget : GlanceAppWidget() {
                 }
             }
             val visible = message?.takeIf { wallClock - messageAt in 0 until WidgetState.MESSAGE_TTL_MS }
-            WidgetContent(model, visible, warn = (prefs[WidgetState.MESSAGE_WARN] ?: 0L) == 1L)
+            WidgetContent(model, visible, setUp)
         }
     }
 
@@ -144,6 +161,18 @@ class DidITakeWidgetReceiver : GlanceAppWidgetReceiver() {
         // First widget placed: make sure the day-boundary refresh is armed.
         context.container.appScope.launch { DayBoundaryAlarm.scheduleNext(context) }
     }
+
+    /**
+     * TASK-012 experiment (supplement R-3 proposal): when the launcher restores widgets from a backup, the platform
+     * says here which old widget id became which new one, and then asks for an update of the new ones. The choice is
+     * not backed up, so nothing is carried over: the restored widgets have no choice and ask to be set up again from
+     * two people on (REQ-079). The line in the log is what the device check reads to see whether this call comes;
+     * if it does, keeping the choice in a backed-up table keyed by widget id becomes possible.
+     */
+    override fun onRestored(context: Context, oldWidgetIds: IntArray, newWidgetIds: IntArray) {
+        super.onRestored(context, oldWidgetIds, newWidgetIds)
+        Log.i("DidITakeWidget", "onRestored: old ${oldWidgetIds.joinToString()} -> new ${newWidgetIds.joinToString()}")
+    }
 }
 
 /** Widget tap: RecordDose with the rendered period key, then message + refresh. */
@@ -152,12 +181,18 @@ class RecordFromWidget : ActionCallback {
         val intakeId = parameters[WidgetParams.INTAKE_ID] ?: return
         val container = context.container
         val core = container.core()
+        // SPEC-009: a widget that has to be set up again records nothing, even from a tile drawn before (REQ-079).
+        if (WidgetChoices.read(context, glanceId).view(core.people.list()) is WidgetView.Reconfigure) {
+            container.afterWrite()
+            return
+        }
         val result = core.record(intakeId, DoseSource.WIDGET, parameters[WidgetParams.PERIOD_KEY])
         val text = Labels.recordMessage(
             result = result,
             name = parameters[WidgetParams.NAME].orEmpty(),
             now = core.clock.now(),
-            zone = core.windowSettings().baseZone,
+            // Times in the phone's own zone (REQ-082, TASK-043).
+            zone = TimeZone.currentSystemDefault(),
         )
         if (result is RecordResult.Error) Log.e("DidITakeWidget", "record failed: ${result.message}")
         updateAppWidgetState(context, glanceId) { prefs ->
@@ -167,7 +202,6 @@ class RecordFromWidget : ActionCallback {
             } else {
                 prefs[WidgetState.MESSAGE] = text
                 prefs[WidgetState.MESSAGE_AT] = System.currentTimeMillis()
-                prefs[WidgetState.MESSAGE_WARN] = if (result is RecordResult.Stale) 0L else 1L
             }
         }
         // Recorded, Stale and Gone all need a fresh render; Already refreshes harmlessly.
@@ -186,134 +220,286 @@ object WidgetUpdater {
 }
 
 // ---------------------------------------------------------------------------------------------
+// Drawing (09 tokens, TASK-044 drawing section 2). Every part the layout can hide stays in the tree with its
+// visibility switched, so a message or the arrow never changes the tree around the list: PR #16 saw the list jump
+// to the top when a message line was inserted above it (report 1.2).
 
+private fun color(argb: Long): ColorProvider = ColorProvider(Color(argb))
+
+/** A Glance [Text] whose Korean words stay whole: lines break only at spaces ([WidgetLayout.keepWords]). */
 @Composable
-private fun WidgetContent(model: WidgetModel?, message: String?, warn: Boolean) {
-    Column(
-        modifier = GlanceModifier.fillMaxSize()
-            .background(ImageProvider(R.drawable.widget_background))
-            .padding(horizontal = 12.dp, vertical = 12.dp),
-    ) {
-        Row(
-            modifier = GlanceModifier.fillMaxWidth().clickable(actionStartActivity<MainActivity>()),
-            verticalAlignment = Alignment.CenterVertically,
+private fun Words(text: String, modifier: GlanceModifier = GlanceModifier, style: TextStyle) {
+    Text(WidgetLayout.keepWords(text), modifier = modifier, style = style)
+}
+
+/** dp of the widget's 16sp and 14sp text at the phone's font size (Android 14+ grows large fonts nonlinearly). */
+private fun widgetFonts(context: Context): WidgetLayout.Fonts {
+    val metrics = context.resources.displayMetrics
+    fun dp(sp: Float): Float = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, sp, metrics) / metrics.density
+    return WidgetLayout.Fonts(body = dp(16f), bodySm = dp(14f))
+}
+
+private fun visibleIf(shown: Boolean): Visibility = if (shown) Visibility.Visible else Visibility.Gone
+
+/**
+ * The whole widget for one size. [setUp] opens the person picker from the `#reconfigure` line (SCR-002). Internal for
+ * WidgetRenderTest, which draws it with fixed content.
+ */
+@Composable
+internal fun WidgetContent(model: WidgetModel?, message: String?, setUp: Action) {
+    val size = LocalSize.current
+    val plan = model?.let { WidgetLayout.plan(it, size.width.value, size.height.value, widgetFonts(LocalContext.current), message) }
+    // Always the first screen (SCR-004), even when the app was left on another screen.
+    val openApp = actionStartActivity(MainActivity.homeIntent(LocalContext.current))
+    Box(modifier = GlanceModifier.fillMaxSize()) {
+        Column(
+            modifier = GlanceModifier.fillMaxSize()
+                .background(ImageProvider(R.drawable.widget_background))
+                .padding(horizontal = WidgetLayout.PAD_H.dp, vertical = WidgetLayout.PAD_V.dp),
         ) {
-            Text(Labels.APP_NAME, style = TextStyle(color = ColorProvider(WidgetColors.Ink), fontSize = 15.sp, fontWeight = FontWeight.Bold))
-            Spacer(GlanceModifier.width(8.dp))
-            Text(
-                model?.dateLabel.orEmpty(),
-                style = TextStyle(color = ColorProvider(WidgetColors.Primary), fontSize = 13.sp, fontWeight = FontWeight.Bold),
-            )
-            Spacer(GlanceModifier.defaultWeight())
-            Text(model?.countLabel.orEmpty(), style = TextStyle(color = ColorProvider(WidgetColors.Muted), fontSize = 12.sp))
-        }
-        // SCR-001#restored (supplement R-3): short line only, the full notice is in the app. Taps on
-        // the buttons below still record.
-        model?.restoreLine?.let { line ->
-            Spacer(GlanceModifier.height(4.dp))
-            Text(
-                line,
-                maxLines = 2,
-                modifier = GlanceModifier.fillMaxWidth().clickable(actionStartActivity<MainActivity>()),
-                style = TextStyle(color = ColorProvider(WidgetColors.WarnInk), fontSize = 12.sp, fontWeight = FontWeight.Bold),
-            )
-        }
-        Spacer(GlanceModifier.height(10.dp))
-
-        when {
-            model == null -> Text("불러오는 중…", style = TextStyle(color = ColorProvider(WidgetColors.Muted), fontSize = 12.sp))
-            model.buttons.isEmpty() -> Text(
-                Labels.EMPTY_WIDGET,
-                modifier = GlanceModifier.clickable(actionStartActivity<MainActivity>()),
-                style = TextStyle(color = ColorProvider(WidgetColors.Muted), fontSize = 12.sp),
-            )
-            else -> model.buttons.chunked(BUTTONS_PER_ROW).forEach { row ->
-                Row(modifier = GlanceModifier.fillMaxWidth().padding(bottom = 6.dp)) {
-                    row.forEach { button -> Pill(button, GlanceModifier.defaultWeight()) }
-                    repeat(BUTTONS_PER_ROW - row.size) { Spacer(GlanceModifier.defaultWeight()) }
-                }
+            // The tap message takes the header's place for 10 seconds (TASK-044 decision 2); both open the app.
+            Box(modifier = GlanceModifier.fillMaxWidth().visibility(visibleIf(message == null))) {
+                Header(model, wraps = plan?.headerWraps == true, openApp)
             }
-        }
-
-        if (message != null) {
-            Spacer(GlanceModifier.height(4.dp))
-            Box(
-                modifier = GlanceModifier.fillMaxWidth()
-                    .background(
-                        ImageProvider(R.drawable.widget_message),
-                        colorFilter = ColorFilter.tint(ColorProvider(if (warn) WidgetColors.WarnBg else WidgetColors.InfoBg)),
-                    )
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
-            ) {
-                Text(
-                    message,
-                    style = TextStyle(color = ColorProvider(if (warn) WidgetColors.WarnInk else WidgetColors.InfoInk), fontSize = 12.sp),
-                )
+            Box(modifier = GlanceModifier.fillMaxWidth().visibility(visibleIf(message != null))) {
+                Band(message.orEmpty(), openApp)
             }
+            // SCR-001#restored (supplement R-3): a short line, the full notice is in the app. Tiles still record.
+            Column(modifier = GlanceModifier.fillMaxWidth().visibility(visibleIf(model?.restoreLine != null))) {
+                Spacer(GlanceModifier.height(WidgetLayout.GAP.dp))
+                Band(model?.restoreLine.orEmpty(), openApp)
+            }
+            Spacer(GlanceModifier.height(WidgetLayout.GAP.dp))
+            Body(model, plan, openApp, setUp, GlanceModifier.fillMaxWidth().defaultWeight())
+        }
+        // SCR-001#overflow (REQ-078): no text, read as '더 있음'. A list never reports its scroll position, so the
+        // arrow stays while the rows are estimated taller than the list (PR #16 report 3.5).
+        Box(modifier = GlanceModifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+            Image(
+                provider = ImageProvider(R.drawable.widget_more),
+                contentDescription = Labels.MORE,
+                modifier = GlanceModifier.size(44.dp, 19.dp).visibility(visibleIf(plan?.overflow == true)),
+                contentScale = ContentScale.FillBounds,
+            )
         }
     }
 }
 
 @Composable
-private fun Pill(button: WidgetButton, modifier: GlanceModifier) {
-    val action = actionRunCallback<RecordFromWidget>(
+private fun Header(model: WidgetModel?, wraps: Boolean, openApp: Action) {
+    val modifier = GlanceModifier.fillMaxWidth().clickable(openApp).padding(horizontal = WidgetLayout.HEADER_PAD_H.dp)
+    val date = TextStyle(color = color(Tokens.INK), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+    when {
+        model == null -> Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+            // Zero wide: a Spacer with no width took the whole row and squeezed the name to nothing (TASK-014 render check).
+            Spacer(GlanceModifier.width(0.dp).height(WidgetLayout.CHIP_MIN.dp))
+            Words(Labels.APP_NAME, style = date)
+        }
+        // SCR-001#reconfigure: no count, since the widget does not know whose items to count.
+        !wraps || model.reconfigure != null -> Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+            DayChip(model.weekday)
+            Spacer(GlanceModifier.width(WidgetLayout.HEADER_GAP.dp))
+            Words(model.headerDate, style = date)
+            Spacer(GlanceModifier.defaultWeight())
+            if (model.reconfigure == null) Count(model)
+        }
+        // Large fonts: the count goes under the date, at the right (TASK-044 drawing, 200%).
+        else -> Column(modifier = modifier) {
+            Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                DayChip(model.weekday)
+                Spacer(GlanceModifier.width(WidgetLayout.HEADER_GAP.dp))
+                Words(model.headerDate, modifier = GlanceModifier.defaultWeight(), style = date)
+            }
+            Spacer(GlanceModifier.height(WidgetLayout.HEADER_LINE_GAP.dp))
+            Row(modifier = GlanceModifier.fillMaxWidth(), horizontalAlignment = Alignment.End) { Count(model) }
+        }
+    }
+}
+
+/** Weekday on `color.ink.default`, at least 28dp square (09 BoxWidget `.dow`). */
+@Composable
+private fun DayChip(weekday: String) {
+    Box(
+        modifier = GlanceModifier.background(ImageProvider(R.drawable.widget_chip)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Spacer(GlanceModifier.size(WidgetLayout.CHIP_MIN.dp))
+        Words(
+            weekday,
+            modifier = GlanceModifier.padding(horizontal = WidgetLayout.CHIP_PAD_H.dp),
+            style = TextStyle(color = color(Tokens.INK_ON_SOLID), fontSize = 14.sp, fontWeight = FontWeight.Bold),
+        )
+    }
+}
+
+/** `1 / 4` bold, then ` 완료 · 건너뜀 1` muted (S-1). */
+@Composable
+private fun Count(model: WidgetModel) {
+    Words(model.countDone, style = TextStyle(color = color(Tokens.INK), fontSize = 14.sp, fontWeight = FontWeight.Bold))
+    Words(" " + model.countRest, style = TextStyle(color = color(Tokens.INK_MUTED), fontSize = 14.sp))
+}
+
+/** Notice band: the tap message, the restore line and the reconfigure line (`color.surface.notice`). */
+@Composable
+private fun Band(text: String, onTap: Action) {
+    Words(
+        text,
+        modifier = GlanceModifier.fillMaxWidth()
+            .background(ImageProvider(R.drawable.widget_notice))
+            .clickable(onTap, rippleOverride = R.drawable.widget_notice_ripple)
+            .padding(horizontal = WidgetLayout.BAND_PAD_H.dp, vertical = WidgetLayout.BAND_PAD_V.dp),
+        style = TextStyle(color = color(Tokens.INK_NOTICE), fontSize = 14.sp, fontWeight = FontWeight.Medium),
+    )
+}
+
+@Composable
+private fun Body(model: WidgetModel?, plan: WidgetLayout.Plan?, openApp: Action, setUp: Action, modifier: GlanceModifier) {
+    val quiet = TextStyle(color = color(Tokens.INK_MUTED), fontSize = 14.sp)
+    when {
+        model == null -> Words(Labels.LOADING, modifier = modifier.padding(horizontal = WidgetLayout.HEADER_PAD_H.dp), style = quiet)
+        // SCR-001#reconfigure (REQ-079): no tiles; the line opens the person picker.
+        model.reconfigure != null -> Column(modifier = modifier) { Band(model.reconfigure.orEmpty(), setUp) }
+        model.buttons.isEmpty() || plan == null -> Words(
+            model.emptyText,
+            modifier = modifier.clickable(openApp).padding(horizontal = WidgetLayout.HEADER_PAD_H.dp),
+            style = quiet,
+        )
+        else -> {
+            // A list of rows, not a grid: a Glance grid jumps back to the top after every tap (PR #16 report 1.2).
+            val rows = model.buttons.chunked(plan.columns)
+            LazyColumn(modifier = modifier) {
+                itemsIndexed(rows) { index, row ->
+                    val bottom = when {
+                        index < rows.lastIndex -> WidgetLayout.GAP
+                        plan.overflow -> WidgetLayout.END_PAD
+                        else -> 0f
+                    }
+                    TileRow(row, plan, bottom)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * One row of tiles of equal height. Every child fills the row's height, so the row takes the tallest tile's height
+ * and stretches the others to it (a LinearLayout sizes a wrap-content row by its children only when all of them do).
+ */
+@Composable
+private fun TileRow(row: List<WidgetButton>, plan: WidgetLayout.Plan, bottom: Float) {
+    Row(modifier = GlanceModifier.fillMaxWidth().padding(bottom = bottom.dp)) {
+        row.forEachIndexed { index, button ->
+            if (index > 0) Spacer(GlanceModifier.width(WidgetLayout.GAP.dp).fillMaxHeight())
+            Tile(button, button.intakeId in plan.whoAbove, GlanceModifier.defaultWeight().fillMaxHeight())
+        }
+        repeat(plan.columns - row.size) {
+            Spacer(GlanceModifier.width(WidgetLayout.GAP.dp).fillMaxHeight())
+            Spacer(GlanceModifier.defaultWeight().fillMaxHeight())
+        }
+    }
+}
+
+/**
+ * One item (09 BoxWidget `.t`): the person's tint with ink text while pending, the person's lid with white text once
+ * taken, grey once skipped (S-3). The whole tile is the touch target, at least 64dp tall.
+ */
+@Composable
+private fun Tile(button: WidgetButton, whoAbove: Boolean, modifier: GlanceModifier) {
+    val (fill, ink) = when (button.state) {
+        TileState.PENDING -> button.palette.tint to button.palette.ink
+        TileState.TAKEN -> button.palette.solid to Tokens.INK_ON_SOLID
+        TileState.SKIPPED -> Tokens.SURFACE_SKIP to Tokens.INK_MUTED
+    }
+    val record = actionRunCallback<RecordFromWidget>(
         actionParametersOf(
             WidgetParams.INTAKE_ID to button.intakeId,
             WidgetParams.PERIOD_KEY to button.periodKey,
             WidgetParams.NAME to button.title,
         ),
     )
-    // The whole pill (circle + labels) is the touch target: well above 48dp.
-    Column(
-        modifier = modifier.clickable(action).semantics { contentDescription = button.description },
-        horizontalAlignment = Alignment.CenterHorizontally,
+    Row(
+        modifier = modifier
+            .background(ImageProvider(R.drawable.widget_tile), colorFilter = ColorFilter.tint(color(fill)))
+            .clickable(record, rippleOverride = R.drawable.widget_tile_ripple)
+            .semantics { contentDescription = button.description }
+            .padding(
+                start = WidgetLayout.TILE_PAD_START.dp,
+                end = WidgetLayout.TILE_PAD_END.dp,
+                top = WidgetLayout.TILE_PAD_V.dp,
+                bottom = WidgetLayout.TILE_PAD_V.dp,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(modifier = GlanceModifier.size(60.dp), contentAlignment = Alignment.Center) {
-            Box(
-                modifier = GlanceModifier.size(54.dp).background(
-                    ImageProvider(if (button.done) R.drawable.widget_circle_done else R.drawable.widget_circle_pending),
-                ),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (button.done) {
-                    Image(
-                        provider = ImageProvider(R.drawable.ic_widget_check),
-                        contentDescription = null,
-                        modifier = GlanceModifier.size(26.dp),
-                    )
-                }
-            }
-            Box(modifier = GlanceModifier.fillMaxSize(), contentAlignment = Alignment.TopStart) {
-                Box(
-                    modifier = GlanceModifier.size(20.dp).background(
-                        ImageProvider(R.drawable.widget_badge),
-                        colorFilter = ColorFilter.tint(ColorProvider(Color(PersonColors.argb(button.personColor)))),
+        // Keeps the tile 64dp tall (48 + the padding) however short its text is.
+        Spacer(GlanceModifier.width(0.dp).height((WidgetLayout.TILE_MIN_HEIGHT - 2 * WidgetLayout.TILE_PAD_V).dp))
+        Column(modifier = GlanceModifier.defaultWeight()) {
+            NameLine(button, whoAbove, ink)
+            button.lines.forEachIndexed { index, line ->
+                // W-2: a pending weekly item's last dose at the name's size.
+                val large = index == 0 && button.largeFirstLine
+                Spacer(GlanceModifier.height(WidgetLayout.TILE_LINE_GAP.dp))
+                Words(
+                    line,
+                    style = TextStyle(
+                        color = color(ink),
+                        fontSize = if (large) 16.sp else 14.sp,
+                        fontWeight = if (large) FontWeight.Medium else FontWeight.Normal,
                     ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        button.personInitial,
-                        style = TextStyle(color = ColorProvider(Color.White), fontSize = 10.sp, fontWeight = FontWeight.Bold),
-                    )
-                }
+                )
             }
         }
-        Text(
-            button.title,
-            maxLines = 1,
-            style = TextStyle(
-                color = ColorProvider(WidgetColors.Ink),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-            ),
-        )
-        Text(
-            button.subtitle,
-            maxLines = 2,
-            style = TextStyle(color = ColorProvider(WidgetColors.Muted), fontSize = 10.sp, textAlign = TextAlign.Center),
-        )
     }
 }
 
-private const val BUTTONS_PER_ROW = 4
+/**
+ * `엄마 혈압약` and the state icon at the right of the first line (09 BoxWidget `.tr`). The person's name is drawn only
+ * with two or more people (REQ-018) and goes on its own line when both names do not fit ([WidgetLayout]).
+ */
+@Composable
+private fun NameLine(button: WidgetButton, whoAbove: Boolean, ink: Long) {
+    val who = button.who
+    val whoStyle = TextStyle(color = color(ink), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+    val nameStyle = TextStyle(color = color(ink), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+    if (who != null && whoAbove) {
+        Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+            Words(who, modifier = GlanceModifier.defaultWeight(), style = whoStyle)
+            Spacer(GlanceModifier.width(WidgetLayout.ICON_GAP.dp))
+            StateIcon(button)
+        }
+        Words(button.title, style = nameStyle)
+    } else {
+        Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+            if (who != null) {
+                // 2dp down so the smaller name sits near the item name's baseline.
+                Words(who, modifier = GlanceModifier.padding(top = 2.dp, end = WidgetLayout.WHO_GAP.dp), style = whoStyle)
+            }
+            Words(button.title, modifier = GlanceModifier.defaultWeight(), style = nameStyle)
+            Spacer(GlanceModifier.width(WidgetLayout.ICON_GAP.dp))
+            StateIcon(button)
+        }
+    }
+}
+
+/** Dashed ring in the person's ink (pending), white disc with a check in the lid color (taken), grey disc with a minus (skipped). */
+@Composable
+private fun StateIcon(button: WidgetButton) {
+    val icon = GlanceModifier.size(WidgetLayout.ICON.dp)
+    when (button.state) {
+        TileState.PENDING -> Image(
+            provider = ImageProvider(R.drawable.widget_icon_ring),
+            contentDescription = null,
+            modifier = icon,
+            colorFilter = ColorFilter.tint(color(button.palette.ink)),
+        )
+        TileState.TAKEN -> Box(modifier = icon, contentAlignment = Alignment.Center) {
+            Image(provider = ImageProvider(R.drawable.widget_icon_disc), contentDescription = null, modifier = GlanceModifier.fillMaxSize())
+            Image(
+                provider = ImageProvider(R.drawable.ic_widget_check),
+                contentDescription = null,
+                modifier = GlanceModifier.size(14.dp),
+                colorFilter = ColorFilter.tint(color(button.palette.solid)),
+            )
+        }
+        TileState.SKIPPED -> Image(provider = ImageProvider(R.drawable.widget_icon_skipped), contentDescription = null, modifier = icon)
+    }
+}

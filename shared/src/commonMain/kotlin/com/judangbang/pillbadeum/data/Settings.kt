@@ -52,6 +52,13 @@ object SettingKeys {
      * when no alarm is needed. Kept so a re-plan does not lose an alarm that is late and not yet collected.
      */
     const val REMINDER_ALARM_AT: String = "reminder_alarm_at"
+
+    /**
+     * When the first-run intro was finished or skipped (UTC epoch ms, SCR-005, SPEC-002, TASK-022); absent until then,
+     * and the app shows the intro. It is backed up with the database, so a restored phone shows the restore notice
+     * instead (05 ERD sections 4 and 5.1).
+     */
+    const val INTRO_SEEN_AT: String = "intro_seen_at"
 }
 
 /**

@@ -127,6 +127,11 @@ ANR_TITLE = "isn't responding"
 APP_LABEL = "DidITake"  # app_name in androidApp/src/main/res/values/strings.xml
 CLOSED_DIALOGS: list[str] = []
 
+# Where the screen dump is written. Not /sdcard: before the first unlock after a reboot the shared storage is still
+# locked (file-based encryption), uiautomator says "dumped" but no file is there, and `cat` prints an error instead
+# of XML (reminder check run 43365673905, every API). /data/local/tmp is usable from boot.
+UI_XML = "/data/local/tmp/ui.xml"
+
 
 def dump_ui() -> list[Node]:
     out = ""
@@ -134,13 +139,19 @@ def dump_ui() -> list[Node]:
     # "null root node" means no window is ready yet; after a reboot on the CI emulator System UI can
     # take more than a minute (explore run 7, 2026-11-12), so that case waits longer than a busy dump.
     for _ in range(25):
-        out = sh("uiautomator dump /sdcard/ui.xml", check=False)
+        out = sh(f"uiautomator dump {UI_XML}", check=False)
         if "dumped" not in out:
             time.sleep(3 if "null root node" in out else 1)
             continue
-        xml = adb("exec-out", "cat", "/sdcard/ui.xml")
+        xml = adb("exec-out", "cat", UI_XML, check=False)
+        try:
+            root = ET.fromstring(xml)
+        except ET.ParseError:
+            out = f"not a screen dump: {xml[:200]!r}"
+            time.sleep(2)
+            continue
         nodes = []
-        for el in ET.fromstring(xml).iter("node"):
+        for el in root.iter("node"):
             m = BOUNDS.match(el.get("bounds", ""))
             if not m:
                 continue
@@ -744,7 +755,7 @@ def main() -> int:
         r.check("스크립트", "끝까지 돎", f"{type(exc).__name__}: {exc}", False)
         try:
             r.shot("error")
-            (args.out / f"api{api}-ui.xml").write_text(adb("exec-out", "cat", "/sdcard/ui.xml", check=False), encoding="utf-8")
+            (args.out / f"api{api}-ui.xml").write_text(adb("exec-out", "cat", UI_XML, check=False), encoding="utf-8")
         except Exception:
             pass
     finally:

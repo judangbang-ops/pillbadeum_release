@@ -33,6 +33,7 @@ import time
 from pathlib import Path
 
 from backup_restore_check import (
+    UI_XML,
     ITEM_A,
     ITEM_B,
     NOTICE,
@@ -146,7 +147,7 @@ def drag(x1: int, y1: int, x2: int, y2: int, r: Report | None = None, tag: str =
 
 def save_ui(r: Report, name: str) -> None:
     """Keeps the last screen dump next to the screenshots, for when the launcher steps go wrong."""
-    xml = adb("exec-out", "cat", "/sdcard/ui.xml", check=False)
+    xml = adb("exec-out", "cat", UI_XML, check=False)
     (r.out / f"api{r.api}-{name}.xml").write_text(xml, encoding="utf-8")
 
 
@@ -437,7 +438,7 @@ def main() -> int:
         r.check("스크립트", "끝까지 돎", f"{type(exc).__name__}: {exc}", False)
         try:
             r.shot("error")
-            (args.out / f"api{api}-ui.xml").write_text(adb("exec-out", "cat", "/sdcard/ui.xml", check=False), encoding="utf-8")
+            (args.out / f"api{api}-ui.xml").write_text(adb("exec-out", "cat", UI_XML, check=False), encoding="utf-8")
         except Exception:
             pass
     finally:

@@ -10,20 +10,27 @@ the same on every image (Android 8 prints `when=` in system_server's own time zo
 
 Flow, on the run's date D in Asia/Seoul (five daily items PillA..PillE, reminders from 08:00, at most 5 a day):
    1. TASK-024 one alarm: with exact alarms refused (Android 12+), then allowed, `dumpsys alarm` holds one
-      reminder alarm of the app at 08:00 (RR-54), inexact then exact; the day-boundary alarm is separate.
+      reminder alarm of the app at 08:00 (RR-54), inexact then exact; the day-boundary alarm is separate. The
+      inexact one has a windowed second alarm at the same time (ReminderAlarm.WINDOW, 10 minutes), told apart by
+      its flags; allowing exact alarms takes it off.
    2. 08:00 the alarm rings with the screen locked: five item reminders, all VISIBILITY_SECRET with
       [먹었어] [30분 뒤] [오늘 건너뜀], and one silent PUBLIC "복용 시간이에요" (SPEC-013, RR-54). They carry
       group keys without a summary, so Android does not bundle them under the app name (PR #20).
    3. Lock screen, eight cells (TC-013): names off/on x the device setting "show all content" (1) / "hide
       sensitive content" (0) x locked/unlocked. Names off: no item name or button on the lock screen, even
-      expanded. Names on + show all: names and [먹었어], and [먹었어] of the first name shown records it without
-      unlocking. On Android 8 and 11 a tap does not expand a lock-screen notification (PR #15, section 3): only
-      the names are checked there, a drag is tried for [먹었어], and when it fails that is a note, not a failure.
+      expanded, not even in a notification icon's description. Names on + show all: names and [먹었어], and
+      [먹었어] of the first name shown records it without unlocking. Names on + hide: no name on the screen; on
+      API 30 System UI still puts the private title into the description of an overflow icon (ICON_DESC), which
+      is noted as a platform limit. On Android 8 and 11 a tap does not expand a lock-screen notification (PR #15,
+      section 3): only the names are checked there, a drag is tried for [먹었어], and when it fails that is a
+      note, not a failure.
    4. Buttons (TC-011, TC-012): of the four other items, in name order, one [오늘 건너뜀] and one [30분 뒤]
       from the shade, one recorded in the app (RR-86) and one swiped away. When the lock screen recorded none,
       PillA is recorded from the shade first. Each reminder goes, and with the last one "복용 시간이에요"
-      goes (N-13).
-   5. 08:30 the snoozed item rings (RR-51), and the next alarm is 09:00.
+      goes (N-13). The snooze rings 30 minutes after the press (`reminder_snooze.fire_at`), and that is the next
+      alarm. A swipe that System UI does not take as a dismissal is tried again (swipe_away), and the report says
+      which try worked.
+   5. 30 minutes after the press the snoozed item rings (RR-51), and the next alarm is 09:00.
    6. A missed alarm (N-12): the app is force-stopped before 09:00, so the 09:00 alarm never comes; opening
       the app at 09:03 shows the 09:00 reminders of the snoozed and the swiped item at once.
    7. Restore (TASK-040, RR-30, RR-33, RR-73): the install marker is deleted, as after a restore (supplement
@@ -73,7 +80,7 @@ from backup_restore_check import (
     uninstall,
     wait_boot,
 )
-from explore import ZONE, put_clock, row_button, set_clock, set_zone
+from explore import ZONE, phone_now, put_clock, row_button, set_clock, set_zone
 from release_check import go_home, save_ui, screen_size
 
 SEED = f"{PKG}/.debug.ReminderSeedReceiver"
@@ -141,13 +148,31 @@ class PlannedAlarm:
         return self.window == "0"
 
     @property
-    def when(self) -> str:
-        """The trigger time in Asia/Seoul, from the epoch of the block head (`Alarm{… when 1794524400000 …}`, `origWhen`
-        from Android 12). The formatted `when=` is the system server's own zone: on API 26 it stayed UTC after the zone
-        was set (run 43360309166), and after a reboot the emulator may start in UTC."""
+    def flags(self) -> int:
+        m = re.search(r"\bflags=0x([0-9a-f]+)", self.block)
+        return int(m.group(1), 16) if m else 0
+
+    @property
+    def windowed(self) -> bool:
+        """The second alarm of the inexact path (`setWindow`, ReminderAlarm.WINDOW = 10 minutes): no allow-while-idle
+        flag. The planned alarm carries FLAG_ALLOW_WHILE_IDLE (0x4, exact), FLAG_ALLOW_WHILE_IDLE_UNRESTRICTED (0x8) or,
+        inexact from Android 12, FLAG_ALLOW_WHILE_IDLE_COMPAT (0x20). Run 43365673905, API 34 with exact alarms refused:
+        flags=0x20 window=+14m26s677ms and flags=0x0 window=+10m0s0ms, both at 08:00."""
+        return not self.flags & 0x2C
+
+    @property
+    def millis(self) -> int | None:
+        """The trigger time in epoch milliseconds, from the block head (`Alarm{… when 1794524400000 …}`, `origWhen`
+        from Android 12)."""
         m = re.search(r"\b(?:origWhen|when) (\d{12,})", self.block)
-        if m:
-            return datetime.fromtimestamp(int(m.group(1)) / 1000, ZONE).strftime("%Y-%m-%d %H:%M:%S")
+        return int(m.group(1)) if m else None
+
+    @property
+    def when(self) -> str:
+        """The trigger time in Asia/Seoul, from [millis]. The formatted `when=` is the system server's own zone: on API 26
+        it stayed UTC after the zone was set (run 43360309166), and after a reboot the emulator may start in UTC."""
+        if self.millis is not None:
+            return datetime.fromtimestamp(self.millis / 1000, ZONE).strftime("%Y-%m-%d %H:%M:%S")
         m = re.search(r"\b(?:origWhen|when)=(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)", self.block)
         if m:
             return m.group(1)
@@ -155,7 +180,8 @@ class PlannedAlarm:
 
     def describe(self) -> str:
         reason = re.search(r"exactAllowReason=(\S+)", self.block)
-        return f"{self.when}, window={self.window}" + (f", {reason.group(0)}" if reason else "")
+        return (f"{self.when}, window={self.window}" + (", 창 알람" if self.windowed else "")
+                + (f", {reason.group(0)}" if reason else ""))
 
 
 def alarm_dump() -> str:
@@ -310,9 +336,14 @@ def judgments(ids: dict[str, str]) -> dict[str, tuple[str, str]]:
     return {names.get(r[0], r[0]): (str(r[1]), str(r[2])) for r in rows}
 
 
-def snoozes(ids: dict[str, str]) -> list[str]:
+def snoozes(ids: dict[str, str]) -> dict[str, int]:
+    """Pending snoozes by item name: the time it rings again, in epoch milliseconds (`reminder_snooze.fire_at`)."""
     names = {v: k for k, v in ids.items()}
-    return sorted(names.get(r[0], r[0]) for r in query("SELECT intake_id FROM reminder_snooze"))
+    return {names.get(r[0], r[0]): int(r[1]) for r in query("SELECT intake_id, fire_at FROM reminder_snooze")}
+
+
+def clock_text(millis: int | None) -> str:
+    return "-" if millis is None else datetime.fromtimestamp(millis / 1000, ZONE).strftime("%H:%M:%S")
 
 
 def setting(key: str) -> str | None:
@@ -400,20 +431,32 @@ def collapse_shade() -> None:
     time.sleep(1)
 
 
+# System UI describes a notification icon (status bar, the lock screen's shelf) as "<app> notification: <title>"
+# (StatusBarIconView.contentDescForNotification). On API 30 that title is the private one even while the lock screen
+# hides the content: with names shown and the device set to hide sensitive content, the shelf icons of the overflow
+# read "DidITake notification: PillA 먹어~!" to accessibility, and the screen shows no name (run 43365673905).
+ICON_DESC = re.compile(r"^.+ notification: ")
+
+
 @dataclass
 class Seen:
     names: list[str]
     button: bool
     generic: bool
+    icon_names: list[str] = field(default_factory=list)  # names only in a notification icon's description
 
     def describe(self) -> str:
+        icons = f", 알림 아이콘 설명에만 이름 {', '.join(self.icon_names)}" if self.icon_names else ""
         return (f"이름 {', '.join(self.names) or '없음'}, [먹었어] {'보임' if self.button else '없음'}, "
-                f"'{LOCK_TITLE}' {'보임' if self.generic else '없음'}")
+                f"'{LOCK_TITLE}' {'보임' if self.generic else '없음'}{icons}")
 
 
 def read_once() -> Seen:
-    blob = "\n".join(t for n in dump_ui() for t in (n.text, n.desc) if t)
-    return Seen([n for n in NAMES if n in blob], TAKEN in blob, LOCK_TITLE in blob)
+    nodes = dump_ui()
+    blob = "\n".join(t for n in nodes for t in (n.text, "" if ICON_DESC.match(n.desc) else n.desc) if t)
+    icons = "\n".join(n.desc for n in nodes if ICON_DESC.match(n.desc))
+    return Seen([n for n in NAMES if n in blob], TAKEN in blob, LOCK_TITLE in blob,
+                [n for n in NAMES if n in icons and n not in blob])
 
 
 def read_screen(expand: int = 4) -> Seen:
@@ -426,8 +469,9 @@ def read_screen(expand: int = 4) -> Seen:
             break
         tap(button)
         again = read_once()
-        seen = Seen([n for n in NAMES if n in seen.names or n in again.names],
-                    seen.button or again.button, seen.generic or again.generic)
+        names = [n for n in NAMES if n in seen.names or n in again.names]
+        seen = Seen(names, seen.button or again.button, seen.generic or again.generic,
+                    [n for n in NAMES if (n in seen.icon_names or n in again.icon_names) and n not in names])
     return seen
 
 
@@ -484,21 +528,55 @@ def press_in_shade(name: str, label: str) -> None:
     collapse_shade()
 
 
-def swipe_away(name: str) -> None:
-    expand_shade()
+def shade_title(name: str) -> Node | None:
+    """The title of `name`'s reminder in the open shade, expanding a bundle once if it is not shown."""
     head = next((n for n in dump_ui() if title(name) in n.text), None)
     if head is None:
         expander = next((n for n in dump_ui() if n.rid.endswith(":id/expand_button") and "ollapse" not in n.desc), None)
         if expander is not None:
             tap(expander)
         head = next((n for n in dump_ui() if title(name) in n.text), None)
-    if head is None:
-        raise RuntimeError(f"{name}'s reminder not found in the shade")
+    return head
+
+
+# How each try swipes: (start x, end x) as parts of the screen width, and the duration in ms.
+SWIPES = ((0.2, 0.995, 300), (0.2, 0.995, 1000), (0.8, 0.005, 1000))
+
+
+def swipe_away(r: Report, name: str, api: int) -> int:
+    """Swipes `name`'s reminder off in the shade, as a person does, and returns the try that took it off (0: none did).
+
+    On the CI emulator a swipe did not always reach System UI as a dismissal: in run 43365673905 (API 30 and 34) the
+    swipe went across the reminder's title in the open shade and the app never heard of it (no log after it, while on
+    API 36 the dismissal's re-plan was logged at once). Each try opens the shade again, reads where the title is now,
+    keeps a screenshot, and swipes slower or the other way; the report says which try worked. From API 29 a last try
+    moves the finger in steps (`input motionevent`), so the move does not hang on how fast System UI takes events."""
     w, _ = screen_size()
-    y = head.center[1]
-    sh(f"input swipe {w // 5} {y} {w - 5} {y} 300")
-    time.sleep(3)
-    collapse_shade()
+    tries = [*SWIPES, None] if api >= 29 else list(SWIPES)
+    for attempt, swipe in enumerate(tries, 1):
+        expand_shade()
+        r.shot(f"swipe-{name}-{attempt}")
+        head = shade_title(name)
+        if head is None:
+            save_ui(r, f"swipe-{name}-{attempt}")
+            collapse_shade()
+            raise RuntimeError(f"{name}'s reminder not found in the shade (try {attempt})")
+        y = head.center[1]
+        if swipe is None:
+            xs = [int(w * f) for f in (0.2, 0.35, 0.5, 0.65, 0.8, 0.95)]
+            moves = "; ".join(f"input motionevent MOVE {x} {y}" for x in xs[1:])
+            sh(f"input motionevent DOWN {xs[0]} {y}; {moves}; input motionevent UP {xs[-1]} {y}")
+        else:
+            start, end, duration = swipe
+            sh(f"input swipe {int(w * start)} {y} {int(w * end)} {y} {duration}")
+        time.sleep(3)
+        if name not in dose_names(wait_posted(lambda p: name not in dose_names(p), timeout=10)):
+            collapse_shade()
+            return attempt
+        dump_ui()
+        save_ui(r, f"swipe-{name}-{attempt}-after")
+        collapse_shade()
+    return 0
 
 
 # ------------------------------------------------------------------------------------------------
@@ -516,6 +594,7 @@ class Run:
         self.lock_taken: str | None = None
         self.snoozed = "PillC"
         self.swiped = "PillE"
+        self.snooze_at: int | None = None  # reminder_snooze.fire_at of the snoozed item, epoch ms (step 4)
 
     def check(self, case: str, expected: str, actual: str, ok: bool) -> bool:
         return self.r.check(case, expected, actual, ok)
@@ -567,22 +646,31 @@ def flow(run: Run, api: int) -> None:
     # 1. TASK-024: one reminder alarm, inexact then exact
     ids = seed(list(NAMES), "08:00", max_per_day=5)
     run.ids = dict(zip(NAMES, ids))
-    first = wait_alarm(lambda a: len(a) >= 1)
+    want_exact = not exact_gate
+    first = wait_alarm(lambda a: len(a) >= (1 if want_exact else 2))
     dump = alarm_dump()
     run.save("alarm-after-seed", dump)
     boundary = alarms(BOUNDARY_ALARM, dump)
-    want_exact = not exact_gate
-    run.check("TASK-024 항목 다섯 개, 같은 08:00 (RR-54)",
-              f"알림 알람 1개, 08:00, {'정확' if want_exact else '비정확(정확 알람 거부)'}; 하루 경계 알람은 따로 1개",
-              f"알림 알람 {show_alarms(first)}; 경계 알람 {len(boundary)}개",
-              len(first) == 1 and first[0].when.endswith("08:00:00") and first[0].exact == want_exact and len(boundary) == 1)
+    planned = [a for a in first if not a.windowed]
+    second = [a for a in first if a.windowed]
+    if want_exact:
+        expected = "알림 알람 1개, 08:00, 정확; 하루 경계 알람은 따로 1개"
+        ok = len(first) == 1 and len(planned) == 1 and planned[0].exact and planned[0].when.endswith("08:00:00")
+    else:
+        # ReminderAlarm: the inexact alarm may ring up to an hour late, so a windowed one (10 minutes) goes with it.
+        expected = ("알림 알람 1개, 08:00, 비정확(정확 알람 거부) + 같은 08:00의 10분 창 알람 1개(ReminderAlarm.WINDOW); "
+                    "하루 경계 알람은 따로 1개")
+        ok = (len(planned) == 1 and not planned[0].exact and planned[0].when.endswith("08:00:00")
+              and len(second) == 1 and second[0].window == "+10m0s0ms" and second[0].when.endswith("08:00:00"))
+    run.check("TASK-024 항목 다섯 개, 같은 08:00 (RR-54)", expected,
+              f"알림 알람 {show_alarms(first)}; 경계 알람 {len(boundary)}개", ok and len(boundary) == 1)
 
     if exact_gate:
         sh(f"appops set {PKG} SCHEDULE_EXACT_ALARM allow")
         granted = wait_alarm(lambda a: len(a) == 1 and a[0].exact, timeout=45)
         run.save("alarm-after-allow", alarm_dump())
         run.check("TASK-024 정확 알람을 허용한 뒤",
-                  "권한 바뀜 방송으로 다시 계산: 알림 알람 1개, 08:00, 정확",
+                  "권한 바뀜 방송으로 다시 계산: 알림 알람 1개, 08:00, 정확 (창 알람은 지워짐)",
                   f"{show_alarms(granted)} ({sh(f'appops get {PKG} SCHEDULE_EXACT_ALARM', check=False).strip()})",
                   len(granted) == 1 and granted[0].exact and granted[0].when.endswith("08:00:00"))
 
@@ -628,9 +716,19 @@ def flow(run: Run, api: int) -> None:
         elif names_on and device == "1":
             ok = len(locked.names) >= 1
             expected = "이름이 보임 ([먹었어]는 보지 않음: API 26·30 잠금 화면에서는 펼치기 탭이 먹지 않음, PR #15 실험 3장)"
-        else:
+        elif names_on:
+            # Names shown, device hides content: the screen shows the public versions. A name only in the description of
+            # an overflow icon is System UI's (API 30, see ICON_DESC): noted, not counted.
             ok = not locked.names and not locked.button and locked.generic
             expected = f"이름·버튼 없이 '{LOCK_TITLE}'만 (펼쳐도)"
+            if locked.icon_names:
+                r.note(f"TC-013 {label}: 화면에는 이름이 없고, 잠금 화면 알림 아이콘의 접근성 설명에만 "
+                       f"{', '.join(locked.icon_names)}이 있음(API {api} System UI가 숨긴 알림의 제목을 아이콘 설명에 씀, "
+                       "앱이 막을 수 없는 플랫폼 한계)")
+        else:
+            # Names hidden: the reminders are SECRET and not on the lock screen at all, so not even an icon may name one.
+            ok = not locked.names and not locked.icon_names and not locked.button and locked.generic
+            expected = f"이름·버튼 없이 '{LOCK_TITLE}'만 (펼쳐도, 알림 아이콘 설명에도 이름 없음)"
         run.check(f"TC-013 잠금 화면: {label}", expected, f"잠금 {showing}; {locked.describe()}", ok and showing is True)
         if tap_taken:
             lock()
@@ -703,16 +801,25 @@ def flow(run: Run, api: int) -> None:
             press_in_shade(taken, TAKEN)
             r.note(f"{taken}: 알림창의 [{TAKEN}]로 기록함, 판정 {judgments(run.ids).get(taken)}")
         press_in_shade(skipped, SKIP)
+        before = phone_now() * 1000
         press_in_shade(snoozed, SNOOZE)
         state = judgments(run.ids)
         left = dose_names(posted())
         alarm = alarms(REMINDER_ALARM)
+        snoozed_until = snoozes(run.ids)
+        run.snooze_at = snoozed_until.get(snoozed)
+        # [30분 뒤] rings 30 minutes after the press (usecase/Reminders.kt: fireAt = now + PlanReminders.SNOOZE), not at
+        # the slot + 30: the press comes some minutes after 08:00 here (run 43365673905: 08:04:03 -> 08:34:03).
+        on_time = run.snooze_at is not None and 30 * 60_000 <= run.snooze_at - before <= 32 * 60_000
+        until = ", ".join(f"{k} {clock_text(v)}" for k, v in snoozed_until.items()) or "없음"
         run.check("TC-011·TC-012 알림 버튼",
-                  f"{skipped} 건너뜀(SKIPPED, NOTIFICATION), {snoozed} 미룸 1건, 둘의 알림 사라짐, 다음 알람 08:30",
-                  f"{skipped} {state.get(skipped)}, 미룸 {snoozes(run.ids)}, 남은 알림 {left}, 알람 {show_alarms(alarm)}",
-                  state.get(skipped) == ("SKIPPED", "NOTIFICATION") and snoozes(run.ids) == [snoozed]
+                  f"{skipped} 건너뜀(SKIPPED, NOTIFICATION), {snoozed} 미룸 1건(누른 때부터 30분 뒤), 둘의 알림 사라짐, "
+                  "다음 알람 = 미룬 시각",
+                  f"{skipped} {state.get(skipped)}, 미룸 {until} (누르기 직전 시계 {clock_text(before)}), "
+                  f"남은 알림 {left}, 알람 {show_alarms(alarm)}",
+                  state.get(skipped) == ("SKIPPED", "NOTIFICATION") and list(snoozed_until) == [snoozed] and on_time
                   and skipped not in left and snoozed not in left
-                  and len(alarm) == 1 and alarm[0].when.endswith("08:30:00"))
+                  and len(alarm) == 1 and alarm[0].millis is not None and abs(alarm[0].millis - run.snooze_at) < 1000)
 
         launch_app()
         tap(row_button(in_app, TAKEN))
@@ -725,25 +832,36 @@ def flow(run: Run, api: int) -> None:
                   f"{in_app} {state.get(in_app)}, 남은 알림 {left}",
                   state.get(in_app) == ("TAKEN", "APP") and in_app not in left)
 
-        swipe_away(swiped)
-        items_ = posted()
+        tried = swipe_away(r, swiped, api)
+        items_ = wait_posted(lambda p: not doses(p) and not lock_notices(p), timeout=15)
         run.check("N-13 마지막 항목 알림을 밀어서 지움", f"{swiped} 알림 사라짐, 항목 알림 0개, '{LOCK_TITLE}'도 사라짐, {swiped}는 판정 없음",
-                  f"{show_posted(items_)}; {swiped} 판정 {judgments(run.ids).get(swiped)}",
-                  not doses(items_) and not lock_notices(items_) and swiped not in judgments(run.ids))
+                  f"{f'{tried}번째 밀기에 사라짐' if tried else '밀어도 남음'}; {show_posted(items_)}; "
+                  f"{swiped} 판정 {judgments(run.ids).get(swiped)}",
+                  tried > 0 and not doses(items_) and not lock_notices(items_) and swiped not in judgments(run.ids))
+        if tried > 1:
+            r.note(f"N-13 밀어서 지우기: 앞의 {tried - 1}번은 System UI가 지우기로 받지 않았음(앱에 아무것도 닿지 않음), "
+                   f"{tried}번째({'손가락을 나눠 움직임' if tried > len(SWIPES) else '더 느리게 또는 반대로'})에 지워짐. 캡처 swipe-{swiped}-*")
 
     run.step("버튼·앱·밀어서 지우기", buttons)
 
-    # 5. The snooze rings at 08:30
+    # 5. The snooze rings 30 minutes after the press
     def snooze_rings() -> None:
-        r.note(f"시계 {set_clock(at(0, 8, 29))}")
+        if run.snooze_at is None:
+            raise RuntimeError("no snooze time: step 4 did not snooze")
+        due = datetime.fromtimestamp(run.snooze_at / 1000, ZONE)
+        # Item reminders still up from step 4 (none when it passed) stay; only the snoozed item may come back.
+        before = dose_names(posted())
+        r.note(f"시계 {set_clock(due - timedelta(minutes=1))}")
         items_ = wait_posted(lambda p: run.snoozed in dose_names(p), timeout=300)
         alarm = alarms(REMINDER_ALARM)
-        r.shot("snooze-0830")
-        run.check("RR-51 [30분 뒤]가 08:30에 울림", f"{run.snoozed} 알림 하나 다시 뜸, 다음 알람 09:00",
+        r.shot("snooze-rings")
+        run.check(f"RR-51 [30분 뒤]가 {due:%H:%M:%S}에 울림",
+                  f"{run.snoozed} 알림 하나 다시 뜸, 다음 알람 09:00" + (f" (4단계에서 남은 {before}는 그대로)" if before else ""),
                   f"{show_posted(items_)}; 알람 {show_alarms(alarm)}",
-                  dose_names(items_) == [run.snoozed] and len(alarm) == 1 and alarm[0].when.endswith("09:00:00"))
+                  dose_names(items_) == sorted({*before, run.snoozed}) and len(alarm) == 1
+                  and alarm[0].when.endswith("09:00:00"))
 
-    run.step("08:30 미룬 알림", snooze_rings)
+    run.step("미룬 알림", snooze_rings)
 
     # 6. A missed alarm comes at once when the app opens (N-12)
     def missed() -> None:

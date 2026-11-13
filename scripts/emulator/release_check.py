@@ -45,6 +45,7 @@ from backup_restore_check import (
     backup_entries,
     backup_now,
     become_root,
+    button_for,
     describe,
     dump_ui,
     ensure_transport,
@@ -68,7 +69,13 @@ from backup_restore_check import (
 )
 
 WIDGET_LABEL = "DidITake"  # app_name / widget_label in androidApp/src/main/res/values/strings.xml
+# The widget's person picker (SCR-002, TASK-012): Labels.PICK_TITLE. It opens on the drop from two people on; with one
+# person it closes by itself and the widget shows everyone (REQ-018).
+PICK_TITLE = "이 위젯에 누구 약을 보일까요?"
 RESTORED_LINE = "복원됨"  # Labels.restoreWidgetLine (supplement R-3)
+# BUG-004: the app switches this WorkManager receiver on when it starts (RescheduleReceiverKeeper), so
+# placing the first widget no longer causes a PACKAGE_CHANGED that resets it to the loading view.
+RESCHEDULE_RECEIVER = "androidx.work.impl.background.systemalarm.RescheduleReceiver"
 
 
 # ------------------------------------------------------------------------------------------------
@@ -89,6 +96,22 @@ def package_info() -> dict[str, str]:
 
 # ------------------------------------------------------------------------------------------------
 # Home screen and widget
+
+
+def reschedule_receiver_enabled() -> bool:
+    """True when `dumpsys package` lists WorkManager's RescheduleReceiver under enabledComponents
+    (it is declared disabled; WorkManager switches it on with the first unfinished work)."""
+    lines = sh(f"dumpsys package {PKG}", check=False).splitlines()
+    for i, line in enumerate(lines):
+        if line.strip() != "enabledComponents:":
+            continue
+        indent = len(line) - len(line.lstrip())
+        for item in lines[i + 1:]:
+            if not item.strip() or len(item) - len(item.lstrip()) <= indent:
+                break
+            if item.strip() == RESCHEDULE_RECEIVER:
+                return True
+    return False
 
 
 def screen_size() -> tuple[int, int]:
@@ -181,8 +204,9 @@ def open_full_widget_picker(r: Report, tag: str, w: int, h: int) -> int:
     return header.bounds[3]
 
 
-def place_widget(r: Report, tag: str) -> None:
-    """Drags the DidITake widget preview onto the middle of the home screen."""
+def place_widget(r: Report, tag: str, pick: str = "전체") -> None:
+    """Drags the DidITake widget preview onto the middle of the home screen. When the person picker opens on the
+    drop (two or more people, TASK-012), takes its picture and taps `pick`: 전체 or a person's name."""
     w, h = screen_size()
     below = open_full_widget_picker(r, tag, w, h)
     preview = widget_preview(h, below)
@@ -193,6 +217,16 @@ def place_widget(r: Report, tag: str) -> None:
     r.note(f"위젯 놓기 ({tag}): 끈 곳 {preview.rid or preview.text} {preview.bounds}")
     x, y = preview.center
     drag(x, y, w // 2, h // 2, r, tag)
+    if find(PICK_TITLE, 6) is not None:
+        save_ui(r, f"{tag}-pick")
+        r.shot(f"{tag}-pick")
+        # Each choice is read as `전체, 나·Mom의 약 3개` or `Mom, 약 1개`: match the start of that description.
+        choice = next((n for n in dump_ui() if n.desc.startswith(f"{pick}, ")), None)
+        if choice is None:
+            raise RuntimeError(f"no '{pick}' in the widget's person picker")
+        tap(choice)
+        r.note(f"위젯 대상자 고르기 ({tag}): {pick}")
+        time.sleep(2)
     go_home()
     r.shot(f"{tag}-placed")
 
@@ -226,10 +260,10 @@ def record_in_app(name: str) -> None:
     """App home > that row's [먹었어] (fallback when the widget could not be placed)."""
     launch_app()
     row = find(name, 20)
-    buttons = [n for n in dump_ui() if n.text == "먹었어"]
-    if row is None or not buttons:
+    button = button_for(row, "먹었어") if row is not None else None
+    if button is None:
         raise RuntimeError(f"no [먹었어] for {name}")
-    tap(min(buttons, key=lambda b: abs(b.center[1] - row.center[1])))
+    tap(button)
     time.sleep(2)
 
 
@@ -275,6 +309,10 @@ def run_flow(apk: Path, next_apk: Path, r: Report) -> None:
     # 2. widget tap records
     launch_app()
     add_item(ITEM_A)
+    # BUG-004: the receiver is already on before the first widget, so placing it switches nothing.
+    keeper = reschedule_receiver_enabled()
+    r.check("BUG-004 첫 위젯 전 RescheduleReceiver", "앱을 연 뒤 켜져 있음 (첫 위젯 때 PACKAGE_CHANGED 없음)",
+            "켜짐" if keeper else "꺼짐", keeper)
     widget = try_place_widget(r, "n")
     shown, source = record(r, ITEM_A, widget)
     tapped = read_state()

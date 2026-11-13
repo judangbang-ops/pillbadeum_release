@@ -1,15 +1,22 @@
 package com.judangbang.pillbadeum.status
 
+import com.judangbang.pillbadeum.data.saveWindowSettings
+import com.judangbang.pillbadeum.design.Tokens
 import com.judangbang.pillbadeum.domain.ScheduleRule
+import com.judangbang.pillbadeum.domain.WindowSettings
 import com.judangbang.pillbadeum.testing.DbFixture
 import com.judangbang.pillbadeum.testing.SEOUL
 import com.judangbang.pillbadeum.testing.TEST_DEVICE_ID
 import com.judangbang.pillbadeum.testing.seoul
+import com.judangbang.pillbadeum.usecase.ArchiveIntake
 import com.judangbang.pillbadeum.usecase.IntakeDraft
 import com.judangbang.pillbadeum.usecase.ManagePeople
+import com.judangbang.pillbadeum.usecase.ManageReminders
+import com.judangbang.pillbadeum.usecase.PersonChange
 import com.judangbang.pillbadeum.usecase.RecordResult
 import com.judangbang.pillbadeum.usecase.SaveIntake
 import com.judangbang.pillbadeum.usecase.SaveIntakeResult
+import com.judangbang.pillbadeum.usecase.SaveReminderResult
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -20,6 +27,7 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
 
 class StatusBoardTest {
     private val fx = DbFixture()
@@ -32,9 +40,13 @@ class StatusBoardTest {
     fun empty_database_gives_empty_board_and_widget() = runTest {
         val board = load()
         assertTrue(board.items.isEmpty())
-        val model = WidgetModel.from(board)
+        val model = WidgetModel.from(board, SEOUL)
         assertEquals("11/11 (수)", model.dateLabel)
         assertEquals("0 / 0 완료", model.countLabel)
+        // 09 BoxWidget header: weekday chip, app name and date, the count in two weights (TASK-014)
+        assertEquals("수", model.weekday)
+        assertEquals("DidITake · 11/11", model.headerDate)
+        assertEquals("0 / 0" to "완료", model.countDone to model.countRest)
         assertTrue(model.buttons.isEmpty())
     }
 
@@ -53,24 +65,26 @@ class StatusBoardTest {
         assertEquals(1, board.doneCount)
         assertEquals(2, board.totalCount)
 
-        val model = WidgetModel.from(board)
+        val model = WidgetModel.from(board, SEOUL)
         assertEquals("1 / 2 완료", model.countLabel)
         val done = model.buttons.single { it.intakeId == morning }
         val pending = model.buttons.single { it.intakeId == evening }
-        assertTrue(done.done)
-        assertEquals("08:02", done.subtitle)
+        assertEquals(TileState.TAKEN, done.state)
+        assertEquals(listOf("08:02 먹음"), done.lines)
         assertEquals("2026-11-11", done.periodKey)
-        assertEquals("T", done.personInitial)
-        assertFalse(pending.done)
-        assertEquals("마지막 어제 21:40", pending.subtitle)
-        assertEquals("Test person Morning dose, 미완료", pending.description)
+        assertEquals("Test person", done.who)
+        assertEquals("Test person Morning dose, 복용함, 오늘 08:02", done.description)
+        assertEquals(TileState.PENDING, pending.state)
+        assertEquals(listOf("마지막 복용 어제\u00a021:40"), pending.lines)
+        assertFalse(pending.largeFirstLine, "W-2 size is for weekly items only (RR-63)")
+        assertEquals("Test person Morning dose, 미완료, 마지막 복용 어제 21:40", pending.description)
     }
 
     @Test
     fun never_recorded_item_says_no_record() = runTest {
         fx.newIntake()
-        val model = WidgetModel.from(load())
-        assertEquals(Labels.NO_RECORD, model.buttons.single().subtitle)
+        val model = WidgetModel.from(load(), SEOUL)
+        assertEquals(listOf(Labels.NO_RECORD), model.buttons.single().lines)
     }
 
     @Test
@@ -94,20 +108,33 @@ class StatusBoardTest {
         fx.at("2026-11-11T03:59:59")
         val before = load()
         assertEquals(LocalDate(2026, 11, 10), before.baseDate)
-        assertEquals("11/10 (화)", WidgetModel.from(before).dateLabel)
+        assertEquals("11/10 (화)", WidgetModel.from(before, SEOUL).dateLabel)
         assertTrue(before.items.single().isDone)
 
         fx.at("2026-11-11T04:00")
         val after = load()
-        assertEquals("11/11 (수)", WidgetModel.from(after).dateLabel)
-        val button = WidgetModel.from(after).buttons.single()
+        assertEquals("11/11 (수)", WidgetModel.from(after, SEOUL).dateLabel)
+        val button = WidgetModel.from(after, SEOUL).buttons.single()
         assertFalse(button.done)
         assertEquals("2026-11-11", button.periodKey)
-        assertEquals("마지막 오늘 03:50", button.subtitle, "a dose 10 minutes ago stays visible")
+        assertEquals(listOf("마지막 복용 오늘\u00a003:50"), button.lines, "a dose 10 minutes ago stays visible")
 
         // A widget still rendered before 04:00 sends the old key: nothing is recorded.
         assertEquals(RecordResult.Stale("2026-11-11"), fx.record(intake, renderedKey = before.items.single().window.periodKey))
         assertEquals(1, fx.history(intake).size)
+    }
+
+    /** SCR-004#stale (TASK-017): the open app reads again at the next day start of the base zone and setting. */
+    @Test
+    fun the_board_goes_stale_at_the_next_day_start() = runTest {
+        fx.newIntake(rule = ScheduleRule.Weekly(DayOfWeek.MONDAY))
+        fx.at("2026-11-11T03:59:59")
+        assertEquals(seoul("2026-11-11T04:00"), load().staleAt)
+        fx.at("2026-11-11T04:00")
+        assertEquals(seoul("2026-11-12T04:00"), load().staleAt, "a weekly item does not wait for its week")
+
+        fx.db.settingDao().saveWindowSettings(WindowSettings(dayStart = LocalTime(6, 0)))
+        assertEquals(seoul("2026-11-11T06:00"), load().staleAt)
     }
 
     @Test
@@ -121,11 +148,11 @@ class StatusBoardTest {
         val item = lastMinute.items.single()
         assertTrue(item.isDone)
         assertEquals(seoul("2026-11-16T04:00"), item.nextWindowStart)
-        assertEquals("월 08:30", Labels.widgetSubtitle(item, lastMinute.now, SEOUL))
+        assertEquals(listOf("월\u00a008:30 먹음"), Labels.widgetLines(item, lastMinute.now, SEOUL))
         assertTrue(item.weekCells.isEmpty(), "week grid is for daily items only")
         assertEquals(
-            "주 1회 · 월 · 이번 창 11/09 (월)~ · 월 08:30 완료 · 다음 창 11/16 (월)",
-            Labels.appDetail(item, lastMinute),
+            RowText("주 1회 월요일 · 11/09(월)\u00a008:30 먹음", nextLine = "다음 창 11/16(월)"),
+            Labels.appRow(item, lastMinute, SEOUL),
         )
 
         fx.at("2026-11-16T04:00")
@@ -134,7 +161,11 @@ class StatusBoardTest {
         assertFalse(pending.isDone)
         assertEquals("2026-11-16", pending.window.periodKey)
         assertEquals(seoul("2026-11-23T04:00"), pending.nextWindowStart)
-        assertEquals("마지막 11/09 (월) 08:30", Labels.widgetSubtitle(pending, nextWindow.now, SEOUL))
+        assertEquals(listOf("마지막 복용 11/09(월)\u00a008:30"), Labels.widgetLines(pending, nextWindow.now, SEOUL))
+        assertEquals(
+            RowText("주 1회 월요일", boldLine = "마지막 복용 11/09(월)\u00a008:30"),
+            Labels.appRow(pending, nextWindow, SEOUL),
+        )
     }
 
     @Test
@@ -190,7 +221,7 @@ class StatusBoardTest {
         assertEquals(Labels.ERROR, Labels.recordMessage(RecordResult.Error("x"), "아침약", now, SEOUL))
         // An older judgment (weekly) shows its weekday.
         assertEquals(
-            "주사: 이미 기록됨 (월 08:30). 변경 없음",
+            "주사: 이미 기록됨 (월\u00a008:30). 변경 없음",
             Labels.recordMessage(
                 RecordResult.Already((already as RecordResult.Already).existing.copy(takenAt = seoul("2026-11-09T08:30").toEpochMilliseconds())),
                 "주사", now, SEOUL,
@@ -199,12 +230,40 @@ class StatusBoardTest {
     }
 
     @Test
-    fun alias_is_shown_with_person_badge() = runTest {
+    fun alias_is_shown_in_the_person_palette() = runTest {
         val me = ManagePeople(fx.db, fx.clock, fx.ids, TEST_DEVICE_ID).ensureDefault().first().id
         SaveIntake(fx.db, fx.clock, fx.ids, TEST_DEVICE_ID).create(IntakeDraft(me, "아침에 먹는 약", widgetAlias = "아침약"))
-        val button = WidgetModel.from(load()).buttons.single()
+        val button = WidgetModel.from(load(), SEOUL).buttons.single()
         assertEquals("아침약", button.title)
-        assertEquals("나", button.personInitial)
-        assertEquals("#3F7D58", button.personColor)
+        assertNull(button.who, "only 나: no person name on the tile (REQ-018)")
+        assertEquals(Tokens.PEOPLE[0], button.palette, "나 is person 1, blue (09 tokens)")
+    }
+
+    /**
+     * SCR-004#permission (TASK-026, REQ-089): the first screen speaks of reminders that cannot come only while an item
+     * has reminders on. An item switched off, archived, or of an archived person does not count (as `listEnabledRules`).
+     */
+    @Test
+    fun reminders_on_counts_items_with_reminders_that_are_not_archived() = runTest {
+        val people = ManagePeople(fx.db, fx.clock, fx.ids, TEST_DEVICE_ID)
+        val me = people.ensureDefault().first()
+        val mom = people.add("Mom", "#B5562B")
+        val save = SaveIntake(fx.db, fx.clock, fx.ids, TEST_DEVICE_ID)
+        val mine = assertIs<SaveIntakeResult.Saved>(save.create(IntakeDraft(me.id, "아침약"))).intakeId
+        val hers = assertIs<SaveIntakeResult.Saved>(save.create(IntakeDraft(mom.id, "혈압약"))).intakeId
+        val reminders = ManageReminders(fx.db, fx.clock, TEST_DEVICE_ID)
+        assertFalse(load().remindersOn, "no rule yet")
+
+        assertIs<SaveReminderResult.Saved>(reminders.saveRule(mine, enabled = false, start = LocalTime(8, 0)))
+        assertFalse(load().remindersOn, "a rule that is off")
+        assertIs<SaveReminderResult.Saved>(reminders.saveRule(hers, enabled = true, start = LocalTime(8, 0)))
+        assertTrue(load().remindersOn, "Mom's item has reminders on")
+
+        assertEquals(PersonChange.Saved, people.archive(mom.id))
+        assertFalse(load().remindersOn, "Mom archived")
+        assertEquals(PersonChange.Saved, people.restore(mom.id))
+        assertTrue(load().remindersOn, "Mom restored")
+        assertTrue(ArchiveIntake(fx.db, fx.clock)(hers))
+        assertFalse(load().remindersOn, "her item archived")
     }
 }

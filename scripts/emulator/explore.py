@@ -7,18 +7,22 @@ fails only when it cannot be done (a button is missing, the widget cannot be pla
 look like is judged by a person, or by Claude from the screenshots, in docs/07-qa/.
 
 Flow (clock set to the run's date in Asia/Seoul, so the screens show Korean dates and times):
-   1. First launch at 08:30: the empty home.
-   2. [항목 추가]: the empty form, then a family member "Mom" added with [+ 사람 추가].
+   1. First launch at 08:30: the intro's two pages (SCR-005, TASK-022), [시작하기], then the empty home.
+   2. [항목 추가]: the empty form, then a family member "Mom" added with [+ 가족 추가], and the form closed with [×].
    3. Three items: Vitamin (나, 매일 아침), BPpill (Mom, 매일 저녁), Weekly (나, 주 1회 월).
-   4. [먹었어] on Vitamin in the app.
-   5. The home-screen widget placed the way a person does it (release_check.place_widget),
+   4. [먹었어] on Vitamin's tile in the app.
+   5. The home-screen widget placed the way a person does it (release_check.place_widget), 전체 picked in
+      the person picker that opens on the drop with two people (TASK-012),
       BPpill tapped on the widget, then tapped again (already recorded).
    6. [기록 취소] on Vitamin, confirmed in the question, then [먹었어] again.
-   7. Editing: Vitamin changed to 주 1회, Weekly deleted ([항목 삭제] > confirm).
+   7. Editing: Vitamin changed to 주 1회, Weekly archived ([보관] > confirm). Then the system BACK
+      (BUG-001): on the form it goes back to the first screen, and on the first screen it leaves the app.
    8. Larger text: font scale 1.3 and 2.0, app and widget. Then dark mode.
    9. Reboot: the widget after the phone restarts.
   10. The next morning 08:30: the widget and the app start a new day.
   11. 02:00 the day after: before the day start (04:00) the day has not changed yet.
+  12. The app left open from 03:55 past 04:00 (TASK-017, SCR-004#stale): the first screen turns to the new day
+      without being opened again.
 
 Names are typed in English because `adb shell input text` cannot type Korean.
 Notifications are not checked: the reminder feature is not built yet (R3).
@@ -40,6 +44,7 @@ from zoneinfo import ZoneInfo
 
 from backup_restore_check import (
     CLOSED_DIALOGS,
+    HOME_MARK,
     PKG,
     Node,
     Report,
@@ -52,6 +57,7 @@ from backup_restore_check import (
     screen_has,
     sh,
     adb,
+    button_for,
     tap,
     uninstall,
     wait_boot,
@@ -61,6 +67,7 @@ from release_check import go_home, place_widget, save_ui, screen_size
 ZONE = ZoneInfo("Asia/Seoul")
 ME = "나"  # ManagePeople.DEFAULT_PERSON_NAME
 MOM = "Mom"
+ADD_FAMILY = "+ 가족 추가"  # the person field of the item form with one person (ItemScreen.kt, TASK-015)
 VITAMIN = "Vitamin"
 BP = "BPpill"
 WEEKLY = "Weekly"
@@ -89,15 +96,54 @@ def tap_exact(text: str, timeout: float = 15, below: int = -1) -> None:
     tap(node)
 
 
-def fields() -> list[Node]:
-    return [n for n in dump_ui() if n.cls.endswith("EditText")]
+def tap_desc(desc: str, timeout: float = 15) -> None:
+    """Taps the node read as `desc`: an icon button such as the form's [×] (`닫기`, TASK-016)."""
+    end = time.time() + timeout
+    while True:
+        node = next((n for n in dump_ui() if n.desc == desc), None)
+        if node is not None:
+            tap(node)
+            return
+        if time.time() >= end:
+            raise RuntimeError(f"no button read as '{desc}'")
+        time.sleep(1)
 
 
-def type_into(index: int, text: str) -> None:
-    boxes = fields()
-    if len(boxes) <= index:
-        raise RuntimeError(f"text field {index + 1} not found ({len(boxes)} on screen)")
-    tap(boxes[index])
+def tap_scrolled(text: str, shot: tuple[Report, str] | None = None) -> None:
+    """Taps the node whose text is exactly `text`, scrolling the screen up to find it: [항목 추가] sits at the end of
+    the first screen's list, below the fold with large text (TASK-016). `shot` takes a picture before the tap."""
+    for _ in range(6):
+        node = exact(text, 2)
+        if node is not None:
+            if shot:
+                shot[0].shot(shot[1])
+            tap(node)
+            return
+        scroll_down()
+    raise RuntimeError(f"'{text}' not found after scrolling")
+
+
+def tile(name: str, timeout: float = 15) -> Node | None:
+    """The text of `name`'s tile on the app's first screen. TalkBack reads a tile as one sentence that starts with
+    the name, or the person and the name: `나 Vitamin, 미완료, …` (TASK-016). Its words are not nodes of their own,
+    so the name is matched in that description."""
+    end = time.time() + timeout
+    while True:
+        hits = [n for n in dump_ui() if n.desc.split(", ")[0].endswith(name)]
+        if hits:
+            return hits[0]
+        if time.time() >= end:
+            return None
+        time.sleep(1)
+
+
+def type_into(label: str, text: str) -> None:
+    """Types into the text field read as `label` (`약 이름`, `가족 이름`)."""
+    boxes = [n for n in dump_ui() if n.cls.endswith("EditText")]
+    box = next((n for n in boxes if n.desc == label), None)
+    if box is None:
+        raise RuntimeError(f"text field '{label}' not found (fields on screen: {[n.desc for n in boxes]})")
+    tap(box)
     sh(f"input text {text}")
     time.sleep(1)
     hide_keyboard()
@@ -120,11 +166,12 @@ def keyboard_height() -> int:
 def hide_keyboard() -> None:
     """Never presses BACK.
 
-    The app has no back handler: its screens are one Compose state in one activity, so a BACK that
-    the keyboard does not take closes the whole app (fourth run, 2026-11-12: after typing a name the
-    form vanished to the launcher; the third run lost the person dialog the same way). The emulator
-    runs with a hardware keyboard and show_ime_with_hard_keyboard 0, so no soft keyboard is drawn.
-    If one is drawn anyway, this only notes it for the report; a covered button then fails the step.
+    Until TASK-016 the app had no back handler, so a BACK that the keyboard did not take closed the
+    whole app (fourth run, 2026-11-12: after typing a name the form vanished to the launcher). Now
+    BACK on a form goes to the first screen without saving (BUG-001), which would still lose the
+    form. The emulator runs with a hardware keyboard and show_ime_with_hard_keyboard 0, so no soft
+    keyboard is drawn. If one is drawn anyway, this only notes it for the report; a covered button
+    then fails the step.
     """
     h = keyboard_height()
     if h > 0:
@@ -132,8 +179,8 @@ def hide_keyboard() -> None:
 
 
 def ensure_home() -> None:
-    """The app's home ("오늘 · 이번 주"), starting the app again when another screen is open."""
-    if exact("오늘 · 이번 주", 3) is None:
+    """The app's first screen ([지난 기록] in its top bar), starting the app again when another screen is open."""
+    if exact(HOME_MARK, 3) is None:
         sh(f"am force-stop {PKG}")
         launch_app()
 
@@ -145,23 +192,20 @@ def scroll_down() -> None:
 
 
 def row_button(name: str, label: str) -> Node:
-    """The [먹었어] or [기록 취소] button on the same line as `name` on the app home."""
-    row = exact(name, 15)
+    """The [먹었어] or [기록 취소] button in `name`'s tile on the app's first screen."""
+    row = tile(name)
     if row is None:
-        raise RuntimeError(f"row {name} not on the home")
-    buttons = [n for n in dump_ui() if n.text == label]
-    if not buttons:
-        raise RuntimeError(f"no [{label}] on the home")
-    button = min(buttons, key=lambda b: abs(b.center[1] - row.center[1]))
-    if abs(button.center[1] - row.center[1]) > 200:
-        raise RuntimeError(f"[{label}] is not on the {name} line")
+        raise RuntimeError(f"tile {name} not on the home")
+    button = button_for(row, label)
+    if button is None:
+        raise RuntimeError(f"no [{label}] in the {name} tile")
     return button
 
 
 def message_line() -> str:
     """The short message the app or widget shows after a tap, if one of the known ones is on screen."""
     for n in dump_ui():
-        if any(key in n.text for key in ("기록했어요", "이미 기록됨", "취소했어요", "삭제했어요", "기록됨", "변경 없음")):
+        if any(key in n.text for key in ("기록했어요", "이미 기록됨", "취소했어요", "보관했어요", "기록됨", "변경 없음")):
             return n.text
     return "(메시지 없음)"
 
@@ -239,6 +283,16 @@ def settle(quiet: float = 30, longest: float = 180) -> None:
         time.sleep(3)
 
 
+def phone_now() -> int:
+    """The phone clock in Unix seconds (it was set apart from the computer's clock)."""
+    return int(sh("date +%s").strip() or 0)
+
+
+def day_label(d) -> str:
+    """The first screen's date line for the logical date `d`: `11월 12일 목요일` (Labels.longDate)."""
+    return f"{d.month}월 {d.day}일 {'월화수목금토일'[d.weekday()]}요일"
+
+
 def font_scale(scale: str) -> None:
     sh(f"settings put system font_scale {scale}")
     time.sleep(3)
@@ -301,20 +355,20 @@ class Steps:
 
 
 def add_item(r: Report, name: str, person: str, weekly: bool, choice: str, shot: str | None = None) -> str:
-    """Home > [항목 추가] > name > person chip > 매일 + time of day, or 주 1회 + weekday > [저장]."""
+    """Home > [항목 추가] > name > person > 매일 + time of day, or 주 1회 + weekday > [저장]."""
     ensure_home()
-    tap_exact("항목 추가")
-    type_into(0, name)
+    tap_scrolled("항목 추가")
+    type_into("약 이름", name)
     tap_exact(person)
     tap_exact("주 1회" if weekly else "매일")
-    # The weekday and time-of-day chips sit under the "주기" label; "월" alone is also in other texts.
-    cycle = exact("주기")
-    tap_exact(choice, below=cycle.bounds[3] if cycle else -1)
+    # The weekday and time-of-day cells sit under their question; "월" alone is also in other texts.
+    group = exact("무슨 요일에?" if weekly else "언제 먹나요?")
+    tap_exact(choice, below=group.bounds[3] if group else -1)
     if shot:
         r.shot(shot)
     tap_exact("저장")
-    if exact(name, 20) is None:
-        raise RuntimeError(f"row {name} did not show after [저장]")
+    if tile(name, 20) is None:
+        raise RuntimeError(f"tile {name} did not show after [저장]")
     return f"{name} 저장됨"
 
 
@@ -337,36 +391,53 @@ def run(r: Report, steps: Steps) -> None:
 
     steps("준비: 서울 시간대, 오늘 08:30", "시간대·시계가 바뀜", setup)
 
-    # 1. first launch
+    # 1. first launch: the intro (SCR-005, TASK-022), then the empty home
     def first_launch() -> str:
-        launch_app()
+        launch_app(stop_at_intro=True)
         time.sleep(2)
+        r.shot("intro-1")
+        for text in ("기록 도구예요", "한 약은 한 휴대폰에서 기록해 주세요"):
+            if not screen_has(text, 5):
+                raise RuntimeError(f"intro page 1 lacks '{text}'")
+        tap_exact("다음")
+        time.sleep(1)
+        r.shot("intro-2")
+        if not screen_has("홈 화면에 위젯을 놓아 주세요", 5):
+            raise RuntimeError("intro page 2 not shown")
+        # The launcher's request is not used here: step 5 places the widget by hand, as page 2 explains.
+        pin = "있음" if exact("위젯 추가", 3) is not None else "없음(손으로 놓는 법만)"
+        tap_exact("시작하기")
+        if exact(HOME_MARK, 15) is None:
+            raise RuntimeError("[시작하기] did not open the first screen")
+        time.sleep(1)
         r.shot("first-launch")
         empty = screen_has("아직 복용 항목이 없어요", 5)
         if not empty:
             raise RuntimeError("empty-home text not shown")
-        return "빈 홈과 안내 문구"
+        return f"안내 두 쪽([위젯 추가] {pin}), [시작하기] 뒤 빈 홈과 안내 문구"
 
-    steps("1. 처음 실행", "빈 홈, [항목 추가] 안내", first_launch)
+    steps("1. 처음 실행", "첫 실행 안내 두 쪽, [시작하기] 뒤 빈 홈과 [항목 추가] 안내", first_launch)
 
     # 2. the add form, and adding a family member
     def add_form() -> str:
         tap_exact("항목 추가")
         time.sleep(1)
         r.shot("add-form-empty")
-        chips = [n.text for n in dump_ui() if n.text in (ME, "+ 사람 추가")]
-        tap_exact("+ 사람 추가")
-        type_into(2, MOM)
+        # One person: the person field is folded and only [+ 가족 추가] shows (TASK-015, REQ-018).
+        chips = [n.text for n in dump_ui() if n.text in (ME, ADD_FAMILY)]
+        tap_exact(ADD_FAMILY)
+        type_into("가족 이름", MOM)
         r.shot("add-person-open")
         tap_exact("추가")
         if exact(MOM, 10) is None:
-            raise RuntimeError(f"chip {MOM} did not show")
+            raise RuntimeError(f"person {MOM} did not show")
         r.shot("add-person-done")
-        tap_exact("닫기")
-        exact("항목 추가", 10)
-        return f"폼의 대상자 칩 {chips}, {MOM} 칩 생김"
+        tap_desc("닫기")
+        if exact(HOME_MARK, 10) is None:
+            raise RuntimeError("[×] did not go back to the first screen")
+        return f"폼의 대상자 칸 {chips}, {MOM} 생김, [×]로 첫 화면"
 
-    steps("2. 항목 추가 화면과 대상자 추가", "빈 폼, 나 칩, 사람 추가 후 새 칩", add_form)
+    steps("2. 항목 추가 화면과 대상자 추가", "빈 폼(대상자 칸 접힘, [+ 가족 추가]), 가족 추가 뒤 나·Mom, [×]로 닫힘", add_form)
 
     # 3. three items
     steps("3-1. 매일 아침 항목 (나)", "목록에 생김", lambda: add_item(r, VITAMIN, ME, False, "아침", "form-vitamin"))
@@ -377,12 +448,12 @@ def run(r: Report, steps: Steps) -> None:
         ensure_home()
         time.sleep(1)
         r.shot("home-three-items")
-        shown = [n for n in (VITAMIN, BP, WEEKLY) if exact(n, 3) is not None]
+        shown = [n for n in (VITAMIN, BP, WEEKLY) if tile(n, 3) is not None]
         if len(shown) != 3:
             raise RuntimeError(f"home shows {shown}")
         return "항목 3개"
 
-    steps("3-4. 항목 3개인 홈", "오늘·이번 주 구역", home_three)
+    steps("3-4. 항목 3개인 홈", "타일 3개와 이번 주 약통", home_three)
 
     # 4. record in the app
     def record_app() -> str:
@@ -393,7 +464,7 @@ def run(r: Report, steps: Steps) -> None:
         r.shot("app-recorded")
         return f"메시지 '{msg}', {records()}"
 
-    steps("4. 앱에서 [먹었어]", "기록 1건, 버튼이 [기록 취소]로 바뀜", record_app)
+    steps("4. 앱에서 [먹었어]", "기록 1건, 타일이 채워지고 버튼이 [기록 취소]로 바뀜", record_app)
 
     # 5. widget
     placed = {"ok": False}
@@ -483,34 +554,66 @@ def run(r: Report, steps: Steps) -> None:
     # 7. edit and delete
     def edit() -> str:
         ensure_home()
-        tap(exact(VITAMIN, 15))
+        node = tile(VITAMIN)
+        if node is None:
+            raise RuntimeError(f"tile {VITAMIN} not on the home")
+        tap(node)
         time.sleep(1)
         r.shot("edit-form")
         tap_exact("주 1회")
         r.shot("edit-weekly")
         tap_exact("저장")
-        exact("항목 추가", 10)
+        exact(HOME_MARK, 10)
         time.sleep(1)
         r.shot("home-after-edit")
         return f"{records()}"
 
     def delete() -> str:
         ensure_home()
-        tap(exact(WEEKLY, 15))
+        node = tile(WEEKLY)
+        if node is None:
+            raise RuntimeError(f"tile {WEEKLY} not on the home")
+        tap(node)
         time.sleep(1)
-        scroll_down()
-        tap_exact("항목 삭제")
+        tap_scrolled("보관")  # at the end of the edit form
         time.sleep(1)
         r.shot("delete-confirm")
-        tap_exact("삭제")
+        # The question is "Weekly을(를) 보관할까요?"; its [보관] is below the title (REQ-014, SCR-006)
+        title = exact(f"{WEEKLY}을(를) 보관할까요?", 10)
+        if title is None:
+            raise RuntimeError("no archive question after [보관]")
+        tap_exact("보관", 10, below=title.bounds[1])
         time.sleep(2)
         msg = message_line()
         r.shot("home-after-delete")
-        gone = exact(WEEKLY, 3) is None
+        gone = tile(WEEKLY, 3) is None
         return f"메시지 '{msg}', 목록에서 {'사라짐' if gone else '남아 있음'}"
 
+    def back() -> str:
+        # BUG-001 (TASK-016): BACK on a form goes to the first screen, and BACK there leaves the app.
+        ensure_home()
+        tap_scrolled("항목 추가")
+        if exact("약 이름", 10) is None:
+            raise RuntimeError("the item form did not open")
+        sh("input keyevent KEYCODE_BACK")
+        if exact(HOME_MARK, 5) is None and keyboard_height() > 0:
+            sh("input keyevent KEYCODE_BACK")  # the first BACK only closed a keyboard
+        if exact(HOME_MARK, 10) is None:
+            raise RuntimeError("BACK on the form did not go to the first screen")
+        r.shot("back-to-home")
+        sh("input keyevent KEYCODE_BACK")
+        time.sleep(2)
+        resumed = [line.strip() for line in sh("dumpsys activity activities", check=False).splitlines()
+                   if "ResumedActivity" in line]
+        r.shot("back-left-app")
+        if any(PKG in line for line in resumed):
+            raise RuntimeError(f"BACK on the first screen did not leave the app: {resumed[:2]}")
+        launch_app()
+        return "폼 → 첫 화면, 첫 화면 → 앱을 나감"
+
     steps("7-1. 항목 수정 (매일 → 주 1회)", "안내 문구, 저장 후 홈", edit)
-    steps("7-2. 항목 삭제", "확인 대화상자, 목록에서 사라짐", delete)
+    steps("7-2. 항목 보관", "확인 대화상자, 목록에서 사라짐", delete)
+    steps("7-3. 시스템 뒤로 가기 (BUG-001)", "폼에서 첫 화면으로, 첫 화면에서 앱을 나감", back)
 
     # 8. larger text and dark mode
     def bigger(scale: str) -> str:
@@ -518,10 +621,11 @@ def run(r: Report, steps: Steps) -> None:
         launch_app()
         time.sleep(2)
         r.shot(f"app-font-{scale}")
-        tap_exact("항목 추가")
+        # With large text the tiles go one a row (TASK-016) and [항목 추가] moves below the fold.
+        tap_scrolled("항목 추가", shot=(r, f"app-font-{scale}-end"))
         time.sleep(1)
         r.shot(f"form-font-{scale}")
-        tap_exact("닫기")
+        tap_desc("닫기")
         if placed["ok"]:
             go_home()
             time.sleep(3)
@@ -586,6 +690,33 @@ def run(r: Report, steps: Steps) -> None:
         return f"시계 {clock}"
 
     steps("11. 그다음 날 02:00", "하루 시작 04:00 전이라 앞날로 셈", before_day_start, look=True)
+
+    # 12. the day start with the app left open (TASK-017)
+    def across_day_start() -> str:
+        clock = set_clock(at(2, 3, 55))
+        start = phone_now()
+        boundary = int(at(2, 4, 0).timestamp())
+        if start > boundary - 60:
+            raise RuntimeError(f"the clock settled too late to watch 04:00 pass ({clock})")
+        before, after = day_label(at(1, 12).date()), day_label(at(2, 12).date())
+        launch_app()
+        if exact(before, 10) is None:
+            raise RuntimeError(f"before 04:00 the first screen does not show {before}")
+        r.shot("app-0355")
+        # The app is not touched from here on: only the screen is read until the new day shows.
+        while phone_now() < boundary + 90:
+            if exact(after, 0) is not None:
+                break
+            time.sleep(5)
+        seen = phone_now()
+        r.shot("app-0400")
+        if exact(after, 0) is None:
+            raise RuntimeError(f"{after} not shown by {datetime.fromtimestamp(seen, ZONE):%H:%M:%S}")
+        if seen < boundary:
+            raise RuntimeError(f"{after} shown before 04:00")
+        return f"{before} → {after} ({datetime.fromtimestamp(seen, ZONE):%H:%M:%S}에 봄, 시계 {clock})"
+
+    steps("12. 앱을 켜 둔 채 04:00 넘기기", "다시 열지 않아도 첫 화면이 새 날짜로 바뀜(SCR-004#stale)", across_day_start)
 
 
 def main() -> int:

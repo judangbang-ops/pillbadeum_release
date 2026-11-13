@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Pending state: a 2dp dashed ring (border.focus), tinted with the person's ink. Twelve 3.76dp dashes with 2dp
+    gaps round a circle of radius 11dp (about 69dp long), one dash centred at the top. A "+" is avoided on purpose:
+    it reads as "add item".
+    A vector, not a stroked oval shape: a shape with no fill draws its inside in the tint color once it is tinted
+    (GradientDrawable fills with the color filter when it has no solid color), which turned the ring into a disc in
+    the TASK-014 render check.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M10.13,1.16A11,11 0,0 1,13.87,1.16M15.80,1.68A11,11 0,0 1,19.04,3.55M20.45,4.96A11,11 0,0 1,22.32,8.20M22.84,10.13A11,11 0,0 1,22.84,13.87M22.32,15.80A11,11 0,0 1,20.45,19.04M19.04,20.45A11,11 0,0 1,15.80,22.32M13.87,22.84A11,11 0,0 1,10.13,22.84M8.20,22.32A11,11 0,0 1,4.96,20.45M3.55,19.04A11,11 0,0 1,1.68,15.80M1.16,13.87A11,11 0,0 1,1.16,10.13M1.68,8.20A11,11 0,0 1,3.55,4.96M4.96,3.55A11,11 0,0 1,8.20,1.68"
+        android:strokeWidth="2"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="butt" />
+</vector>

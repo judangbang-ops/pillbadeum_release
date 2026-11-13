@@ -23,6 +23,7 @@ import com.judangbang.pillbadeum.domain.ReminderSlot
 import com.judangbang.pillbadeum.domain.Window
 import com.judangbang.pillbadeum.domain.WindowSettings
 import com.judangbang.pillbadeum.domain.defaultReminderStart
+import com.judangbang.pillbadeum.domain.quietDrops
 import com.judangbang.pillbadeum.domain.quietNotice
 import com.judangbang.pillbadeum.domain.reminderSlots
 import com.judangbang.pillbadeum.domain.windowOf
@@ -282,8 +283,12 @@ sealed interface SaveReminderResult {
 }
 
 sealed interface SaveReminderSettingsResult {
-    /** Saved; [notices] holds the quiet-hours message per item with reminders on, by intake id (N-4, REQ-077). */
-    data class Saved(val notices: Map<String, QuietNotice>) : SaveReminderSettingsResult
+    /**
+     * Saved; [notices] holds the quiet-hours message per item with reminders on, by intake id (N-4, REQ-077), and
+     * [dropped] the repeats quiet hours drop in one day over all those items, for the settings screen's one notice
+     * "다시 알림이 모두 4번 줄어요 (알림을 켠 항목 2개)" (SCR-009).
+     */
+    data class Saved(val notices: Map<String, QuietNotice>, val dropped: Int) : SaveReminderSettingsResult
 
     /** Not among the offered values (N-4). Nothing written. */
     data object Invalid : SaveReminderSettingsResult
@@ -336,24 +341,7 @@ class ManageReminders(
                 if (intake == null || intake.archivedAt != null || person == null || person.archivedAt != null) {
                     return@immediateTransaction SaveReminderResult.Gone
                 }
-                val dao = db.reminderDao()
-                val old = dao.findRule(intakeId)
-                val nowMillis = now.toEpochMilliseconds()
-                // Saving the same values writes nothing, so updated_at keeps when the rule last really changed.
-                if (old == null || old.enabled != enabled || old.startTime != start.toString()) {
-                    dao.upsertRule(
-                        ReminderRuleEntity(
-                            intakeId = intakeId,
-                            enabled = enabled,
-                            startTime = start.toString(),
-                            createdAt = old?.createdAt ?: nowMillis,
-                            updatedAt = nowMillis,
-                            version = (old?.version ?: 0) + 1,
-                            deviceId = deviceId,
-                        ),
-                    )
-                }
-                if (!enabled) dao.deleteSnooze(intakeId)
+                db.writeReminderRule(intakeId, enabled, start, now.toEpochMilliseconds(), deviceId)
                 val notice = if (enabled) {
                     quietNotice(start, db.settingDao().loadWindowSettings(), db.settingDao().loadReminderSettings())
                 } else {
@@ -378,10 +366,11 @@ class ManageReminders(
                 if (!settings.isValid) return@immediateTransaction SaveReminderSettingsResult.Invalid
                 db.settingDao().saveReminderSettings(settings)
                 val windowSettings = db.settingDao().loadWindowSettings()
-                val notices = db.reminderDao().listEnabledRules().mapNotNull { row ->
-                    quietNotice(LocalTime.parse(row.startTime), windowSettings, settings)?.let { row.intakeId to it }
+                val starts = db.reminderDao().listEnabledRules().map { it.intakeId to LocalTime.parse(it.startTime) }
+                val notices = starts.mapNotNull { (intakeId, start) ->
+                    quietNotice(start, windowSettings, settings)?.let { intakeId to it }
                 }.toMap()
-                SaveReminderSettingsResult.Saved(notices)
+                SaveReminderSettingsResult.Saved(notices, starts.sumOf { (_, start) -> quietDrops(start, windowSettings, settings) })
             }
         }
 
@@ -409,4 +398,37 @@ class ManageReminders(
                 SnoozeResult.Snoozed(fireAt)
             }
         }
+}
+
+/**
+ * Writes an item's reminder switch and first time inside the caller's transaction (supplement N-3, `ManageReminders.saveRule`
+ * and the item screen's save, TASK-023). The same values write nothing, so `updated_at` keeps when the rule last really
+ * changed (RR-79); otherwise the row is written with version + 1. Switched off, the item's [30분 뒤] goes too (N-7). True
+ * when the row was written.
+ */
+internal suspend fun DidITakeDatabase.writeReminderRule(
+    intakeId: String,
+    enabled: Boolean,
+    start: LocalTime,
+    now: Long,
+    deviceId: String,
+): Boolean {
+    val dao = reminderDao()
+    val old = dao.findRule(intakeId)
+    val changed = old == null || old.enabled != enabled || old.startTime != start.toString()
+    if (changed) {
+        dao.upsertRule(
+            ReminderRuleEntity(
+                intakeId = intakeId,
+                enabled = enabled,
+                startTime = start.toString(),
+                createdAt = old?.createdAt ?: now,
+                updatedAt = now,
+                version = (old?.version ?: 0) + 1,
+                deviceId = deviceId,
+            ),
+        )
+    }
+    if (!enabled) dao.deleteSnooze(intakeId)
+    return changed
 }

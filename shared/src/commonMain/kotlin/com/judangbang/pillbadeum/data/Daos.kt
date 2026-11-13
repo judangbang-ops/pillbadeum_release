@@ -72,6 +72,10 @@ interface IntakeDao {
     @Query("SELECT * FROM intake ORDER BY sort_order, created_at, id")
     suspend fun listAll(): List<IntakeEntity>
 
+    /** One person's intakes that are not archived themselves (person restore, supplement P-9). */
+    @Query("SELECT * FROM intake WHERE person_id = :personId AND archived_at IS NULL ORDER BY sort_order, created_at, id")
+    suspend fun listActiveOfPerson(personId: String): List<IntakeEntity>
+
     @Query("SELECT COALESCE(MAX(sort_order), -1) FROM intake")
     suspend fun maxSortOrder(): Int
 
@@ -228,6 +232,17 @@ interface DoseRecordDao {
         """,
     )
     suspend fun findLastActiveBefore(intakeId: String, before: Long): DoseRecordEntity?
+
+    /** Latest active dose (kind TAKEN, skips left out) taken before [before]: "마지막 복용" (supplement S-2, W-2). */
+    @Query(
+        """
+        SELECT * FROM dose_record
+        WHERE intake_id = :intakeId AND active = 1 AND kind = 'TAKEN' AND taken_at < :before
+        ORDER BY taken_at DESC
+        LIMIT 1
+        """,
+    )
+    suspend fun findLastActiveTakenBefore(intakeId: String, before: Long): DoseRecordEntity?
 
     /**
      * `taken_at` of the latest active judgment of any intake taken before [before], or null.

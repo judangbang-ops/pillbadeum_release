@@ -111,6 +111,22 @@ class LoadHistoryTest {
         assertEquals(CellState.TAKEN, history(november).stateOn("2026-11-11", intake))
     }
 
+    /** TASK-019: an archived item's cells are marked (SCR-007 cannot open them), and `today` is the base date. */
+    @Test
+    fun archived_cells_are_marked_and_today_is_the_base_date() = runTest {
+        val kept = fx.newIntake(effectiveFrom = seoul("2026-11-10T04:00"))
+        val archived = fx.newIntake(effectiveFrom = seoul("2026-11-10T04:00"))
+        recordAt(archived, "2026-11-10T08:00")
+        fx.at("2026-11-11T10:00")
+        assertTrue(ArchiveIntake(fx.db, fx.clock)(archived))
+        fx.at("2026-11-12T02:00")
+
+        val month = history(november)
+        assertEquals(LocalDate(2026, 11, 11), month.today, "02:00 is still the 11th's window (day start 04:00)")
+        assertTrue(month.cellsOn("2026-11-10", archived).single().archived)
+        assertTrue(month.cellsOn("2026-11-10", kept).none { it.archived })
+    }
+
     @Test
     fun rr45_weekly_items_have_one_cell_on_the_anchor_day_and_no_missed_days_between() = runTest {
         val intake = fx.newIntake(ScheduleRule.Weekly(DayOfWeek.MONDAY), effectiveFrom = seoul("2026-10-26T04:00"))

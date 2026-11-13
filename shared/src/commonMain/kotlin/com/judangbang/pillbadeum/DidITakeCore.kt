@@ -11,7 +11,11 @@ import com.judangbang.pillbadeum.restore.AcknowledgeRestore
 import com.judangbang.pillbadeum.restore.CheckInstall
 import com.judangbang.pillbadeum.restore.InstallMarker
 import com.judangbang.pillbadeum.restore.InstallState
+import com.judangbang.pillbadeum.status.JudgeCell
 import com.judangbang.pillbadeum.status.LoadHistory
+import com.judangbang.pillbadeum.status.LoadJudgeCell
+import com.judangbang.pillbadeum.status.LoadPeople
+import com.judangbang.pillbadeum.status.LoadSettings
 import com.judangbang.pillbadeum.status.LoadStatusBoard
 import com.judangbang.pillbadeum.usecase.ArchiveIntake
 import com.judangbang.pillbadeum.usecase.DeleteArchivedIntake
@@ -26,7 +30,10 @@ import com.judangbang.pillbadeum.usecase.RecordInWindow
 import com.judangbang.pillbadeum.usecase.RecordResult
 import com.judangbang.pillbadeum.usecase.ResolveClockFlag
 import com.judangbang.pillbadeum.usecase.SaveIntake
+import com.judangbang.pillbadeum.usecase.TimeEditCommand
 import com.judangbang.pillbadeum.usecase.VoidDose
+import com.judangbang.pillbadeum.usecase.WindowCommand
+import com.judangbang.pillbadeum.usecase.WindowWriteResult
 import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
@@ -71,6 +78,15 @@ class DidITakeCore private constructor(
     /** One month of history (SCR-008, supplement P-8). */
     val loadHistory: LoadHistory = LoadHistory(db, clock)
 
+    /** One cell of the judgment screen (SCR-007, TASK-018). */
+    val loadJudgeCell: LoadJudgeCell = LoadJudgeCell(db, clock)
+
+    /** What the settings screen shows (SCR-009, TASK-020). */
+    val loadSettings: LoadSettings = LoadSettings(db)
+
+    /** What the people screen shows (SCR-010, TASK-021). */
+    val loadPeople: LoadPeople = LoadPeople(db)
+
     /** Reminder plan: next alarm after a change, overdue reminders when the alarm rings (TASK-011, N-8). */
     val planReminders: PlanReminders = PlanReminders(db, clock)
 
@@ -96,6 +112,29 @@ class DidITakeCore private constructor(
                 deviceZoneId = deviceZone().id,
             ),
         )
+
+    /**
+     * Writes [kind] into [cell] from SCR-007 ([RecordInWindow.record]): [takenAt] is the picked time, null for now (current
+     * window only, P-2); [replacing] is the cell's judgment being turned into [kind] (a skip into a dose). The cell's read
+     * time is the rendered time, so a settings change after it makes the write stale (P-5).
+     */
+    suspend fun recordIn(cell: JudgeCell, kind: DoseKind, takenAt: Instant? = null, replacing: String? = null): WindowWriteResult =
+        recordInWindow.record(
+            WindowCommand(
+                intakeId = cell.intakeId,
+                scheduleVersionId = cell.scheduleVersionId,
+                periodKey = cell.window.periodKey,
+                kind = kind,
+                takenAt = takenAt,
+                deviceZoneId = deviceZone().id,
+                renderedAt = cell.now,
+                replacing = replacing,
+            ),
+        )
+
+    /** Moves the dose [doseId] of [cell] to [newTakenAt] (SCR-007 `[먹은 시각 고치기]`, supplement P-6). */
+    suspend fun editTime(cell: JudgeCell, doseId: String, newTakenAt: Instant): WindowWriteResult =
+        recordInWindow.editTime(TimeEditCommand(doseId, newTakenAt, deviceZone().id, renderedAt = cell.now))
 
     /** Day start and base zone from the setting table (defaults: 04:00, Asia/Seoul). */
     suspend fun windowSettings(): WindowSettings = db.settingDao().loadWindowSettings()

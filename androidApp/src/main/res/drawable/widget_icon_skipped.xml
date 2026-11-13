@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Skipped state: a color.line.strong disc with a white minus. The word 건너뜀 is written on the tile too, so
+    color is not the only sign (supplement S-3, S-5).
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="oval">
+            <size android:width="24dp" android:height="24dp" />
+            <solid android:color="#8B909A" />
+        </shape>
+    </item>
+    <item
+        android:width="12dp"
+        android:height="12dp"
+        android:drawable="@drawable/ic_widget_minus"
+        android:gravity="center" />
+</layer-list>

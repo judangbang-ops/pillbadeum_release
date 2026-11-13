@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Weekday chip in the header: color.ink.default, radius.cell (09 BoxWidget). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#15171C" />
+    <corners android:radius="8dp" />
+</shape>

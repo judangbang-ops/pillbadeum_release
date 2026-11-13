@@ -63,6 +63,19 @@ android {
     buildFeatures {
         compose = true
     }
+
+    testOptions {
+        // 위젯 렌더 시험(WidgetRenderTest, TASK-014)과 앱 화면 시험(AppScreenTest, TASK-015)이 앱의 리소스로 그림.
+        // CI에서는 아직 돌리지 않음: ./gradlew :androidApp:testDebugUnitTest. -Probolectric.repo=<주소>를 주면
+        // Robolectric이 Android jar를 Maven Central 대신 그 미러에서 받음
+        unitTests.isIncludeAndroidResources = true
+        unitTests.all { test ->
+            providers.gradleProperty("robolectric.repo").orNull?.let { test.systemProperty("robolectric.dependency.repo.url", it) }
+            // 렌더 그림(PNG)과 접근성 트리(txt)도 결과로 둬서, 빌드 캐시가 시험 결과를 되살릴 때 같은 판으로 되살아나게 함
+            test.outputs.dir(layout.buildDirectory.dir("widget-render"))
+            test.outputs.dir(layout.buildDirectory.dir("app-render"))
+        }
+    }
 }
 
 kotlin {
@@ -73,4 +86,13 @@ dependencies {
     implementation(project(":shared"))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.glance.appwidget)
+    // 앱 시작 때 RescheduleReceiver를 켜 두는 빈 작업(BUG-004). Glance가 이미 가져오는 판이라 APK에 새로 들지 않음
+    implementation(libs.androidx.work.runtime)
+
+    testImplementation(libs.robolectric)
+    testImplementation(libs.junit4)
+    testImplementation(libs.androidx.test.core)
+    // 앱 화면 시험(AppScreenTest, TASK-015): Compose 시험 도구와, JVM에서 열리는 Android 내장 SQLite 드라이버
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation(libs.androidx.sqlite.framework)
 }

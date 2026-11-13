@@ -124,7 +124,7 @@ class InstallCheckTest {
         assertFalse(board.items.single().isDone, "today's window is pending on the new phone")
         val notice = assertNotNull(board.restoreNotice)
         assertEquals(seoul("2026-11-10T21:40"), notice.lastRecordAt)
-        assertEquals("복원됨 · 마지막 기록 11/10 21:40 · 앱에서 확인", WidgetModel.from(board).restoreLine)
+        assertEquals("복원됨 · 마지막 기록 11/10 21:40 · 앱에서 확인", WidgetModel.from(board, SEOUL).restoreLine)
         assertEquals(
             "백업에서 복원했어요. 마지막 기록은 11/10 21:40이에요. 그 뒤의 기록은 없을 수 있어요. 한 약은 한 휴대폰에서 기록해 주세요",
             Labels.restoreAppNotice(notice, SEOUL),
@@ -156,7 +156,7 @@ class InstallCheckTest {
 
         val board = core.loadStatusBoard()
         assertNull(board.restoreNotice)
-        assertNull(WidgetModel.from(board).restoreLine)
+        assertNull(WidgetModel.from(board, SEOUL).restoreLine)
         assertEquals("0", setting(SettingKeys.RESTORE_NOTICE_PENDING))
 
         fx.at("2026-11-11T09:00")
@@ -240,7 +240,7 @@ class InstallCheckTest {
         assertNull(notice.lastRecordAt)
         assertTrue(notice.hasRecords)
         assertEquals(CheckInstall.ONLY_LATER_RECORDS, setting(SettingKeys.RESTORE_NOTICE_LAST_RECORD_AT))
-        assertEquals("복원됨 · 앱에서 확인", WidgetModel.from(board).restoreLine)
+        assertEquals("복원됨 · 앱에서 확인", WidgetModel.from(board, SEOUL).restoreLine)
         assertEquals(
             "백업에서 복원했어요. 다른 휴대폰에서 한 기록은 없을 수 있어요. 한 약은 한 휴대폰에서 기록해 주세요",
             Labels.restoreAppNotice(notice, SEOUL),
@@ -307,7 +307,7 @@ class InstallCheckTest {
         assertNull(notice.lastRecordAt)
         assertFalse(notice.hasRecords)
         assertEquals(CheckInstall.NO_RECORDS, setting(SettingKeys.RESTORE_NOTICE_LAST_RECORD_AT))
-        assertEquals("복원됨 · 기록 없음 · 앱에서 확인", WidgetModel.from(board).restoreLine)
+        assertEquals("복원됨 · 기록 없음 · 앱에서 확인", WidgetModel.from(board, SEOUL).restoreLine)
         assertTrue(Labels.restoreAppNotice(notice, SEOUL).endsWith(Labels.ONE_PHONE))
     }
 

@@ -4,6 +4,8 @@ import androidx.room3.immediateTransaction
 import androidx.room3.useWriterConnection
 import com.judangbang.pillbadeum.data.DidITakeDatabase
 import com.judangbang.pillbadeum.data.PersonEntity
+import com.judangbang.pillbadeum.design.PersonPalette
+import com.judangbang.pillbadeum.design.Tokens
 import com.judangbang.pillbadeum.domain.UuidV7
 import kotlin.time.Clock
 
@@ -83,10 +85,49 @@ class ManagePeople(
         }
     }
 
-    /** Brings an archived person back; their intakes show again with their past judgments. */
-    suspend fun restore(personId: String): PersonChange {
-        val changed = db.personDao().restore(personId, clock.now().toEpochMilliseconds())
-        return if (changed == 1) PersonChange.Saved else PersonChange.Gone
+    /**
+     * Brings an archived person back; their intakes show again with their past judgments (REQ-095,
+     * SPEC-044, supplement P-9). There is no archive history table, so the archived stretch is kept in the
+     * schedule versions instead, in the same write transaction as the restore: every intake of the person
+     * that is not archived itself has its open version closed at the person's archive time and a new version
+     * with the same schedule opened at the restore time. History then has no cells while the person was
+     * archived (no version, not missed), the window holding the archive keeps a cell only for that version's
+     * own judgment, and the window holding the restore is the new version's (P-8). Restoring again changes
+     * nothing ([PersonChange.Gone]). Recomputing reminders and widgets is the caller's job (N-9).
+     */
+    suspend fun restore(personId: String): PersonChange = db.useWriterConnection { transactor ->
+        transactor.immediateTransaction {
+            val people = db.personDao()
+            val archivedAt = people.findById(personId)?.archivedAt ?: return@immediateTransaction PersonChange.Gone
+            val now = clock.now().toEpochMilliseconds()
+            val versions = db.scheduleVersionDao()
+            for (intake in db.intakeDao().listActiveOfPerson(personId)) {
+                val open = versions.findOpen(intake.id) ?: continue
+                // A version that starts after the archive (changed then, or the clock was wrong) already
+                // leaves the archived stretch out; it is kept as it is.
+                if (open.effectiveFrom > archivedAt) continue
+                // With the clock set back before the archive, close and open at now so versions never overlap,
+                // and never before the open version's own start (that leaves it empty, as SaveIntake.update does).
+                val closeAt = maxOf(minOf(archivedAt, now), open.effectiveFrom)
+                check(versions.close(open.id, effectiveTo = closeAt, now = now) == 1) {
+                    "open schedule version ${open.id} could not be closed"
+                }
+                versions.insert(
+                    open.copy(
+                        id = ids.next(),
+                        effectiveFrom = maxOf(now, closeAt),
+                        effectiveTo = null,
+                        createdAt = now,
+                        updatedAt = now,
+                        version = 1,
+                        deviceId = deviceId,
+                    ),
+                )
+            }
+            // Read as archived in this same transaction, so the row must change; anything else rolls back.
+            check(people.restore(personId, now) == 1) { "archived person $personId could not be restored" }
+            PersonChange.Saved
+        }
     }
 
     companion object {
@@ -94,11 +135,21 @@ class ManagePeople(
     }
 }
 
-/** Badge colors offered in the app (ui-mockup-v3: 나 = green, 가족 = orange). */
+/**
+ * Person colors: the six lids of the 09 tokens (`color.person.1`~`6`, [Tokens.PEOPLE]). A person stores only the
+ * lid color; the tile tint and text color come from the same token (09 mockup README section 7). The first, blue, is
+ * the default "나"; the list before the tokens started with the old Pillbox green.
+ */
 object PersonColors {
-    const val DEFAULT: String = "#3F7D58"
+    val PALETTE: List<String> = Tokens.PEOPLE.map { it.solidHex }
 
-    val PALETTE: List<String> = listOf(DEFAULT, "#B5562B", "#1D4E89", "#7A4E9C", "#A0405E", "#5B6B2E")
+    val DEFAULT: String = PALETTE.first()
+
+    /**
+     * The six colors this list offered before the 09 tokens (`#3F7D58` first). Nothing was released with them, but
+     * test phones may still hold them; each maps to the token at the same place.
+     */
+    private val BEFORE_TOKENS: List<String> = listOf("#3F7D58", "#B5562B", "#1D4E89", "#7A4E9C", "#A0405E", "#5B6B2E")
 
     private val HEX = Regex("^#[0-9A-Fa-f]{6}$")
 
@@ -108,5 +159,27 @@ object PersonColors {
     fun argb(color: String): Int {
         val hex = if (isValid(color)) color else DEFAULT
         return (0xFF000000L or hex.substring(1).toLong(16)).toInt()
+    }
+
+    /** The token palette of a stored color. A color from neither list gets the first palette. */
+    fun palette(color: String): PersonPalette = Tokens.PEOPLE[index(color)]
+
+    /** Where a stored color sits in [PALETTE] (0~5): its own place, an old color's place, else 0. */
+    fun index(color: String): Int {
+        val index = PALETTE.indexOfFirst { it.equals(color, ignoreCase = true) }
+            .takeIf { it >= 0 } ?: BEFORE_TOKENS.indexOfFirst { it.equals(color, ignoreCase = true) }
+        return index.coerceAtLeast(0)
+    }
+
+    /** The [PALETTE] color a stored color is drawn with, so an old color still marks its swatch as chosen. */
+    fun canonical(color: String): String = PALETTE[index(color)]
+
+    /**
+     * The color a new person starts with (09 PersonAdd: 나 파랑 and 엄마 주황 leave 초록 chosen): the first color nobody in
+     * [used] has, or with all six taken the first of the least used. The same color can still be picked (screens.md SCR-010).
+     */
+    fun leastUsed(used: List<String>): String {
+        val counts = used.groupingBy(::index).eachCount()
+        return PALETTE[PALETTE.indices.minBy { counts[it] ?: 0 }]
     }
 }

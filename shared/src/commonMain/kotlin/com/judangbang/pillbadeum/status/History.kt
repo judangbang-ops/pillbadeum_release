@@ -32,9 +32,14 @@ data class HistoryMonth(
     val days: List<HistoryDay>,
     /** First day of the month of the earliest schedule start, for the "이전 달" limit; null with no items. */
     val firstMonth: LocalDate?,
+    /** Two or more people are not archived: the person picker is shown (REQ-018, REQ-040, [showsPeople]). */
+    val showPeople: Boolean = true,
 ) {
     /** SCR-008#empty: no item had a window in this month. */
     val isEmpty: Boolean get() = days.isEmpty()
+
+    /** The logical date of [now] (the base date): its line is marked `오늘`, and the next month stops at its month. */
+    val today: LocalDate get() = logicalDateOf(now, settings)
 }
 
 data class HistoryDay(val date: LocalDate, val cells: List<HistoryCell>)
@@ -62,6 +67,11 @@ data class HistoryCell(
      * treats the window as the new version's and refuses a judgment change or a new record as stale.
      */
     val cutByScheduleChange: Boolean = false,
+    /**
+     * The item or its person is archived (shown up to then). SCR-007 cannot open it (`#gone`), so the history screen
+     * says so at once instead (TASK-019).
+     */
+    val archived: Boolean = false,
 )
 
 enum class CellState {
@@ -167,6 +177,7 @@ internal class ItemCells(
             judgment = judgment,
             clockWarning = judgment != null && judgment.id in flagged,
             cutByScheduleChange = cut,
+            archived = intake.archivedAt != null || person.archivedAt != null,
         )
     }
 
@@ -220,6 +231,7 @@ class LoadHistory(
             settings = settings,
             days = byDate.keys.sortedDescending().map { HistoryDay(it, byDate.getValue(it)) },
             firstMonth = firstMonth,
+            showPeople = showsPeople(people.values.count { it.archivedAt == null }),
         )
     }
 }

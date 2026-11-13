@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS `reminder_rule` (`intake_id` TEXT NOT NULL, `enabled`
 --   rule (DB가 막음): 항목 하나에 미룸 하나(PRIMARY KEY intake_id).
 CREATE TABLE IF NOT EXISTS `reminder_snooze` (`intake_id` TEXT NOT NULL, `period_key` TEXT NOT NULL, `fire_at` INTEGER NOT NULL, PRIMARY KEY(`intake_id`), FOREIGN KEY(`intake_id`) REFERENCES `intake`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION );
 
--- TBL-008 setting (CTX-001·CTX-003·CTX-005) ← SPEC-001, SPEC-013, SPEC-028, SPEC-031, SPEC-032, SPEC-033, SPEC-034, SPEC-035, SPEC-038, SPEC-039, SPEC-040, SPEC-041 | terms: TERM-014, TERM-015, TERM-016, TERM-024
+-- TBL-008 setting (CTX-001·CTX-003·CTX-005) ← SPEC-001, SPEC-002, SPEC-013, SPEC-028, SPEC-031, SPEC-032, SPEC-033, SPEC-034, SPEC-035, SPEC-038, SPEC-039, SPEC-040, SPEC-041 | terms: TERM-014, TERM-015, TERM-016, TERM-024
 --   앱 전체 설정 키·값. 키 목록과 뜻은 docs/05-erd/README.md 4장과 Settings.kt.
 --   rule (코드): day_start·base_zone은 바꾼 때부터 적용(TERM-014). 이미 쓴 판정의 period_key는 바꾸지 않음.
 CREATE TABLE IF NOT EXISTS `setting` (`key` TEXT NOT NULL, `value` TEXT NOT NULL, PRIMARY KEY(`key`));

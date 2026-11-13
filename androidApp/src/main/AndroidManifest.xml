@@ -38,6 +38,24 @@
             </intent-filter>
         </activity>
 
+        <!--
+            SCR-002, the widget's person picker (TASK-012). The launcher starts it when the widget is placed and, on
+            Android 12+, from the widget's Reconfigure button (res/xml/diditake_widget_info.xml), so it is exported with
+            the APPWIDGET_CONFIGURE filter. It only acts on this app's own widget ids. Translucent so that nothing shows
+            while it decides; with one person it never draws (REQ-018). Its own task affinity sends a pick started
+            from the widget back to the home screen, not into the app.
+        -->
+        <activity
+            android:name=".widget.WidgetPickActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
         <receiver
             android:name=".widget.DidITakeWidgetReceiver"
             android:exported="true"
@@ -49,6 +67,15 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/diditake_widget_info" />
         </receiver>
+
+        <!--
+            The success callback of the intro's [위젯 추가] (SCR-005, TASK-022): the launcher shows no configuration
+            activity for a widget placed on request, so this gives it its choice. Reached only through the app's own
+            pending intent.
+        -->
+        <receiver
+            android:name=".widget.WidgetPinnedReceiver"
+            android:exported="false" />
 
         <!-- Day-boundary alarm (own explicit intent) plus system time/boot broadcasts. -->
         <receiver

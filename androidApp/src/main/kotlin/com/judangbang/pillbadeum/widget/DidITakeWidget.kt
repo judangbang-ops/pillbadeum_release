@@ -78,6 +78,7 @@ import com.judangbang.pillbadeum.status.WidgetModel
 import com.judangbang.pillbadeum.status.WidgetView
 import com.judangbang.pillbadeum.status.view
 import com.judangbang.pillbadeum.usecase.RecordResult
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
@@ -145,8 +146,19 @@ class DidITakeWidget : GlanceAppWidget() {
         }
     }
 
+    /**
+     * Null when loading failed (logged). A cancellation goes on: the session left the composition or ended, which is not
+     * a failure (it was logged as one, LeftCompositionCancellationException, in the PR #21 device check on API 36).
+     */
     private suspend fun <T> loadOrNull(block: suspend () -> T): T? =
-        runCatching { block() }.onFailure { Log.e(TAG, "widget model load failed", it) }.getOrNull()
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "widget model load failed", e)
+            null
+        }
 
     companion object {
         private const val TAG = "DidITakeWidget"

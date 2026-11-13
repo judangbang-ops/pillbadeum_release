@@ -205,9 +205,10 @@ def open_full_widget_picker(r: Report, tag: str, w: int, h: int) -> int:
     return header.bounds[3]
 
 
-def place_widget(r: Report, tag: str, pick: str = "전체") -> None:
+def place_widget(r: Report, tag: str, pick: str = "전체") -> bool:
     """Drags the DidITake widget preview onto the middle of the home screen. When the person picker opens on the
-    drop (two or more people, TASK-012), takes its picture and taps `pick`: 전체 or a person's name."""
+    drop (two or more people, TASK-012), takes its picture and taps `pick`: 전체 or a person's name.
+    Returns whether the picker opened (with one person it does not, REQ-018)."""
     w, h = screen_size()
     below = open_full_widget_picker(r, tag, w, h)
     preview = widget_preview(h, below)
@@ -218,7 +219,8 @@ def place_widget(r: Report, tag: str, pick: str = "전체") -> None:
     r.note(f"위젯 놓기 ({tag}): 끈 곳 {preview.rid or preview.text} {preview.bounds}")
     x, y = preview.center
     drag(x, y, w // 2, h // 2, r, tag)
-    if find(PICK_TITLE, 6) is not None:
+    picker = find(PICK_TITLE, 6) is not None
+    if picker:
         save_ui(r, f"{tag}-pick")
         r.shot(f"{tag}-pick")
         # Each choice is read as `전체, 나·Mom의 약 3개` or `Mom, 약 1개`: match the start of that description.
@@ -230,6 +232,7 @@ def place_widget(r: Report, tag: str, pick: str = "전체") -> None:
         time.sleep(2)
     go_home()
     r.shot(f"{tag}-placed")
+    return picker
 
 
 def try_place_widget(r: Report, tag: str) -> bool:

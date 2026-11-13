@@ -17,6 +17,7 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.datetime.TimeZone
 
 /**
  * Keeps the one reminder alarm and the reminder notifications in line with the database (TASK-024, TASK-025,
@@ -99,7 +100,8 @@ object Reminders {
             return
         }
         val board = core.loadStatusBoard()
-        val contents = notices.mapNotNull { ReminderLabels.content(board, it) }
+        val zone = TimeZone.currentSystemDefault()
+        val contents = notices.mapNotNull { ReminderLabels.content(board, it, zone) }
         ReminderNotifications.postDoses(context, contents, core.settings.showNamesOnLock(), board.now)
         Log.i(TAG, "${contents.size} reminder(s) shown")
     }
@@ -127,7 +129,7 @@ object Reminders {
         when (result) {
             is RecordResult.Recorded, RecordResult.Gone -> ReminderNotifications.cancelDose(context, content.intakeId)
             is RecordResult.Already -> {
-                val text = ReminderLabels.already(result.existing, core.clock.now(), core.windowSettings().baseZone)
+                val text = ReminderLabels.already(result.existing, core.clock.now(), TimeZone.currentSystemDefault())
                 ReminderNotifications.showResult(context, content, text, showNames, RESULT_TIMEOUT)
             }
             is RecordResult.Stale -> ReminderNotifications.showResult(context, content, ReminderLabels.STALE, showNames, null)

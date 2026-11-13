@@ -143,19 +143,6 @@ class LabelsTest {
         assertEquals(listOf("마지막 복용 오늘\u00a003:00"), tile.lines)
     }
 
-    /** The reminder body (R3, PR #20) reads [Labels.lastLabel] until it moves to [Labels.lastTaken]: same output. */
-    @Test
-    fun the_old_last_label_keeps_its_wording_for_the_reminder_body() = runTest {
-        val pressure = mine("혈압약")
-        recordAt(pressure, "2026-11-04T09:10")
-        suspend fun last() = load().items.single().lastBefore
-        fx.at("2026-11-10T10:00")
-        assertEquals("마지막 11/04 (수) 09:10", Labels.lastLabel(last(), fx.clock.now(), SEOUL))
-        recordAt(pressure, "2026-11-09T21:40", DoseKind.SKIPPED)
-        assertEquals("마지막 어제 21:40", Labels.lastLabel(last(), fx.clock.now(), SEOUL), "either kind, plain space")
-        assertEquals(Labels.NO_RECORD, Labels.lastLabel(null, fx.clock.now(), SEOUL))
-    }
-
     @Test
     fun rr58_times_follow_the_phone_zone_while_windows_and_the_base_date_stay() = runTest {
         val london = TimeZone.of("Europe/London")

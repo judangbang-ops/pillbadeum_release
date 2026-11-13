@@ -18,7 +18,10 @@ data class ReminderContent(
     val name: String,
     /** `아침약 먹어~!` */
     val title: String,
-    /** `마지막 복용 어제 08:02` */
+    /**
+     * `마지막 복용 어제 08:02`, weekly `마지막 복용 어제(일) 22:00`, and a second line `어제 건너뜀` when a later skip
+     * follows the last dose (W-2, W-4). The notification shows the first line folded and both lines unfolded.
+     */
     val text: String,
     /** The person's name when the reminders cover more than one person, else null. */
     val person: String?,
@@ -59,28 +62,31 @@ object ReminderLabels {
     fun title(item: IntakeStatus): String = "${item.displayName} 먹어~!"
 
     /**
-     * Body: the last dose (SCR-003, REQ-021), the same line as the widget. TASK-041 puts the weekly line of
-     * supplement W-2 here.
+     * Body (SCR-003, REQ-021, supplement W-2, W-4): the lines of the widget button while the item is pending, the last
+     * dose first (`마지막 복용 어제 22:00`, weekly with the weekday, or `기록 없음`) so a folded reminder shows it,
+     * then a later skip (`어제 건너뜀`, `지난주 건너뜀`). Times and dates in [zone], the phone's (REQ-082, RR-58).
      */
-    fun text(item: IntakeStatus, now: Instant, zone: TimeZone): String = Labels.lastLabel(item.lastBefore, now, zone)
+    fun text(item: IntakeStatus, now: Instant, zone: TimeZone): String =
+        listOfNotNull(Labels.lastTaken(item, now, zone), Labels.laterSkip(item, now, zone)).joinToString("\n")
 
     fun skip(rule: ScheduleRule): String = when (rule) {
         ScheduleRule.Daily -> SKIP_TODAY
         is ScheduleRule.Weekly -> SKIP_THIS_WEEK
     }
 
-    /** SCR-003#already: `이미 기록됨 (08:02)`, shown briefly and then closed. */
+    /** SCR-003#already: `이미 기록됨 (08:02)` in [zone], the phone's (REQ-082), shown briefly and then closed. */
     fun already(existing: DoseRecordEntity, now: Instant, zone: TimeZone): String =
         "이미 기록됨 (${Labels.stamp(Instant.fromEpochMilliseconds(existing.takenAt), now, zone)})"
 
     /**
-     * The reminder of [notice]'s item, from [board] read at the moment of showing. Null when the board no
-     * longer has that item waiting in the same window (archived meanwhile, judged meanwhile, new window).
+     * The reminder of [notice]'s item, from [board] read at the moment of showing, its times in [zone] (the phone's,
+     * REQ-082; windows stay in the base zone). Null when the board no longer has that item waiting in the same window
+     * (archived meanwhile, judged meanwhile, new window).
      *
      * The person's name goes in the notification header only when the board's items belong to more than one
      * person, so two people's same medicine is not mixed up (Claude default: SCR-003 names only the item).
      */
-    fun content(board: StatusBoard, notice: ReminderNotice): ReminderContent? {
+    fun content(board: StatusBoard, notice: ReminderNotice, zone: TimeZone): ReminderContent? {
         val item = board.items.firstOrNull { it.intakeId == notice.intakeId } ?: return null
         if (item.window.periodKey != notice.window.periodKey || item.judgment != null) return null
         val people = board.items.mapTo(HashSet()) { it.person.id }.size
@@ -89,7 +95,7 @@ object ReminderLabels {
             periodKey = item.window.periodKey,
             name = item.displayName,
             title = title(item),
-            text = text(item, board.now, board.settings.baseZone),
+            text = text(item, board.now, zone),
             person = item.person.name.takeIf { people > 1 },
             skipLabel = skip(item.rule),
             canSnooze = notice.canSnooze,

@@ -317,23 +317,6 @@ object Labels {
         return "$who 이번 주: ${days.ifEmpty { NO_RECORD }}"
     }
 
-    /**
-     * Older wording of the latest judgment of either kind: `마지막 어제 21:40`, `마지막 11/04 (수) 09:10`, or
-     * `기록 없음`. Its output is kept exactly as it was, only for the reminder body (R3, PR #20), until that body
-     * moves to [lastTaken] (TASK-041 W-4, TASK-043). New code uses [lastTaken].
-     */
-    fun lastLabel(last: DoseRecordEntity?, now: Instant, zone: TimeZone): String {
-        if (last == null) return NO_RECORD
-        val local = Instant.fromEpochMilliseconds(last.takenAt).toLocalDateTime(zone)
-        val today = now.toLocalDateTime(zone).date
-        val day = when (local.date) {
-            today -> "오늘"
-            today.minus(1, DateTimeUnit.DAY) -> "어제"
-            else -> date(local.date)
-        }
-        return "마지막 $day ${hhmm(local)}"
-    }
-
     /** Widget button line for a judgment with a clock warning (SCR-001#clock, supplement C-2). */
     const val CLOCK_CHECK_IN_APP: String = "! 앱에서 확인"
 

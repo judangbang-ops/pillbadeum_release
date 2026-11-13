@@ -3,7 +3,6 @@ package com.judangbang.pillbadeum.reminder
 import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Icon
@@ -192,11 +191,13 @@ internal object ReminderNotifications {
         now: Instant,
         alertAgain: Boolean,
     ): Notification {
+        val lines = content.text.lines()
         val builder = Notification.Builder(context, ReminderChannels.DOSES)
             .setSmallIcon(R.drawable.ic_stat_reminder)
             .setColor(ACCENT)
             .setContentTitle(content.title)
-            .setContentText(content.text)
+            // The last dose folded (W-2, W-4); a later skip only unfolded.
+            .setContentText(lines.first())
             .setCategory(Notification.CATEGORY_REMINDER)
             .setShowWhen(true)
             .setWhen(now.toEpochMilliseconds())
@@ -207,6 +208,7 @@ internal object ReminderNotifications {
             .addExtras(content.toBundle())
             .setVisibility(visibilityFor(showNames))
         if (showNames) builder.setPublicVersion(lockVersion(context, ReminderChannels.DOSES))
+        if (lines.size > 1) builder.setStyle(Notification.BigTextStyle().bigText(content.text))
         if (content.person != null) builder.setSubText(content.person)
         // Taken off when the window ends even if the day-boundary refresh is late (N-13).
         val untilEnd = content.windowEnd - now
@@ -268,11 +270,14 @@ internal object ReminderNotifications {
         return PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
 
-    /** The app as from its icon (SCR-004 is its first screen). */
+    /**
+     * The app on its first screen, SCR-004, whatever screen it was left on (screens.md: a reminder opens SCR-004), as the
+     * widget's header does ([MainActivity.homeIntent]).
+     */
     private fun openApp(context: Context): PendingIntent = PendingIntent.getActivity(
         context,
         0,
-        Intent.makeMainActivity(ComponentName(context, MainActivity::class.java)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        MainActivity.homeIntent(context),
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
 

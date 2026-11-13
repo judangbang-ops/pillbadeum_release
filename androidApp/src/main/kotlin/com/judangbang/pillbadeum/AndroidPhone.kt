@@ -3,9 +3,7 @@ package com.judangbang.pillbadeum
 import android.Manifest
 import android.app.Activity
 import android.app.ActivityManager
-import android.app.AlarmManager
 import android.app.KeyguardManager
-import android.app.NotificationManager
 import android.app.TimePickerDialog
 import android.appwidget.AppWidgetManager
 import android.content.ActivityNotFoundException
@@ -18,6 +16,9 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import com.judangbang.pillbadeum.boundary.DayBoundaryAlarm
+import com.judangbang.pillbadeum.reminder.ReminderAlarm
+import com.judangbang.pillbadeum.reminder.ReminderChannels
+import com.judangbang.pillbadeum.reminder.ReminderNotifications
 import com.judangbang.pillbadeum.ui.AccessSetting
 import com.judangbang.pillbadeum.ui.Phone
 import com.judangbang.pillbadeum.ui.ReminderAccess
@@ -117,15 +118,16 @@ class AndroidPhone(
     }
 
     /**
-     * Notifications are on while the app's notifications are on and the dose-reminder channel is not switched off; a
-     * channel not created yet counts as on. Exact alarms follow `canScheduleExactAlarms()` from Android 12 and are always
-     * allowed before. Battery use is unrestricted while the app is left out of battery optimization and, from Android 9,
-     * not restricted in the background. A state that cannot be read is not shown as a problem.
+     * Notifications and exact alarms are judged as the reminders judge them (R3): [ReminderNotifications.canPostDoses]
+     * (the app's notifications on and the dose-reminder channel not switched off; a channel not created yet counts as
+     * on) and [ReminderAlarm.canScheduleExact] (`canScheduleExactAlarms()` from Android 12, always allowed before).
+     * Battery use is unrestricted while the app is left out of battery optimization and, from Android 9, not restricted
+     * in the background. A state that cannot be read is not shown as a problem.
      */
     override fun reminderAccess(): ReminderAccess =
         ReminderAccess(
-            notifications = readOr(true) { notificationsOn() },
-            exactAlarms = readOr(true) { exactAlarmsAllowed() },
+            notifications = readOr(true) { ReminderNotifications.canPostDoses(activity) },
+            exactAlarms = readOr(true) { ReminderAlarm.canScheduleExact(activity) },
             batteryUnrestricted = readOr(true) { batteryUnrestricted() },
         )
 
@@ -166,19 +168,6 @@ class AndroidPhone(
         return listOfNotNull(first, appInfo).any(::start)
     }
 
-    private fun notificationsOn(): Boolean {
-        val manager = activity.getSystemService(NotificationManager::class.java) ?: return true
-        return manager.areNotificationsEnabled() && !doseChannelOff(manager)
-    }
-
-    private fun doseChannelOff(manager: NotificationManager): Boolean =
-        manager.getNotificationChannel(DOSES_CHANNEL)?.importance == NotificationManager.IMPORTANCE_NONE
-
-    private fun exactAlarmsAllowed(): Boolean {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
-        return activity.getSystemService(AlarmManager::class.java)?.canScheduleExactAlarms() ?: true
-    }
-
     private fun batteryUnrestricted(): Boolean {
         val power = activity.getSystemService(PowerManager::class.java) ?: return true
         if (!power.isIgnoringBatteryOptimizations(activity.packageName)) return false
@@ -187,12 +176,13 @@ class AndroidPhone(
     }
 
     private fun notificationSettings(): Intent {
-        val manager = activity.getSystemService(NotificationManager::class.java)
-        val onlyChannel = manager != null && readOr(false) { manager.areNotificationsEnabled() && doseChannelOff(manager) }
+        val onlyChannel = readOr(false) {
+            ReminderNotifications.canPost(activity) && !ReminderNotifications.canPostDoses(activity)
+        }
         return if (onlyChannel) {
             Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
                 .putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName)
-                .putExtra(Settings.EXTRA_CHANNEL_ID, DOSES_CHANNEL)
+                .putExtra(Settings.EXTRA_CHANNEL_ID, ReminderChannels.DOSES)
         } else {
             Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName)
         }
@@ -220,8 +210,5 @@ class AndroidPhone(
 
     private companion object {
         const val TAG = "AndroidPhone"
-
-        /** R3's `ReminderChannels.DOSES` (PR #20): this becomes that constant once both pull requests are merged. */
-        const val DOSES_CHANNEL = "dose_reminders"
     }
 }

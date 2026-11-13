@@ -1,5 +1,7 @@
 package com.judangbang.pillbadeum.status
 
+import com.judangbang.pillbadeum.domain.DoseKind
+import com.judangbang.pillbadeum.domain.DoseSource
 import com.judangbang.pillbadeum.domain.ScheduleRule
 import com.judangbang.pillbadeum.testing.DbFixture
 import com.judangbang.pillbadeum.testing.SEOUL
@@ -21,6 +23,7 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
 
 /**
  * TASK-025: what a dose reminder says and offers (screens.md SCR-003, REQ-027, REQ-045, REQ-088, N-7, N-11).
@@ -49,9 +52,9 @@ class ReminderLabelsTest {
         return plan.fire().notices
     }
 
-    private suspend fun contents(notices: List<ReminderNotice>): List<ReminderContent?> {
+    private suspend fun contents(notices: List<ReminderNotice>, zone: TimeZone = SEOUL): List<ReminderContent?> {
         val now = board()
-        return notices.map { ReminderLabels.content(now, it) }
+        return notices.map { ReminderLabels.content(now, it, zone) }
     }
 
     @Test
@@ -66,12 +69,49 @@ class ReminderLabelsTest {
         assertEquals("2026-11-11", content.periodKey)
         assertEquals("Morning dose", content.name)
         assertEquals("Morning dose 먹어~!", content.title)
-        assertEquals(Labels.lastLabel(board().items.single().lastBefore, seoul("2026-11-11T08:00"), SEOUL), content.text)
-        assertTrue(content.text.contains("어제 21:40"), content.text)
+        assertEquals("마지막 복용 어제\u00a021:40", content.text, "the widget's line (W-4)")
         assertEquals(ReminderLabels.SKIP_TODAY, content.skipLabel)
         assertTrue(content.canSnooze)
         assertEquals(seoul("2026-11-12T04:00"), content.windowEnd)
         assertNull(content.person, "one person: no name in the header")
+    }
+
+    /** W-2, W-4: a weekly reminder starts with the last dose and its weekday, as the widget button does. */
+    @Test
+    fun w4_a_weekly_reminder_starts_with_the_last_dose_and_its_weekday() = runTest {
+        val a = item(rule = ScheduleRule.Weekly(DayOfWeek.WEDNESDAY))
+        fx.at("2026-11-10T21:40")
+        assertIs<RecordResult.Recorded>(fx.record(a, renderedKey = null, source = DoseSource.APP))
+
+        val content = assertNotNull(contents(ringAt("2026-11-11T08:00")).single())
+
+        assertEquals("마지막 복용 어제(화)\u00a021:40", content.text)
+    }
+
+    /** S-2, W-2: a skip later than the last dose is a second line, seen when the reminder is unfolded. */
+    @Test
+    fun a_later_skip_is_the_second_line_of_the_body() = runTest {
+        val a = item()
+        fx.at("2026-11-10T21:40")
+        assertIs<RecordResult.Recorded>(fx.record(a, renderedKey = null, source = DoseSource.APP, kind = DoseKind.SKIPPED))
+
+        val content = assertNotNull(contents(ringAt("2026-11-11T08:00")).single())
+
+        assertEquals("${Labels.NO_RECORD}\n어제 건너뜀", content.text, "a skip is never the last dose")
+    }
+
+    /** REQ-082, RR-58: the body's times follow the phone's zone, while the window stays the base zone's. */
+    @Test
+    fun rr58_the_body_follows_the_phones_zone() = runTest {
+        val a = item()
+        fx.at("2026-11-10T21:40") // 12:40 in London
+        assertIs<RecordResult.Recorded>(fx.record(a, renderedKey = "2026-11-10"))
+
+        val notices = ringAt("2026-11-11T08:00") // 11/10 23:00 in London
+        val content = assertNotNull(contents(notices, TimeZone.of("Europe/London")).single())
+
+        assertEquals("마지막 복용 오늘\u00a012:40", content.text, "still 11/10 in London")
+        assertEquals("2026-11-11", content.periodKey, "Seoul's window")
     }
 
     @Test

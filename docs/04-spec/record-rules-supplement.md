@@ -127,7 +127,7 @@
 - **S-5 지난 기록(REQ-037)**: 건너뜀은 복용과 다른 기호와 글자(`건너뜀`)로 보이고, 색만으로 구분하지 않음
 - 구현 (TASK-013·TASK-043, [PR #19](https://github.com/judangbang-ops/pillbadeum_release/pull/19)): `LoadStatusBoard`가 항목마다 마지막 복용 `lastTaken`(복용만, `findLastActiveTakenBefore`)을 따로 읽음. `lastBefore`(종류 상관없는 마지막 판정)와 `isDone`(판정 있음)은 그대로 두고 `isTaken`·`isSkipped`·`laterSkip`을 더함. `StatusBoard.doneCount`는 복용만 세고 `skippedCount`를 따로 둠. 문구는 `Labels.count`(S-1), `widgetLines`·`lastTaken`·`laterSkip`·`appRow`(S-2, 날짜 글자는 `dayWord`), `recordMessage`(S-3), `spoken`(S-4). 위젯 버튼은 `WidgetButton.state`(`PENDING`·`TAKEN`·`SKIPPED`)로 원을 고르고 건너뜀은 회색 원(`widget_icon_skipped`). 시각은 부르는 쪽이 넘긴 표시 시간대로 쓰고, 앱과 위젯은 기기 시간대(`TimeZone.currentSystemDefault()`)를 넘김(REQ-082). 새 위젯 배치(요일 약통)는 TASK-014(`WidgetLayout`, 렌더 시험 `WidgetRenderTest`). 런처 캡처는 아직
   - Claude가 정한 것: 날짜 글자와 시각은 줄이 바뀌지 않는 빈칸(U+00A0)으로 이음(TASK-044 그림). 복용한 칸의 줄은 09 목업대로 `08:02 먹음`(주 1회는 `월 08:02 먹음`). TalkBack은 그 전 날짜를 `11월 9일 월요일`처럼 말로 읽고, 늦은 건너뜀이 있으면 `…, 어제 건너뜀`까지 읽고, 풀리지 않은 시계 경고(C-2)가 있으면 끝에 `앱에서 확인`을 읽음. 대상자 이름은 배지와 같은 조건(보관되지 않은 대상자 둘 이상, REQ-018)에서 읽음
-  - 알림 본문(SCR-003)은 R3 [PR #20](https://github.com/judangbang-ops/pillbadeum_release/pull/20)의 `ReminderLabels.text`가 아직 `Labels.lastLabel`(종류 상관없는 마지막 판정)과 기준 시간대를 씀. 두 PR이 모두 들어간 뒤 `Labels.lastTaken`과 기기 시간대로 바꿈(TASK-041·TASK-043의 남은 몫)
+  - 알림 본문(SCR-003)은 `ReminderLabels.text`가 위젯 버튼과 같은 줄(`lastTaken`, 늦은 건너뜀이 있으면 둘째 줄 `laterSkip`)을 기기 시간대로 씀. 접힌 알림은 첫 줄, 펼치면 두 줄. `already`(`이미 기록됨 (08:02)`)도 기기 시간대. 옛 `Labels.lastLabel`(종류 상관없는 마지막 판정, 기준 시간대)은 지움 (TASK-041·TASK-043의 남은 몫, R2·R3을 합친 [PR #20](https://github.com/judangbang-ops/pillbadeum_release/pull/20))
 
 ### 반례
 
@@ -304,7 +304,7 @@
 - **W-3 읽기**: TalkBack은 주 1회 미완료 버튼을 "{대상자} {항목}, 이번 주 미완료, 마지막 복용 어제 일요일 22:00"으로 읽음. 대상자가 한 명이면 "{대상자}"를 읽지 않음 (S-4에 더함)
 - **W-4 알림**: 주 1회 약의 알림은 N-5대로 창의 첫날에만 울리고, 본문 첫 줄에 W-2 문구를 넣음. 마지막 복용이 가까워도 알림을 줄이거나 막지 않음 (**Claude 기본값**)
 - **한계**: 사용자가 문구를 읽어야만 효과가 있음(검토 A3의 반론). 기록을 막거나 묻지 않으므로 이중 복용을 앱이 막지는 않음
-- 구현 (TASK-041, [PR #19](https://github.com/judangbang-ops/pillbadeum_release/pull/19)): 위젯 버튼은 `WidgetButton.largeFirstLine`이면 첫 줄을 이름과 같은 16sp로 그림(TASK-014의 요일 약통 칸). 앱 줄은 `RowText.boldLine`에 마지막 복용을, `skipLine`에 `지난주 건너뜀`을 줌. 주 1회 앱 줄은 SPEC-015대로 이번·다음 창도 보임(`이번 창 11/09 (월)~ · 다음 창 11/16 (월)`, 배치는 TASK-016). 알림 본문 첫 줄(W-4)은 3장 구현의 알림 줄과 같이 PR #20이 들어간 뒤
+- 구현 (TASK-041, [PR #19](https://github.com/judangbang-ops/pillbadeum_release/pull/19)): 위젯 버튼은 `WidgetButton.largeFirstLine`이면 첫 줄을 이름과 같은 16sp로 그림(TASK-014의 요일 약통 칸). 앱 줄은 `RowText.boldLine`에 마지막 복용을, `skipLine`에 `지난주 건너뜀`을 줌. 주 1회 앱 줄은 SPEC-015대로 이번·다음 창도 보임(`이번 창 11/09 (월)~ · 다음 창 11/16 (월)`, 배치는 TASK-016). 알림 본문 첫 줄(W-4)은 3장 구현의 알림 줄대로 함([PR #20](https://github.com/judangbang-ops/pillbadeum_release/pull/20), `ReminderLabelsTest.w4_*`)
 
 ### 반례
 

@@ -479,8 +479,10 @@ def flow(f: Flow, apk: Path) -> None:
     go_home()
     done = f.step("tap", "-Text", "PillA", "-When", "04:00:00", again=False)
     at = re.search(r"누른 뒤 휴대폰 시각 (\d{2}:\d{2}:\d{2})", done.out)
-    f.check("tap -Text PillA -When 04:00:00 (RR-13)", "휴대폰 시계가 04:00:00이 되면 위젯의 PillA를 누름 (2초 안)",
-            done.tail(1), done.ok and at is not None and "04:00:00" <= at.group(1) <= "04:00:02")
+    # `input tap` is a Java program that takes about a second to start on the CI emulator: the tap lands a little after
+    # 04:00:00, and the time printed after it a little later still
+    f.check("tap -Text PillA -When 04:00:00 (RR-13)", "휴대폰 시계가 04:00:00이 되면 위젯의 PillA를 누름 (누른 뒤 시각 5초 안)",
+            done.tail(1), done.ok and at is not None and "04:00:00" <= at.group(1) <= "04:00:05")
     seen = f.snap("rr13-after", "PillA")
     bands = [text for text, _ in widget_nodes(kit.raw / "rr13-after.xml") if re.fullmatch(r"\s*\d+\s*/\s*\d+\s*", text)]
     r.note(f"RR-13 탭 직후: {'날짜가 바뀌었어요 띠' if seen.stale else '띠 없음'}, 위젯 머리글 {bands or '못 읽음'} "

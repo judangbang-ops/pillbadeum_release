@@ -139,10 +139,12 @@ REQ-048의 목표 숫자는 두 밤의 결과를 보고 정해 요구 문서에 
 
 1. 옛 폰: 앱에 기록 몇 건과 위젯(대상자를 고른 위젯 포함), 화면 잠금 있음. `snap -Name rr29-old-home`, 앱 [지난 기록] 캡처
 2. 옛 폰에서 백업: Google 백업(설정 > 계정 및 백업) 또는 `adb shell bmgr backupnow com.judangbang.pillbadeum`
-3. 새 폰: Smart Switch나 Google 계정 복원으로 옮김. 그 뒤 새 폰을 꽂고 `info -Name rr29-new-info`, `snap -Name rr29-new-home`
+3. 새 폰: Smart Switch나 Google 계정 복원으로 옮김. 그 뒤 새 폰을 꽂고 `info -Name rr29-new-info`, `snap -Name rr29-new-home`, `logcat -Name rr29-new`
 4. 새 폰에서 앱을 엶 → 복원 안내 → [확인했어요] (TC-052)
 
 합격: 기록이 그대로 옴(건수와 날짜), 복원 안내가 뜸, 위젯이 되살아나면 복원 줄을 보이고 대상자가 둘 이상이면 다시 고르게 함(보충 R-3). 런처가 위젯을 되살리지 않으면 그대로 적음. 화면 잠금이 없는 폰은 기록이 오지 않는 것이 맞음(RR-68).
+
+위젯이 되살아났으면 `rr29-new-app.txt`에서 `onRestored: old … -> new …` 줄을 찾아 옛 위젯 번호와 새 번호를 적음. 에뮬레이터 확인은 앱을 지웠다가 복원하므로 홈 화면의 위젯이 사라져 이 줄을 볼 수 없음. 위젯 선택을 새 번호로 옮기는 방법([보충 2장의 제안](../04-spec/record-rules-supplement.md#2-복원-감지와-안내-a2))은 이 줄이 실제로 찍히는지를 보고 정함.
 
 ## 5. 보고서
 

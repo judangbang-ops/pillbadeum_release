@@ -240,14 +240,31 @@ def set_zone() -> str:
     return sh("getprop persist.sys.timezone").strip()
 
 
+def phone_now() -> int:
+    """The phone clock in Unix seconds (it was set apart from the computer's clock).
+
+    Right after `date -u` moved the clock on API 26, the next `adb shell` once ended with exit 255 and printed
+    nothing, and adb answered again a moment later (reminder check, run 43420227464). Reading the clock changes
+    nothing on the phone, so a read that brings no number is asked again."""
+    out = ""
+    for _ in range(3):
+        out = sh("date +%s", check=False).strip()
+        if out.isdigit():
+            return int(out)
+        time.sleep(2)
+        adb("wait-for-device", check=False, timeout=60)
+    raise RuntimeError(f"phone clock not read: adb shell date +%s said {out!r}")
+
+
 def put_clock(target: int) -> None:
     """Sets the phone clock to `target` (Unix seconds), or raises."""
     sh(f"cmd alarm set-time {target * 1000}", check=False)
-    now = int(sh("date +%s").strip() or 0)
+    now = phone_now()
     if abs(now - target) > 120:
+        # On API 26 `cmd alarm set-time` leaves the clock as it was (run 43420227464 came here), so there `date` sets it.
         utc = datetime.fromtimestamp(target, timezone.utc)
         sh(f"date -u {utc.strftime('%m%d%H%M%Y.%S')}", check=False)
-        now = int(sh("date +%s").strip() or 0)
+        now = phone_now()
     if abs(now - target) > 120:
         raise RuntimeError(f"clock not set: wanted {target}, phone says {now}")
 
@@ -265,13 +282,13 @@ def set_clock(at: datetime) -> str:
     started = time.time()
     settle()
     expected = target + int(time.time() - started)
-    now = int(sh("date +%s").strip() or 0)
+    now = phone_now()
     if abs(now - expected) > 120:
         # Seen once on run 7: the time went back while System UI was stalling. Set it once more.
         put_clock(expected)
         settle()
         expected = target + int(time.time() - started)
-        now = int(sh("date +%s").strip() or 0)
+        now = phone_now()
         if abs(now - expected) > 120:
             raise RuntimeError(f"clock went back after it was set: wanted about {expected}, phone says {now}")
     return sh("date '+%Y-%m-%d %H:%M %Z'").strip()
@@ -295,11 +312,6 @@ def settle(quiet: float = 30, longest: float = 180) -> None:
         if time.time() - last_dialog >= quiet:
             return
         time.sleep(3)
-
-
-def phone_now() -> int:
-    """The phone clock in Unix seconds (it was set apart from the computer's clock)."""
-    return int(sh("date +%s").strip() or 0)
 
 
 def day_label(d) -> str:

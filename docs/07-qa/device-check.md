@@ -45,7 +45,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\device\device-check.
 | 1 | `info` | - | 기기·버전·설정 값이 남음 |
 | 2 | `install -Fresh -Apk <개인 APK>` | - | 깔림, versionCode가 main의 커밋 수 |
 | 3 | `additem -Names PillA,PillB,PillC,PillD,PillE` | - | 첫 실행 안내를 [건너뛰기]로 넘기고 다섯 항목 |
-| 4 | `bug004` | 홈 화면 첫 페이지에 4×2 위젯을 놓음(3분 안) | **BUG-004**: 놓기 전 RescheduleReceiver 켜짐 `True`, 10초 캡처에 항목 칸이 보이고 도는 원이 아님, logcat에 우리 패키지의 패키지 바뀜 줄 0개 |
+| 4 | `bug004` | 홈 화면 첫 페이지에 4×2 위젯을 놓음(3분 안). 놓은 뒤 위젯 테두리가 남아 있으면 스크립트가 [뒤로]로 닫음 | **BUG-004**: 놓기 전 RescheduleReceiver 켜짐 `True`, 10초 캡처에 항목 칸이 보이고 도는 원이 아님, logcat에 우리 패키지의 패키지 바뀜 줄 0개 |
 | 5 | `remind -Names PillA,PillB,PillC,PillD,PillE` | - | 다섯 항목 [알림 받기] 켬, 첫 알림 시각 08:00 |
 | 6 | `exact -Mode allow`, `alarms` | - | 이 앱 알림 알람이 정확 알람 하나(보충 N-12) |
 | 7 | `reboot` | 부팅 뒤 잠금을 풂 | **RR-18**: 잠금을 풀고 20초 뒤 홈 화면 위젯이 오늘로 그려짐(캡처), 경계 알람과 알림 알람이 다시 있음(`reboot-alarms`), 앱 로그에 죽은 기록 없음 |

@@ -26,7 +26,8 @@ Flow (zone Asia/Seoul; the kit's own `clock` step moves the clock; D is the phon
    8. exact deny, alarms: the reminder alarm is no longer exact
    9. logcat (no crash line of the app), reboot: the driver types the PIN after the boot, and the kit leaves the
       screen, the alarms and the logs. Last here, not before the cells as on the Galaxy: the emulator comes back on
-      the host's clock
+      the host's clock. When the boot has not finished in 5 minutes (API 36, run 43391459701), the driver keeps the
+      phone's properties and logs (raw/reboot-hang-*.txt) and turns the emulator off and on; the report says so
   10. clock auto, info
 
 The emulator draws the soft keyboard although it has a hardware one (show_ime_with_hard_keyboard 1), as a phone does,
@@ -43,7 +44,9 @@ when a check fails. Standard library only. Not product code.
 from __future__ import annotations
 
 import argparse
+import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -210,6 +213,50 @@ def unroot() -> str:
         if who and who != "0":
             return who
     raise RuntimeError(f"adb unroot failed (id -u = {who!r})")
+
+
+# As in .github/actions/android-emulator, which starts the emulator first (AVD "check" in $RUNNER_TEMP/avd)
+EMULATOR_FLAGS = ("-no-window", "-no-audio", "-no-boot-anim", "-no-snapshot", "-gpu", "swiftshader_indirect",
+                  "-camera-back", "none", "-camera-front", "none")
+
+
+def boot_hang_diagnostics(raw: Path) -> None:
+    """What the phone says while its boot hangs: the properties (init.svc.*, sys.boot_completed) and the last logs."""
+    for name, args, timeout in (
+        ("props", ("shell", "getprop"), 60),
+        ("crash", ("logcat", "-d", "-b", "crash"), 90),
+        ("logcat", ("logcat", "-d", "-v", "time", "-t", "4000"), 120),
+    ):
+        try:
+            out = adb(*args, check=False, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            out = f"[{timeout}초 안에 답이 없음]"
+        (raw / f"reboot-hang-{name}.txt").write_text(out, encoding="utf-8")
+
+
+def power_cycle() -> None:
+    """Turns the CI emulator off and on with the same AVD; the data partition stays, as on a phone whose power key
+    was held. Only on the CI runner (RUNNER_TEMP), where .github/actions/android-emulator made the AVD."""
+    temp = os.environ.get("RUNNER_TEMP")
+    if not temp:
+        raise RuntimeError("emulator did not finish booting (not on the CI runner: not restarting it)")
+    adb("emu", "kill", check=False, timeout=60)
+    end = time.time() + 120
+    while time.time() < end and "emulator-" in adb("devices", check=False, timeout=30):
+        time.sleep(3)
+    if "emulator-" in adb("devices", check=False, timeout=30):
+        subprocess.run(["pkill", "-9", "-f", "qemu-system"], check=False)
+        time.sleep(5)
+    avd = Path(temp) / "avd"
+    for lock in (avd / "check.avd").glob("*.lock"):  # left behind when the emulator was killed
+        if lock.is_dir():
+            shutil.rmtree(lock, ignore_errors=True)
+        else:
+            lock.unlink(missing_ok=True)
+    log = open(Path(temp) / "emulator.log", "ab")
+    subprocess.Popen(["emulator", "-avd", "check", *EMULATOR_FLAGS], env={**os.environ, "ANDROID_AVD_HOME": str(avd)},
+                     stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+    adb("wait-for-device", check=False, timeout=300)
 
 
 def phone_now() -> datetime:
@@ -520,7 +567,16 @@ def flow(f: Flow, apk: Path) -> None:
     rebooting = kit.start("reboot")
     time.sleep(20)
     adb("wait-for-device", check=False, timeout=300)
-    wait_boot(600)
+    try:
+        wait_boot(300)
+    except RuntimeError:
+        # API 36, run 43391459701: the boot after `adb reboot` never finished (emulator.log has no second "Boot
+        # completed"); reminder_check.py's reboot on the same image came back in 29 seconds. Keep what the phone
+        # says, then turn the emulator off and on, as a person holds the power key. The kit waits up to 10 minutes.
+        boot_hang_diagnostics(kit.raw)
+        r.note("재부팅: 5분 안에 부팅이 끝나지 않아 에뮬레이터를 껐다 켬. 그때 휴대폰 상태는 raw/reboot-hang-*.txt")
+        power_cycle()
+        wait_boot(600)
     unlocked = False
     end = time.time() + 270
     while time.time() < end and rebooting.poll() is None:

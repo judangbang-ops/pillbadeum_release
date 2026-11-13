@@ -33,7 +33,7 @@
   bug004   처음 놓는 위젯을 지켜봄: 사람이 위젯을 놓으면 3초·10초 뒤 화면과 로그를 남김 (install -Fresh 뒤에 부름)
   latency  홈 화면 위젯에서 항목 칸을 누르고 위젯 머리글 자리가 바뀔 때까지 시간을 잼 (기록이 생김).
            -Item 하나 또는 -Names 여럿 (-Count번을 이름 차례로 돌아가며 누름). 위젯에 안 보이면 위젯 목록을 밀어 찾음.
-           -Process dead면 누르기 전에 앱 프로세스를 내림 (am kill)
+           -Process dead면 누르기 전에 앱 프로세스를 내림 (am kill, 위젯 작업이 끝날 때까지 최대 90초 되풀이)
   reboot   앞의 로그를 남기고 휴대폰을 다시 시작함. 사람이 잠금을 풀면 화면·알람·로그를 남김
 
 비밀값을 쓰지 않습니다. 화면 잠금 PIN은 사람이 휴대폰에서 직접 넣고, 스크립트는 묻거나 적지 않습니다.
@@ -861,8 +861,14 @@ function Step-Remind {
         $start = '?'
         if ($null -ne $startNode) {
             $clock = (Get-NodeText $startNode).Trim()
-            $spoken = (Get-NodeDesc $startNode).Trim()
-            $start = if ($clock) { "$clock ($spoken)" } else { $spoken }
+            # 설명 '첫 알림 시각, 8시'에서 '8시' (Labels.clockSpoken: '8시', '13시 30분')
+            $spoken = (Get-NodeDesc $startNode).Trim().Substring($ReminderStart.Length + 1).Trim()
+            if (-not $clock -and $spoken -match '^(\d{1,2})시(?: (\d{1,2})분)?$') {
+                # 버튼의 설명이 글자 '08:00'을 덮어 덤프에 글자가 없음 (API 34·36 에뮬레이터, 실행 43391459701): 설명을 시각으로 바꿈
+                $minute = if ($Matches[2]) { [int]$Matches[2] } else { 0 }
+                $clock = '{0:D2}:{1:D2}' -f [int]$Matches[1], $minute
+            }
+            $start = if ($clock) { "$clock ('$spoken')" } else { "'$spoken'" }
         }
         $save = Wait-Node $SaveButton 20 -Exact
         if ($null -eq $save) { throw "'$SaveButton' 버튼이 화면에 없습니다. $done" }
@@ -993,13 +999,24 @@ function Step-Bug004 {
         $stem = "bug004-${wait}s"
         Save-Screenshot $stem | Out-Null
         $xml = Get-UiDump $stem
+        $note = ''
+        $root = if ($null -ne $xml) { $xml.SelectSingleNode('//node') } else { $null }
+        if ($null -ne $root -and $root.GetAttribute('package') -ne $PackageName -and @(Get-WidgetNodes $xml).Count -eq 0) {
+            # 런처가 막 놓은 위젯에 크기 조절 테두리를 띄우는 동안은 덤프에 그 테두리만 있고 홈 화면 노드가 없음 (Pixel 런처,
+            # API 34 에뮬레이터 실행 43391459701: widget_resize_frame뿐). [뒤로]로 테두리만 닫고 다시 덤프함. 위젯을 놓을 때 뜨는
+            # 대상자 고르기(SCR-002)는 이 앱 화면이라 그때는 누르지 않음. 캡처는 위에서 이미 그 시각에 남김
+            Invoke-Shell 'input keyevent KEYCODE_BACK' -AllowFail | Out-Null
+            Start-Sleep -Milliseconds 800
+            $xml = Get-UiDump $stem
+            $note = ', 런처의 위젯 테두리를 [뒤로]로 닫고 다시 덤프함'
+        }
         $progress = $false
         $texts = @()
         if ($null -ne $xml) {
             $progress = @($xml.SelectNodes('//node') | Where-Object { $_.GetAttribute('class') -match 'ProgressBar' }).Count -gt 0
             $texts = @($xml.SelectNodes('//node') | ForEach-Object { Get-NodeText $_ } | Where-Object { $_ })
         }
-        $results += "${wait}초: 도는 원(ProgressBar) $(if ($progress) { '있음' } else { '없음' }), 화면 글자 $($texts.Count)개 (캡처 $stem.png)"
+        $results += "${wait}초: 도는 원(ProgressBar) $(if ($progress) { '있음' } else { '없음' }), 화면 글자 $($texts.Count)개 (캡처 $stem.png$note)"
     }
     $log = Save-DeviceOutput ("logcat -d -v year -T '{0}'" -f $start.Logcat) 'bug004-logcat.txt'
     $changed = @($log -split "`r?`n" | Where-Object { $_.Contains($PackageName) -and $_ -match 'PACKAGE_CHANGED|onPackageModified|package changed|pkg changed' })
@@ -1175,8 +1192,17 @@ function Step-Latency {
         # 띠("이미 기록됨 …")는 10초 뒤 머리글로 돌아감(MESSAGE_TTL_MS). 띠가 남아 있으면 같은 글이라 바뀜을 못 봄
         if ($n -gt 1) { Start-Sleep -Seconds 12 }
         if ($Process -eq 'dead') {
-            Invoke-Shell "am kill $PackageName" -AllowFail | Out-Null
-            Start-Sleep -Seconds 2
+            # am kill은 뒤에서 쉬는(cached) 프로세스만 내림. 위젯을 그리는 작업(Glance, WorkManager)이 도는 동안은 프로세스가
+            # 남음 (API 34·36 에뮬레이터, 실행 43391459701): 작업이 끝날 때까지 2초마다 다시 내려 봄 (최대 90초)
+            $killFrom = Get-Date
+            do {
+                Invoke-Shell "am kill $PackageName" -AllowFail | Out-Null
+                Start-Sleep -Seconds 2
+                $left = (Invoke-Shell "pidof $PackageName" -AllowFail).Trim()
+            } while ($left -and ((Get-Date) - $killFrom).TotalSeconds -lt 90)
+            if (-not $left -and ((Get-Date) - $killFrom).TotalSeconds -gt 5) {
+                Write-Output ("{0}/{1} 앱 프로세스가 {2:N0}초 만에 내려감 (그동안 위젯 작업이 돌았음)" -f $n, $Count, ((Get-Date) - $killFrom).TotalSeconds)
+            }
         } elseif (-not (Invoke-Shell "pidof $PackageName" -AllowFail).Trim()) {
             # 프로세스를 띄우고 홈으로 돌아감
             Invoke-Shell "monkey -p $PackageName -c android.intent.category.LAUNCHER 1" -AllowFail | Out-Null
@@ -1185,7 +1211,7 @@ function Step-Latency {
             Start-Sleep -Seconds 2
         }
         $appPid = (Invoke-Shell "pidof $PackageName" -AllowFail).Trim()
-        if ($Process -eq 'dead' -and $appPid) { throw "am kill 뒤에도 앱 프로세스가 있습니다(pid $appPid). 앱 화면이 앞에 떠 있지 않은지 봅니다." }
+        if ($Process -eq 'dead' -and $appPid) { throw "90초 동안 am kill을 되풀이해도 앱 프로세스가 남았습니다(pid $appPid). 앱 화면이 앞에 떠 있지 않은지 봅니다." }
         $stem = Get-Stem ("latency-{0}-{1}" -f (Get-Date -Format 'HHmmss'), $Process) ''
         if (-not (Show-WidgetItem $target "$stem-before")) {
             throw "홈 화면의 이 앱 위젯에서 '$target' 칸을 찾지 못했습니다 (덤프: $stem-before.xml). 위젯이 홈 화면 첫 페이지에 보이는지, 위젯 크기를 봅니다."
@@ -1366,12 +1392,14 @@ function Step-Reboot {
     Invoke-Adb -Arguments @('reboot') | Out-Null
     Start-Sleep -Seconds 5
     Invoke-Adb -Arguments @('wait-for-device') | Out-Null
+    # 갤럭시는 1~2분이면 부팅이 끝남. 에뮬레이터 확인(device_kit_check.py)은 5분 안에 부팅이 끝나지 않으면 에뮬레이터를
+    # 껐다 켜므로 그만큼 더 기다림
     $booted = $false
-    for ($i = 0; $i -lt 90; $i++) {
+    for ($i = 0; $i -lt 300; $i++) {
         if ((Invoke-Shell 'getprop sys.boot_completed' -AllowFail).Trim() -eq '1') { $booted = $true; break }
         Start-Sleep -Seconds 2
     }
-    if (-not $booted) { throw '3분 안에 부팅이 끝나지 않았습니다.' }
+    if (-not $booted) { throw '10분 안에 부팅이 끝나지 않았습니다.' }
     Write-Output "부팅 끝 ($(Get-Date -Format 'HH:mm:ss')). 휴대폰 잠금을 풀어 주세요. 5분 기다립니다."
     # 부팅이 막 끝난 때는 잠금 화면이 아직 안 떠 '잠금 없음'으로 읽힐 수 있어 잠깐 둔 뒤 봄
     Start-Sleep -Seconds 10

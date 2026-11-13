@@ -364,7 +364,7 @@ class PlanRemindersTest {
     }
 
     @Test
-    fun rr90_a_late_alarm_still_shows_the_slot_it_was_set_for() = runTest {
+    fun rr91_a_late_alarm_still_shows_the_slot_it_was_set_for() = runTest {
         manage.saveSettings(ReminderSettings(interval = 30.minutes, maxPerDay = 1))
         item("A", "08:00")
         replan()
@@ -377,7 +377,7 @@ class PlanRemindersTest {
     }
 
     @Test
-    fun rr90_the_first_run_after_a_reboot_still_counts_from_now() = runTest {
+    fun rr91_the_first_run_after_a_reboot_still_counts_from_now() = runTest {
         manage.saveSettings(ReminderSettings(interval = 30.minutes, maxPerDay = 1))
         item("A", "08:00")
         replan()
@@ -387,7 +387,7 @@ class PlanRemindersTest {
     }
 
     @Test
-    fun rr91_a_clock_set_back_by_seconds_does_not_ring_the_same_slot_again() = runTest {
+    fun rr92_a_clock_set_back_by_seconds_does_not_ring_the_same_slot_again() = runTest {
         item("A", "08:00")
         replan()
         assertEquals(listOf("11-11T08:00 A"), ringUntil("2026-11-11T08:00"))

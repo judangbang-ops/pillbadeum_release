@@ -18,9 +18,11 @@ import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
 
 /**
- * Debug builds only (`androidApp/src/debug`): sets up what the item and settings screens (TASK-023, TASK-020,
- * R2) will set, so that `scripts/emulator/reminder_check.py` can check the reminders before those screens exist.
- * Everything goes through the same use cases as the app, then [com.judangbang.pillbadeum.AppContainer.afterWrite].
+ * Debug builds only (`androidApp/src/debug`): sets up what the item and settings screens (TASK-023, TASK-020) set,
+ * so that `scripts/emulator/reminder_check.py` can make the same state every run without driving those screens (the
+ * item screen's reminder field is checked by the app test `ItemReminderTest`; kept by Claude's decision, 2026-11-13,
+ * supplement N-13 '구현'). Everything goes through the same use cases as the app, then
+ * [com.judangbang.pillbadeum.AppContainer.afterWrite].
  *
  * Not exported: only the shell as root (`adb root` on an emulator image) can reach it.
  *

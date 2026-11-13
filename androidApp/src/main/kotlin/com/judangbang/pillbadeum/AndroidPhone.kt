@@ -1,5 +1,6 @@
 package com.judangbang.pillbadeum
 
+import android.Manifest
 import android.app.Activity
 import android.app.ActivityManager
 import android.app.AlarmManager
@@ -26,9 +27,14 @@ import kotlinx.datetime.LocalTime
 
 /**
  * [Phone] on Android, for the settings screen (SCR-009, TASK-020), the intro (SCR-005, TASK-022) and what keeps reminders
- * from coming (SCR-004#permission, SCR-009, TASK-026) of [activity]. It asks for no permission of its own.
+ * from coming (SCR-004#permission, SCR-009, TASK-026) of [activity]. The one permission it asks for is the notification
+ * permission, through [requestNotifications] (SCR-006, TASK-023): `MainActivity` launches the system window with it and
+ * calls the given function when the answer comes back.
  */
-class AndroidPhone(private val activity: Activity) : Phone {
+class AndroidPhone(
+    private val activity: Activity,
+    private val requestNotifications: ((onAnswered: () -> Unit) -> Unit)? = null,
+) : Phone {
     override val appVersion: String by lazy {
         try {
             val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -122,6 +128,23 @@ class AndroidPhone(private val activity: Activity) : Phone {
             exactAlarms = readOr(true) { exactAlarmsAllowed() },
             batteryUnrestricted = readOr(true) { batteryUnrestricted() },
         )
+
+    /**
+     * `POST_NOTIFICATIONS` (Android 13, REQ-049) while it is not granted. Without [requestNotifications], or when the
+     * window cannot be launched, there is nothing to ask and SCR-006#permission says what to do instead.
+     */
+    override fun askNotifications(onAnswered: () -> Unit): Boolean {
+        val request = requestNotifications ?: return false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return false
+        if (activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return false
+        return try {
+            request(onAnswered)
+            true
+        } catch (e: ActivityNotFoundException) {
+            Log.w(TAG, "no notification permission window", e)
+            false
+        }
+    }
 
     /**
      * The app's notification settings, or the dose channel's own when only the channel is off (SPEC-028); the request for

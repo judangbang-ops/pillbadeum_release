@@ -318,5 +318,22 @@ internal fun ConfirmDialog(title: String, body: String, confirm: String, onConfi
     }
 }
 
+/** A notice after a change that was made (SCR-006#quiet), with `[확인]` alone; closing it any way is the same. */
+@Composable
+internal fun NoticeDialog(title: String, body: String, onClose: () -> Unit) {
+    Dialog(onDismissRequest = onClose) {
+        Column(
+            Modifier.clip(Ui.Tile).background(Ui.Surface).padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Words(title, Ui.type(18, Ui.ExtraBold, lineHeight = 1.3f), heading = true)
+            Words(body, Ui.type(16, color = Ui.Muted))
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.End) {
+                ActionButton("확인", ButtonLook.InkSmall, onClose)
+            }
+        }
+    }
+}
+
 /** For a part that only repeats what TalkBack already reads elsewhere (`aria-hidden`). */
 internal fun Modifier.hiddenFromTalkBack(): Modifier = clearAndSetSemantics { }

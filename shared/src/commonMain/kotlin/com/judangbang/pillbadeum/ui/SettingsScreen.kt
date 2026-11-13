@@ -332,8 +332,9 @@ private fun save(new: ReminderSettings, view: SettingsView, actions: SettingsAct
 
 // Rows (box.css `.li`) -----------------------------------------------------------------------------------------------
 
-/** A row's frame: at least 56 dp, a subtle line under it (box.css `.li`). */
-private fun Modifier.row(): Modifier = fillMaxWidth().heightIn(min = 56.dp).drawBehind {
+/** A row's frame: at least 56 dp, a subtle line under it unless [line] is false (box.css `.li`; also SCR-006's reminder rows). */
+internal fun Modifier.row(line: Boolean = true): Modifier = fillMaxWidth().heightIn(min = 56.dp).drawBehind {
+    if (!line) return@drawBehind
     val w = 1.dp.toPx()
     drawLine(Ui.LineSubtle, Offset(0f, size.height - w / 2), Offset(size.width, size.height - w / 2), w)
 }
@@ -378,20 +379,23 @@ private fun ValueRow(
     }
 }
 
-/** A row with a switch (`.tg`): the whole row switches it, read as a switch with its name and note (SPEC-034). */
+/**
+ * A row with a switch (`.tg`): the whole row switches it, read as a switch with its name and note (SPEC-034). SCR-006's
+ * `알림 받기` uses it too, without the line while the time row follows (09 ItemForm) and without a note for daily items.
+ */
 @Composable
-private fun SwitchRow(name: String, note: String, on: Boolean?, onChange: (Boolean) -> Unit) {
-    var m = Modifier.row()
+internal fun SwitchRow(name: String, note: String?, on: Boolean?, line: Boolean = true, onChange: (Boolean) -> Unit) {
+    var m = Modifier.row(line)
     if (on != null) m = m.toggleable(value = on, role = Role.Switch, onValueChange = onChange)
     Row(
-        m.clearAndSetSemantics { contentDescription = if (on == null) "$name, ${Labels.LOADING}" else "$name. $note" }
+        m.clearAndSetSemantics { contentDescription = if (on == null) "$name, ${Labels.LOADING}" else listOfNotNull(name, note).joinToString(". ") }
             .padding(horizontal = 4.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Column(Modifier.weight(1f)) {
             Words(name, Ui.type(16, lineHeight = 1.25f))
-            Words(note, Ui.type(14, color = Ui.Muted), Modifier.padding(top = 2.dp))
+            note?.let { Words(it, Ui.type(14, color = Ui.Muted), Modifier.padding(top = 2.dp)) }
         }
         if (on == null) {
             Box(Modifier.size(width = 52.dp, height = 32.dp).clip(RoundedCornerShape(16.dp)).background(Ui.Sunken))
@@ -482,7 +486,7 @@ private fun LinkRow(name: String, onClick: () -> Unit) {
  * keeps whole words (Claude's design: 09 draws the row at 100% only).
  */
 @Composable
-private fun EndOrBelow(start: @Composable () -> Unit, end: @Composable () -> Unit) {
+internal fun EndOrBelow(start: @Composable () -> Unit, end: @Composable () -> Unit) {
     Layout(contents = listOf(start, end), modifier = Modifier.fillMaxWidth()) { (startMeasurables, endMeasurables), constraints ->
         val width = constraints.maxWidth
         val gap = 12.dp.roundToPx()

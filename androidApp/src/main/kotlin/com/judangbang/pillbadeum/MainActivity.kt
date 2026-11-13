@@ -1,5 +1,6 @@
 package com.judangbang.pillbadeum
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -7,6 +8,7 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
@@ -22,6 +24,18 @@ class MainActivity : ComponentActivity() {
     /** Bumped when [homeIntent] reaches this activity again: back to the first screen. */
     private var homeRequests by mutableIntStateOf(0)
 
+    /**
+     * Who asked last for the notification permission (SCR-006 `[알림 받기]`, REQ-049, TASK-023). An activity recreated while
+     * the system window was open gets the answer with nobody waiting; its screen reads the phone again on resuming anyway.
+     */
+    private var notificationsAnswered: (() -> Unit)? = null
+
+    private val notificationsRequest = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        val answered = notificationsAnswered
+        notificationsAnswered = null
+        answered?.invoke()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val container = container
@@ -35,7 +49,10 @@ class MainActivity : ComponentActivity() {
                 Log.e(TAG, "day boundary alarm not set", e)
             }
         }
-        val phone = AndroidPhone(this)
+        val phone = AndroidPhone(this) { answered ->
+            notificationsAnswered = answered
+            notificationsRequest.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
         setContent {
             App(
                 open = { container.core() },

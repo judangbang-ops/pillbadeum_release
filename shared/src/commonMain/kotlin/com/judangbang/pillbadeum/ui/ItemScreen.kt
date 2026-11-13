@@ -59,23 +59,43 @@ import androidx.compose.ui.unit.sp
 import com.judangbang.pillbadeum.data.PersonEntity
 import com.judangbang.pillbadeum.domain.ScheduleRule
 import com.judangbang.pillbadeum.domain.SlotLabel
+import com.judangbang.pillbadeum.domain.defaultReminderStart
 import com.judangbang.pillbadeum.status.IntakeStatus
 import com.judangbang.pillbadeum.status.Labels
 import com.judangbang.pillbadeum.status.WidgetLayout
 import com.judangbang.pillbadeum.status.showsPeople
 import com.judangbang.pillbadeum.usecase.IntakeDraft
 import com.judangbang.pillbadeum.usecase.PersonColors
+import com.judangbang.pillbadeum.usecase.ReminderChoice
 import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.LocalTime
+
+/** What the reminder part of SCR-006 asks of the app (TASK-023). */
+internal class ItemReminderActions(
+    /** The system time picker, 24-hour and to the minute, as SCR-009's. */
+    val pickTime: (initial: LocalTime, onPicked: (LocalTime) -> Unit) -> Unit,
+    /** `[알림 받기]` switched on: the notification permission is asked for where the phone has one (REQ-049). */
+    val switchedOn: () -> Unit,
+    /** SCR-006#permission's `[설정 열기]`: the app's notification settings (REQ-089, SPEC-028). */
+    val openSettings: () -> Unit,
+)
 
 /**
- * SCR-006 항목 추가·수정, drawn as 09 ItemForm without the reminder part (TASK-023). [editing] null adds a new item.
- * What has been typed survives the screen being recreated (BUG-003); system back is the same as `[닫기]` (REQ-094).
+ * SCR-006 항목 추가·수정, drawn as 09 ItemForm. [editing] null adds a new item. What has been typed survives the screen
+ * being recreated (BUG-003); system back is the same as `[닫기]` (REQ-094).
+ *
+ * The reminder part (TASK-023): `[알림 받기]`, off for a new item, and while on the first time, which follows the slot's
+ * default (supplement N-3) until one is picked. A saved time other than the default of the saved slot counts as picked.
+ * While on and the phone's notifications are off, SCR-006#permission shows under it; [access] null (not read yet, or the
+ * permission window is open) shows nothing.
  */
 @Composable
 internal fun ItemScreen(
     editing: IntakeStatus?,
     people: List<PersonEntity>,
     message: String?,
+    access: ReminderAccess?,
+    reminders: ItemReminderActions,
     /** Adds a person; `onAdded` gets the new person's id, which the form then selects (TASK-015). */
     onAddPerson: (name: String, color: String, onAdded: (String) -> Unit) -> Unit,
     onClose: () -> Unit,
@@ -94,9 +114,15 @@ internal fun ItemScreen(
     var newPersonColor by rememberSaveable { mutableStateOf(PersonColors.leastUsed(people.map { it.color })) }
     var nameError by rememberSaveable { mutableStateOf(false) }
     var confirmArchive by rememberSaveable { mutableStateOf(false) }
+    var reminderOn by rememberSaveable { mutableStateOf(editing?.reminder?.enabled ?: false) }
+    // `HH:MM` picked by hand; null follows the slot's default.
+    var startPicked by rememberSaveable {
+        mutableStateOf(editing?.let { e -> e.reminder?.start?.takeIf { it != defaultReminderStart(e.slotLabel) } }?.toString())
+    }
 
     val anchor = DayOfWeek.entries.first { it.name == anchorName }
     val slot = SlotLabel.entries.firstOrNull { it.name == slotName }
+    val start = startPicked?.let(LocalTime::parse) ?: defaultReminderStart(if (weekly) null else slot)
     // The chosen person, or the first one while none is chosen (or the chosen one was archived meanwhile).
     val chosen = people.firstOrNull { it.id == personId } ?: people.firstOrNull()
 
@@ -113,6 +139,7 @@ internal fun ItemScreen(
                 widgetAlias = alias,
                 rule = if (weekly) ScheduleRule.Weekly(anchor) else ScheduleRule.Daily,
                 slotLabel = slot,
+                reminder = ReminderChoice(reminderOn, start),
             ),
         )
     }
@@ -198,6 +225,18 @@ internal fun ItemScreen(
                         }
                     }
                 }
+                ReminderPart(
+                    on = reminderOn,
+                    note = if (weekly) Labels.reminderWeekly(anchor) else null,
+                    start = start,
+                    notificationsOff = access?.notifications == false,
+                    onSwitch = { on ->
+                        reminderOn = on
+                        if (on) reminders.switchedOn()
+                    },
+                    onPick = { reminders.pickTime(start) { picked -> startPicked = picked.toString() } },
+                    onOpenSettings = reminders.openSettings,
+                )
                 if (editing != null) {
                     // [보관], not [항목 삭제]: archiving keeps the records (REQ-014, TERM-018, SCR-006).
                     ActionButton("보관", ButtonLook.Danger, { confirmArchive = true })
@@ -223,6 +262,47 @@ internal fun ItemScreen(
             onConfirm = { confirmArchive = false; onArchive(editing) },
             onDismiss = { confirmArchive = false },
         )
+    }
+}
+
+/**
+ * 09 ItemForm's reminder rows: `알림 받기` with its switch, and while on `첫 알림 시각` with the time as a button, where the
+ * rest is set, and SCR-006#permission when the phone's notifications are off (REQ-089). The time button keeps whole words
+ * at 200% text by going under its name ([EndOrBelow]).
+ */
+@Composable
+private fun ReminderPart(
+    on: Boolean,
+    note: String?,
+    start: LocalTime,
+    notificationsOff: Boolean,
+    onSwitch: (Boolean) -> Unit,
+    onPick: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
+        SwitchRow(Labels.REMINDER_SWITCH, note, on, line = !on, onChange = onSwitch)
+        if (on) {
+            Box(Modifier.row().padding(horizontal = 4.dp, vertical = 8.dp), contentAlignment = Alignment.CenterStart) {
+                EndOrBelow(
+                    start = { Words(Labels.REMINDER_START, Ui.type(16, lineHeight = 1.25f), Modifier.hiddenFromTalkBack()) },
+                    end = {
+                        ActionButton(
+                            Labels.clock(start),
+                            ButtonLook.LineSmall,
+                            onPick,
+                            Modifier.semantics { contentDescription = Labels.reminderStartSpoken(start) },
+                        )
+                    },
+                )
+            }
+            Note(Labels.REMINDER_ELSEWHERE, Modifier.padding(top = 6.dp))
+            if (notificationsOff) {
+                Band(Labels.ITEM_NOTIFICATIONS_OFF, Modifier.padding(top = 12.dp), live = true) {
+                    ActionButton(Labels.OPEN_SETTINGS, ButtonLook.LineSmall, onOpenSettings)
+                }
+            }
+        }
     }
 }
 

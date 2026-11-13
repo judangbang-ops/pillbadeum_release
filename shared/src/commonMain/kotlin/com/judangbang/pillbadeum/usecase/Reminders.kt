@@ -280,24 +280,7 @@ class ManageReminders(
                 if (intake == null || intake.archivedAt != null || person == null || person.archivedAt != null) {
                     return@immediateTransaction SaveReminderResult.Gone
                 }
-                val dao = db.reminderDao()
-                val old = dao.findRule(intakeId)
-                val nowMillis = now.toEpochMilliseconds()
-                // Saving the same values writes nothing, so updated_at keeps when the rule last really changed.
-                if (old == null || old.enabled != enabled || old.startTime != start.toString()) {
-                    dao.upsertRule(
-                        ReminderRuleEntity(
-                            intakeId = intakeId,
-                            enabled = enabled,
-                            startTime = start.toString(),
-                            createdAt = old?.createdAt ?: nowMillis,
-                            updatedAt = nowMillis,
-                            version = (old?.version ?: 0) + 1,
-                            deviceId = deviceId,
-                        ),
-                    )
-                }
-                if (!enabled) dao.deleteSnooze(intakeId)
+                db.writeReminderRule(intakeId, enabled, start, now.toEpochMilliseconds(), deviceId)
                 val notice = if (enabled) {
                     quietNotice(start, db.settingDao().loadWindowSettings(), db.settingDao().loadReminderSettings())
                 } else {
@@ -348,4 +331,37 @@ class ManageReminders(
                 SnoozeResult.Snoozed(fireAt)
             }
         }
+}
+
+/**
+ * Writes an item's reminder switch and first time inside the caller's transaction (supplement N-3, `ManageReminders.saveRule`
+ * and the item screen's save, TASK-023). The same values write nothing, so `updated_at` keeps when the rule last really
+ * changed (RR-79); otherwise the row is written with version + 1. Switched off, the item's [30분 뒤] goes too (N-7). True
+ * when the row was written.
+ */
+internal suspend fun DidITakeDatabase.writeReminderRule(
+    intakeId: String,
+    enabled: Boolean,
+    start: LocalTime,
+    now: Long,
+    deviceId: String,
+): Boolean {
+    val dao = reminderDao()
+    val old = dao.findRule(intakeId)
+    val changed = old == null || old.enabled != enabled || old.startTime != start.toString()
+    if (changed) {
+        dao.upsertRule(
+            ReminderRuleEntity(
+                intakeId = intakeId,
+                enabled = enabled,
+                startTime = start.toString(),
+                createdAt = old?.createdAt ?: now,
+                updatedAt = now,
+                version = (old?.version ?: 0) + 1,
+                deviceId = deviceId,
+            ),
+        )
+    }
+    if (!enabled) dao.deleteSnooze(intakeId)
+    return changed
 }

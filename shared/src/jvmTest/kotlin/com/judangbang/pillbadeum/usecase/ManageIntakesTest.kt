@@ -1,5 +1,7 @@
 package com.judangbang.pillbadeum.usecase
 
+import com.judangbang.pillbadeum.domain.QuietNotice
+import com.judangbang.pillbadeum.domain.ReminderSettings
 import com.judangbang.pillbadeum.domain.ScheduleRule
 import com.judangbang.pillbadeum.domain.ScheduleType
 import com.judangbang.pillbadeum.domain.SlotLabel
@@ -19,6 +21,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.LocalTime
 
 class ManageIntakesTest {
     private val fx = DbFixture()
@@ -178,5 +181,77 @@ class ManageIntakesTest {
         assertEquals(1, fx.history(id).size, "records are kept")
         assertEquals(RecordResult.Gone, fx.record(id, renderedKey = "2026-11-11"))
         assertEquals(SaveIntakeResult.Gone, saveIntake.update(id, IntakeDraft(person, "아침약")))
+    }
+
+    // TASK-023: SCR-006's reminder part, saved with the item ---------------------------------------------------------
+
+    /** SPEC-031's acceptance through the item screen's save (RR-49): 21:00, 60 minutes, 3 a day, quiet 22:00~07:00. */
+    @Test
+    fun spec31_a_bedtime_reminder_saved_with_the_item_loses_two_repeats() = runTest {
+        val saved = assertIs<SaveIntakeResult.Saved>(
+            saveIntake.create(IntakeDraft(me(), "수면제", slotLabel = SlotLabel.BEDTIME, reminder = ReminderChoice(true, LocalTime(21, 0)))),
+        )
+        assertEquals(SavedQuiet(QuietNotice.Reduced(2), ReminderSettings()), saved.quiet)
+        val rule = fx.db.reminderDao().findRule(saved.intakeId)!!
+        assertTrue(rule.enabled)
+        assertEquals("21:00", rule.startTime)
+        assertEquals(1, rule.version)
+        assertEquals(TEST_DEVICE_ID, rule.deviceId)
+        assertEquals(ReminderChoice(true, LocalTime(21, 0)), board().items.single().reminder)
+    }
+
+    /** Supplement N-3: a new item's reminder is off, and an item that never had one keeps no row. */
+    @Test
+    fun a_new_item_with_its_reminder_off_keeps_no_rule() = runTest {
+        val saved = assertIs<SaveIntakeResult.Saved>(
+            saveIntake.create(IntakeDraft(me(), "아침약", slotLabel = SlotLabel.MORNING, reminder = ReminderChoice(false, LocalTime(8, 0)))),
+        )
+        assertNull(saved.quiet)
+        assertNull(fx.db.reminderDao().findRule(saved.intakeId))
+        assertNull(board().items.single().reminder, "no row: off, with the label's time")
+    }
+
+    /** RR-79: saving an item whose reminder did not change writes no rule, so its slots are not hidden again. */
+    @Test
+    fun saving_the_same_reminder_again_writes_nothing_and_says_nothing() = runTest {
+        val draft = IntakeDraft(me(), "수면제", slotLabel = SlotLabel.BEDTIME, reminder = ReminderChoice(true, LocalTime(21, 0)))
+        val id = assertIs<SaveIntakeResult.Saved>(saveIntake.create(draft)).intakeId
+        val first = fx.db.reminderDao().findRule(id)!!
+        fx.at("2026-11-11T09:00")
+        val renamed = assertIs<SaveIntakeResult.Saved>(saveIntake.update(id, draft.copy(name = "수면 유도제")))
+        assertNull(renamed.quiet, "the reminder did not change")
+        assertEquals(first, fx.db.reminderDao().findRule(id))
+        assertIs<SaveIntakeResult.Saved>(saveIntake.update(id, draft.copy(reminder = null)))
+        assertEquals(first, fx.db.reminderDao().findRule(id), "a draft without the reminder part leaves it alone")
+    }
+
+    /** Supplement N-4: a first time inside quiet hours rings once; the time is kept to the minute. */
+    @Test
+    fun a_first_time_inside_quiet_hours_rings_once_and_seconds_are_dropped() = runTest {
+        val saved = assertIs<SaveIntakeResult.Saved>(
+            saveIntake.create(IntakeDraft(me(), "수면제", slotLabel = SlotLabel.BEDTIME, reminder = ReminderChoice(true, LocalTime(23, 0, 30)))),
+        )
+        assertEquals(QuietNotice.FirstOnly, saved.quiet?.notice)
+        assertEquals("23:00", fx.db.reminderDao().findRule(saved.intakeId)!!.startTime)
+    }
+
+    /** Supplement N-7: switched off on the item screen, the rule keeps its time and the item's [30분 뒤] goes. */
+    @Test
+    fun switching_off_on_the_item_screen_keeps_the_time_and_drops_the_snooze() = runTest {
+        val on = IntakeDraft(me(), "아침약", slotLabel = SlotLabel.MORNING, reminder = ReminderChoice(true, LocalTime(8, 0)))
+        val created = assertIs<SaveIntakeResult.Saved>(saveIntake.create(on))
+        assertNull(created.quiet, "09:00 and 10:00 are outside quiet hours")
+        val id = created.intakeId
+        fx.at("2026-11-11T08:10")
+        assertIs<SnoozeResult.Snoozed>(ManageReminders(fx.db, fx.clock, TEST_DEVICE_ID).snooze(id, "2026-11-11"))
+
+        val off = assertIs<SaveIntakeResult.Saved>(saveIntake.update(id, on.copy(reminder = ReminderChoice(false, LocalTime(8, 0)))))
+        assertNull(off.quiet)
+        val rule = fx.db.reminderDao().findRule(id)!!
+        assertFalse(rule.enabled)
+        assertEquals("08:00", rule.startTime)
+        assertEquals(2, rule.version)
+        assertNull(fx.db.reminderDao().findSnooze(id))
+        assertEquals(ReminderChoice(false, LocalTime(8, 0)), board().items.single().reminder)
     }
 }

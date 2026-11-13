@@ -73,6 +73,14 @@ interface Phone {
     fun reminderAccess(): ReminderAccess
 
     /**
+     * SCR-006's `[알림 받기]` switched on (REQ-049, SPEC-028, TASK-023): the system's notification-permission window, where
+     * the phone has the permission (Android 13 and later) and the app does not hold it yet. [onAnswered] is called once
+     * the window closes, whatever the answer; the caller reads [reminderAccess] again. False when there was nothing to
+     * ask, and then [onAnswered] is not called. Once refused twice, the system answers by itself without a window.
+     */
+    fun askNotifications(onAnswered: () -> Unit): Boolean
+
+    /**
      * Opens the system screen where [setting] is changed (SPEC-028, SPEC-029, SPEC-030). A phone without that screen
      * gets the app's information screen instead (SPEC-030). False when nothing could be opened; the screen says so.
      */

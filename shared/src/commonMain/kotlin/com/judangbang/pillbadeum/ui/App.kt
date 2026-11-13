@@ -437,6 +437,12 @@ fun App(
             }
 
             is Route.Item -> key(current.key) {
+                // SCR-006#permission (TASK-023): read on opening, on coming back from the system settings and after the
+                // permission window. While that window is open nothing is said under the switch.
+                LaunchedEffect(refreshKey) { access = phone.reminderAccess() }
+                var asking by remember { mutableStateOf(false) }
+                // SCR-006#quiet (REQ-077): what quiet hours take from the reminder just saved, said before going back.
+                var quiet by rememberSaveable { mutableStateOf<String?>(null) }
                 val loaded = board
                 val editing = current.intakeId?.let { id -> loaded?.items?.firstOrNull { it.intakeId == id } }
                 when {
@@ -451,6 +457,19 @@ fun App(
                         editing = editing,
                         people = people,
                         message = message,
+                        access = access.takeUnless { asking },
+                        reminders = ItemReminderActions(
+                            pickTime = { initial, onPicked -> phone.pickTime(initial, onPicked) },
+                            switchedOn = {
+                                if (!asking) {
+                                    asking = phone.askNotifications {
+                                        asking = false
+                                        access = phone.reminderAccess()
+                                    }
+                                }
+                            },
+                            openSettings = { openAccess(AccessSetting.NOTIFICATIONS) },
+                        ),
                         onAddPerson = { name, color, onAdded ->
                             write(failure = "저장하지 못했어요. 다시 눌러 주세요") { c ->
                                 val added = c.people.add(name, color)
@@ -465,7 +484,13 @@ fun App(
                                 val result = if (id == null) c.saveIntake.create(draft) else c.saveIntake.update(id, draft)
                                 when (result) {
                                     is SaveIntakeResult.Saved -> {
-                                        go(Route.Home)
+                                        val saved = result.quiet
+                                        if (saved == null) {
+                                            go(Route.Home)
+                                        } else {
+                                            message = null
+                                            quiet = Labels.itemQuiet(saved.notice, saved.settings)
+                                        }
                                         afterWrite()
                                     }
                                     is SaveIntakeResult.Invalid -> message = when (result.reason) {
@@ -489,6 +514,13 @@ fun App(
                             }
                         },
                     )
+                }
+                quiet?.let { text ->
+                    // Saved already: `[확인]`, back or a tap outside all go to the first screen (screens.md SCR-006#quiet).
+                    NoticeDialog(Labels.ITEM_SAVED, text) {
+                        quiet = null
+                        go(Route.Home)
+                    }
                 }
             }
 

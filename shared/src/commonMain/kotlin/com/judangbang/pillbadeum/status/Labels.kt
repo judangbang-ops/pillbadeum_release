@@ -3,6 +3,7 @@ package com.judangbang.pillbadeum.status
 import com.judangbang.pillbadeum.data.DoseRecordEntity
 import com.judangbang.pillbadeum.data.PersonEntity
 import com.judangbang.pillbadeum.domain.DoseKind
+import com.judangbang.pillbadeum.domain.QuietNotice
 import com.judangbang.pillbadeum.domain.ReminderSettings
 import com.judangbang.pillbadeum.domain.ScheduleRule
 import com.judangbang.pillbadeum.domain.SlotLabel
@@ -765,6 +766,37 @@ object Labels {
     /** No system screen could be opened, not even the app's information (Claude's wording). */
     val ACCESS_OPEN_FAILED: String
         get() = "설정 화면을 열지 못했어요. 휴대폰 설정의 앱 목록에서 ${withObject(APP_NAME)} 찾아 주세요"
+
+    // SCR-006 알림 칸 (TASK-023, 09 ItemForm) ------------------------------------------------------------------------
+
+    const val REMINDER_SWITCH: String = "알림 받기"
+
+    /** Under `알림 받기` of a weekly item: it rings on the window's first day only (REQ-041, supplement N-5, 09 ItemForm). */
+    fun reminderWeekly(anchor: DayOfWeek): String = "그 주의 ${weekdayName(anchor)}에만 울려요."
+
+    const val REMINDER_START: String = "첫 알림 시각"
+
+    /** What TalkBack reads for the time button: `첫 알림 시각, 21시`. */
+    fun reminderStartSpoken(start: LocalTime): String = "$REMINDER_START, ${clockSpoken(start)}"
+
+    /** Under the reminder rows (09 ItemForm): the common settings are on SCR-009 (REQ-042). */
+    const val REMINDER_ELSEWHERE: String = "다시 알림 간격·하루 최대·방해 금지는 설정에서 바꿔요."
+
+    /** SCR-006#permission (REQ-089, SPEC-028): reminders are on, but the app's notifications are off. */
+    const val ITEM_NOTIFICATIONS_OFF: String = "알림 권한이 없어 알림이 오지 않아요"
+
+    /** SCR-006#quiet's title: the item is saved, quiet hours or not (REQ-077: saving is never refused). */
+    const val ITEM_SAVED: String = "저장했어요"
+
+    /**
+     * SCR-006#quiet (REQ-077, SPEC-031, supplement N-4): `방해 금지 시간(22:00~07:00)과 겹쳐 다시 알림이 2번 줄어요`, or, with
+     * the first time inside quiet hours, `방해 금지 시간이라 첫 알림만 울리고 다시 알림은 없어요`.
+     */
+    fun itemQuiet(notice: QuietNotice, reminders: ReminderSettings): String = when (notice) {
+        QuietNotice.FirstOnly -> "방해 금지 시간이라 첫 알림만 울리고 다시 알림은 없어요"
+        is QuietNotice.Reduced ->
+            "방해 금지 시간(${clock(reminders.quietStart)}~${clock(reminders.quietEnd)})과 겹쳐 다시 알림이 ${notice.dropped}번 줄어요"
+    }
 
     // SCR-010 대상자 관리 (TASK-021, 09 People and PersonAdd) --------------------------------------------------------
 

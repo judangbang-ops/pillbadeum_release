@@ -19,10 +19,12 @@ import com.judangbang.pillbadeum.domain.nextDayBoundary
 import com.judangbang.pillbadeum.domain.windowOf
 import com.judangbang.pillbadeum.restore.CheckInstall
 import com.judangbang.pillbadeum.usecase.FlagClockMismatch
+import com.judangbang.pillbadeum.usecase.ReminderChoice
 import com.judangbang.pillbadeum.usecase.findActiveIn
 import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
 
 /**
  * One rule for the widget, the app screens and history (REQ-018, SPEC-005, SPEC-027, TASK-015): person
@@ -105,6 +107,11 @@ data class IntakeStatus(
     val clockWarning: Boolean = false,
     /** Latest active dose (not a skip) taken before [window] started: "마지막 복용" (supplement S-2, W-2). */
     val lastTaken: DoseRecordEntity? = lastBefore?.takeIf { it.kind == DoseKind.TAKEN },
+    /**
+     * The item's saved reminder switch and first time, which the item screen starts from (SCR-006, TASK-023). Null while
+     * the item has no `reminder_rule` row: off, with the time of its label (supplement N-3).
+     */
+    val reminder: ReminderChoice? = null,
 ) {
     /** The window has an active judgment, a dose or a skip; a widget tap then changes nothing (`Already`). */
     val isDone: Boolean get() = judgment != null
@@ -226,6 +233,7 @@ class LoadStatusBoard(
                 lastTaken = records.findLastActiveTakenBefore(intake.id, window.start.toEpochMilliseconds()),
                 weekCells = if (rule is ScheduleRule.Daily) weekCells(cells, intake, person, week, baseDate, flaggedIds) else emptyList(),
                 clockWarning = judgment != null && judgment.id in flaggedIds,
+                reminder = db.reminderDao().findRule(intake.id)?.let { ReminderChoice(it.enabled, LocalTime.parse(it.startTime)) },
             )
         }
         val shown = intakes.associateBy { it.id }

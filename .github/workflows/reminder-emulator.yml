@@ -3,8 +3,9 @@
 # 경우와 기대 동작은 scripts/emulator/reminder_check.py 첫 주석. 실기기 확인은 TASK-032·052.
 #
 # - 알림 코드를 바꾼 PR과 수동 실행에서 돎(실행마다 약 40분, API마다 나란히). 저장소가 공개라 Actions 사용 시간
-#   한도가 없어(2026-11-13) PR에서도 API 34·36·30·26을 모두 돌림. PR에 다시 푸시할 때는 그 푸시가 아래 paths를
-#   바꿨을 때만 돎(gate 작업, .github/scripts/push_gate.py). 라벨 `emulator-reminders`를 붙이면 그 PR로 다시 돎
+#   한도가 없어(2026-11-13) PR에서도 API 34·36·30·26을 모두 돌림. PR에 다시 푸시할 때는 이 확인이 마지막으로 모두
+#   성공한 커밋 뒤로 아래 paths가 바뀌었을 때만 돎(gate 작업, .github/scripts/push_gate.py). 라벨
+#   `emulator-reminders`를 붙이면 그 PR로 다시 돎
 #   (reminder_check.py가 backup_restore_check·explore·release_check의 도우미를 써서 scripts/emulator 전체를 봄)
 # - 서명 키·비밀값을 쓰지 않음. 디버그 APK로 확인함. 알림 켠 항목은 디버그 빌드에만 있는 수신기
 #   (androidApp/src/debug/.../ReminderSeedReceiver.kt)로 앱의 use case를 불러 만듦. 항목 화면의 알림 칸(TASK-023)은
@@ -19,12 +20,15 @@ on:
       - androidApp/src/main/AndroidManifest.xml
       - androidApp/src/main/kotlin/com/judangbang/pillbadeum/AppContainer.kt
       - androidApp/src/main/kotlin/com/judangbang/pillbadeum/reminder/**
+      - androidApp/src/main/kotlin/com/judangbang/pillbadeum/boundary/**
       - androidApp/src/debug/**
       - shared/src/commonMain/kotlin/com/judangbang/pillbadeum/domain/Reminders.kt
       - shared/src/commonMain/kotlin/com/judangbang/pillbadeum/usecase/Reminders.kt
       - shared/src/commonMain/kotlin/com/judangbang/pillbadeum/status/ReminderLabels.kt
+      - shared/src/commonMain/kotlin/com/judangbang/pillbadeum/data/Settings.kt
       - scripts/emulator/**
       - .github/actions/android-emulator/**
+      - .github/scripts/push_gate.py
       - .github/workflows/reminder-emulator.yml
   workflow_dispatch:
     inputs:
@@ -43,13 +47,18 @@ concurrency:
 
 jobs:
   gate:
-    # 다른 emulator 워크플로와 같음. 라벨을 붙여 온 실행은 `emulator-reminders`일 때만 돌고, 그때는 늘 돎
-    # (push_gate.py는 synchronize가 아닌 동작이면 run=true). 경로는 위 on.pull_request.paths와 같게 둠
-    # ('dir/**'는 'dir/'로 씀). 수동 실행에서는 건너뜀
+    # on.pull_request.paths는 PR 전체가 바꾼 파일을 봐서, 위 경로를 한 번 바꾼 PR은 문서만 고친 푸시에도
+    # 아래 작업을 모두 다시 돌림. 이 PR에서 그 확인이 마지막으로 모두 성공한 커밋 뒤로 그 경로가 바뀌었는지 보고
+    # 정함(.github/scripts/push_gate.py). 실패한 확인은 기준이 되지 않아 다음 푸시에서 다시 돎. PR을 열 때·다시 열
+    # 때·알 수 없을 때는 돎. 경로는 위 on.pull_request.paths와 같게 둠('dir/**'는 'dir/'로 씀)
+    # 라벨을 붙여 온 실행은 `emulator-reminders`일 때만 돌고, 그때는 늘 돎. 수동 실행에서는 건너뜀
     name: 이번 푸시가 바꾼 파일
     if: github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'emulator-reminders')
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read # 지난 실행을 읽음
     outputs:
       run: ${{ steps.gate.outputs.run }}
     steps:
@@ -61,19 +70,23 @@ jobs:
       - id: gate
         env:
           GATE_ACTION: ${{ github.event.action }}
-          GATE_BEFORE: ${{ github.event.before }}
           GATE_AFTER: ${{ github.event.after }}
+          GATE_JOB: "알림 (API"
+          GH_TOKEN: ${{ github.token }}
         run: >-
           python3 .github/scripts/push_gate.py
           androidApp/src/main/AndroidManifest.xml
           androidApp/src/main/kotlin/com/judangbang/pillbadeum/AppContainer.kt
           androidApp/src/main/kotlin/com/judangbang/pillbadeum/reminder/
+          androidApp/src/main/kotlin/com/judangbang/pillbadeum/boundary/
           androidApp/src/debug/
           shared/src/commonMain/kotlin/com/judangbang/pillbadeum/domain/Reminders.kt
           shared/src/commonMain/kotlin/com/judangbang/pillbadeum/usecase/Reminders.kt
           shared/src/commonMain/kotlin/com/judangbang/pillbadeum/status/ReminderLabels.kt
+          shared/src/commonMain/kotlin/com/judangbang/pillbadeum/data/Settings.kt
           scripts/emulator/
           .github/actions/android-emulator/
+          .github/scripts/push_gate.py
           .github/workflows/reminder-emulator.yml
 
   apk:
@@ -110,6 +123,8 @@ jobs:
   reminders:
     name: 알림 (API ${{ matrix.api }})
     needs: apk
+    # 건너뛴 gate가 apk를 거쳐 이 작업까지 건너뛰게 하지 않게 apk 결과만 봄(수동 실행)
+    if: ${{ !cancelled() && needs.apk.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     strategy:

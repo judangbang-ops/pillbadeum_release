@@ -760,6 +760,8 @@ def main() -> int:
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
 
+    adb("wait-for-device")
+    wait_boot()  # also counts this boot, so become_root waits for the emulator's own commands after it
     api = api_level()
     r = Report(args.out, api, f"에뮬레이터 둘러보기 API {api}")
     try:

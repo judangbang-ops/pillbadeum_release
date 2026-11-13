@@ -20,6 +20,7 @@ Standard library only. Not product code.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import shutil
 import sqlite3
@@ -67,33 +68,135 @@ def adb(*args: str, check: bool = True, timeout: int = 120) -> str:
     return run(["adb", *args], check=check, timeout=timeout)
 
 
+# When adb loses the phone for a moment, `adb shell` ends with exit 255 and prints nothing: on API 27 right after
+# `adb root` (PR #14), on API 26 right after `date -u` (run 43420227464) and 5 seconds after the reminder check started
+# (run 43434875342, attempt 1). A command that leaves the phone the same when it runs twice (a read, or setting a value)
+# is then sent again once adb sees the phone. A tap, a key, a broadcast or a clock change is not: it may have run.
+AGAIN = re.compile(r"""
+    (getprop|setprop|id|cat|ls|find|pidof|rm\ -f|wm\ size|bmgr\ list|settings\ (get|put)|am\ force-stop|appops\ set
+    |pm\ grant|svc\ power\ stayon|cmd\ uimode\ night|dumpsys\ (alarm|notification|window|activity|package))(\s|$)
+    |date\ '?\+""", re.X)
+# Where it happened, for the report: the command by its first two words only (a whole command can hold the throwaway
+# lock-screen PIN), and what was done
+ADB_DROPS: list[str] = []
+
+
+def shell_once(cmd: str, timeout: int = 120) -> tuple[int, str]:
+    """Sends `adb shell cmd` once: its exit code, and what it printed. A lost phone is code 255 and nothing printed."""
+    proc = subprocess.run(["adb", "shell", cmd], capture_output=True, text=True, errors="replace", timeout=timeout)
+    return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
+
+
+def note_drop(cmd: str, then: str) -> None:
+    what = " ".join(cmd.split()[:2])
+    ADB_DROPS.append(f"{what} ({then})")
+    devices = " / ".join(run(["adb", "devices"], check=False, timeout=30).split("\n")[1:]).strip()
+    print(f"[adb] shell '{what} …' -> 255 with no output (adb devices: {devices or 'none'}); {then}", flush=True)
+
+
 def sh(cmd: str, check: bool = True, timeout: int = 120) -> str:
-    return adb("shell", cmd, check=check, timeout=timeout)
+    """`adb shell cmd`. When adb loses the phone, one command AGAIN allows is sent up to three times; any other command
+    (also a list such as `a; b`) once."""
+    tries = 3 if AGAIN.match(cmd) and not re.search(r";|&&|\|\||\n", cmd) else 1
+    for attempt in range(1, tries + 1):
+        code, out = shell_once(cmd, timeout)
+        if code == 255 and not out.strip():
+            note_drop(cmd, "다시 보냄" if attempt < tries else "다시 보내지 않음")
+            if attempt < tries:
+                time.sleep(2)
+                adb("wait-for-device", check=False, timeout=60)
+                continue
+        if check and code != 0:
+            raise RuntimeError(f"adb shell {cmd} -> {code}\n{out}")
+        return out
+    raise AssertionError("unreachable")
 
 
 def api_level() -> int:
     return int(sh("getprop ro.build.version.sdk").strip())
 
 
-def become_root(timeout: int = 60) -> None:
-    # `adb root` restarts adbd. `wait-for-device` can return while the old connection is still listed,
-    # and the next shell then fails with exit 255 (seen on API 27, 2026-11-12), so ask again until root answers.
+# Boots this script waited for (wait_boot), and of those, the boots whose emulator commands become_root waited for
+BOOTS = 0
+SETTLED = 0
+
+
+def emulator_log() -> Path | None:
+    """The CI emulator's log (.github/actions/android-emulator, emulator_boot.power_cycle); None on a phone."""
+    temp = os.environ.get("RUNNER_TEMP")
+    path = Path(temp) / "emulator.log" if temp else None
+    return path if path is not None and path.exists() else None
+
+
+def emulator_done(timeout: float = 30) -> None:
+    """On the CI runner, waits until the emulator has run its own adb commands after the boots this script waited for.
+
+    When the emulator sees a boot finish, it writes "Boot completed in … ms" and "Increasing screen off timeout, logcat
+    buffer size to 2M." to its log and runs `adb shell settings put system screen_off_timeout 2147483647` and `adb shell
+    logcat -G 2M` (on API 30 and 36 the log also showed `settings put system accelerometer_rotation 1`). In run
+    43434875342 they met this script's `adb root` on all four APIs, at the start or after the reboot ('device offline',
+    "device 'emulator-5554' not found" in emulator.log), and on API 26 the script's next shell ended with exit 255 and no
+    output. Waiting for them keeps `adb root` apart from them, and keeps them from setting the screen timeout and the log
+    size after this script did."""
+    global SETTLED
+    log = emulator_log()
+    if log is None or SETTLED >= BOOTS:
+        return
+    end = time.time() + timeout
+    seen = 0
+    while time.time() < end:
+        text = log.read_text(encoding="utf-8", errors="replace")
+        seen = min(text.count("Boot completed in"), text.count("Increasing screen off timeout"))
+        if seen >= BOOTS:
+            break
+        time.sleep(1)
+    else:
+        print(f"[adb] emulator.log shows its post-boot commands for {seen} of {BOOTS} boots; going on", flush=True)
+    SETTLED = BOOTS
+    time.sleep(5)  # its commands, each tried twice when adb does not find the phone
+
+
+def become_root(timeout: int = 90) -> None:
+    """Restarts adbd as root and returns once adb keeps answering as root.
+
+    `adb root` restarts adbd. `wait-for-device` can return while the old connection is still listed, and the next shell
+    then fails with exit 255 (API 27, PR #14), so it asks until root answers. On API 26 a shell 5 seconds after root
+    answered still ended with exit 255 and no output (run 43434875342), so it then asks until three answers in a row,
+    2 seconds apart, come back."""
+    def ask(cmd: str) -> str:
+        code, out = shell_once(cmd, timeout=60)
+        if code == 255 and not out.strip():
+            note_drop(cmd, "adb root 뒤 확인, 다시 물음")
+        return out.strip() if code == 0 else ""
+
+    emulator_done()
     adb("root", check=False)
     who = ""
+    steady = 0
     end = time.time() + timeout
     while time.time() < end:
         time.sleep(2)
-        adb("wait-for-device", check=False, timeout=60)
-        who = sh("id -u", check=False).strip()
-        if who == "0":
+        if who != "0":
+            adb("wait-for-device", check=False, timeout=60)
+            who = ask("id -u")
+            continue
+        steady = steady + 1 if ask("getprop sys.boot_completed") == "1" else 0
+        if steady >= 3:
             return
+        if steady == 0:
+            adb("wait-for-device", check=False, timeout=60)
+            who = ask("id -u")
+    if who == "0":
+        raise RuntimeError(f"adb root answered, but adb did not keep answering for {timeout} seconds")
     raise RuntimeError(f"adb root failed (id -u = {who!r}); use a google_apis or default image")
 
 
 def wait_boot(timeout: int = 300) -> None:
+    global BOOTS
     end = time.time() + timeout
     while time.time() < end:
         if sh("getprop sys.boot_completed", check=False).strip() == "1":
+            BOOTS += 1
             return
         time.sleep(2)
     raise RuntimeError("emulator did not finish booting")
@@ -562,6 +665,8 @@ class Report:
         notes = list(self.notes)
         if CLOSED_DIALOGS:
             notes.append(f"[Wait]로 닫은 시스템 ANR 대화상자 {len(CLOSED_DIALOGS)}번: {', '.join(sorted(set(CLOSED_DIALOGS)))}")
+        if ADB_DROPS:
+            notes.append(f"adb가 휴대폰을 잠깐 놓침(`adb shell`이 출력 없이 255) {len(ADB_DROPS)}번: {', '.join(ADB_DROPS)}")
         if notes:
             lines += ["", *[f"- {n}" for n in notes]]
         (self.out / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")

@@ -370,3 +370,4 @@
 | `.corthex/project.json` | `04-functional-spec`의 설명에 이 문서를 적음 (원본 칸은 한 파일만 받음) |
 | 04 명세 고정 (2026-11-13) | P-9·RR-90을 더하고(REQ-095, SPEC-044, TASK-053, TC-088), P-8 한계와 N-9·N-13을 고침(SPEC-013, TASK-025) |
 | R3 [PR #20](https://github.com/judangbang-ops/pillbadeum_release/pull/20) (2026-11-13) | N-12에 시계 1분 여유와 늦게 온 알람의 칸 나이를, N-13 '구현'에 창 알람·다시 시도·알림 묶음·버튼 결과의 잠금 화면·디버그 수신기와 한계(Android 16의 자동 묶음, Android 11의 아이콘 설명, 에뮬레이터의 밀기 포함)를 더함. 새 반례 RR-91·92를 REQ-041·REQ-047 합격 기준, TASK-024·TASK-027, TC-010·TC-032에 연결. TASK-024 끝난 조건의 알람 수를 창 알람에 맞춤 |
+| TASK-027 [PR #23](https://github.com/judangbang-ops/pillbadeum_release/pull/23) (2026-11-13) | N-13 '구현'의 디버그 수신기 줄에 TASK-027 단계가 쓰는 동작(`START`, `ARCHIVE_PERSON`, `SETTINGS`)을 더함. N-12(늦은 알람)와 RR-43의 알림 몫·RR-56~58·RR-81·RR-91·92의 확인 결과를 TASK-027(끝남)과 TC-010·017·027·032·042에 적음 |

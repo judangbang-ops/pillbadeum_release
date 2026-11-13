@@ -316,6 +316,26 @@ class PlanRemindersTest {
     }
 
     @Test
+    fun rr90_restoring_the_person_arms_the_items_reminders_again() = runTest {
+        val a = item("A", "08:00")
+        item("B", "08:30")
+        val people = ManagePeople(fx.db, fx.clock, fx.ids, TEST_DEVICE_ID)
+        val person = fx.db.intakeDao().findById(a)!!.personId
+        assertEquals(PersonChange.Saved, people.archive(person))
+        replan()
+        assertEquals(listOf("11-11T08:30 B", "11-11T09:30 B", "11-11T10:30 B"), ringUntil("2026-11-12T07:30"))
+        assertEquals(seoul("2026-11-12T08:30"), alarm)
+        // The re-plan after the restore (N-9, P-9) arms the alarm for A's first slot again; nothing is collected.
+        assertEquals(PersonChange.Saved, people.restore(person))
+        replan()
+        assertEquals(seoul("2026-11-12T08:00"), alarm)
+        assertEquals(
+            listOf("11-12T08:00 A", "11-12T08:30 B", "11-12T09:00 A", "11-12T09:30 B", "11-12T10:00 A", "11-12T10:30 B"),
+            ringUntil("2026-11-12T20:00"),
+        )
+    }
+
+    @Test
     fun rr79_switching_reminders_on_late_rings_the_next_slot_only() = runTest {
         item("B", "07:30") // an earlier run sets reminder_last_run_at
         replan()

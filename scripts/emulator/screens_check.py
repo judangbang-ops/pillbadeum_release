@@ -7,7 +7,7 @@ pictures. explore.py walks first use; this script checks what each task's end co
 dump (api34-name.xml) next to the picture, so the sentences TalkBack reads can be checked too (content-desc).
 
 Flow (clock set in Asia/Seoul; day 0 is the run's date):
-   1. Install and open the app (the intro is passed with [건너뛰기]; step 16 shows it).
+   1. Install and open the app (the intro is passed with [건너뛰기]; step 17 shows it).
    2. The widget placed with one person: no person picker, the widget shows everyone (TASK-012, REQ-018).
    3. Vitamin (나, 매일 아침): no person on the tile or the widget, nor in what TalkBack reads (TASK-015).
    4. 설정 > 대상자 관리: the list, [대상자 추가] with the one-phone note, Mom added, her color changed (TASK-021).
@@ -16,7 +16,7 @@ Flow (clock set in Asia/Seoul; day 0 is the run's date):
    6. The widget's choice deleted, as after a restore: with two people only "위젯을 다시 설정해 주세요" (TASK-012).
    7. That line opens the person picker (SCR-002); Mom picked: only Mom's item and count (TASK-012).
    8. Mom archived: the question, 보관됨, the widget's archived line (TASK-021, TASK-012).
-   9. Text 200%: [되살리기] under the name and on the screen (TASK-021).
+   9. Text 200% at the Pixel 5's width (393dp): [되살리기] on the screen, clear of the name (TASK-021).
   10. Mom brought back: her widget shows her item again (TASK-021).
   11. Day 0: Vitamin recorded in the app.
   12. Day 1, 09:00: BPpill's [⋯] opens SCR-007 (TASK-018): the buttons with no judgment, [건너뜀], the buttons of a skip.
@@ -26,23 +26,27 @@ Flow (clock set in Asia/Seoul; day 0 is the run's date):
       changed to a dose (SCR-007 of past days, TASK-018).
   14. The clock moved back after a dose (TASK-016, TASK-018, TASK-019, supplement C): the warning band, SCR-007's two
       buttons, the warning still there once the clock is right again (RR-64), the history cell, [그대로 두기].
-  15. Phone in Europe/London (TASK-043): times on the phone's clock, dates still in Asia/Seoul.
-  16. Installed again: the intro, and its [위젯 추가] asks the launcher to place the widget (TASK-022).
+  15. Phone in Europe/London (TASK-043): times on the phone's clock, dates still in Asia/Seoul. Then the base zone
+      changed in 설정 (P-5): a day that ended before it opens as SCR-007#locked, with no button (TASK-018).
+  16. Mom archived again, text 200% and the display density set for a 360dp width: [되살리기] under the name (TASK-021).
+  17. Installed again: the intro, and its [위젯 추가] asks the launcher to place the widget (TASK-022).
 
 One widget at a time: the Pixel launcher's first page holds one 4x2 widget next to its own icons, so the steps change
-the widget's person through its own "다시 설정" line instead of placing a second one. Uninstalling the app (step 16)
+the widget's person through its own "다시 설정" line instead of placing a second one. Uninstalling the app (step 17)
 takes the widget off the home screen.
 
 Names are typed in English (`adb shell input text` cannot type Korean). The debug APK is used: the database is read as
 root, and the debug receiver (androidApp/src/debug) redraws the widgets the way a write does.
 
-Writes report.md, screenshots (api34-NN-name.png) and screen dumps to --out. Exits 1 when a check fails.
+Writes report.md, screenshots (api34-NN-name.png), screen dumps and steps.json (each step's result with the numbers of
+the screenshots it took, for the capture gallery) to --out. Exits 1 when a check fails.
 Standard library only. Not product code.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -110,7 +114,16 @@ CLOCK_SPOKEN = ", 시계 확인 필요"  # the end of Labels.spoken / historySpo
 SKIP_TAP = "건너뜀으로 기록됨"  # Labels.recordMessage for a skipped tile
 GREEN = "초록"  # Labels.COLOR_NAMES[2]
 SEOUL_NOTE = "날짜는 기준 시간대(Asia/Seoul)로 셈해요."  # HomeScreen, when the phone is in another zone
+LOCKED = "설정을 바꾸기 전의 기록은 고칠 수 없어요"  # Labels.LOCKED, the band of SCR-007#locked
+LOCKED_NOTE = "하루 시작 시각이나 기준 시간대를 바꾸기 전에 끝난 날이에요."  # Labels.LOCKED_NOTE
+ZONE_ASK = "기준 시간대를 바꿀까요?"  # SettingsScreen, the P-5 question before the base zone changes
 LONDON = "Europe/London"
+SEOUL = "Asia/Seoul"
+# What TalkBack reads at the end of a history cell (Labels.historySpoken)
+CELL_ENDS = ("먹음", "아직", "건너뜀", "빠짐", CLOCK_SPOKEN)
+# Every button SCR-007 can show (JudgeScreen); none is there on a #locked cell
+JUDGE_ACTIONS = ("지금 먹었어", "먹은 시각 고르기", "건너뜀", "먹은 시각 고치기", "기록 취소", "먹었어로 바꾸기", "건너뜀 취소",
+                 "그대로 두기")
 
 # Glance keeps each widget's state, the person choice among it, in files/datastore/appWidget-<id>.preferences_pb
 DATASTORE = f"{DATA}/files/datastore"
@@ -199,6 +212,12 @@ def home_nodes(ok, timeout: float = 20) -> list[Node]:
     return wait_screen(ok, timeout)
 
 
+def at_home(nodes: list[Node]) -> bool:
+    """The app's first screen: [지난 기록] in its top bar and no [뒤로]/[닫기]. HOME_MARK alone is not enough here:
+    SCR-008's title is also 지난 기록, and the other screens open from the first one have [뒤로] or [닫기]."""
+    return has_text(nodes, HOME_MARK) and not any(n.desc in ("뒤로", "닫기") for n in nodes)
+
+
 def app_in_front() -> bool:
     lines = sh("dumpsys activity activities", check=False).splitlines()
     return any("ResumedActivity" in line and PKG in line for line in lines)
@@ -209,7 +228,7 @@ def to_home() -> None:
     screens' own [뒤로]/[닫기]. Only when that does not get there is the app stopped and started again."""
     for _ in range(6):
         nodes = dump_ui()
-        if has_text(nodes, HOME_MARK):
+        if at_home(nodes):
             return
         back = next((n for n in nodes if n.desc in ("뒤로", "닫기")), None)
         if back is not None:
@@ -231,11 +250,14 @@ def reopen() -> None:
 
 
 def open_people() -> None:
-    """First screen > [설정] > 대상자 관리 (SCR-010)."""
+    """First screen > [설정] > 대상자 관리 (SCR-010). Waits for the screen's title: with text 200% [대상자 추가] can sit
+    below the fold, and a dump holds only what is on screen. The settings row is one description (`대상자 관리, 2명`)
+    with no text of its own, so the title text is only on SCR-010."""
     to_home()
     tap_exact("설정")
     tap(seek(desc_starts("대상자 관리, "), "설정의 '대상자 관리' 줄"))
-    if exact("대상자 추가", 15) is None:
+    nodes = wait_screen(lambda ns: has_text(ns, "대상자 관리"), 15)
+    if not has_text(nodes, "대상자 관리"):
         raise RuntimeError("the people screen did not open")
 
 
@@ -260,7 +282,62 @@ def open_history() -> None:
     """First screen > [지난 기록] (SCR-008)."""
     to_home()
     tap_exact(HOME_MARK)
-    wait_screen(lambda ns: any(n.desc.endswith(("먹음", "아직", "건너뜀", "빠짐", CLOCK_SPOKEN)) for n in ns), 20)
+    wait_screen(lambda ns: any(n.desc.endswith(CELL_ENDS) for n in ns), 20)
+
+
+def last_cell() -> Node | None:
+    """The lowest history cell on screen after scrolling to the bottom: the oldest day, the first cell of its line.
+    Skipped cells are left out (their state word 건너뜀 is also a button text of SCR-007)."""
+    _, h = size()
+    for _ in range(4):
+        scroll_down()
+    cells = [n for n in dump_ui() if n.desc.endswith(CELL_ENDS) and not n.desc.endswith("건너뜀") and on_screen(n, h)]
+    return max(cells, key=lambda n: (n.bounds[1], -n.bounds[0]), default=None)
+
+
+def base_zone() -> str:
+    """The base zone the app keeps (setting `base_zone`; Asia/Seoul until it is changed)."""
+    rows = query("SELECT value FROM setting WHERE key = 'base_zone'")
+    return rows[0][0] if rows else SEOUL
+
+
+def set_base_zone(zone: str, shot=None) -> None:
+    """First screen > [설정] > 기준 시간대 > `zone` > [바꾸기] (SCR-009 and its P-5 question). The list puts the zone in
+    use, the phone's and Asia/Seoul first, so `zone` is one of those here."""
+    to_home()
+    tap_exact("설정")
+    tap(seek(desc_starts("기준 시간대, "), "설정의 '기준 시간대' 줄"))
+    tap(seek(desc_starts(f"{zone}, "), f"{zone} in the zone list"))
+    if exact(ZONE_ASK, 10) is None:
+        raise RuntimeError(f"no question before the base zone becomes {zone}")
+    if shot:
+        shot()
+    tap_exact("바꾸기")
+    nodes = wait_screen(lambda ns: has_desc(ns, f"기준 시간대, {zone}"), 15)
+    if not has_desc(nodes, f"기준 시간대, {zone}"):
+        raise RuntimeError(f"the settings row does not say {zone}")
+
+
+def archived_line(name: str) -> tuple[Node | None, Node | None]:
+    """`name`'s line under 보관됨 on SCR-010 and its [되살리기], scrolling until both are on screen."""
+    _, h = size()
+    line = button = None
+    for _ in range(6):
+        nodes = dump_ui()
+        line = next((n for n in nodes if n.desc.startswith(f"{name}, ") and "지난 기록은 남아요" in n.desc), None)
+        button = next((n for n in nodes if n.desc == f"{name} 되살리기"), None)
+        if line and button and on_screen(line, h) and on_screen(button, h):
+            break
+        scroll_down()
+    return line, button
+
+
+def physical_density() -> int:
+    """The display's own density (`wm density` prints it with any override)."""
+    found = re.search(r"Physical density: (\d+)", sh("wm density"))
+    if found is None:
+        raise RuntimeError("wm density printed no physical density")
+    return int(found.group(1))
 
 
 def history_descs(rounds: int = 3) -> list[str]:
@@ -380,6 +457,22 @@ def find_pin_button(timeout: float = 15) -> Node | None:
 # Flow
 
 
+class ShotSteps(Steps):
+    """explore.Steps that also keeps which screenshots each step took, written to steps.json for the capture gallery."""
+
+    def __init__(self, r: Report) -> None:
+        super().__init__(r)
+        self.spans: list[dict] = []
+
+    def __call__(self, title: str, expected: str, fn, look: bool = False) -> bool:
+        first = self.r.shots + 1
+        ok = super().__call__(title, expected, fn, look)
+        case, _, actual, _ = self.r.rows[-1]
+        self.spans.append({"title": case, "expected": expected, "actual": actual, "ok": ok,
+                           "shots": [f"api{self.r.api}-{n:02d}-" for n in range(first, self.r.shots + 1)]})
+        return ok
+
+
 def add(r: Report, name: str, person: str | None, choice: str, shot: str | None = None) -> str:
     """Home > [항목 추가] > name > person (only shown from two people on, TASK-015) > 매일 + time of day > [저장]."""
     to_home()
@@ -482,6 +575,21 @@ def run(r: Report, steps: Steps, apk: Path) -> None:
 
     steps("3. 대상자 한 명: 이름 앞에 대상자 없음 (TASK-015)",
           f"앱 칸과 위젯 칸이 '{VITAMIN}, …'로 읽히고 '{ME}'가 보이지 않음", one_person)
+
+    def one_person_history() -> str:
+        open_history()
+        nodes = dump_ui()
+        cells = [n.desc for n in nodes if n.desc.startswith((f"{VITAMIN}, ", f"{ME} {VITAMIN}, "))]
+        picker = [n.text for n in nodes if n.text in ("전체", ME)]
+        r.shot("history-one-person")
+        save_ui(r, "history-one-person")
+        tap_desc("뒤로")
+        if picker or cells != [f"{VITAMIN}, 아직"]:
+            raise RuntimeError(f"picker texts {picker}, cells {cells}")
+        return f"대상자 고르기 없음, 칸 {cells}"
+
+    steps("3-2. 대상자 한 명의 지난 기록 (TASK-015)", f"대상자 고르기(전체·{ME}) 없음, 칸 '{VITAMIN}, 아직'",
+          one_person_history)
 
     # 4. people: list, add with the one-phone note, edit the color (TASK-021)
     colors: dict[str, str] = {}
@@ -627,33 +735,30 @@ def run(r: Report, steps: Steps, apk: Path) -> None:
     steps("8. Mom 보관 (TASK-021, TASK-012)",
           f"묻고 보관, '보관됨'과 [되살리기], 위젯은 '{RECONFIGURE_ARCHIVED}', 앱 칸에서 BPpill이 빠짐", archive_mom)
 
-    # 9. text 200%: [되살리기] under the name and on the screen (TASK-021, ArchivedLine)
+    # 9. text 200% at this phone's width: [되살리기] on the screen, beside or under the name (TASK-021, ArchivedLine).
+    # It goes under the name only when it would take more than 45% of the room beside the badge; the Pixel 5 is 393dp
+    # wide, where it still fits beside. The end condition's 360dp is step 16, at the end (wm density re-lays the launcher).
     def archived_200() -> str:
         font_scale("2.0")
         try:
             reopen()
             open_people()
             _, h = size()
-            name = button = None
-            for attempt in range(6):
-                nodes = dump_ui()
-                name = next((n for n in nodes if n.desc.startswith(f"{MOM}, ") and "지난 기록은 남아요" in n.desc), None)
-                button = next((n for n in nodes if n.desc == f"{MOM} 되살리기"), None)
-                if name and button and on_screen(name, h) and on_screen(button, h):
-                    break
-                scroll_down()
+            name, button = archived_line(MOM)
             r.shot("people-archived-200")
             save_ui(r, "people-archived-200")
             if not (name and button):
                 raise RuntimeError(f"name {name}, button {button}")
             below = button.bounds[1] >= name.bounds[3] - 2
-            if not below or not on_screen(button, h):
+            beside = button.bounds[0] >= name.bounds[2] - 2
+            if not (below or beside) or not on_screen(button, h):
                 raise RuntimeError(f"name {name.bounds}, [되살리기] {button.bounds}, screen height {h}")
-            return f"이름 {name.bounds} 아래 [되살리기] {button.bounds}"
+            dp = round(size()[0] * 160 / physical_density())
+            return f"폭 {dp}dp: 이름 {name.bounds} {'아래' if below else '옆'} [되살리기] {button.bounds}"
         finally:
             font_scale("1.0")
 
-    steps("9. 글자 200%의 보관됨 (TASK-021)", "[되살리기]가 이름 아래에 있고 화면 안", archived_200)
+    steps("9. 글자 200%의 보관됨, 이 휴대폰 폭 (TASK-021)", "[되살리기]가 화면 안에 있고 이름과 겹치지 않음", archived_200)
 
     # 10. Mom brought back
     def restore_mom() -> str:
@@ -701,15 +806,22 @@ def run(r: Report, steps: Steps, apk: Path) -> None:
         skipped = buttons(("먹었어로 바꾸기", "건너뜀 취소", "먹은 시각 고르기"))
         r.shot("judge-skipped")
         tap_desc("뒤로")
+        home = wait_screen(at_home, 10)
+        tile_said = spoken(home, BP)
+        r.shot("home-skipped")
+        save_ui(r, "home-skipped")
         rows = active(BP)
+        if not any(s.endswith(", 건너뜀") for s in tile_said):
+            raise RuntimeError(f"the first screen reads {BP} as {tile_said}")
         want_none = {"지금 먹었어": True, "먹은 시각 고르기": True, "건너뜀": True, "먹은 시각 고치기": False, "기록 취소": False}
         want_skip = {"먹었어로 바꾸기": True, "건너뜀 취소": True, "먹은 시각 고르기": False}
         if none != want_none or skipped != want_skip or not rows or rows[-1][1] != "SKIPPED":
             raise RuntimeError(f"none {none}, skipped {skipped}, {BP} {rows}")
-        return f"시계 {clock}; 판정 없음 {none}; 건너뜀 뒤 {skipped}; {BP} {rows[-1]}"
+        return f"시계 {clock}; 판정 없음 {none}; 건너뜀 뒤 {skipped}; {BP} {rows[-1]}; 첫 화면 칸 {tile_said}"
 
     steps("12-1. 1일 09:00 BPpill [⋯]: 판정 없음 → 건너뜀 (TASK-018)",
-          "[지금 먹었어]·[먹은 시각 고르기]·[건너뜀], 건너뜀 뒤 [먹었어로 바꾸기]·[건너뜀 취소]", day1_skip)
+          "[지금 먹었어]·[먹은 시각 고르기]·[건너뜀], 건너뜀 뒤 [먹었어로 바꾸기]·[건너뜀 취소], 첫 화면 칸은 '…, 건너뜀'",
+          day1_skip)
 
     def widget_skip_tap() -> str:
         before = active_count()
@@ -720,7 +832,7 @@ def run(r: Report, steps: Steps, apk: Path) -> None:
         if target is None:
             raise RuntimeError(f"{BP} not on the widget")
         tap(target)
-        time.sleep(2)
+        wait_screen(lambda ns: any(SKIP_TAP in n.text for n in ns), 8)
         msg = message_line()
         r.shot("widget-skipped-tap")
         save_ui(r, "widget-skipped-tap")
@@ -879,6 +991,9 @@ def run(r: Report, steps: Steps, apk: Path) -> None:
     steps("14-2. 시계 경고의 판정 고치기 (TASK-018 SCR-007#future)", "[그대로 두기]·[기록 취소]", judge_clock)
 
     def clock_right_again() -> str:
+        if not flagged["at"]:
+            # Without 14-1's dose the clock would be set from 0 (1970) and every record would look ahead of it
+            raise RuntimeError("14-1 recorded no dose, so the clock is left as it is")
         clock = set_clock(datetime.fromtimestamp(flagged["at"] + 30 * 60, ZONE))
         reopen()
         band = find_text_start(CLOCK_BAND)
@@ -909,18 +1024,31 @@ def run(r: Report, steps: Steps, apk: Path) -> None:
     steps("14-4. [그대로 두기] (RR-66)", "띠가 사라지고 판정은 그대로", keep)
 
     # 15. the phone in another zone (TASK-043, REQ-082)
+    def last_dose(name: str) -> int:
+        """Epoch seconds of `name`'s latest active dose."""
+        rows = query("SELECT MAX(d.taken_at) FROM dose_record d JOIN intake i ON i.id = d.intake_id "
+                     f"WHERE i.name = '{name}' AND d.active = 1")
+        return (rows[0][0] or 0) // 1000
+
     def london() -> str:
+        dose = flagged["at"] or last_dose(VITAMIN)  # 14-1's dose; an earlier one when 14-1 failed
         zone = zone_to(LONDON)
         try:
             reopen()
             nodes = dump_ui()
-            note = has_text(nodes, SEOUL_NOTE)
             date = day_label(at(2, 12).date())
             dated = any(n.text.startswith(date) or date in n.text for n in nodes)
-            uk = hm(flagged["at"], ZoneInfo(LONDON))
+            uk = hm(dose, ZoneInfo(LONDON))
             said = [s for s in spoken(nodes, VITAMIN) if uk in s]
             r.shot("home-london")
             save_ui(r, "home-london")
+            try:
+                seek(text_is(SEOUL_NOTE), "the zone note")  # under the list, with the medical note
+                note = True
+                r.shot("home-london-notes")
+            except RuntimeError:
+                note = False
+            scroll_top()
             open_history()
             cells = [c for c in history_descs() if c.startswith(f"{ME} {VITAMIN}, ") and uk in c]
             r.shot("history-london")
@@ -938,7 +1066,79 @@ def run(r: Report, steps: Steps, apk: Path) -> None:
     steps("15. 휴대폰 시간대 Europe/London (TASK-043)",
           "기록 시각은 휴대폰 시계(런던), 날짜·칸은 기준 시간대(서울), 첫 화면에 기준 시간대 안내", london)
 
-    # 16. installed again: the intro and its [위젯 추가] (TASK-022)
+    # 15-2. a day that ended before the base zone changed (SCR-007#locked, P-5, RR-44). With the phone in London the
+    # zone list has Europe/London at the top; the base zone goes back to Asia/Seoul after it (another P-5 change).
+    def locked() -> str:
+        before = base_zone()
+        zone_to(LONDON)
+        try:
+            reopen()
+            set_base_zone(LONDON, shot=lambda: r.shot("settings-zone-ask"))
+            r.shot("settings-zone-london")
+            stored = base_zone()
+            open_history()
+            cell = last_cell()
+            if cell is None:
+                raise RuntimeError("no history cell to open")
+            said = cell.desc
+            tap(cell)
+            nodes = wait_screen(lambda ns: any(LOCKED in n.text for n in ns), 15)
+            band = next((n.text for n in nodes if LOCKED in n.text), "")
+            note = any(LOCKED_NOTE in n.text for n in nodes)
+            shown = sorted({n.text for n in nodes if n.text in JUDGE_ACTIONS})
+            r.shot("judge-locked")
+            save_ui(r, "judge-locked")
+            tap_desc("뒤로")
+            if stored != LONDON or not band or shown:
+                raise RuntimeError(f"base zone {before} → {stored}, cell '{said}', band '{band}', buttons {shown}")
+            return (f"기준 시간대 {before} → {stored}; 맨 아래 칸 '{said}'; 띠 '{band}'; "
+                    f"안내 줄 {'있음' if note else '없음'}; 버튼 없음")
+        finally:
+            try:
+                if base_zone() != SEOUL:
+                    set_base_zone(SEOUL)
+            except Exception as exc:  # the next steps read dates in Seoul; say so instead of hiding the step's own error
+                r.note(f"기준 시간대를 {SEOUL}로 되돌리지 못함: {type(exc).__name__}: {exc}")
+            zone_to(SEOUL)
+
+    steps("15-2. 기준 시간대를 바꾸기 전에 끝난 날 (TASK-018 SCR-007#locked)",
+          f"설정에서 기준 시간대를 {LONDON}로 바꾼 뒤 지난 기록 맨 아래 칸: '{LOCKED}' 띠, 버튼 없음", locked)
+
+    # 16. TASK-021's end condition at 360dp: text 200% puts [되살리기] under the name. Mom is archived again and the
+    # display density set for a 360dp width; last before the reinstall, since wm density also re-lays the launcher.
+    def archived_360() -> str:
+        w, h = size()
+        dpi = round(w * 160 / 360)
+        open_people()
+        tap(seek(desc_starts(f"{MOM}, "), f"{MOM}'s line"))
+        tap(seek(text_is("보관"), "[보관]"))
+        title = exact(f"{MOM}을(를) 보관할까요?", 10)
+        if title is None:
+            raise RuntimeError("no archive question")
+        tap_exact("보관", 10, below=title.bounds[1])
+        if not has_text(wait_screen(lambda ns: has_text(ns, "보관됨"), 15), "보관됨"):
+            raise RuntimeError(f"{MOM} was not archived")
+        try:
+            font_scale("2.0")
+            sh(f"wm density {dpi}")
+            reopen()
+            open_people()
+            name, button = archived_line(MOM)
+            r.shot("people-archived-200-360dp")
+            save_ui(r, "people-archived-200-360dp")
+            if not (name and button):
+                raise RuntimeError(f"name {name}, button {button}")
+            below = button.bounds[1] >= name.bounds[3] - 2
+            if not below or not on_screen(button, h):
+                raise RuntimeError(f"density {dpi}: name {name.bounds}, [되살리기] {button.bounds}, screen height {h}")
+            return f"wm density {dpi} (폭 {w * 160 // dpi}dp): 이름 {name.bounds} 아래 [되살리기] {button.bounds}"
+        finally:
+            sh("wm density reset", check=False)
+            font_scale("1.0")
+
+    steps("16. 폭 360dp·글자 200%의 보관됨 (TASK-021)", "[되살리기]가 이름 아래 줄에 있고 화면 안", archived_360)
+
+    # 17. installed again: the intro and its [위젯 추가] (TASK-022)
     def intro_pin() -> str:
         uninstall()
         time.sleep(3)
@@ -973,7 +1173,7 @@ def run(r: Report, steps: Steps, apk: Path) -> None:
             raise RuntimeError(f"widgets before {left}, after {ids}, texts {[n.text for n in nodes if n.text]}, choices {choices}")
         return f"지운 뒤 위젯 {left}, [위젯 추가] → '{button.text or button.rid}' → 위젯 {ids}, 선택 {choices}"
 
-    steps("16. 첫 실행 안내의 [위젯 추가] (TASK-022)", "런처의 추가 창 → 홈 화면에 위젯, 대상자 한 명이라 '전체'(*)로 저장",
+    steps("17. 첫 실행 안내의 [위젯 추가] (TASK-022)", "런처의 추가 창 → 홈 화면에 위젯, 대상자 한 명이라 '전체'(*)로 저장",
           intro_pin)
 
 
@@ -993,8 +1193,9 @@ def main() -> int:
     wait_boot()  # also counts this boot, so become_root waits for the emulator's own commands after it
     api = api_level()
     r = Report(args.out, api, f"에뮬레이터 화면 확인 API {api}")
+    steps = ShotSteps(r)
     try:
-        run(r, Steps(r), args.apk)
+        run(r, steps, args.apk)
     except Exception as exc:
         traceback.print_exc()
         r.check("화면 확인 진행", "끝까지 감", f"{type(exc).__name__}: {exc}", False)
@@ -1002,6 +1203,7 @@ def main() -> int:
         for note in sorted(set(KEYBOARD_NOTES)):
             r.note(note)
         r.write()
+        (args.out / "steps.json").write_text(json.dumps(steps.spans, ensure_ascii=False, indent=1), encoding="utf-8")
         LOG_PARTS.append(adb("logcat", "-d", "-v", "time", check=False))
         (args.out / f"api{api}-logcat.txt").write_text("\n".join(LOG_PARTS), encoding="utf-8")
     return 1 if r.failed else 0

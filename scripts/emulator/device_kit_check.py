@@ -9,7 +9,8 @@ here first. The person's part is played by this driver: it drops the widget the 
 types a test PIN the way reminder_check.py does (the kit never asks for or sees a PIN), expands and taps a lock-screen
 reminder, and waits for the clock.
 
-Flow (zone Asia/Seoul; the kit's own `clock` step moves the clock; D is the phone's date at the start):
+Flow (zone Asia/Seoul; the kit's own `clock` step moves the clock; D is the day before the phone's date at the start,
+so the host's clock the emulator comes back on after the reboot is always after the items were made):
    1. info; clock D 06:30; install -Fresh; additem PillA..PillE (the first-run intro is skipped with [건너뛰기])
    2. bug004 while the driver drops the widget: RescheduleReceiver on before the drop, the 10-second dump shows the
       widget's items (nodes with the app's package) and no ProgressBar, no package-changed log line
@@ -350,7 +351,10 @@ def flow(f: Flow, apk: Path) -> None:
     done = f.step("info")
     f.check("info", f"기기·앱·설정 정보가 info.txt에 남음 (API {api})", done.line("ro.build.version.sdk") or done.tail(1),
             done.ok and f"ro.build.version.sdk: {api}" in kit.text("info.txt"))
-    day = phone_now().date()
+    # D is yesterday: the reboot (9) brings the emulator back on the host's clock, and before D 06:30, when the items
+    # are made, no schedule is in effect, so the app rightly sets no reminder alarm. With D as today the reboot check
+    # failed whenever a run reached it before 06:30 KST (ff477b9, run 43466041194, API 34: "no reminder alarm needed").
+    day = phone_now().date() - timedelta(days=1)
     f.clock(datetime.combine(day, clock_time(6, 30)), "준비: 첫 알림 08:00 전")
     done = f.step("install", "-Apk", str(apk), "-Fresh", again=False)
     f.check("install -Fresh", "앱을 지우고 새로 깖", done.line("깔림:") or done.tail(), done.ok and "깔림: versionCode" in done.out)

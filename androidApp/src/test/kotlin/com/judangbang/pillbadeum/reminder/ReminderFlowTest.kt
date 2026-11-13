@@ -22,6 +22,8 @@ import com.judangbang.pillbadeum.status.ReminderLabels
 import com.judangbang.pillbadeum.usecase.IntakeDraft
 import com.judangbang.pillbadeum.usecase.SaveIntakeResult
 import com.judangbang.pillbadeum.usecase.SaveReminderResult
+import com.judangbang.pillbadeum.usecase.TimeEditCommand
+import com.judangbang.pillbadeum.usecase.WindowWriteResult
 import kotlin.time.Instant
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDateTime
@@ -287,6 +289,36 @@ class ReminderFlowTest {
         names(false, at(8, 6))
         assertTrue(doses().all { it.notification.visibility == Notification.VISIBILITY_SECRET })
         assertNotNull(lockNotice())
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // TASK-027: a write that empties today's window
+
+    @Test
+    fun a_time_edit_that_moves_todays_dose_to_last_night_brings_todays_next_slot_back() {
+        // Made the evening before, so last night's window is in the item's schedule (P-4) and can take the dose.
+        app.clock.now = at(20, 0, day = 11)
+        val (a) = seed("PillA")
+        assertEquals(at(8, 0).ms, reminderAlarm().triggerAtMs)
+        ring(at(8, 0))
+        press(a, ReminderLabels.TAKEN, at(8, 2))
+        assertEquals("judged: tomorrow's first slot", at(8, 0, day = 13).ms, reminderAlarm().triggerAtMs)
+
+        // SCR-007 [먹은 시각 고치기]: the 08:02 dose was really taken at 23:00 last night (RR-43, supplement P-6, P-7).
+        runBlocking {
+            app.clock.now = at(8, 30)
+            val core = app.container.core()
+            val doseId = core.loadStatusBoard().items.single { it.intakeId == a }.judgment!!.id
+            val moved = core.recordInWindow.editTime(TimeEditCommand(doseId, at(23, 0, day = 11), "Asia/Seoul", renderedAt = at(8, 30)))
+            assertTrue("moved: $moved", moved is WindowWriteResult.Recorded)
+            afterWrite()
+        }
+        assertNull("today's window is empty again", judgment(a))
+        assertEquals("REQ-044: today's next slot, not tomorrow's", at(9, 0).ms, reminderAlarm().triggerAtMs)
+        assertNull("a re-plan shows nothing: 08:00 does not come back late", dose(a))
+
+        ring(at(9, 0))
+        assertEquals("PillA rings at 09:00 with the moved dose as its last", "마지막 복용 어제 23:00", dose(a)!!.notification.text)
     }
 
     // ---------------------------------------------------------------------------------------------

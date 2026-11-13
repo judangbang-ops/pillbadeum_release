@@ -46,3 +46,6 @@ local.properties
 # Python bytecode (scripts/emulator, .github/scripts)
 __pycache__/
 *.pyc
+
+# 실기기 확인의 원본(화면 덤프·알림 목록·로그, scripts/device/device-check.ps1). 보고서에는 고른 캡처와 숫자만 옮김
+docs/07-qa/*/raw/

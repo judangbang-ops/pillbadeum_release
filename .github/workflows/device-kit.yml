@@ -1,0 +1,229 @@
+# 갤럭시 실기기 확인 스크립트(scripts/device/device-check.ps1)를 에뮬레이터에서 루트 없이 돌려 봄 (TASK-032·052·054 준비).
+# 실기기에서는 adb가 셸 사용자이고 위젯 놓기·잠금 풀기는 사람이 함. 이 확인은 같은 단계를 adbd가 셸 사용자인 에뮬레이터에서
+# pwsh로 돌리고, 사람 몫은 scripts/emulator/device_kit_check.py가 함. 순서와 기대 동작은 그 파일 첫 주석과
+# docs/07-qa/device-check.md
+#
+# - 기기 스크립트, 에뮬레이터 확인, 스크립트가 읽는 앱 화면·위젯·알림 코드를 바꾼 PR과 수동 실행에서 돎(API 34·36 나란히,
+#   실행마다 약 40분). PR에 다시 푸시할 때는 이 확인이 마지막으로 모두 성공한 커밋 뒤로 아래 paths가 바뀌었을 때만 돎
+#   (gate 작업, .github/scripts/push_gate.py). 라벨 `device-kit`을 붙이면 그 PR로 다시 돎
+# - Windows PowerShell 5.1(동희님 PC와 같은 Windows)에서 스크립트를 읽고, 도움말을 보이고, 휴대폰이 없을 때 안내하는지 봄
+# - 서명 키·비밀값을 쓰지 않음. 디버그 APK로 확인함. 갤럭시에는 개인 APK를 깖(device-check.md 1장 7)
+name: 기기 스크립트 확인
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+    paths:
+      - scripts/device/**
+      - scripts/emulator/**
+      - shared/src/commonMain/kotlin/com/judangbang/pillbadeum/ui/**
+      - shared/src/commonMain/kotlin/com/judangbang/pillbadeum/status/Labels.kt
+      - shared/src/commonMain/kotlin/com/judangbang/pillbadeum/status/ReminderLabels.kt
+      - androidApp/src/main/kotlin/com/judangbang/pillbadeum/widget/**
+      - androidApp/src/main/kotlin/com/judangbang/pillbadeum/reminder/**
+      - .github/actions/android-emulator/**
+      - .github/scripts/push_gate.py
+      - .github/workflows/device-kit.yml
+  workflow_dispatch:
+    inputs:
+      apis:
+        description: API 수준 목록 (JSON 배열)
+        required: false
+        default: "[34, 36]"
+
+permissions:
+  contents: read
+
+# 다른 라벨을 붙인 실행이 돌고 있는 확인을 취소하지 않게 라벨 이름을 그룹에 넣음(푸시는 'push')
+concurrency:
+  group: device-kit-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}-${{ github.event.label.name || 'push' }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    # 이 PR에서 아래 확인이 마지막으로 모두 성공한 커밋 뒤로 위 경로가 바뀌었는지 보고 정함(.github/scripts/push_gate.py).
+    # 경로는 위 on.pull_request.paths와 같게 둠('dir/**'는 'dir/'로 씀). 라벨을 붙여 온 실행은 `device-kit`일 때만 돌고,
+    # 그때는 늘 돎. 수동 실행에서는 건너뜀
+    name: 이번 푸시가 바꾼 파일
+    if: github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'device-kit')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read # 지난 실행을 읽음
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - id: gate
+        env:
+          GATE_ACTION: ${{ github.event.action }}
+          GATE_AFTER: ${{ github.event.after }}
+          GATE_JOB: "기기 스크립트 (API"
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 .github/scripts/push_gate.py
+          scripts/device/
+          scripts/emulator/
+          shared/src/commonMain/kotlin/com/judangbang/pillbadeum/ui/
+          shared/src/commonMain/kotlin/com/judangbang/pillbadeum/status/Labels.kt
+          shared/src/commonMain/kotlin/com/judangbang/pillbadeum/status/ReminderLabels.kt
+          androidApp/src/main/kotlin/com/judangbang/pillbadeum/widget/
+          androidApp/src/main/kotlin/com/judangbang/pillbadeum/reminder/
+          .github/actions/android-emulator/
+          .github/scripts/push_gate.py
+          .github/workflows/device-kit.yml
+
+  windows:
+    name: Windows PowerShell 5.1
+    needs: gate
+    # 수동 실행(gate 건너뜀)이나 gate 실패 때는 돎. gate가 run=false라고 하거나 다른 라벨이면 건너뜀
+    if: ${{ !cancelled() && needs.gate.outputs.run != 'false' && (github.event.action != 'labeled' || github.event.label.name == 'device-kit') }}
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # 이 글은 러너가 임시 파일로 써서 돌리므로 영문만 씀(한글 비교는 글자 번호로)
+      - name: 읽기·도움말·휴대폰 없을 때 안내
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          "Windows PowerShell $($PSVersionTable.PSVersion) $($PSVersionTable.PSEdition)"
+          if ($PSVersionTable.PSVersion.Major -ne 5) { throw 'expected Windows PowerShell 5.1' }
+          $kit = (Resolve-Path 'scripts\device\device-check.ps1').Path
+
+          # 1. UTF-8 with BOM (5.1 reads a file without BOM in the ANSI code page and the Korean text breaks), and it parses
+          $bytes = [System.IO.File]::ReadAllBytes($kit)
+          if (-not ($bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF)) { throw 'device-check.ps1 is not UTF-8 with BOM' }
+          $tokens = $null; $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($kit, [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { "line $($_.Extent.StartLineNumber): $($_.Message)" }
+            throw "parse errors: $($errors.Count)"
+          }
+          'parse: ok'
+
+          # 2. Comment-based help and the step list
+          $help = Get-Help $kit -Full
+          if ($help.Synopsis -notmatch 'TASK-052') { throw "help synopsis not read: $($help.Synopsis)" }
+          $command = Get-Command $kit
+          $steps = $command.Parameters['Step'].Attributes | Where-Object { $_ -is [System.Management.Automation.ValidateSetAttribute] }
+          "steps: $($steps.ValidValues -join ', ')"
+          foreach ($step in @('info', 'snap', 'clock', 'additem', 'remind', 'appnames', 'bug004', 'latency', 'night', 'reboot')) {
+            if ($steps.ValidValues -notcontains $step) { throw "step missing: $step" }
+          }
+
+          # 3. No phone: an adb that lists no device. The kit stops with its own message (Korean, read in-process)
+          $stub = Join-Path $env:RUNNER_TEMP 'adbstub'
+          New-Item -ItemType Directory -Path $stub -Force | Out-Null
+          [System.IO.File]::WriteAllText((Join-Path $stub 'adb.cmd'), "@echo List of devices attached`r`n@exit /b 0`r`n")
+          $env:Path = "$stub;$env:Path"
+          $out = Join-Path $env:RUNNER_TEMP 'kit-out'
+          $message = ''
+          try {
+            & $kit -Step info -OutDir $out
+          } catch {
+            $message = $_.Exception.Message
+          }
+          if (-not $message) { throw 'the kit ran without a phone' }
+          # U+D734 is the first letter of the Korean word for phone: the message is Korean, not mojibake
+          if (-not $message.Contains([string][char]0xD734)) { throw "message text is broken: $message" }
+          if ($message -notmatch 'USB.*\(\D*0\D*\).*-Serial') { throw "unexpected message: $message" }
+          'no phone (in-process): stopped with the kit message'
+
+          # 4. The way the guide runs it: a new Windows PowerShell with -File and comma-joined -Names
+          $ErrorActionPreference = 'Continue'
+          & powershell -NoProfile -ExecutionPolicy Bypass -File $kit -Step snap -Name test -Names PillA,PillB -OutDir $out
+          $code = $LASTEXITCODE
+          $ErrorActionPreference = 'Stop'
+          if ($code -eq 0) { throw 'expected a non-zero exit code without a phone' }
+          "no phone (-File): exit code $code"
+          exit 0
+
+  apk:
+    name: 디버그 APK
+    needs: gate
+    if: ${{ !cancelled() && needs.gate.outputs.run != 'false' && (github.event.action != 'labeled' || github.event.label.name == 'device-kit') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: gradle/actions/wrapper-validation@0723195856401067f7a2779048b490ace7a47d7c # v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: 디버그 APK (./gradlew :androidApp:assembleDebug)
+        run: ./gradlew :androidApp:assembleDebug
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: device-kit-apk
+          path: androidApp/build/outputs/apk/debug/androidApp-debug.apk
+          retention-days: 1
+          overwrite: true
+          if-no-files-found: error
+
+  kit:
+    name: 기기 스크립트 (API ${{ matrix.api }})
+    needs: apk
+    # 건너뛴 gate가 apk를 거쳐 이 작업까지 건너뛰게 하지 않게 apk 결과만 봄(수동 실행)
+    if: ${{ !cancelled() && needs.apk.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # 34: 기준. 36: 가장 새 Android(갤럭시 One UI 8과 같은 Android 16, 알림 묶음 규칙이 바뀜)
+        api: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.apis || '[34, 36]') }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: device-kit-apk
+          path: ${{ runner.temp }}/apk
+
+      # KVM, 시스템 이미지, AVD를 준비하고 부팅을 기다림. 시계를 바꾸므로 코어 4개. adbd는 셸 사용자로 켜짐(adb root를 부르지 않음)
+      - uses: ./.github/actions/android-emulator
+        with:
+          api: ${{ matrix.api }}
+          cores: "4"
+
+      - name: 기기 스크립트 확인 (scripts/emulator/device_kit_check.py)
+        run: |
+          pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+          python3 scripts/emulator/device_kit_check.py \
+            --apk "$RUNNER_TEMP/apk/androidApp-debug.apk" \
+            --out "$RUNNER_TEMP/device-kit-${{ matrix.api }}"
+
+      - name: 결과 표
+        if: ${{ !cancelled() }}
+        run: |
+          report="$RUNNER_TEMP/device-kit-${{ matrix.api }}/report.md"
+          if [ -f "$report" ]; then cat "$report" >> "$GITHUB_STEP_SUMMARY"; else echo "보고서 없음" >> "$GITHUB_STEP_SUMMARY"; fi
+          cp "$RUNNER_TEMP/emulator.log" "$RUNNER_TEMP/device-kit-${{ matrix.api }}/" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() }}
+        with:
+          name: device-kit-api${{ matrix.api }}
+          path: ${{ runner.temp }}/device-kit-${{ matrix.api }}/
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: ignore

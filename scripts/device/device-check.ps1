@@ -1113,9 +1113,12 @@ function Get-ScreenSize {
 }
 
 function Measure-WidgetTap($Target, $Size, [int]$Frames) {
-    # 휴대폰 안에서: 머리글 줄만 잘라 해시 → 누름 → 원시 캡처를 이어 찍으며 해시, 바뀌면 멈춤. 시각은 /proc/uptime
-    # (0.01초)이고 캡처를 시작하기 직전에 읽음. 그래서 처음 바뀐 캡처의 시각이 위 끝, 그 앞 캡처의 시각이 아래 끝.
-    # 머리글 자리에는 기록하면 '2 / 4'처럼 바뀐 수가, "이미 기록됨"이면 그 글 띠가 옴 (WidgetContent)
+    # 휴대폰 안에서: 머리글 줄만 잘라 해시 → 누름 → 원시 캡처를 이어 찍으며 해시. 시각은 /proc/uptime(0.01초)이고 캡처를
+    # 시작하기 직전에 읽음. 머리글 자리에는 기록하면 '2 / 4'처럼 바뀐 수가, "이미 기록됨"이면 그 글 띠가 옴 (WidgetContent).
+    # 위젯 목록 칸을 누르면 Glance가 보이지 않는 활동(InvisibleActionTrampolineActivity)을 거치고, 그 활동이 뜨는 동안
+    # 머리글 줄이 잠깐 다르게 찍힘: 앱 프로세스가 내려가 있으면 활동이 뜨기까지 0.8초쯤 걸려 첫 캡처가 이것을 잡았고, 앱은
+    # 그 뒤에 띠를 그렸음(API 36, 실행 43414847467). 그래서 바뀐 모습이 1.5초 그대로 머물면 멈추고(SETTLE, 1/100초 단위),
+    # 그 마지막 모습이 처음 찍힌 캡처의 시각을 위 끝, 그 앞에서 누르기 전과 똑같이 찍힌 마지막 캡처의 시각을 아래 끝으로 함
     $rowBytes = $Size.Width * 4
     # 캡처 머리 바이트 때문에 잘린 곳이 몇 픽셀 밀리지만, 같은 곳을 매번 비교하므로 바뀜을 보는 데 문제없음
     $top = [Math]::Max(0, $Target.Header.Top - 4)
@@ -1127,10 +1130,13 @@ d=@DIR@/lat; mkdir -p $d; rm -f $d/t.txt;
 sc() { screencap $d/f.raw; dd if=$d/f.raw bs=@RB@ skip=@TOP@ count=@ROWS@ 2>/dev/null | md5sum | cut -d' ' -f1; };
 read u x < /proc/uptime; h0=$(sc); echo f0 $u $h0 >> $d/t.txt;
 input tap @X@ @Y@; read u x < /proc/uptime; echo tap $u >> $d/t.txt;
-i=1; while [ $i -le @N@ ]; do read u x < /proc/uptime; h=$(sc); echo f$i $u $h >> $d/t.txt; if [ x$h != x$h0 ]; then break; fi; i=$((i+1)); done;
+i=1; run=x; rs=0;
+while [ $i -le @N@ ]; do read u x < /proc/uptime; h=$(sc); echo f$i $u $h >> $d/t.txt; c=${u%.*}${u#*.};
+if [ x$h = x$h0 ]; then run=x; elif [ x$h != x$run ]; then run=$h; rs=$c; elif [ $((c-rs)) -ge @SETTLE@ ]; then break; fi;
+i=$((i+1)); done;
 cat $d/t.txt; rm -f $d/f.raw
 '@
-    $deviceScript = $deviceScript.Replace("`r", '').Replace("`n", ' ').Replace('@DIR@', $RemoteDir).Replace('@RB@', "$rowBytes").Replace('@TOP@', "$top").Replace('@ROWS@', "$rows").Replace('@X@', "$x").Replace('@Y@', "$y").Replace('@N@', "$Frames")
+    $deviceScript = $deviceScript.Replace("`r", '').Replace("`n", ' ').Replace('@DIR@', $RemoteDir).Replace('@RB@', "$rowBytes").Replace('@TOP@', "$top").Replace('@ROWS@', "$rows").Replace('@X@', "$x").Replace('@Y@', "$y").Replace('@N@', "$Frames").Replace('@SETTLE@', '150')
     $out = Invoke-Shell $deviceScript
     $shots = @()
     $tap = $null
@@ -1144,16 +1150,22 @@ cat $d/t.txt; rm -f $d/f.raw
         if ($t.Success) { $tap = [double]::Parse($t.Groups[1].Value, [Globalization.CultureInfo]::InvariantCulture) }
     }
     if ($shots.Count -lt 2 -or $null -eq $tap) { throw "재기 출력을 읽지 못했습니다:$([Environment]::NewLine)$out" }
-    $first = $shots | Where-Object { $_.Index -ge 1 -and $_.Hash -ne $shots[0].Hash } | Select-Object -First 1
     $intervals = @()
     for ($k = 2; $k -lt $shots.Count; $k++) { $intervals += ($shots[$k].At - $shots[$k - 1].At) }
     $step = if ($intervals.Count) { ($intervals | Measure-Object -Average).Average } else { 0 }
-    if ($null -eq $first) {
-        return [pscustomobject]@{ Changed = $false; Upper = $null; Lower = $null; Step = $step; Covered = ($shots[-1].At - $tap) }
+    $covered = $shots[-1].At - $tap
+    $final = $shots[-1].Hash
+    if ($final -eq $shots[0].Hash) {
+        return [pscustomobject]@{ Changed = $false; Settled = $false; Upper = $null; Lower = $null; Step = $step; Covered = $covered }
     }
-    $previous = $shots | Where-Object { $_.Index -eq ($first.Index - 1) } | Select-Object -First 1
-    $lower = if ($first.Index -le 1) { 0.0 } else { [Math]::Max(0.0, $previous.At - $tap) }
-    [pscustomobject]@{ Changed = $true; Upper = [Math]::Round($first.At - $tap, 2); Lower = [Math]::Round($lower, 2); Step = $step; Covered = ($shots[-1].At - $tap) }
+    $first = $shots | Where-Object { $_.Index -ge 1 -and $_.Hash -eq $final } | Select-Object -First 1
+    $unchanged = @($shots | Where-Object { $_.Index -ge 1 -and $_.Index -lt $first.Index -and $_.Hash -eq $shots[0].Hash })
+    $lower = if ($unchanged.Count) { [Math]::Max(0.0, $unchanged[-1].At - $tap) } else { 0.0 }
+    # 지켜볼 장수를 다 써서 멈췄으면 마지막 모습이 1.5초 머물렀는지 따로 봄
+    $runFrom = $shots.Count - 1
+    while ($runFrom -gt 1 -and $shots[$runFrom - 1].Hash -eq $final) { $runFrom-- }
+    $settled = ($shots[-1].At - $shots[$runFrom].At) -ge 1.5
+    [pscustomobject]@{ Changed = $true; Settled = $settled; Upper = [Math]::Round($first.At - $tap, 2); Lower = [Math]::Round($lower, 2); Step = $step; Covered = $covered }
 }
 
 function Get-NearestRank([double[]]$Sorted, [double]$Fraction) {
@@ -1248,7 +1260,8 @@ function Step-Latency {
         [System.IO.File]::AppendAllText($csv, $line + [Environment]::NewLine, $script:Utf8)
         $state = if ($Process -eq 'dead') { 'dead' } else { "alive (pid $appPid)" }
         if ($result.Changed) {
-            Write-Output ("{0}/{1} {2} {3}: 머리글 '{4}' → '{5}' ({6}), {7:N2}~{8:N2}초 사이 (캡처 간격 평균 {9:N2}초)" -f $n, $Count, $target, $state, $before, $afterText, $kind, $result.Lower, $result.Upper, $result.Step)
+            Write-Output ("{0}/{1} {2} {3}: 머리글 '{4}' → '{5}' ({6}), {7:N2}~{8:N2}초 사이 (캡처 간격 평균 {9:N2}초){10}" -f $n, $Count, $target, $state, $before, $afterText, $kind, $result.Lower, $result.Upper, $result.Step,
+                $(if ($result.Settled) { '' } else { ', 바뀐 모습이 1.5초 머물기 전에 지켜볼 장수가 끝남' }))
         } else {
             Write-Output ("{0}/{1} {2} {3}: {4:N1}초 안에 머리글 자리가 바뀌지 않음 (캡처 간격 평균 {5:N2}초)" -f $n, $Count, $target, $state, $result.Covered, $result.Step)
         }

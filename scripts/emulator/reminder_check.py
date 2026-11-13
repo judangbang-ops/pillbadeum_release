@@ -44,7 +44,8 @@ Flow, on the run's date D in Asia/Seoul (five daily items PillA..PillE, reminder
       that saves them) and the phone restarts. The emulator comes back on the host's clock, on some images in
       UTC, so the zone and 11:01 are set again before unlocking; the app is not direct-boot aware, so the
       unlock's BOOT_COMPLETED is its first run. After unlocking, the 11:00 reminders show and the next alarm
-      is 12:00.
+      is 12:00. When the reboot does not come back in 5 minutes, the emulator is turned off and on
+      (emulator_boot.py) and the report says so.
    9. Window end (RR-87): at D+1 04:01 the reminders of D are gone and the next alarm is D+1 08:00.
 
 Names are English because `adb shell` arguments stay ASCII. The real Galaxy check is TASK-052.
@@ -84,6 +85,7 @@ from backup_restore_check import (
     uninstall,
     wait_boot,
 )
+from emulator_boot import wait_reboot
 from explore import ZONE, phone_now, put_clock, row_button, set_clock, set_zone
 from release_check import go_home, save_ui, screen_size
 
@@ -978,10 +980,12 @@ def flow(run: Run, api: int) -> None:
         # step 1 was gone after the reboot on API 34 (an hour-wide alarm, run 43360309166).
         sh("cmd appops write-settings", check=False)
         run.logs.append(adb("logcat", "-d", "-v", "time", check=False, timeout=60))
+        sh("sync", check=False, timeout=60)  # written to disk even when the emulator has to be turned off below
         adb("reboot", check=False)
         time.sleep(10)
-        adb("wait-for-device", timeout=300)
-        wait_boot(600)
+        if wait_reboot(r.out):
+            r.note("재부팅: 5분 안에 휴대폰이 돌아오지 않아(adb에서 사라짐 또는 부팅이 끝나지 않음) 에뮬레이터를 껐다 켬 "
+                   "(전원 버튼을 길게 누른 것과 같음). 그때 상태는 reboot-hang-*.txt")
         become_root()
         # The emulator comes back on the host's clock (API 26·34·36) and, on some images, in UTC (API 34·36); API 30 kept
         # 10:59 and finished booting before 11:00 (run 43360309166). The app is not direct-boot aware, so nothing reaches

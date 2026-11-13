@@ -18,6 +18,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.DayOfWeek
@@ -69,7 +70,7 @@ class PlanRemindersTest {
             val at = alarm ?: break
             if (at > end) break
             if (at > fx.clock.now) fx.clock.now = at
-            val run = plan.fire()
+            val run = plan.fire(alarmRang = true)
             shown += run.notices.map { it.label() }.sorted()
             alarm = run.nextAlarmAt
         }
@@ -360,6 +361,47 @@ class PlanRemindersTest {
         fx.voidDose(record.id)
         replan()
         assertEquals(listOf("11-11T16:00 B"), ringUntil("2026-11-11T16:30"))
+    }
+
+    @Test
+    fun rr91_a_late_alarm_still_shows_the_slot_it_was_set_for() = runTest {
+        manage.saveSettings(ReminderSettings(interval = 30.minutes, maxPerDay = 1))
+        item("A", "08:00")
+        replan()
+        assertEquals(seoul("2026-11-11T08:00"), alarm)
+        // An inexact alarm (exact alarms not allowed) comes 40 minutes late, more than the 30-minute interval.
+        fx.at("2026-11-11T08:40")
+        val run = plan.fire(alarmRang = true)
+        assertEquals(listOf("11-11T08:00 A"), run.notices.map { it.label() })
+        assertEquals(seoul("2026-11-12T08:00"), run.nextAlarmAt)
+    }
+
+    @Test
+    fun rr91_the_first_run_after_a_reboot_still_counts_from_now() = runTest {
+        manage.saveSettings(ReminderSettings(interval = 30.minutes, maxPerDay = 1))
+        item("A", "08:00")
+        replan()
+        // The phone was off from before 08:00 to 08:40: N-12 as before, the slot is more than an interval old.
+        fx.at("2026-11-11T08:40")
+        assertEquals(emptyList(), plan.fire(alarmRang = false).notices)
+    }
+
+    @Test
+    fun rr92_a_clock_set_back_by_seconds_does_not_ring_the_same_slot_again() = runTest {
+        item("A", "08:00")
+        replan()
+        assertEquals(listOf("11-11T08:00 A"), ringUntil("2026-11-11T08:00"))
+        // A network time correction moves the clock 10 seconds back just after the reminder (TIME_SET collects).
+        fx.clock.now = seoul("2026-11-11T08:00") - 10.seconds
+        val run = plan.fire()
+        assertEquals(emptyList(), run.notices)
+        assertEquals(
+            seoul("2026-11-11T08:00").toEpochMilliseconds().toString(),
+            fx.db.settingDao().get(SettingKeys.REMINDER_LAST_RUN_AT),
+            "the last run does not go back with it",
+        )
+        alarm = run.nextAlarmAt
+        assertEquals(listOf("11-11T09:00 A", "11-11T10:00 A"), ringUntil("2026-11-11T12:00"))
     }
 
     @Test

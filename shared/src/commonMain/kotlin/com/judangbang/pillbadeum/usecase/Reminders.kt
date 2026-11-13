@@ -8,6 +8,8 @@ import com.judangbang.pillbadeum.data.PersonEntity
 import com.judangbang.pillbadeum.data.ReminderRuleEntity
 import com.judangbang.pillbadeum.data.ReminderSnoozeEntity
 import com.judangbang.pillbadeum.data.ScheduleParams
+import com.judangbang.pillbadeum.data.SettingDao
+import com.judangbang.pillbadeum.data.SettingKeys
 import com.judangbang.pillbadeum.data.loadReminderAlarmAt
 import com.judangbang.pillbadeum.data.loadReminderLastRunAt
 import com.judangbang.pillbadeum.data.loadReminderSettings
@@ -25,6 +27,7 @@ import com.judangbang.pillbadeum.domain.quietDrops
 import com.judangbang.pillbadeum.domain.quietNotice
 import com.judangbang.pillbadeum.domain.reminderSlots
 import com.judangbang.pillbadeum.domain.windowOf
+import com.judangbang.pillbadeum.restore.CheckInstall
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
@@ -49,6 +52,17 @@ data class ReminderNotice(
 /** Result of a reminder run: what to show now and when the one alarm should ring next (N-8). */
 data class ReminderRun(val notices: List<ReminderNotice>, val nextAlarmAt: Instant?)
 
+/** A dose reminder the app has on screen: the item and the period key its buttons were made for (N-13). */
+data class ShownReminder(val intakeId: String, val periodKey: String)
+
+/** What [PlanReminders.review] found for the reminders on screen (N-13, R-3). */
+data class ShownReview(
+    /** Reminders to take off the screen. */
+    val clear: List<ShownReminder>,
+    /** A restore notice waits for [확인했어요]: no dose reminder is shown until then (R-3, TASK-040). */
+    val restorePending: Boolean,
+)
+
 /**
  * The reminder plan (record-rules-supplement.md N-4~N-8, N-12; TASK-011). Computed from the settings and
  * the clock alone: no reminder count is stored. One alarm serves every item (N-8).
@@ -69,6 +83,11 @@ data class ReminderRun(val notices: List<ReminderNotice>, val nextAlarmAt: Insta
  * moment of showing. Slots before the item's reminders were switched on or its start time changed are not
  * shown (RR-79). Snoozes that no longer apply (judged window, new period key, item or person archived,
  * reminders switched off) are deleted on the way (N-7).
+ *
+ * While a restore notice waits for [확인했어요] (`restore_notice_pending` = 1), both calls return no alarm and
+ * no reminder and clear `reminder_alarm_at`, so a time restored from the old phone cannot show a dose
+ * reminder (R-3, N-12, TASK-040). [AcknowledgeRestore][com.judangbang.pillbadeum.restore.AcknowledgeRestore]
+ * then sets `reminder_last_run_at` to the moment of the tap, and the next [nextAlarm] starts from there (RR-73).
  */
 class PlanReminders(
     private val db: DidITakeDatabase,
@@ -79,6 +98,10 @@ class PlanReminders(
             transactor.immediateTransaction {
                 val now = clock.now()
                 val settings = db.settingDao()
+                if (settings.restoreNoticePending()) {
+                    settings.saveReminderAlarmAt(null)
+                    return@immediateTransaction null
+                }
                 val lastRun = settings.loadReminderLastRunAt(now)
                 // The planned alarm is late (Doze) or its receiver has not run yet: keep it so fire() collects it.
                 val planned = settings.loadReminderAlarmAt()
@@ -87,25 +110,68 @@ class PlanReminders(
             }
         }
 
-    suspend fun fire(): ReminderRun =
+    /**
+     * [alarmRang]: this run is for the alarm itself, not the first run after a boot, clock or time-zone change. Then
+     * a slot's age counts from the time the alarm was planned for (`reminder_alarm_at`) when that time is already
+     * past and not yet collected, so an alarm that comes late still shows the slot it was set for (N-12 늦은 알람):
+     * an inexact alarm may come up to an hour late even outside Doze (PR #20 independent review).
+     */
+    suspend fun fire(alarmRang: Boolean = false): ReminderRun =
         db.useWriterConnection { transactor ->
             transactor.immediateTransaction {
                 val now = clock.now()
                 val settings = db.settingDao()
+                if (settings.restoreNoticePending()) {
+                    settings.saveReminderAlarmAt(null)
+                    return@immediateTransaction ReminderRun(emptyList(), null)
+                }
                 val lastRun = settings.loadReminderLastRunAt(now)
+                val planned = settings.loadReminderAlarmAt()
+                val ageFrom = planned?.takeIf { alarmRang && it > lastRun && it < now } ?: now
                 val items = loadItems(now)
-                val notices = items.mapNotNull { item -> item.due(lastRun, now) }
+                val notices = items.mapNotNull { item -> item.due(lastRun, now, ageFrom) }
                 for (item in items) {
                     val snooze = item.snooze ?: continue
                     if (Instant.fromEpochMilliseconds(snooze.fireAt) <= now) db.reminderDao().deleteSnooze(item.intake.id)
                 }
-                settings.saveReminderLastRunAt(now)
+                // Never back: a clock set back by less than a minute keeps the last run (loadReminderLastRunAt).
+                settings.saveReminderLastRunAt(maxOf(lastRun, now))
                 // A snooze that was just shown is at or before now, so it is no longer a next time.
                 val next = nextAlarmAt(items, now)
                 settings.saveReminderAlarmAt(next)
                 ReminderRun(notices, next)
             }
         }
+
+    /**
+     * N-13 for the dose reminders on screen: [shown] entries to take off because their window got a judgment
+     * (from the widget, the app or a notification) or ended, their item or person was archived or deleted, or
+     * the item's reminders were switched off. While a restore notice is pending every one goes (R-3). Reads only.
+     */
+    suspend fun review(shown: List<ShownReminder>): ShownReview {
+        val settingDao = db.settingDao()
+        if (settingDao.restoreNoticePending()) return ShownReview(clear = shown, restorePending = true)
+        if (shown.isEmpty()) return ShownReview(clear = emptyList(), restorePending = false)
+        val now = clock.now()
+        val settings = settingDao.loadWindowSettings()
+        // Only items and people that are not archived (and not deleted) have an enabled rule here.
+        val enabled = db.reminderDao().listEnabledRules().mapTo(HashSet()) { it.intakeId }
+        val clear = shown.filter { reminder -> !isStillDue(reminder, enabled, now, settings) }
+        return ShownReview(clear = clear, restorePending = false)
+    }
+
+    private suspend fun isStillDue(
+        reminder: ShownReminder,
+        enabled: Set<String>,
+        now: Instant,
+        settings: WindowSettings,
+    ): Boolean {
+        if (reminder.intakeId !in enabled) return false
+        val version = db.scheduleVersionDao().findEffective(reminder.intakeId, now.toEpochMilliseconds()) ?: return false
+        val window = windowOf(ScheduleParams.toRule(version), now, settings)
+        if (window.periodKey != reminder.periodKey) return false
+        return db.doseRecordDao().findActiveIn(reminder.intakeId, window) == null
+    }
 
     private fun nextAlarmAt(items: List<Item>, now: Instant): Instant? = items.mapNotNull { it.next(now) }.minOrNull()
 
@@ -173,13 +239,16 @@ class PlanReminders(
         /** Grid slots of this window that a pending snooze does not hold back (N-7). */
         private val gridTimes: List<Instant> = slots.map { it.at }.filter { snoozeAt == null || it >= snoozeAt }
 
-        /** N-12: the latest due time in (lastRun, now], shown only when at most one interval old. */
-        fun due(lastRun: Instant, now: Instant): ReminderNotice? {
+        /**
+         * N-12: the latest due time in (lastRun, now], shown only when at most one interval older than [ageFrom]:
+         * now, or the planned time of an alarm that rang late.
+         */
+        fun due(lastRun: Instant, now: Instant, ageFrom: Instant): ReminderNotice? {
             if (judged) return null
             val grid = gridTimes.filter { it > lastRun && it <= now && (since == null || it > since) }
             val snoozed = snoozeAt?.takeIf { it <= now }
             val latest = (grid + listOfNotNull(snoozed)).maxOrNull() ?: return null
-            if (latest < now - interval) return null
+            if (latest < ageFrom - interval) return null
             return ReminderNotice(
                 intakeId = intake.id,
                 intakeName = intake.name,
@@ -206,6 +275,10 @@ class PlanReminders(
         val SNOOZE: Duration = 30.minutes
     }
 }
+
+/** `restore_notice_pending` = 1: the restore notice waits for [확인했어요] (supplement R-3). */
+private suspend fun SettingDao.restoreNoticePending(): Boolean =
+    get(SettingKeys.RESTORE_NOTICE_PENDING) == CheckInstall.PENDING
 
 /** An item's reminder switch and first time, with the N-3 defaults when it has no row yet. */
 data class ReminderRule(val intakeId: String, val enabled: Boolean, val start: LocalTime)
@@ -291,6 +364,12 @@ class ManageReminders(
         }
 
     suspend fun settings(): ReminderSettings = db.settingDao().loadReminderSettings()
+
+    /**
+     * Whether any item has reminders switched on, counting only items and people that are not archived. The app's
+     * notification and exact-alarm guidance shows only then (SPEC-015, SPEC-028, SPEC-029, REQ-089).
+     */
+    suspend fun anyEnabled(): Boolean = db.reminderDao().listEnabledRules().isNotEmpty()
 
     /** Saves the common settings (N-1, N-4). */
     suspend fun saveSettings(settings: ReminderSettings): SaveReminderSettingsResult =

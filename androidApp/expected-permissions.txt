@@ -7,8 +7,14 @@
 #       docs/06-review/evidence-2026-11-11/build-and-apk-check.txt, 7b8d9df 빌드 기준).
 # 릴리즈 APK도 같은 기준과 비교함 (TASK-002, 2026-11-12). 두 변형의 권한이 달라지면 이 파일을 변형별로 나눔.
 
-# 앱 매니페스트: 재부팅 뒤 하루 경계 갱신을 다시 걺
+# 앱 매니페스트: 재부팅 뒤 하루 경계 갱신과 복용 알림 알람을 다시 걺
 uses-permission: name='android.permission.RECEIVE_BOOT_COMPLETED'
+
+# 앱 매니페스트: 복용 알림 (TASK-025). Android 13 이상은 알림을 켤 때 물음 (TASK-023, SPEC-028)
+uses-permission: name='android.permission.POST_NOTIFICATIONS'
+
+# 앱 매니페스트: 허용된 동안 정확 알람으로 복용 알림을 울림, 아니면 비정확 (TASK-024, REQ-050). USE_EXACT_ALARM은 넣지 않음 (REQ-052)
+uses-permission: name='android.permission.SCHEDULE_EXACT_ALARM'
 
 # androidx.work:work-runtime 2.7.1 (Glance가 끌어옴). ACCESS_NETWORK_STATE를 뺄지는 위젯 시험 뒤 정함 (검토 B8)
 uses-permission: name='android.permission.WAKE_LOCK'

@@ -231,6 +231,11 @@ def records() -> str:
 def set_zone() -> str:
     sh("cmd alarm set-timezone Asia/Seoul", check=False)
     if sh("getprop persist.sys.timezone").strip() != "Asia/Seoul":
+        # Android 8 has no `cmd alarm set-timezone`. IAlarmManager.setTimeZone (transaction 3) tells the system server
+        # and sends TIMEZONE_CHANGED, which setprop alone does not: on API 26 the alarm dump and the lock-screen clock
+        # stayed in UTC (reminder check, run 43360309166).
+        sh("service call alarm 3 s16 Asia/Seoul", check=False)
+    if sh("getprop persist.sys.timezone").strip() != "Asia/Seoul":
         sh("setprop persist.sys.timezone Asia/Seoul", check=False)
     return sh("getprop persist.sys.timezone").strip()
 

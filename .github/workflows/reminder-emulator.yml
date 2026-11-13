@@ -2,17 +2,30 @@
 # 알람 하나(정확·비정확), 잠금 화면 여덟 칸, 버튼, 놓친 알람, 복원 안내, 재부팅, 창 끝.
 # 경우와 기대 동작은 scripts/emulator/reminder_check.py 첫 주석. 실기기 확인은 TASK-032·052.
 #
-# - 사람이 시킬 때만 돎(실행마다 약 40분 × API 수, 무료 분 한도): PR에 라벨 `emulator-reminders`를 붙이면 그 PR로
-#   API 34 하나, 수동 실행(main에 합친 뒤)은 고른 API들(기본 34·36·30·26). PR 자동 실행은 이번 푸시가 바꾼 파일로
-#   정하는 gate(PR #18, .github/scripts/push_gate.py)가 합쳐진 뒤 그 방식으로 붙임. on.pull_request.paths만 쓰면
-#   알림 코드를 한 번 바꾼 PR은 문서만 고친 푸시에도 다시 돎
-# - 서명 키·비밀값을 쓰지 않음. 디버그 APK로 확인함 (항목 화면 TASK-023 대신 디버그 빌드 전용 수신기로 알림 켠 항목을 만듦)
+# - 알림 코드를 바꾼 PR과 수동 실행에서 돎(실행마다 약 40분, API마다 나란히). 저장소가 공개라 Actions 사용 시간
+#   한도가 없어(2026-11-13) PR에서도 API 34·36·30·26을 모두 돌림. PR에 다시 푸시할 때는 그 푸시가 아래 paths를
+#   바꿨을 때만 돎(gate 작업, .github/scripts/push_gate.py). 라벨 `emulator-reminders`를 붙이면 그 PR로 다시 돎
+#   (reminder_check.py가 backup_restore_check·explore·release_check의 도우미를 써서 scripts/emulator 전체를 봄)
+# - 서명 키·비밀값을 쓰지 않음. 디버그 APK로 확인함. 알림 켠 항목은 디버그 빌드에만 있는 수신기
+#   (androidApp/src/debug/.../ReminderSeedReceiver.kt)로 앱의 use case를 불러 만듦. 항목 화면의 알림 칸(TASK-023)은
+#   앱 시험 ItemReminderTest가 봄
 # - Android SDK·에뮬레이터는 러너에 있는 sdkmanager로 받음(.github/actions/android-emulator). 서드파티 액션을 쓰지 않음
 name: 에뮬레이터 알림 확인
 
 on:
   pull_request:
-    types: [labeled]
+    types: [opened, synchronize, reopened, labeled]
+    paths:
+      - androidApp/src/main/AndroidManifest.xml
+      - androidApp/src/main/kotlin/com/judangbang/pillbadeum/AppContainer.kt
+      - androidApp/src/main/kotlin/com/judangbang/pillbadeum/reminder/**
+      - androidApp/src/debug/**
+      - shared/src/commonMain/kotlin/com/judangbang/pillbadeum/domain/Reminders.kt
+      - shared/src/commonMain/kotlin/com/judangbang/pillbadeum/usecase/Reminders.kt
+      - shared/src/commonMain/kotlin/com/judangbang/pillbadeum/status/ReminderLabels.kt
+      - scripts/emulator/**
+      - .github/actions/android-emulator/**
+      - .github/workflows/reminder-emulator.yml
   workflow_dispatch:
     inputs:
       apis:
@@ -23,15 +36,51 @@ on:
 permissions:
   contents: read
 
-# 다른 라벨을 붙인 실행이 돌고 있는 확인을 취소하지 않게 라벨 이름을 그룹에 넣음
+# 다른 라벨을 붙인 실행이 돌고 있는 확인을 취소하지 않게 라벨 이름을 그룹에 넣음(푸시는 'push')
 concurrency:
-  group: reminder-emulator-${{ github.event.pull_request.number || github.ref }}-${{ github.event.label.name || 'dispatch' }}
+  group: reminder-emulator-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}-${{ github.event.label.name || 'push' }}
   cancel-in-progress: true
 
 jobs:
+  gate:
+    # 다른 emulator 워크플로와 같음. 라벨을 붙여 온 실행은 `emulator-reminders`일 때만 돌고, 그때는 늘 돎
+    # (push_gate.py는 synchronize가 아닌 동작이면 run=true). 경로는 위 on.pull_request.paths와 같게 둠
+    # ('dir/**'는 'dir/'로 씀). 수동 실행에서는 건너뜀
+    name: 이번 푸시가 바꾼 파일
+    if: github.event_name == 'pull_request' && (github.event.action != 'labeled' || github.event.label.name == 'emulator-reminders')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - id: gate
+        env:
+          GATE_ACTION: ${{ github.event.action }}
+          GATE_BEFORE: ${{ github.event.before }}
+          GATE_AFTER: ${{ github.event.after }}
+        run: >-
+          python3 .github/scripts/push_gate.py
+          androidApp/src/main/AndroidManifest.xml
+          androidApp/src/main/kotlin/com/judangbang/pillbadeum/AppContainer.kt
+          androidApp/src/main/kotlin/com/judangbang/pillbadeum/reminder/
+          androidApp/src/debug/
+          shared/src/commonMain/kotlin/com/judangbang/pillbadeum/domain/Reminders.kt
+          shared/src/commonMain/kotlin/com/judangbang/pillbadeum/usecase/Reminders.kt
+          shared/src/commonMain/kotlin/com/judangbang/pillbadeum/status/ReminderLabels.kt
+          scripts/emulator/
+          .github/actions/android-emulator/
+          .github/workflows/reminder-emulator.yml
+
   apk:
     name: 디버그 APK
-    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'emulator-reminders'
+    needs: gate
+    # 수동 실행(gate 건너뜀)이나 gate 실패 때는 돎. gate가 run=false라고 하거나 다른 라벨이면 건너뜀
+    if: ${{ !cancelled() && needs.gate.outputs.run != 'false' && (github.event.action != 'labeled' || github.event.label.name == 'emulator-reminders') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -68,7 +117,7 @@ jobs:
       matrix:
         # 34: 기준. 36: 가장 새 Android(알림 묶음 규칙이 바뀜). 30: 정확 알람 권한이 없는 Android 11.
         # 26: 알림 권한·정확 알람 권한이 없는 가장 낮은 지원 버전
-        api: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.apis || '[34]') }}
+        api: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.apis || '[34, 36, 30, 26]') }}
     steps:
       - uses: actions/checkout@v6
         with:

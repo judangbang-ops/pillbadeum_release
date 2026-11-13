@@ -59,6 +59,16 @@ internal object ReminderNotifications {
     /** False while the app may not post (Android 13+ permission refused, or notifications off for the app). */
     fun canPost(context: Context): Boolean = manager(context)?.areNotificationsEnabled() == true
 
+    /**
+     * [canPost] and the dose reminders channel not switched off in the system settings: SCR-003#permission covers both
+     * ("알림 권한 거부, 알림 채널 끔"), and the app's guidance (TASK-026) tests the same. A channel not made yet counts as on.
+     */
+    fun canPostDoses(context: Context): Boolean {
+        if (!canPost(context)) return false
+        val channel = manager(context)?.getNotificationChannel(ReminderChannels.DOSES) ?: return true
+        return channel.importance != NotificationManager.IMPORTANCE_NONE
+    }
+
     fun visibilityFor(showNames: Boolean): Int =
         if (showNames) Notification.VISIBILITY_PRIVATE else Notification.VISIBILITY_SECRET
 

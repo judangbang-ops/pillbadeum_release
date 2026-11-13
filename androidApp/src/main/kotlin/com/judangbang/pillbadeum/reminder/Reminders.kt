@@ -92,9 +92,10 @@ object Reminders {
     }
 
     private suspend fun show(context: Context, core: DidITakeCore, notices: List<ReminderNotice>) {
-        if (!ReminderNotifications.canPost(context)) {
-            // SCR-003#permission: nothing shows; the app's guidance says why (REQ-089, TASK-026).
-            Log.i(TAG, "notifications are off: ${notices.size} reminder(s) not shown")
+        if (!ReminderNotifications.canPostDoses(context)) {
+            // SCR-003#permission (notifications refused or off, or the dose channel off): nothing shows, not even the
+            // lock-screen notice on the other channel; the app's guidance says why (REQ-089, TASK-026).
+            Log.i(TAG, "dose reminders are off: ${notices.size} reminder(s) not shown")
             return
         }
         val board = core.loadStatusBoard()

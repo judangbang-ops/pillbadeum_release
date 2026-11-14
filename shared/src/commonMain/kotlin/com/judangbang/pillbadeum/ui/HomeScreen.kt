@@ -271,7 +271,7 @@ private fun ReadyBody(
             val daily = board.items.filter { it.rule is ScheduleRule.Daily }
             if (daily.isNotEmpty()) {
                 SectionTitle("이번 주 약통")
-                WeekBox(board, daily, namesAbove = columns == 1)
+                WeekBox(board, daily, namesAbove = HomeLayout.weekNamesAbove(columns, daily.map { it.name }, bodySm))
             }
             ActionButton("항목 추가", ButtonLook.Ink, actions.add, Modifier.padding(top = 16.dp)) { PlusIcon(Ui.OnSolid) }
             Notes(board, zone, Modifier.padding(top = 24.dp))
@@ -376,7 +376,8 @@ private fun MoreButton(name: String, color: Color, onClick: () -> Unit, modifier
 
 /**
  * `이번 주 약통` (09 BoxHome `.wk`): daily items, Monday to Sunday (REQ-035). Each row is read as one sentence
- * ([Labels.weekSpoken]). With large text the names go above their cells.
+ * ([Labels.weekSpoken]). With large text, or a name wider than its column, the names go above their cells
+ * ([HomeLayout.weekNamesAbove]).
  */
 @Composable
 private fun WeekBox(board: StatusBoard, daily: List<IntakeStatus>, namesAbove: Boolean) {
@@ -385,7 +386,7 @@ private fun WeekBox(board: StatusBoard, daily: List<IntakeStatus>, namesAbove: B
             .padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 6.dp),
     ) {
         Row(Modifier.fillMaxWidth().hiddenFromTalkBack(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (!namesAbove) Spacer(Modifier.width(64.dp))
+            if (!namesAbove) Spacer(Modifier.width(HomeLayout.WEEK_NAME.dp))
             board.week.forEach { day ->
                 val today = day == board.baseDate
                 Words(
@@ -405,7 +406,7 @@ private fun WeekBox(board: StatusBoard, daily: List<IntakeStatus>, namesAbove: B
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    if (!namesAbove) Words(item.name, Ui.type(14, Ui.SemiBold, lineHeight = 1.25f), Modifier.width(64.dp), maxLines = 1)
+                    if (!namesAbove) Words(item.name, Ui.type(14, Ui.SemiBold, lineHeight = 1.25f), Modifier.width(HomeLayout.WEEK_NAME.dp), maxLines = 1)
                     item.weekCells.forEach { cell -> Box(Modifier.weight(1f).height(28.dp).drawBehind { drawCell(cell, solid) }) }
                 }
             }

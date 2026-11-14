@@ -7,18 +7,26 @@ nobody on the team has an Android phone yet (2026-11-12). The app tests (AppScre
 at 360dp; this script sees what the phone draws, on every screen.
 
 On every page (one screen dump, which holds what TalkBack reads, and one raw screen capture):
-- REQ-067: each target, a node of the app or of our widget that is clickable, long-clickable or checkable, is at least
-  48 x 48 dp. A node that touches the bottom of the list it scrolls in (or its top, once the list has moved) may be cut
-  there, so it counts where it is whole; one only ever seen cut is listed apart.
-- REQ-068: each target has words to read: its description, its text, or the words of the nodes under it that are not
-  targets themselves. Every target and what it reads goes to detail.md, for a person to read.
+- REQ-067: each target, a node of the app or of our widget that is clickable, long-clickable or checkable (also when
+  disabled: TalkBack reads it, with its state), is at least 48 x 48 dp. A node may be cut where it is drawn only in
+  part: past the edge of the list it scrolls in, at the bottom of that list (or its top, once the list has moved), or
+  reported smaller than the role node Compose puts under it (see `covered`). It counts where it is whole; one only
+  ever seen cut is listed apart.
+- REQ-068: each whole target has words to read: its description, its text, or the words of the nodes under it that are
+  not targets themselves. Every target and what it reads goes to detail.md, for a person to read.
 - REQ-066: no text touches the screen's left or right edge (the screens keep a 16dp side), and no two texts, no two
-  targets and no text and a target outside it lie on top of each other. Compose reports a text's whole string even when
-  it is drawn cut, so the captures are also looked at by a person.
-- REQ-069: under each text (a node with a text, or a description that is not a target) the most common color is the
-  background, and each token text color drawn there with at least 15 pixels is a color of its letters; each pair's
-  ratio (WCAG 2.1) must be at least 4.5:1. Colors are named by design/base.tokens.json; colors that are no token are
-  listed. The reminder is drawn by System UI: its targets and words are listed, not judged.
+  targets and no text and a target outside it lie on top of each other. Bounds are taken within the lists a node
+  scrolls in: Compose reports a control's touch bounds, which reach 24dp (half a target) past the edge of its list
+  (NodeCoordinator.touchBoundsInRoot), where nothing is drawn. Compose reports a text's whole string even when it is
+  drawn cut, so the captures are also looked at by a person.
+- REQ-069: under each text (a node with a text, or in the app a description that is not a target: Compose texts read
+  as one sentence carry no text of their own) the most common color is the background, and each token text color
+  drawn there with at least 15 pixels is a color of its letters; each pair's ratio (WCAG 2.1) must be at least 4.5:1.
+  White is both `surface.default` and `ink.on-solid`: on a background it differs from by less than 1.5:1 it is taken
+  for a white cell, card or icon, not letters (the design draws white letters only on solid fills; tokens.md has the
+  designed pairs, and a person looks at the captures). In the widget the texts are views of their own, so a tile's
+  description is not measured. Colors are named by design/base.tokens.json; colors that are no token are listed. The
+  reminder is drawn by System UI: its targets and words are listed, not judged.
 
 Flow (clock in Asia/Seoul; day 0 is the run's date; the display density set for a 360dp width from the start):
    0. Setup: day -7 09:00, heads-up popups off, the debug APK installed.
@@ -27,8 +35,10 @@ Flow (clock in Asia/Seoul; day 0 is the run's date; the display density set for 
       doses on day -7, so the weekly item shows its last dose on day 0.
    3. Day 0 09:00: 엄마 in green (SCR-010), one dose and one skip, so the first screen has every tile state.
    4. Each screen at 100%, then at 200%: SCR-004; SCR-006 new, with [+ 가족] open, edit, and the archive question;
-      SCR-007 and its time picker; SCR-008; SCR-009 and its interval, per-day, quiet-hours and base-zone pickers;
-      SCR-010 and its person form; SCR-001 the widget; SCR-002 the widget's person picker; SCR-003 the reminder.
+      SCR-007 and its time picker; SCR-008; SCR-009 and its interval, per-day, quiet-hours and base-zone pickers (the
+      zone list, some 600 lines of one kind, for its first 3 pages); SCR-010 and its person form; SCR-001 the widget;
+      SCR-002 the widget's person picker; SCR-003 the reminder: the app shows a reminder only within 10 minutes of its
+      time (ReminderAlarm.WINDOW), so the clock goes to the next planned one before the alarm's broadcast is sent.
 
 Names are added through the debug receiver (androidApp/src/debug), not typed: `adb shell input text` cannot type Korean.
 
@@ -92,7 +102,7 @@ from explore import (
 )
 from release_check import PICK_TITLE, go_home, place_widget
 from reminder_check import ACTION_SEED, REMINDER_ALARM, REMINDER_RECEIVER, TITLE_END, collapse_shade, debug, expand_shade
-from reminder_check import query
+from reminder_check import alarms, doses, query, wait_posted
 from screens_check import (
     GREEN,
     RECONFIGURE,
@@ -120,7 +130,9 @@ TARGET_DP = 48  # REQ-067, design token size.target
 TEXT_RATIO = 4.5  # REQ-069 (WCAG 2.1 AA for text)
 SCALES = ("1.0", "2.0")
 MAX_PAGES = 10
+ZONE_PAGES = 3  # the base-zone list: some 600 lines of one kind
 MIN_TEXT_PIXELS = 15  # a token color with fewer pixels under a text is not taken for its letters
+WHITE_FILL_RATIO = 1.5  # white (also surface.default) closer than this to its background is a fill, not letters
 
 # The data (Korean names, typed through the debug receiver); ME is the first person (ManagePeople.DEFAULT_PERSON_NAME)
 MOM = "엄마"
@@ -313,7 +325,8 @@ class N:
 
     @property
     def target(self) -> bool:
-        return self.enabled and (self.click or self.long_click or self.checkable)
+        """A control, also when disabled (`[이 시각으로 기록]` before a time): TalkBack reads it with its state."""
+        return self.click or self.long_click or self.checkable
 
     @property
     def w(self) -> int:
@@ -420,19 +433,44 @@ ROLES = (("Switch", "스위치"), ("CheckBox", "체크박스"), ("RadioButton", 
          ("Button", "버튼"))
 
 
+def role_child(nodes: list[N], n: N) -> N | None:
+    """The node Compose adds under a control that merges its words, to read its role: a `Button` (or another role
+    class) with no words of its own. It keeps the control's bounds even where the control is reported covered."""
+    return next((nodes[k] for k in n.kids if not nodes[k].target and not nodes[k].text and not nodes[k].desc
+                 and any(nodes[k].cls.endswith(key) for key, _ in ROLES)), None)
+
+
 def role(nodes: list[N], n: N) -> str:
     """The role TalkBack names, from the class (Compose puts it on a child with the same bounds), and the state."""
-    classes = [n.cls] + [nodes[k].cls for k in n.kids if nodes[k].bounds == n.bounds]
+    child = role_child(nodes, n)
+    classes = [n.cls] + ([child.cls] if child else [])
     word = next((w for c in classes for key, w in ROLES if c.endswith(key)), "")
     state = []
     if n.checkable:
-        state.append("켜짐" if n.checked else "꺼짐")
-    if n.selected:
+        if word == "스위치":
+            state.append("켜짐" if n.checked else "꺼짐")
+        else:
+            state.append("선택됨" if n.checked else "선택 안 됨")
+    if n.selected and "선택됨" not in state:
         state.append("선택됨")
+    if not n.enabled:
+        state.append("쓸 수 없음")
     return ", ".join(x for x in [word, *state] if x)
 
 
-def viewport(nodes: list[N], n: N) -> tuple[int, int, int, int] | None:
+Box = tuple[int, int, int, int]
+
+
+def contains(outer: Box, inner: Box) -> bool:
+    return outer[0] <= inner[0] and outer[1] <= inner[1] and outer[2] >= inner[2] and outer[3] >= inner[3]
+
+
+def clip(a: Box, b: Box) -> Box | None:
+    x1, y1, x2, y2 = max(a[0], b[0]), max(a[1], b[1]), min(a[2], b[2]), min(a[3], b[3])
+    return (x1, y1, x2, y2) if x2 > x1 and y2 > y1 else None
+
+
+def viewport(nodes: list[N], n: N) -> Box | None:
     p = n.parent
     while p >= 0:
         if nodes[p].scroll:
@@ -441,15 +479,39 @@ def viewport(nodes: list[N], n: N) -> tuple[int, int, int, int] | None:
     return None
 
 
+def visible(nodes: list[N], n: N) -> Box | None:
+    """`n`'s bounds within every list it scrolls in, None when it lies outside. Compose reports a control's touch
+    bounds, and a list clips them only half a target (24dp) past its edge (NodeCoordinator.touchBoundsInRoot): a tile
+    of the first screen's list reached 24dp up under the top bar, where the bar is drawn (run 43570269368)."""
+    box: Box | None = n.bounds
+    p = n.parent
+    while p >= 0 and box is not None:
+        if nodes[p].scroll:
+            box = clip(box, nodes[p].bounds)
+        p = nodes[p].parent
+    return box
+
+
+def covered(nodes: list[N], n: N) -> bool:
+    """Compose gives a node only the part of it no node drawn later covers (the accessibility delegate's uncovered
+    region), so beside a list that reaches under it the top bar's `[지난 기록]` was reported 28dp tall; its role node
+    kept the whole 48dp (run 43570269368, first screen, page 2)."""
+    child = role_child(nodes, n)
+    return child is not None and child.bounds != n.bounds and contains(child.bounds, n.bounds)
+
+
 def maybe_cut(nodes: list[N], n: N, page: int) -> bool:
-    """A node at the bottom of its scrolling list, or at its top once the list has moved, may be cut by the list."""
+    """A node drawn only in part: past the edge of the list it scrolls in, reported smaller than its role node, or at
+    the bottom of its list (or its top once the list has moved), where Compose reports it already clipped."""
+    if visible(nodes, n) != n.bounds or covered(nodes, n):
+        return True
     vp = viewport(nodes, n)
     if vp is None:
         return False
     return n.bounds[3] >= vp[3] - 1 or (page > 0 and n.bounds[1] <= vp[1] + 1)
 
 
-def overlap(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> bool:
+def overlap(a: Box, b: Box) -> bool:
     return min(a[2], b[2]) - max(a[0], b[0]) >= 2 and min(a[3], b[3]) - max(a[1], b[1]) >= 2
 
 
@@ -492,12 +554,17 @@ def dp(px: int) -> float:
 
 
 def judge_page(m: Measured, nodes: list[N], shot: Shot | None, page: int) -> None:
-    ids = scope(nodes, m.mode)
-    own = set(ids)
+    box: dict[int, Box] = {}
+    for i in scope(nodes, m.mode):
+        seen_box = visible(nodes, nodes[i])
+        if seen_box is not None:  # a node wholly past the edge of its list is not on screen
+            box[i] = seen_box
+    ids = list(box)
     rel: dict[int, set[int]] = {i: set(ancestors(nodes, i)) for i in ids}
 
     def related(a: int, b: int) -> bool:
-        return a in rel.get(b, ()) or b in rel.get(a, ())
+        # A text field is both a text and a target: the same node
+        return a == b or a in rel.get(b, ()) or b in rel.get(a, ())
 
     targets = [i for i in ids if nodes[i].target]
     for i in targets:
@@ -514,36 +581,50 @@ def judge_page(m: Measured, nodes: list[N], shot: Shot | None, page: int) -> Non
     texts = [i for i in ids if nodes[i].text.strip()]
     if m.mode == "shade":
         return  # System UI draws it: targets and words only
+    described = [i for i in ids if nodes[i].desc.strip() and not nodes[i].target and not nodes[i].text]
     sw = shot.w if shot else 0
-    for i in texts + [i for i in ids if nodes[i].desc.strip() and not nodes[i].target and not nodes[i].text]:
+    for i in texts + described:
         n = nodes[i]
-        if sw and (n.bounds[0] <= 1 or n.bounds[2] >= sw - 1):
-            m.edges.append(f"p{page + 1} '{(n.text or n.desc)[:30]}' {n.bounds}")
+        if sw and (box[i][0] <= 1 or box[i][2] >= sw - 1):
+            m.edges.append(f"p{page + 1} '{(n.text or n.desc)[:30]}' {box[i]}")
     for a_pos, a in enumerate(texts):
         for b in texts[a_pos + 1:]:
-            if not related(a, b) and overlap(nodes[a].bounds, nodes[b].bounds):
-                m.overlaps.append(f"p{page + 1} 글자 '{nodes[a].text[:20]}' {nodes[a].bounds} ↔ '{nodes[b].text[:20]}' {nodes[b].bounds}")
+            if not related(a, b) and overlap(box[a], box[b]):
+                m.overlaps.append(f"p{page + 1} 글자 '{nodes[a].text[:20]}' {box[a]} ↔ '{nodes[b].text[:20]}' {box[b]}")
     for a_pos, a in enumerate(targets):
         for b in targets[a_pos + 1:]:
-            if not related(a, b) and overlap(nodes[a].bounds, nodes[b].bounds):
-                m.overlaps.append(f"p{page + 1} 누르는 곳 '{label(nodes, nodes[a])[:20]}' ↔ '{label(nodes, nodes[b])[:20]}'")
+            if not related(a, b) and overlap(box[a], box[b]):
+                m.overlaps.append(f"p{page + 1} 누르는 곳 '{label(nodes, nodes[a])[:20]}' {box[a]} ↔ "
+                                  f"'{label(nodes, nodes[b])[:20]}' {box[b]}")
     for t in texts:
         for c in targets:
-            if not related(t, c) and overlap(nodes[t].bounds, nodes[c].bounds):
-                m.overlaps.append(f"p{page + 1} 글자 '{nodes[t].text[:20]}' ↔ 누르는 곳 '{label(nodes, nodes[c])[:20]}'")
+            if not related(t, c) and overlap(box[t], box[c]):
+                m.overlaps.append(f"p{page + 1} 글자 '{nodes[t].text[:20]}' {box[t]} ↔ 누르는 곳 "
+                                  f"'{label(nodes, nodes[c])[:20]}' {box[c]}")
     if shot is not None:
-        measure_colors(m, nodes, shot, [i for i in texts if i in own]
-                       + [i for i in ids if nodes[i].desc.strip() and not nodes[i].target and not nodes[i].text])
+        # In the widget every text is a view of its own; a tile's description spans its icon too
+        measure_colors(m, nodes, shot, texts + (described if m.mode == "app" else []), box)
 
 
-def measure_colors(m: Measured, nodes: list[N], shot: Shot, ids: list[int]) -> None:
+def letters(hex_: str, bg: str) -> str | None:
+    """The text token `hex_` is, when it can be letters on `bg`: white closer than WHITE_FILL_RATIO to its background
+    is a cell, card or icon (white is surface.default too), so not letters."""
+    fg = text_name(hex_)
+    if fg is not None and any(not is_text_token(n) for n in BY_HEX[hex_]) and ratio(hex_, bg) < WHITE_FILL_RATIO:
+        return None
+    return fg
+
+
+def measure_colors(m: Measured, nodes: list[N], shot: Shot, ids: list[int], box: dict[int, Box]) -> None:
     for i in ids:
         n = nodes[i]
-        if n.w < 9 or n.h < 9:
+        x1, y1, x2, y2 = box[i]
+        w, h = x2 - x1, y2 - y1
+        if w < 9 or h < 9:
             continue
         # A few pixels in from the box's edge: a neighbour's color, or the parent's color in a rounded corner, is not
         # taken for letters (white is both surface.default and ink.on-solid)
-        hist = shot.colors(n.bounds, inset=max(2, min(n.w, n.h) // 12))
+        hist = shot.colors(box[i], inset=max(2, min(w, h) // 12))
         total = sum(hist.values())
         if not total:
             continue
@@ -557,7 +638,7 @@ def measure_colors(m: Measured, nodes: list[N], shot: Shot, ids: list[int]) -> N
             if hx in BY_HEX:
                 if count < MIN_TEXT_PIXELS:
                     continue
-                fg = text_name(hx)
+                fg = letters(hx, bg)
                 if fg is None:
                     m.parts[(fill_name(hx), fill_name(bg))] = round(ratio(hx, bg), 2)
                     continue
@@ -580,9 +661,10 @@ def verdict(m: Measured) -> tuple[str, bool]:
     small = [t for t in whole if t["w"] < TARGET_DP - 0.4 or t["h"] < TARGET_DP - 0.4]  # 1 px of rounding at 3x
     cut_only = [t for t in m.targets.values() if not t["whole"]
                 and not any(w["label"] == t["label"] for w in whole)]
-    unnamed = [t for t in m.targets.values() if not t["label"].strip()]
+    # A cut target can have only its words' part off screen (a tile whose names have scrolled away)
+    unnamed = [t for t in whole if not t["label"].strip()]
     low = {k: v for k, v in m.pairs.items() if v["ratio"] < TEXT_RATIO}
-    parts = [f"쪽 {len(m.pages)}개" + (f"(목록 끝까지 못 감: {MAX_PAGES}쪽에서 멈춤)" if m.truncated else "")]
+    parts = [f"쪽 {len(m.pages)}개" + (f"(목록 끝까지 가지 않고 앞 {len(m.pages)}쪽만 봄)" if m.truncated else "")]
     if whole:
         least = min(whole, key=lambda t: min(t["w"], t["h"]))
         parts.append(f"누르는 곳 {len({t['label'] for t in m.targets.values()})}가지(가장 작은 '{least['label'][:20]}' "
@@ -635,8 +717,9 @@ def signature(nodes: list[N], mode: str) -> tuple:
 RESULTS: list[Measured] = []
 
 
-def measure(r: Report, sid: str, name: str, scale: str, mode: str = "app") -> tuple[str, bool]:
-    """Photographs and judges every page of the screen on show, from the top of its list to the bottom."""
+def measure(r: Report, sid: str, name: str, scale: str, mode: str = "app", max_pages: int = MAX_PAGES) -> tuple[str, bool]:
+    """Photographs and judges every page of the screen on show, from the top of its list to the bottom (or to
+    `max_pages` pages)."""
     m = Measured(sid, name, scale, mode)
     tag = f"{name}-{'100' if scale == '1.0' else '200'}"
     nodes, _ = full_dump()
@@ -650,14 +733,14 @@ def measure(r: Report, sid: str, name: str, scale: str, mode: str = "app") -> tu
                 break
             scroller = scroller_of(nodes, mode) or scroller
     last = None
-    for page in range(MAX_PAGES + 1):
+    for page in range(max_pages + 1):
         shot = grab()
         nodes, xml = full_dump()
         sig = signature(nodes, mode)
         if sig == last:
             break
-        if page == MAX_PAGES:
-            m.truncated = True  # the list still moved after MAX_PAGES pages
+        if page == max_pages:
+            m.truncated = True  # the list still moved after max_pages pages
             break
         r.shots += 1
         base = f"api{r.api}-{r.shots:02d}-{tag}-p{page + 1}"
@@ -754,7 +837,7 @@ EXPECTED = ("누르는 곳 모두 48×48dp 이상, 모두 읽을 말 있음, 글
 
 
 def both(steps: A11ySteps, r: Report, sid: str, name: str, title: str, open_fn, is_open, mode: str = "app",
-         after_scale=None, expected: str = EXPECTED) -> None:
+         after_scale=None, expected: str = EXPECTED, max_pages: int = MAX_PAGES) -> None:
     """The screen at text 100%, then at 200%. At 200% the screen opened at 100% is measured again once the app has
     redrawn it; if it did not stay open (a state not kept across recreation), it is opened again at 200%."""
 
@@ -769,7 +852,7 @@ def both(steps: A11ySteps, r: Report, sid: str, name: str, title: str, open_fn, 
                     after_scale()
                 if not ready(is_open, 20):
                     raise RuntimeError(f"{sid} {title} did not open")
-            return measure(r, sid, name, scale, mode)
+            return measure(r, sid, name, scale, mode, max_pages)
         return run
 
     steps(f"{sid} {title} · 글자 100%", expected, at(SCALES[0]))
@@ -960,7 +1043,7 @@ def run(r: Report, steps: A11ySteps, apk: Path) -> None:
     both(steps, r, "SCR-009", "settings-quiet", "설정, 방해 금지 고르기", setting_row("방해 금지, "),
          lambda ns: has_text(ns, QUIET_NOTE))
     both(steps, r, "SCR-009", "settings-zone", "설정, 기준 시간대 고르기", setting_row("기준 시간대, "),
-         lambda ns: has_text(ns, ZONE_NOTE))
+         lambda ns: has_text(ns, ZONE_NOTE), max_pages=ZONE_PAGES)
 
     def people() -> None:
         leave_to_home()
@@ -1017,16 +1100,27 @@ def run(r: Report, steps: A11ySteps, apk: Path) -> None:
 
         steps("SCR-002 전체 고르기 (되돌림)", "위젯이 다시 전체", pick_all)
 
-    # The reminder (System UI): permission granted, the alarm's broadcast sent at 09:00 (two items pending since 08:00)
+    # The reminder (System UI): permission granted, then the clock at the next planned reminder and the alarm's broadcast
+    # sent. The app shows a reminder only within 10 minutes of its time (ReminderAlarm.WINDOW): run 43570269368 sent the
+    # broadcast at 09:20, after 09:00's had passed, and none came. Two items are pending then: 골다공증약 and 엄마's
+    # 글루코사민 콘드로이친.
     def reminder_ready(nodes) -> bool:
         return any(n.text.endswith(TITLE_END) for n in nodes)
+
+    def bring_reminders() -> str:
+        planned = [a.millis for a in alarms(REMINDER_ALARM) if a.millis is not None and not a.windowed]
+        due = datetime.fromtimestamp(min(planned) / 1000, ZONE) if planned else at(0, 10, 0)
+        clock = set_clock(due + timedelta(seconds=20))
+        sh(f"am broadcast -n {REMINDER_RECEIVER} -a {REMINDER_ALARM}")
+        shown = doses(wait_posted(lambda p: bool(doses(p)), 60))
+        if not shown:
+            raise RuntimeError(f"no reminder was posted (clock {clock})")
+        return f"다음 알림 {due:%H:%M}, 시계 {clock}; 알림 {len(shown)}개: " + ", ".join(sorted(p.title for p in shown))
 
     def open_reminder() -> None:
         expand_shade()
         if not ready(reminder_ready, 10):
             collapse_shade()
-            sh(f"am broadcast -n {REMINDER_RECEIVER} -a {REMINDER_ALARM}")
-            time.sleep(5)
             expand_shade()
         for _ in range(3):  # open our reminders so their buttons show
             nodes = parse(adb("exec-out", "cat", UI_XML, check=False)) if dump_ui() else []
@@ -1045,8 +1139,9 @@ def run(r: Report, steps: A11ySteps, apk: Path) -> None:
         return "알림 권한 줌"
 
     steps("SCR-003 준비: 알림 권한", "권한 줌", grant)
-    both(steps, r, "SCR-003", "reminder", "알림 (알림 창을 내림)", open_reminder, reminder_ready, mode="shade",
-         expected="시스템이 그리는 화면: 누르는 곳과 읽는 말을 적음(판정 안 함)")
+    if steps("SCR-003 준비: 다음 알림 시각으로 시계, 알림 알람 방송", "남은 두 항목의 알림이 뜸", bring_reminders):
+        both(steps, r, "SCR-003", "reminder", "알림 (알림 창을 내림)", open_reminder, reminder_ready, mode="shade",
+             expected="시스템이 그리는 화면: 누르는 곳과 읽는 말을 적음(판정 안 함)")
     collapse_shade()
 
 

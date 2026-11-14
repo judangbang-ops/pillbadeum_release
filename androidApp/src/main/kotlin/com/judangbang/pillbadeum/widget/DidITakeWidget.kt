@@ -267,21 +267,23 @@ internal fun WidgetContent(model: WidgetModel?, message: String?, setUp: Action)
         Column(
             modifier = GlanceModifier.fillMaxSize()
                 .background(ImageProvider(R.drawable.widget_background))
-                .padding(horizontal = WidgetLayout.PAD_H.dp, vertical = WidgetLayout.PAD_V.dp),
+                .padding(start = WidgetLayout.PAD_H.dp, end = WidgetLayout.PAD_H.dp, bottom = WidgetLayout.PAD_V.dp),
         ) {
-            // The tap message takes the header's place for 10 seconds (TASK-044 decision 2); both open the app.
-            Box(modifier = GlanceModifier.fillMaxWidth().visibility(visibleIf(message == null))) {
-                Header(model, wraps = plan?.headerWraps == true, openApp)
+            // The top: the header, or the tap message in its place for 10 seconds (TASK-044 decision 2). Both open the
+            // app, and the whole top is the button: at least 48dp tall with the widget's top padding and the gap above
+            // the list inside it (REQ-067; the header alone was 28dp, TASK-030).
+            val top = GlanceModifier.fillMaxWidth().clickable(openApp).padding(vertical = WidgetLayout.TOP_PAD_V.dp)
+            Box(modifier = top.visibility(visibleIf(message == null))) {
+                Header(model, wraps = plan?.headerWraps == true)
             }
-            Box(modifier = GlanceModifier.fillMaxWidth().visibility(visibleIf(message != null))) {
-                Band(message.orEmpty(), openApp)
+            Box(modifier = top.visibility(visibleIf(message != null))) {
+                BandText(message.orEmpty())
             }
             // SCR-001#restored (supplement R-3): a short line, the full notice is in the app. Tiles still record.
             Column(modifier = GlanceModifier.fillMaxWidth().visibility(visibleIf(model?.restoreLine != null))) {
-                Spacer(GlanceModifier.height(WidgetLayout.GAP.dp))
                 Band(model?.restoreLine.orEmpty(), openApp)
+                Spacer(GlanceModifier.height(WidgetLayout.GAP.dp))
             }
-            Spacer(GlanceModifier.height(WidgetLayout.GAP.dp))
             Body(model, plan, openApp, setUp, GlanceModifier.fillMaxWidth().defaultWeight())
         }
         // SCR-001#overflow (REQ-078): no text, read as '더 있음'. A list never reports its scroll position, so the
@@ -297,18 +299,20 @@ internal fun WidgetContent(model: WidgetModel?, message: String?, setUp: Action)
     }
 }
 
+/** The header, inside the top's button; a row is [WidgetLayout.TOP_MIN] tall at least, so the button is 48dp. */
 @Composable
-private fun Header(model: WidgetModel?, wraps: Boolean, openApp: Action) {
-    val modifier = GlanceModifier.fillMaxWidth().clickable(openApp).padding(horizontal = WidgetLayout.HEADER_PAD_H.dp)
+private fun Header(model: WidgetModel?, wraps: Boolean) {
+    val modifier = GlanceModifier.fillMaxWidth().padding(horizontal = WidgetLayout.HEADER_PAD_H.dp)
     val date = TextStyle(color = color(Tokens.INK), fontSize = 14.sp, fontWeight = FontWeight.Medium)
     when {
         model == null -> Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
             // Zero wide: a Spacer with no width took the whole row and squeezed the name to nothing (TASK-014 render check).
-            Spacer(GlanceModifier.width(0.dp).height(WidgetLayout.CHIP_MIN.dp))
+            Spacer(GlanceModifier.width(0.dp).height(WidgetLayout.TOP_MIN.dp))
             Words(Labels.APP_NAME, style = date)
         }
         // SCR-001#reconfigure: no count, since the widget does not know whose items to count.
         !wraps || model.reconfigure != null -> Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+            Spacer(GlanceModifier.width(0.dp).height(WidgetLayout.TOP_MIN.dp))
             DayChip(model.weekday)
             Spacer(GlanceModifier.width(WidgetLayout.HEADER_GAP.dp))
             Words(model.headerDate, style = date)
@@ -351,17 +355,33 @@ private fun Count(model: WidgetModel) {
     Words(" " + model.countRest, style = TextStyle(color = color(Tokens.INK_MUTED), fontSize = 14.sp))
 }
 
-/** Notice band: the tap message, the restore line and the reconfigure line (`color.surface.notice`). */
+private val noticeStyle = TextStyle(color = color(Tokens.INK_NOTICE), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+
+/** The notice band's look (`color.surface.notice`): the tap message, inside the top's button. */
 @Composable
-private fun Band(text: String, onTap: Action) {
+private fun BandText(text: String) {
     Words(
         text,
         modifier = GlanceModifier.fillMaxWidth()
             .background(ImageProvider(R.drawable.widget_notice))
-            .clickable(onTap, rippleOverride = R.drawable.widget_notice_ripple)
             .padding(horizontal = WidgetLayout.BAND_PAD_H.dp, vertical = WidgetLayout.BAND_PAD_V.dp),
-        style = TextStyle(color = color(Tokens.INK_NOTICE), fontSize = 14.sp, fontWeight = FontWeight.Medium),
+        style = noticeStyle,
     )
+}
+
+/** A notice band that is a button of its own, at least 48dp tall (REQ-067): the restore line and the reconfigure line. */
+@Composable
+private fun Band(text: String, onTap: Action) {
+    Row(
+        modifier = GlanceModifier.fillMaxWidth()
+            .background(ImageProvider(R.drawable.widget_notice))
+            .clickable(onTap, rippleOverride = R.drawable.widget_notice_ripple)
+            .padding(horizontal = WidgetLayout.BAND_PAD_H.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Spacer(GlanceModifier.width(0.dp).height(WidgetLayout.TARGET.dp))
+        Words(text, modifier = GlanceModifier.defaultWeight().padding(vertical = WidgetLayout.BAND_PAD_V.dp), style = noticeStyle)
+    }
 }
 
 @Composable

@@ -252,6 +252,13 @@ class WidgetRenderTest {
             walk(root)
         }
 
+        // REQ-067 (TASK-030): every button (the top, a tile, a band) is at least 48dp both ways; a pixel for rounding.
+        val density = root.resources.displayMetrics.density
+        for (button in views.filter { it.isClickable && shown(it) }) {
+            val size = "${button.width / density}×${button.height / density}dp"
+            assertTrue("$name: a ${button.javaClass.simpleName} button is $size", minOf(button.width, button.height) >= 48 * density - 1)
+        }
+
         val arrowShown = views.any { it is ImageView && it.contentDescription == Labels.MORE && shown(it) }
         assertEquals("$name: down arrow", arrow, arrowShown)
         views.filterIsInstance<ListView>().filter(::shown).forEach { list ->

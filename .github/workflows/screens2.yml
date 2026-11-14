@@ -1,0 +1,162 @@
+# R2 화면 작업 2부(TASK-014·020·023·026·041·042)의 끝 조건인 에뮬레이터 캡처를 찍고 확인함.
+# 알림 권한 창의 허용·거부와 그 안내, 정확 알람·배터리 안내와 시스템 화면, 설정의 백업 문구(화면 잠금 있음·없음)·
+# 잠금 화면 이름·다시 알림 간격의 방해 금지 안내·하루 시작 시각과 위젯, 항목 여섯 개 위젯의 글자 크기별 모습과 탭.
+# 흐름과 이유는 scripts/emulator/screens2_check.py 첫 주석. 1부는 screens.yml.
+#
+# - 이 스크립트·워크플로나 도우미를 바꾼 PR과 수동 실행에서만 돎. 저장소가 공개라 Actions 사용 시간 한도가 없어
+#   (2026-11-13) API 34·36·26·27을 나란히 돌림. PR에 다시 푸시할 때는 이 확인이 마지막으로 모두 성공한 커밋 뒤로
+#   아래 paths가 바뀌었을 때만 돎(gate 작업, .github/scripts/push_gate.py)
+# - 34·36: 모든 단계. 26: 위젯·배터리 안내·백업 문구(Android 8은 알림·정확 알람 권한이 없음). 27: 백업 문구만(TC-035)
+# - 서명 키·비밀값을 쓰지 않음. 디버그 APK로 봄. 백업 문구를 보려고 거는 화면 잠금은 알림 확인의 시험용 PIN이며,
+#   스크립트가 PIN과 그 명령의 출력을 기록하지 않고 확인 뒤 바로 지움
+name: 에뮬레이터 화면 확인 2부
+
+on:
+  pull_request:
+    paths:
+      - scripts/emulator/screens2_check.py
+      # screens2_check.py가 쓰는 도우미(1부 스크립트·화면 덤프·탭·위젯 놓기·시계·DB 읽기). 바꾸면 이 확인도 다시 돎
+      - scripts/emulator/screens_check.py
+      - scripts/emulator/explore.py
+      - scripts/emulator/backup_restore_check.py
+      - scripts/emulator/release_check.py
+      - scripts/emulator/reminder_check.py
+      - scripts/emulator/emulator_boot.py
+      - .github/actions/android-emulator/**
+      - .github/scripts/push_gate.py
+      - .github/workflows/screens2.yml
+  workflow_dispatch:
+    inputs:
+      apis:
+        description: API 수준 목록 (JSON 배열)
+        required: false
+        default: "[34, 36, 26, 27]"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: screens2-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    # 화면 확인 1부(screens.yml)의 gate와 같음: 이 PR에서 이 확인이 마지막으로 모두 성공한 커밋 뒤로 위 경로가
+    # 바뀌었는지 보고 정함. 실패한 확인은 기준이 되지 않아 다음 푸시에서 다시 돎. PR을 열 때·다시 열 때·알 수 없을 때는
+    # 돎. 경로는 위 on.pull_request.paths와 같게 둠('dir/**'는 'dir/'로 씀). 수동 실행에서는 건너뜀
+    name: 이번 푸시가 바꾼 파일
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read # 지난 실행을 읽음
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - id: gate
+        env:
+          GATE_ACTION: ${{ github.event.action }}
+          GATE_AFTER: ${{ github.event.after }}
+          GATE_JOB: "화면 확인 2부 (API"
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 .github/scripts/push_gate.py
+          scripts/emulator/screens2_check.py
+          scripts/emulator/screens_check.py
+          scripts/emulator/explore.py
+          scripts/emulator/backup_restore_check.py
+          scripts/emulator/release_check.py
+          scripts/emulator/reminder_check.py
+          scripts/emulator/emulator_boot.py
+          .github/actions/android-emulator/
+          .github/scripts/push_gate.py
+          .github/workflows/screens2.yml
+
+  apk:
+    name: 디버그 APK
+    needs: gate
+    # gate가 run=false라고 할 때만 건너뜀. 수동 실행(gate 건너뜀)이나 gate 실패 때는 돎
+    if: ${{ !cancelled() && needs.gate.outputs.run != 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: gradle/actions/wrapper-validation@0723195856401067f7a2779048b490ace7a47d7c # v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: 디버그 APK (./gradlew :androidApp:assembleDebug)
+        run: ./gradlew :androidApp:assembleDebug
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: screens2-apk
+          path: androidApp/build/outputs/apk/debug/androidApp-debug.apk
+          retention-days: 1
+          overwrite: true
+          if-no-files-found: error
+
+  screens2:
+    name: 화면 확인 2부 (API ${{ matrix.api }})
+    needs: apk
+    # 건너뛴 gate가 apk를 거쳐 이 작업까지 건너뛰게 하지 않게 apk 결과만 봄(수동 실행)
+    if: ${{ !cancelled() && needs.apk.result == 'success' }}
+    runs-on: ubuntu-latest
+    # 글자 크기를 네 번 바꾸고 시계를 세 번 옮김. 1부(API 34 한 대)는 약 30분
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        # 34: 기준(Android 14, 큰 글자를 덜 키움). 36: 가장 새 Android(권한 창·설정 화면이 바뀜).
+        # 26: 가장 낮은 지원 버전(motionevent 없음, 다른 런처). 27: Android 8.1의 백업 문구
+        api: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.apis || '[34, 36, 26, 27]') }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: screens2-apk
+          path: ${{ runner.temp }}/apk
+
+      # KVM, 시스템 이미지, AVD를 준비하고 부팅을 기다림 (1부·알림 확인과 같은 액션). 시계를 바꾸므로 코어 4개
+      - uses: ./.github/actions/android-emulator
+        with:
+          api: ${{ matrix.api }}
+          cores: "4"
+
+      - name: 화면 확인 2부 (scripts/emulator/screens2_check.py)
+        run: |
+          python3 scripts/emulator/screens2_check.py \
+            --apk "$RUNNER_TEMP/apk/androidApp-debug.apk" \
+            --out "$RUNNER_TEMP/screens2-${{ matrix.api }}"
+
+      - name: 결과 표
+        if: ${{ !cancelled() }}
+        run: |
+          report="$RUNNER_TEMP/screens2-${{ matrix.api }}/report.md"
+          if [ -f "$report" ]; then cat "$report" >> "$GITHUB_STEP_SUMMARY"; else echo "보고서 없음" >> "$GITHUB_STEP_SUMMARY"; fi
+          cp "$RUNNER_TEMP/emulator.log" "$RUNNER_TEMP/screens2-${{ matrix.api }}/" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() }}
+        with:
+          name: screens2-api${{ matrix.api }}
+          path: ${{ runner.temp }}/screens2-${{ matrix.api }}/
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: ignore

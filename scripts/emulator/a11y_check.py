@@ -131,6 +131,7 @@ TARGET_DP = 48  # REQ-067, design token size.target
 TEXT_RATIO = 4.5  # REQ-069 (WCAG 2.1 AA for text)
 SCALES = ("1.0", "2.0")
 MAX_PAGES = 10
+TOP_SWIPES = 2 * MAX_PAGES  # a swipe moves 70% of a list's height, so this reaches the top from MAX_PAGES pages down
 ZONE_PAGES = 3  # the base-zone list: some 600 lines of one kind
 MIN_TEXT_PIXELS = 15  # a token color with fewer pixels under a text is not taken for its letters
 WHITE_FILL_RATIO = 1.5  # white (also surface.default) closer than this to its background is a fill, not letters
@@ -726,7 +727,10 @@ def measure(r: Report, sid: str, name: str, scale: str, mode: str = "app", max_p
     nodes, _ = full_dump()
     scroller = scroller_of(nodes, mode)
     if scroller is not None:
-        for _ in range(4):
+        # Up to the top until the list stops moving. A new text size makes the app again and a list keeps the place it
+        # had at 100%, deeper at 200% (run 43576739894: four swipes left the history list's month, people and first
+        # cell, and the time zone list's first rows, above the first page)
+        for _ in range(TOP_SWIPES):
             before = signature(nodes, mode)
             swipe_in(scroller, up=False)
             nodes, _ = full_dump()

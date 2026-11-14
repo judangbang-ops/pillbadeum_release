@@ -439,7 +439,9 @@ class SettingsScreenTest {
 
     /**
      * 200% text: in the base-zone list an offset goes under its zone, so `Asia/Seoul` keeps one line. The accessibility
-     * check (run 43579503348) found it broken into a letter or two a line beside `UTC+09:00 · 이 휴대폰`.
+     * check (run 43579503348) found it broken into a letter or two a line beside `UTC+09:00 · 이 휴대폰`. An offset also
+     * goes under a zone with a word too wide to sit beside it: run 43582314689 and this render showed `Africa/Addis_Ababa`
+     * broken into `Africa/`, `Addis_Aba`, `ba` beside `UTC+03:00`.
      */
     @Test
     fun large_text_puts_zone_offsets_under_their_names() {
@@ -449,9 +451,15 @@ class SettingsScreenTest {
         row("기준 시간대, Asia/Seoul").performScrollTo().performClick()
         val seoul = compose.onNodeWithContentDescription("Asia/Seoul, UTC+09:00 · 이 휴대폰").fetchSemanticsNode().boundsInRoot
         val height = seoul.height / compose.density.density
-        // The name's line (40 dp) over the offset's (35 dp), 4 dp between and 6 dp above and below, about 91 dp; a font
+        // The name's line over the offset's, 4 dp between and 6 dp above and below: about 87 dp in this render; a font
         // that wraps the offset or breaks the name at '/' adds a line. Broken a letter or two a line, it was eight
         assertTrue("the offset under the name: $height dp", height in 80f..150f)
+        val addis = "Africa/Addis_Ababa, UTC+03:00"
+        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasContentDescription(addis))
+        val addisHeight = compose.onNodeWithContentDescription(addis).fetchSemanticsNode().boundsInRoot.height / compose.density.density
+        // `Africa/Addis_Ababa` (about 242 dp of the 288) on one line over its offset, like Seoul's; beside the offset its
+        // three lines took 115 dp. `Africa/Abidjan` keeps its offset beside: `Africa/` over `Abidjan`, 80 dp
+        assertTrue("Addis_Ababa whole on one line, its offset under it: $addisHeight dp", addisHeight < 100f)
         compose.assertTargetsAtLeast48dp()
         save("settings-zone-200")
     }

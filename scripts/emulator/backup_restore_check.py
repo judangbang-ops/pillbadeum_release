@@ -70,8 +70,9 @@ def adb(*args: str, check: bool = True, timeout: int = 120) -> str:
 
 # When adb loses the phone for a moment, `adb shell` ends with exit 255 and prints nothing: on API 27 right after
 # `adb root` (PR #14), on API 26 right after `date -u` (run 43420227464) and 5 seconds after the reminder check started
-# (run 43434875342, attempt 1). A command that leaves the phone the same when it runs twice (a read, or setting a value)
-# is then sent again once adb sees the phone. A tap, a key, a broadcast or a clock change is not: it may have run.
+# (run 43434875342, attempt 1). Once it printed first: on API 26 `getprop persist.sys.timezone` printed the zone, then
+# 255 (run 43560980439). A command that leaves the phone the same when it runs twice (a read, or setting a value) is
+# then sent again once adb sees the phone. A tap, a key, a broadcast or a clock change is not: it may have run.
 AGAIN = re.compile(r"""
     (getprop|setprop|id|cat|ls|find|pidof|rm\ -f|wm\ size|bmgr\ list|settings\ (get|put)|am\ force-stop|appops\ set
     |pm\ grant|svc\ power\ stayon|cmd\ uimode\ night|dumpsys\ (alarm|notification|window|activity|package))(\s|$)
@@ -87,21 +88,25 @@ def shell_once(cmd: str, timeout: int = 120) -> tuple[int, str]:
     return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
 
 
-def note_drop(cmd: str, then: str) -> None:
+def note_drop(cmd: str, then: str, printed: bool = False) -> None:
     what = " ".join(cmd.split()[:2])
-    ADB_DROPS.append(f"{what} ({then})")
+    ADB_DROPS.append(f"{what} ({'출력 뒤 ' if printed else ''}{then})")
     devices = " / ".join(run(["adb", "devices"], check=False, timeout=30).split("\n")[1:]).strip()
-    print(f"[adb] shell '{what} …' -> 255 with no output (adb devices: {devices or 'none'}); {then}", flush=True)
+    how = "after printing" if printed else "with no output"
+    print(f"[adb] shell '{what} …' -> 255 {how} (adb devices: {devices or 'none'}); {then}", flush=True)
 
 
 def sh(cmd: str, check: bool = True, timeout: int = 120) -> str:
     """`adb shell cmd`. When adb loses the phone, one command AGAIN allows is sent up to three times; any other command
-    (also a list such as `a; b`) once."""
-    tries = 3 if AGAIN.match(cmd) and not re.search(r";|&&|\|\||\n", cmd) else 1
+    (also a list such as `a; b`) once. adb can also lose the phone after the command printed: on API 26 (run
+    43560980439) `getprop persist.sys.timezone` printed the zone and ended with 255. A command AGAIN allows is sent again
+    then too, since running it twice leaves the phone the same."""
+    again = bool(AGAIN.match(cmd)) and not re.search(r";|&&|\|\||\n", cmd)
+    tries = 3 if again else 1
     for attempt in range(1, tries + 1):
         code, out = shell_once(cmd, timeout)
-        if code == 255 and not out.strip():
-            note_drop(cmd, "다시 보냄" if attempt < tries else "다시 보내지 않음")
+        if code == 255 and (again or not out.strip()):
+            note_drop(cmd, "다시 보냄" if attempt < tries else "다시 보내지 않음", printed=bool(out.strip()))
             if attempt < tries:
                 time.sleep(2)
                 adb("wait-for-device", check=False, timeout=60)
@@ -666,7 +671,7 @@ class Report:
         if CLOSED_DIALOGS:
             notes.append(f"[Wait]로 닫은 시스템 ANR 대화상자 {len(CLOSED_DIALOGS)}번: {', '.join(sorted(set(CLOSED_DIALOGS)))}")
         if ADB_DROPS:
-            notes.append(f"adb가 휴대폰을 잠깐 놓침(`adb shell`이 출력 없이 255) {len(ADB_DROPS)}번: {', '.join(ADB_DROPS)}")
+            notes.append(f"adb가 휴대폰을 잠깐 놓침(`adb shell`이 255로 끝남) {len(ADB_DROPS)}번: {', '.join(ADB_DROPS)}")
         if notes:
             lines += ["", *[f"- {n}" for n in notes]]
         (self.out / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")

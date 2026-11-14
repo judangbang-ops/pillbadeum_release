@@ -270,14 +270,15 @@ internal fun WidgetContent(model: WidgetModel?, message: String?, setUp: Action)
                 .padding(start = WidgetLayout.PAD_H.dp, end = WidgetLayout.PAD_H.dp, bottom = WidgetLayout.PAD_V.dp),
         ) {
             // The top: the header, or the tap message in its place for 10 seconds (TASK-044 decision 2). Both open the
-            // app, and the whole top is the button: at least 48dp tall with the widget's top padding and the gap above
-            // the list inside it (REQ-067; the header alone was 28dp, TASK-030).
-            val top = GlanceModifier.fillMaxWidth().clickable(openApp).padding(vertical = WidgetLayout.TOP_PAD_V.dp)
-            Box(modifier = top.visibility(visibleIf(message == null))) {
-                Header(model, wraps = plan?.headerWraps == true)
+            // app, and each is one button at least 48dp tall, with the widget's top padding and the gap above the list
+            // inside it (REQ-067; the header row alone was 28dp, TASK-030). Glance moves a click to a box of its own
+            // around the clicked element, so the visibility stays on these outer boxes: on the clicked element it
+            // left the hidden one a 1px button (TASK-030 render test).
+            Box(modifier = GlanceModifier.fillMaxWidth().visibility(visibleIf(message == null))) {
+                Header(model, wraps = plan?.headerWraps == true, openApp)
             }
-            Box(modifier = top.visibility(visibleIf(message != null))) {
-                BandText(message.orEmpty())
+            Box(modifier = GlanceModifier.fillMaxWidth().visibility(visibleIf(message != null))) {
+                BandText(message.orEmpty(), openApp)
             }
             // SCR-001#restored (supplement R-3): a short line, the full notice is in the app. Tiles still record.
             Column(modifier = GlanceModifier.fillMaxWidth().visibility(visibleIf(model?.restoreLine != null))) {
@@ -299,10 +300,14 @@ internal fun WidgetContent(model: WidgetModel?, message: String?, setUp: Action)
     }
 }
 
-/** The header, inside the top's button; a row is [WidgetLayout.TOP_MIN] tall at least, so the button is 48dp. */
+/**
+ * The header, one button that opens the app: a row [WidgetLayout.TOP_MIN] tall at least, with [WidgetLayout.TOP_PAD_V]
+ * above and below, so 48dp.
+ */
 @Composable
-private fun Header(model: WidgetModel?, wraps: Boolean) {
-    val modifier = GlanceModifier.fillMaxWidth().padding(horizontal = WidgetLayout.HEADER_PAD_H.dp)
+private fun Header(model: WidgetModel?, wraps: Boolean, openApp: Action) {
+    val modifier = GlanceModifier.fillMaxWidth().clickable(openApp)
+        .padding(horizontal = WidgetLayout.HEADER_PAD_H.dp, vertical = WidgetLayout.TOP_PAD_V.dp)
     val date = TextStyle(color = color(Tokens.INK), fontSize = 14.sp, fontWeight = FontWeight.Medium)
     when {
         model == null -> Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
@@ -357,16 +362,21 @@ private fun Count(model: WidgetModel) {
 
 private val noticeStyle = TextStyle(color = color(Tokens.INK_NOTICE), fontSize = 14.sp, fontWeight = FontWeight.Medium)
 
-/** The notice band's look (`color.surface.notice`): the tap message, inside the top's button. */
+/**
+ * The tap message in the header's place: the notice band's look (`color.surface.notice`) inside one button that opens
+ * the app, with [WidgetLayout.TOP_PAD_V] above and below like the header.
+ */
 @Composable
-private fun BandText(text: String) {
-    Words(
-        text,
-        modifier = GlanceModifier.fillMaxWidth()
-            .background(ImageProvider(R.drawable.widget_notice))
-            .padding(horizontal = WidgetLayout.BAND_PAD_H.dp, vertical = WidgetLayout.BAND_PAD_V.dp),
-        style = noticeStyle,
-    )
+private fun BandText(text: String, openApp: Action) {
+    Box(modifier = GlanceModifier.fillMaxWidth().clickable(openApp).padding(vertical = WidgetLayout.TOP_PAD_V.dp)) {
+        Words(
+            text,
+            modifier = GlanceModifier.fillMaxWidth()
+                .background(ImageProvider(R.drawable.widget_notice))
+                .padding(horizontal = WidgetLayout.BAND_PAD_H.dp, vertical = WidgetLayout.BAND_PAD_V.dp),
+            style = noticeStyle,
+        )
+    }
 }
 
 /** A notice band that is a button of its own, at least 48dp tall (REQ-067): the restore line and the reconfigure line. */

@@ -429,9 +429,12 @@ def resize(r: Report, tag: str, side: str, target) -> str:
     if tip is not None:
         save_ui(r, f"{tag}-tip")
         r.shot(f"{tag}-tip")
-        tap(*tip.center)
-        time.sleep(1)
+        tap(tip)
         nodes = dump_ui()
+        if any(WIDGET_TIP.search(n.text) for n in nodes):  # still there: BACK closes only the top floating view
+            sh("input keyevent KEYCODE_BACK")
+            time.sleep(1)
+            nodes = dump_ui()
         if by_rid(nodes, "widget_resize_frame") is None:  # the frame went with the tip: open it again
             swipe(x, y, x, y, 2000)
             nodes = dump_ui()

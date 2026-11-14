@@ -31,7 +31,10 @@ Flow (clock set in Asia/Seoul; day 0 is the run's date; the clock only moves for
   12. Weekly tapped on a Friday; the Saturday still taken; the next Monday 05:00 `이번 주 미완료, 마지막 복용 …금요일`
       (QA 11).
   13. The soft keyboard up over the item form: [저장] whole above it, tapped, and the item saved (QA 12).
-  14. No crash of the app in the whole run (the crash log, QA 1's "크래시 없이").
+  14. The app's data cleared (`pm clear`, what [저장공간 지우기] in the settings does) with the widget left on the home
+      screen, then a tile it still draws tapped: no judgment row, and the widget drawn again as the empty widget
+      (REQ-092, TC-009; not one of the 13, but TASK-034 owns it).
+  15. No crash of the app in the whole run (the crash log, QA 1's "크래시 없이").
 
 Names are typed in English (`adb shell input text` cannot type Korean). The debug APK is used: the database is read as
 root. The widget is never redrawn by the debug receiver here: what it shows after a write, a clock change or the day
@@ -47,6 +50,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sqlite3
 import sys
 import time
 import traceback
@@ -104,6 +108,7 @@ NAMES = (MORNING, VITAMIN, WEEKLY)
 s2.ITEMS = NAMES + (TYPED,)
 
 EMPTY_HOME = "아직 복용 항목이 없어요"  # HomeScreen's empty state (SCR-004#empty)
+EMPTY_WIDGET = "앱에서 복용 항목을 추가해 주세요"  # Labels.EMPTY_WIDGET, the widget with no items (SCR-001#empty)
 NO_RECORD = "기록 없음"  # Labels.NO_RECORD
 CANCEL_ASK = "기록을 취소할까요?"  # the question of [기록 취소] (REQ-029)
 MORE = s2.MORE  # the widget's down arrow, read as "더 있음" (SCR-001#overflow)
@@ -693,7 +698,55 @@ def run(r: Report, steps: ShotSteps) -> None:
 
     steps("13. 키보드가 열린 채 저장 (QA 12)", "화면 키보드가 떠 있을 때 [저장]이 키보드 위에 다 보이고, 누르면 저장됨", keyboard)
 
-    # 14. No crash (QA 1)
+    # 14. App data cleared, then a tile left on the widget tapped (REQ-092)
+    def data_cleared() -> str:
+        if not ok["widget"]:
+            raise RuntimeError("no widget on the home screen (step 3)")
+        out = sh(f"pm clear {PKG}", check=False).strip()
+        time.sleep(3)
+        nodes = s2.widget_page(lambda ns: bool(widget_tiles(ns)) or any(flat(n.text) == EMPTY_WIDGET for n in ns), 30)
+        left = list(widget_tiles(nodes))
+        before = s2.widget_header(nodes)
+        r.shot("widget-data-cleared")
+        save_ui(r, "widget-data-cleared")
+        if not left:
+            # Nothing left to tap: say what the widget showed instead (the check below still asks for no rows)
+            empty = any(flat(n.text) == EMPTY_WIDGET for n in nodes)
+            if not empty:
+                raise RuntimeError(f"pm clear '{out}': no tile and no '{EMPTY_WIDGET}' on the widget: {widget_texts(nodes)}")
+            return f"pm clear '{out}' 뒤 탭하기 전에 이미 빈 위젯 '{EMPTY_WIDGET}' {before}: 누를 버튼이 남지 않음"
+        tapped = MORNING if MORNING in left else left[0]
+        tap_tile(tapped)
+        # The tap starts the app in a new process over an empty database; the widget is drawn again from it
+        end = time.time() + 40
+        while True:
+            nodes = dump_ui()
+            empty = any(flat(n.text) == EMPTY_WIDGET for n in nodes)
+            if (empty and not widget_tiles(nodes)) or time.time() >= end:
+                break
+            time.sleep(2)
+        message = widget_message(nodes)
+        after = s2.widget_header(nodes)
+        r.shot("widget-data-cleared-tap")
+        save_ui(r, "widget-data-cleared-tap")
+        try:
+            rows, items = query("SELECT (SELECT COUNT(*) FROM dose_record), (SELECT COUNT(*) FROM intake)")[0]
+        except sqlite3.Error as exc:  # no database at all: the tap never reached the app
+            rows, items = None, f"DB 없음({exc})"
+        problems = []
+        if rows != 0 or items != 0:
+            problems.append(f"DB dose_record {rows}, intake {items}")
+        if not empty or widget_tiles(nodes):
+            problems.append(f"widget not empty: tiles {list(widget_tiles(nodes))}, {widget_texts(nodes)}")
+        if problems:
+            raise RuntimeError(f"pm clear '{out}', tiles left {left}, tapped {tapped}: " + "; ".join(problems))
+        return (f"pm clear '{out}' 뒤 위젯에 남은 칸 {left}(머리글 {before}); {tapped} 탭 → DB 판정 {rows}행·항목 {items}개, "
+                f"위젯 '{EMPTY_WIDGET}' {after}, 메시지 {message}")
+
+    steps("14. 앱 데이터를 지운 뒤 남은 위젯 버튼 (REQ-092)",
+          f"`pm clear` 뒤 위젯에 남은 칸을 누르면 판정 행 없음, 위젯이 칸 없이 '{EMPTY_WIDGET}'로 다시 그려짐", data_cleared)
+
+    # 15. No crash (QA 1)
     def no_crash() -> str:
         crash = adb("logcat", "-d", "-b", "crash", check=False)
         ours = [line for line in crash.splitlines() if PKG in line]
@@ -701,7 +754,7 @@ def run(r: Report, steps: ShotSteps) -> None:
             raise RuntimeError(f"crash log: {ours[:5]}")
         return "크래시 기록에 이 앱 없음"
 
-    steps("14. 실행 내내 크래시 없음 (QA 1)", "logcat crash 버퍼에 이 앱이 없음", no_crash)
+    steps("15. 실행 내내 크래시 없음 (QA 1)", "logcat crash 버퍼에 이 앱이 없음", no_crash)
 
 
 def main() -> int:

@@ -82,6 +82,7 @@ from explore import (
     day_label,
     exact,
     font_scale,
+    keyboard_height,
     night,
     row_button,
     scroll_down,
@@ -105,7 +106,6 @@ from screens_check import (
     find_pin_button,
     has_desc,
     has_text,
-    home_nodes,
     our_widget_ids,
     physical_density,
     refresh_widgets,
@@ -241,12 +241,40 @@ def back_to_app(ok, timeout: float = 15) -> list[Node]:
     return wait_screen(ok, timeout)
 
 
+def keyboard_up() -> bool:
+    """An on-screen keyboard is up: the window dump says so, or the item form's [저장] footer, which the form keeps above
+    the keyboard, sits in the upper 70% of the screen."""
+    if keyboard_height() > 0:
+        return True
+    save = next((n for n in dump_ui() if n.text == "저장"), None)
+    return save is not None and save.bounds[3] < size()[1] * 0.7
+
+
+def type_name(name: str) -> None:
+    """Types the item's name into the form and closes an on-screen keyboard that came up. On API 36 one comes up although
+    the emulator has a hardware keyboard and show_ime_with_hard_keyboard is 0, and it covered 주 1회's weekdays and the
+    times of day (screens2 run 43539426392). BACK is pressed only while the keyboard is up, which takes it, and the form
+    must still be there after (BACK on the form itself would leave it, BUG-001)."""
+    type_into("약 이름", name)
+    for _ in range(3):
+        time.sleep(1.5)
+        if not keyboard_up():
+            return
+        sh("input keyevent KEYCODE_BACK")
+        time.sleep(1.5)
+        if not any(n.text == "약 이름" for n in dump_ui()):
+            raise RuntimeError("BACK left the item form instead of closing the on-screen keyboard")
+        KEYBOARD_NOTES.append(f"API {API['n']}: 이름을 넣은 뒤 뜬 화면 키보드를 BACK으로 닫음")
+    if keyboard_up():
+        raise RuntimeError("the on-screen keyboard stayed up over the item form")
+
+
 def item_form(name: str, slot: str) -> None:
     """First screen > [항목 추가] > name > 매일 + time of day (screens_check.add without [저장]); [알림 받기] is left to
     the step. One person: the form asks for no person (TASK-015)."""
     to_home()
     tap_scrolled("항목 추가")
-    type_into("약 이름", name)
+    type_name(name)
     tap_exact("매일")
     group = exact("언제 먹나요?")
     tap_exact(slot, below=group.bounds[3] if group else -1)
@@ -396,7 +424,46 @@ def active_keys() -> list[tuple]:
 
 
 def widget_host(nodes: list[Node]) -> Node | None:
-    return next((n for n in nodes if "AppWidgetHostView" in n.cls and n.desc in (WIDGET_LABEL, "")), None)
+    """Our widget on the launcher page shown: the host read as the app's name (Pixel Launcher, API 34 and 36; on API 36
+    the list's rows are hosts too, unnamed), else the largest unnamed host that holds the widget's header, empty text or
+    a tile (a launcher that does not name the host)."""
+    hosts = [n for n in nodes if "AppWidgetHostView" in n.cls]
+    named = next((n for n in hosts if n.desc == WIDGET_LABEL), None)
+    if named is not None:
+        return named
+
+    def ours(n: Node) -> bool:
+        return n.text.startswith(f"{WIDGET_LABEL} · ") or n.text == EMPTY_WIDGET or n.desc.split(", ")[0] in ITEMS
+
+    held = [h for h in hosts if h.desc == "" and any(ours(n) and within(n, h) for n in nodes)]
+    return max(held, key=lambda h: (h.bounds[2] - h.bounds[0]) * (h.bounds[3] - h.bounds[1]), default=None)
+
+
+LAUNCHER_PAGES = 4
+
+
+def widget_page(ok, timeout: float = 30) -> list[Node]:
+    """The launcher page with our widget, read until `ok(nodes)` holds. The widget the intro asks for went to the
+    launcher's second page on API 34 and 36, and HOME pressed while the launcher is in front, or after a text size
+    change has made it again, shows its first page (screens2 run 43539426392: the widget steps found no widget). So when
+    the page HOME shows has no widget, HOME is pressed again for the first page and the pages are swiped to the left one
+    at a time, in the empty middle of the screen. Never to the right of the first page: Pixel Launcher keeps a feed
+    there."""
+    go_home()
+    nodes = dump_ui()
+    if widget_host(nodes) is None:
+        go_home()
+        w, h = size()
+        y = h * 9 // 20
+        for _ in range(LAUNCHER_PAGES):
+            sh(f"input swipe {w * 5 // 6} {y} {w // 6} {y} 300")
+            time.sleep(2)
+            nodes = dump_ui()
+            if widget_host(nodes) is not None:
+                break
+        else:
+            raise RuntimeError(f"our widget is on none of the launcher's first {LAUNCHER_PAGES + 1} pages")
+    return nodes if ok(nodes) else wait_screen(ok, timeout)
 
 
 def within(inner: Node, outer: Node, slack: int = 1) -> bool:
@@ -434,7 +501,7 @@ def widget_ready(nodes: list[Node]) -> bool:
 def settled_widget(timeout: float = 15) -> list[Node]:
     """The home screen read until the widget's list and tiles sit where they sat one read before: a redraw for a new text
     size has finished."""
-    nodes = home_nodes(widget_ready, 30)
+    nodes = widget_page(widget_ready, 30)
     end = time.time() + timeout
     last = None
     while True:
@@ -714,7 +781,7 @@ def run(r: Report, steps: ShotSteps, apk: Path, api: int) -> None:
             launch_app()
             place_widget(r, "widget-drag")
             how = "런처의 위젯 목록에서 끌어 놓음"
-        nodes = home_nodes(lambda ns: has_text(ns, EMPTY_WIDGET), 30)
+        nodes = widget_page(lambda ns: has_text(ns, EMPTY_WIDGET), 30)
         r.shot("widget-empty")
         save_ui(r, "widget-empty")
         ids = our_widget_ids()
@@ -735,7 +802,7 @@ def run(r: Report, steps: ShotSteps, apk: Path, api: int) -> None:
     def weekly_dose() -> str:
         to_home()
         tap_scrolled("항목 추가")
-        type_into("약 이름", WEEKLY)
+        type_name(WEEKLY)
         tap_exact("주 1회")
         group = exact("무슨 요일에?")
         tap_exact(WEEKDAYS[base.weekday()], below=group.bounds[3] if group else -1)
@@ -847,7 +914,7 @@ def run(r: Report, steps: ShotSteps, apk: Path, api: int) -> None:
         ids = seed(names, "20:00")
         reopen()
         refresh_widgets()
-        nodes = home_nodes(lambda ns: len(tiles_in(ns, list_view(ns))) >= 2, 30)
+        nodes = widget_page(lambda ns: len(tiles_in(ns, list_view(ns))) >= 2, 30)
         listed = query("SELECT name FROM intake WHERE archived_at IS NULL ORDER BY sort_order, created_at, id")
         r.shot("widget-six")
         save_ui(r, "widget-six")
@@ -913,7 +980,7 @@ def run(r: Report, steps: ShotSteps, apk: Path, api: int) -> None:
             raise RuntimeError("no widget on the home screen (step 1)")
         font_scale("1.0")
         refresh_widgets()
-        home_nodes(widget_ready, 30)
+        widget_page(widget_ready, 30)
         done, problems, kept = [], [], []
         for name in TAP_ORDER:
             node, box = reach_tile(name)
@@ -933,7 +1000,7 @@ def run(r: Report, steps: ShotSteps, apk: Path, api: int) -> None:
             after = sorted(k for k, n in tiles_in(after_nodes, list_view(after_nodes)).items() if whole(n))
             kept.append(f"{name}: {'그대로' if after == before else f'{before} → {after}'}")
         # The last tap's message holds the header's place for 10 seconds (WidgetState.MESSAGE_TTL_MS)
-        nodes = home_nodes(lambda ns: widget_header(ns)[1] == f"{len(ITEMS)} / {len(ITEMS)}", 25)
+        nodes = widget_page(lambda ns: widget_header(ns)[1] == f"{len(ITEMS)} / {len(ITEMS)}", 25)
         head, count = widget_header(nodes)
         r.shot("widget-all-taken")
         save_ui(r, "widget-all-taken")
@@ -1194,7 +1261,7 @@ def day_start_step(r: Report, steps: ShotSteps, base: date, at, key0: str) -> No
         clock = set_clock(at(1, 3, 30))
         reopen()
         refresh_widgets()
-        nodes = home_nodes(lambda ns: widget_header(ns)[0] == header0, 20)
+        nodes = widget_page(lambda ns: widget_header(ns)[0] == header0, 20)
         before = widget_header(nodes)
         r.shot("widget-before-day-start")
         save_ui(r, "widget-before-day-start")
@@ -1212,7 +1279,7 @@ def day_start_step(r: Report, steps: ShotSteps, base: date, at, key0: str) -> No
         to_home()
         app_date = has_text(dump_ui(), day_label(day1))
         r.shot("home-day-start")
-        after_nodes = home_nodes(lambda ns: widget_header(ns)[0] == header1, 30)
+        after_nodes = widget_page(lambda ns: widget_header(ns)[0] == header1, 30)
         after = widget_header(after_nodes)
         r.shot("widget-after-day-start")
         save_ui(r, "widget-after-day-start")

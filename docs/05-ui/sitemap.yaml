@@ -104,7 +104,7 @@
       status: active
       code: 없음 (첫 화면에 하루 시작·기준 시간대 표시만 있음)
       flows: [FL-006, FL-007, FL-008]
-      reqs: [REQ-011, REQ-015, REQ-036, REQ-042, REQ-046, REQ-047, REQ-050, REQ-051, REQ-053, REQ-054, REQ-055, REQ-063, REQ-077, REQ-089, REQ-094]
+      reqs: [REQ-011, REQ-015, REQ-036, REQ-042, REQ-046, REQ-047, REQ-050, REQ-051, REQ-053, REQ-054, REQ-055, REQ-063, REQ-066, REQ-077, REQ-089, REQ-094]
       terms: [CTX-001, TERM-014, TERM-015, TERM-016, CTX-002, TERM-018, TERM-019, CTX-003, TERM-024, CTX-005]
       children:
         - id: SCR-010

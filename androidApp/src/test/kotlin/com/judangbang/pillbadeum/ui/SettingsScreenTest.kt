@@ -442,6 +442,11 @@ class SettingsScreenTest {
      * check (run 43579503348) found it broken into a letter or two a line beside `UTC+09:00 · 이 휴대폰`. An offset also
      * goes under a zone with a word too wide to sit beside it: run 43582314689 and this render showed `Africa/Addis_Ababa`
      * broken into `Africa/`, `Addis_Aba`, `ba` beside `UTC+03:00`.
+     *
+     * This render is not the phone's in one way: Compose takes a text's min intrinsic width from `java.text.BreakIterator`,
+     * which on a phone is ICU and breaks after '/', and on this JVM is the JDK's and does not. So here every zone counts
+     * as one word and every offset goes under; on the emulator (run 43585038873) `Africa/Abidjan` keeps its offset
+     * beside, `Africa/` over `Abidjan`, and only names like `Africa/Addis_Ababa` move it under.
      */
     @Test
     fun large_text_puts_zone_offsets_under_their_names() {
@@ -458,7 +463,7 @@ class SettingsScreenTest {
         compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasContentDescription(addis))
         val addisHeight = compose.onNodeWithContentDescription(addis).fetchSemanticsNode().boundsInRoot.height / compose.density.density
         // `Africa/Addis_Ababa` (about 242 dp of the 288) on one line over its offset, like Seoul's; beside the offset its
-        // three lines took 115 dp. `Africa/Abidjan` keeps its offset beside: `Africa/` over `Abidjan`, 80 dp
+        // three lines took 115 dp
         assertTrue("Addis_Ababa whole on one line, its offset under it: $addisHeight dp", addisHeight < 100f)
         compose.assertTargetsAtLeast48dp()
         save("settings-zone-200")

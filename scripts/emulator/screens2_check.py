@@ -1272,7 +1272,7 @@ def permission_steps(r: Report, steps: ShotSteps) -> None:
         r.shot("home-access-ok")
         if pkg in ("", PKG) or band_text(home, EXACT_ALARMS_OFF) or band_text(home, NOTIFICATIONS_OFF):
             raise RuntimeError(f"system screen '{pkg}', notice left {band_text(home, EXACT_ALARMS_OFF)}")
-        return f"'{band}' → [{ALLOW}] → {pkg} {texts[:3]}; {how}으로 허용 → 안내 사라짐; 분 약속 없음"
+        return f"'{band}' → [{ALLOW}] → {pkg} {texts[:3]}; 허용한 방법: {how} → 안내 사라짐; 분 약속 없음"
 
     steps("7-1. 정확 알람 안내 → [허용하기] → 허용 (TASK-026, TC-029)", f"'{EXACT_ALARMS_OFF}'와 [{ALLOW}] → 이 앱의 허용 화면, "
           "허용하고 돌아오면 안내 없음", exact_alarms)
@@ -1375,7 +1375,7 @@ def day_start_step(r: Report, steps: ShotSteps, base: date, at, key0: str) -> No
         if problems:
             raise RuntimeError("; ".join(problems))
         taken0 = sum(1 for row_ in keys_after if row_[1] == key0)
-        return (f"시계 {clock}; 바꾸기 전 위젯 {before}; {how}로 03:00 → '{DAY_START_ASK}' '{body[:20]}…' → [바꾸기]; "
+        return (f"시계 {clock}; 바꾸기 전 위젯 {before}; 03:00을 넣은 곳: {how} → '{DAY_START_ASK}' '{body[:20]}…' → [바꾸기]; "
                 f"위젯 {after}; 저장값 {stored}; 활성 판정 {count_before} → {count_after}, 기간키 그대로({key0} {taken0}건)")
 
     steps("12. 03:30에 하루 시작 04:00 → 03:00 (TASK-020, RR-15, TC-033)",

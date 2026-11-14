@@ -25,7 +25,7 @@ Flow (clock set in Asia/Seoul; day 0 is the run's date; the clock only moves for
    9. Vitamin tapped on the widget again: one voided row and one active row (QA 8).
   10. Clock moved to day 1 05:00: the widget turns to day 1 by itself (TIME_SET): header, `0 / 3`, `마지막 복용 어제`
       (QA 9).
-  11. Morning tapped (day 1). Clock moved to day 2 03:55, before the 04:00 day start: still day 1. Then, with no clock
+  11. Morning tapped (day 1). Clock moved to day 2 03:54, before the 04:00 day start: still day 1. Then, with no clock
       change, the day-boundary alarm (04:00:05, inexact) turns the widget to day 2: header, `0 / 3`, Morning not taken;
       the app's log shows the next boundary planned after it (QA 10).
   12. Weekly tapped on a Friday; the Saturday still taken; the next Monday 05:00 `이번 주 미완료, 마지막 복용 …금요일`
@@ -636,7 +636,7 @@ def run(r: Report, steps: ShotSteps) -> None:
                 f"로그 '{replanned[0][-60:]}'")
 
     steps("11. 하루 시작 04:00 경계 알람 (QA 10)",
-          f"{day1} 기록 뒤 03:55에는 '{header(day1)}' 1 / 3, 04:00:05 경계 알람(정확하지 않은 알람) 뒤 시계를 건드리지 않아도 "
+          f"{day1} 기록 뒤 03:54에는 '{header(day1)}' 1 / 3, 04:00:05 경계 알람(정확하지 않은 알람) 뒤 시계를 건드리지 않아도 "
           f"'{header(day2)}' 0 / 3과 Morning 미완료, 앱 로그에 다음 경계 예약", boundary)
 
     # 12. Weekly window (QA 11)
@@ -774,7 +774,7 @@ def run(r: Report, steps: ShotSteps) -> None:
         if problems:
             raise RuntimeError(f"pm clear '{out}', tiles left {left}, tapped {tapped}: " + "; ".join(problems))
         return (f"pm clear '{out}' 뒤 위젯에 남은 칸 {left}(머리글 {before}); {tapped} 탭 → DB 판정 {rows}행·항목 {items}개, "
-                f"위젯 '{EMPTY_WIDGET}' {after}, 메시지 {message}")
+                f"위젯 '{EMPTY_WIDGET}' {after}, 위젯 메시지 '{message}'")
 
     steps("14. 앱 데이터를 지운 뒤 남은 위젯 버튼 (REQ-092)",
           f"`pm clear` 뒤 위젯에 남은 칸을 누르면 판정 행 없음, 위젯이 칸 없이 '{EMPTY_WIDGET}'로 다시 그려짐", data_cleared)

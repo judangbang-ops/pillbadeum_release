@@ -1,0 +1,169 @@
+# 위젯이 런처에서 4×2로 놓이고 4×2보다 작아지지 않는지 기본 폭과 폭 360dp에서 봄(BUG-005, REQ-026, TC-054).
+# 첫 실행 안내의 [위젯 추가]로 놓고, 런처의 추가 창 크기 글('4 × 2'), 놓인 칸, 크기 조절 틀로 가장 작게 줄인 칸을 읽고,
+# 런처의 세로·가로 화면 칸 크기로 Launcher3 규칙을 계산함. 흐름과 이유는 scripts/emulator/widget_size_check.py 첫 주석.
+#
+# - 위젯 정의(diditake_widget_info.xml), 이 스크립트·워크플로나 도우미를 바꾼 PR과 수동 실행에서만 돎. PR에 다시
+#   푸시할 때는 이 확인이 마지막으로 모두 성공한 커밋 뒤로 아래 paths가 바뀌었을 때만 돎(gate 작업,
+#   .github/scripts/push_gate.py)
+# - 34·36: Android 12부터의 Launcher3 규칙(targetCell). 30·26: targetCell이 없는 옛 런처
+# - 서명 키·비밀값을 쓰지 않음. 디버그 APK로 봄
+name: 에뮬레이터 위젯 크기 확인
+
+on:
+  pull_request:
+    paths:
+      - androidApp/src/main/res/xml/diditake_widget_info.xml
+      - scripts/emulator/widget_size_check.py
+      # widget_size_check.py가 쓰는 도우미(화면 덤프·탭·설치·위젯 찾기·시계). 바꾸면 이 확인도 다시 돎
+      - scripts/emulator/screens2_check.py
+      - scripts/emulator/screens_check.py
+      - scripts/emulator/explore.py
+      - scripts/emulator/backup_restore_check.py
+      - scripts/emulator/release_check.py
+      - scripts/emulator/reminder_check.py
+      - scripts/emulator/emulator_boot.py
+      - .github/actions/android-emulator/**
+      - .github/scripts/push_gate.py
+      - .github/workflows/widget-size.yml
+  workflow_dispatch:
+    inputs:
+      apis:
+        description: API 수준 목록 (JSON 배열)
+        required: false
+        default: "[34, 36, 30, 26]"
+      widths:
+        description: 볼 폭 ('own'은 기본 밀도, 숫자는 dp)
+        required: false
+        default: "own,360"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: widget-size-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    # 화면 확인 2부(screens2.yml)의 gate와 같음: 이 PR에서 이 확인이 마지막으로 모두 성공한 커밋 뒤로 위 경로가
+    # 바뀌었는지 보고 정함. 경로는 위 on.pull_request.paths와 같게 둠('dir/**'는 'dir/'로 씀). 수동 실행에서는 건너뜀
+    name: 이번 푸시가 바꾼 파일
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read # 지난 실행을 읽음
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - id: gate
+        env:
+          GATE_ACTION: ${{ github.event.action }}
+          GATE_AFTER: ${{ github.event.after }}
+          GATE_JOB: "위젯 크기 (API"
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 .github/scripts/push_gate.py
+          androidApp/src/main/res/xml/diditake_widget_info.xml
+          scripts/emulator/widget_size_check.py
+          scripts/emulator/screens2_check.py
+          scripts/emulator/screens_check.py
+          scripts/emulator/explore.py
+          scripts/emulator/backup_restore_check.py
+          scripts/emulator/release_check.py
+          scripts/emulator/reminder_check.py
+          scripts/emulator/emulator_boot.py
+          .github/actions/android-emulator/
+          .github/scripts/push_gate.py
+          .github/workflows/widget-size.yml
+
+  apk:
+    name: 디버그 APK
+    needs: gate
+    # gate가 run=false라고 할 때만 건너뜀. 수동 실행(gate 건너뜀)이나 gate 실패 때는 돎
+    if: ${{ !cancelled() && needs.gate.outputs.run != 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: gradle/actions/wrapper-validation@0723195856401067f7a2779048b490ace7a47d7c # v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: 디버그 APK (./gradlew :androidApp:assembleDebug)
+        run: ./gradlew :androidApp:assembleDebug
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: widget-size-apk
+          path: androidApp/build/outputs/apk/debug/androidApp-debug.apk
+          retention-days: 1
+          overwrite: true
+          if-no-files-found: error
+
+  widget-size:
+    name: 위젯 크기 (API ${{ matrix.api }})
+    needs: apk
+    # 건너뛴 gate가 apk를 거쳐 이 작업까지 건너뛰게 하지 않게 apk 결과만 봄(수동 실행)
+    if: ${{ !cancelled() && needs.apk.result == 'success' }}
+    runs-on: ubuntu-latest
+    # 폭 둘에서 다시 설치·놓기·줄이기·돌리기. 한 폭에 약 5분
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # 34: 기준(Android 14). 36: 가장 새 Android. 30: targetCell이 없는 Android 11. 26: 가장 낮은 지원 버전
+        api: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.apis || '[34, 36, 30, 26]') }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: widget-size-apk
+          path: ${{ runner.temp }}/apk
+
+      # KVM, 시스템 이미지, AVD(pixel_5)를 준비하고 부팅을 기다림 (화면 확인과 같은 액션)
+      - uses: ./.github/actions/android-emulator
+        with:
+          api: ${{ matrix.api }}
+          cores: "4"
+
+      - name: 위젯 크기 (scripts/emulator/widget_size_check.py)
+        env:
+          WIDTHS: ${{ github.event_name == 'workflow_dispatch' && inputs.widths || 'own,360' }}
+        run: |
+          python3 scripts/emulator/widget_size_check.py \
+            --apk "$RUNNER_TEMP/apk/androidApp-debug.apk" \
+            --out "$RUNNER_TEMP/widget-size-${{ matrix.api }}" \
+            --widths "$WIDTHS"
+
+      - name: 결과 표
+        if: ${{ !cancelled() }}
+        run: |
+          report="$RUNNER_TEMP/widget-size-${{ matrix.api }}/report.md"
+          if [ -f "$report" ]; then cat "$report" >> "$GITHUB_STEP_SUMMARY"; else echo "보고서 없음" >> "$GITHUB_STEP_SUMMARY"; fi
+          cp "$RUNNER_TEMP/emulator.log" "$RUNNER_TEMP/widget-size-${{ matrix.api }}/" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() }}
+        with:
+          name: widget-size-api${{ matrix.api }}
+          path: ${{ runner.temp }}/widget-size-${{ matrix.api }}/
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: ignore

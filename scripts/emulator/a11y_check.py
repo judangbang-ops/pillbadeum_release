@@ -117,6 +117,7 @@ from screens_check import (
     open_people,
     refresh_widgets,
     reopen,
+    scroll_top,
     seek,
     text_is,
     wait_screen,
@@ -966,6 +967,12 @@ def run(r: Report, steps: A11ySteps, apk: Path) -> None:
     # 4. every screen at 100% and 200%
     def home() -> None:
         leave_to_home()
+        # A new text size makes the app again and its list keeps the place it had at 100% (run 43574423401: at 200%
+        # the first card was above the fold and the screen was not known), so it is read from the top.
+        for _ in range(3):
+            if has_desc(dump_ui(), f"{ME} {MULTI}, "):
+                return
+            scroll_top()
 
     both(steps, r, "SCR-004", "home", "첫 화면 (먹음·건너뜀·미완료·주 1회)", home,
          lambda ns: at_home(ns) and has_desc(ns, f"{ME} {MULTI}, "))

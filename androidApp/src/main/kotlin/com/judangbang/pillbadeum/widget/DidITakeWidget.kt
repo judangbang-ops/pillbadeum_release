@@ -364,14 +364,19 @@ private val noticeStyle = TextStyle(color = color(Tokens.INK_NOTICE), fontSize =
 
 /**
  * The tap message in the header's place: the notice band's look (`color.surface.notice`) inside one button that opens
- * the app, with [WidgetLayout.TOP_PAD_V] above and below like the header.
+ * the app, with [WidgetLayout.TOP_PAD_V] above and below like the header. Like the header row, the inside is
+ * [WidgetLayout.TOP_MIN] tall at least, so a one-line message on a font with shorter lines is still 48dp.
  */
 @Composable
 private fun BandText(text: String, openApp: Action) {
-    Box(modifier = GlanceModifier.fillMaxWidth().clickable(openApp).padding(vertical = WidgetLayout.TOP_PAD_V.dp)) {
+    Row(
+        modifier = GlanceModifier.fillMaxWidth().clickable(openApp).padding(vertical = WidgetLayout.TOP_PAD_V.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Spacer(GlanceModifier.width(0.dp).height(WidgetLayout.TOP_MIN.dp))
         Words(
             text,
-            modifier = GlanceModifier.fillMaxWidth()
+            modifier = GlanceModifier.defaultWeight()
                 .background(ImageProvider(R.drawable.widget_notice))
                 .padding(horizontal = WidgetLayout.BAND_PAD_H.dp, vertical = WidgetLayout.BAND_PAD_V.dp),
             style = noticeStyle,

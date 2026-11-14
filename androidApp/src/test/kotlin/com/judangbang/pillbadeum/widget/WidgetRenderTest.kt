@@ -123,6 +123,11 @@ class WidgetRenderTest {
         check("message-200", model(drawing), message = skippedMessage, fontScale = 2f, arrow = true)
 
     @Test
+    fun a_one_line_message_is_still_a_48dp_button() =
+        // REQ-067 (TASK-030): the shortest message kind, one line on a 4x2.
+        check("message-short-100", model(drawing), message = "아침약: 이미 기록됨 (08:02). 변경 없음", arrow = true)
+
+    @Test
     fun the_restore_band() =
         check("restore-100", model(short(4), restore = "복원됨 · 마지막 기록 11/09${nb}21:40 · 앱에서 확인"), arrow = true)
 

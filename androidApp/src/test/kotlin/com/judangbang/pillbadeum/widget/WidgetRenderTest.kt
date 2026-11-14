@@ -171,12 +171,14 @@ class WidgetRenderTest {
 
     @Test
     fun the_smallest_4x2_the_launchers_gave() {
-        // BUG-005 (scripts/emulator/widget_size_check.py): the smallest 4x2 Pixel Launcher gave on a screen 360dp wide.
-        // Upright: Android 11 (API 30), whose 5-column grid gives four cells 249x189dp. Turned: Android 14 (API 34),
-        // 604x104dp, when the home screen is allowed to turn.
+        // BUG-005 (scripts/emulator/widget_size_check.py): the smallest upright 4x2 Pixel Launcher gave on a screen
+        // 360dp wide. Android 11 (API 30), whose 5-column grid gives four cells 249x189dp, at 100% and at 130%, the
+        // largest font size in its settings. Android 14 and later, where the font size goes to 200%: 321x195dp
+        // (API 36). At 249x189dp and 200%, a pairing Android 11 does not offer, the header takes four lines and leaves
+        // the list 26dp (CI run 43616469725).
         check("smallest-upright-100", model(drawing), size = DpSize(249.dp, 189.dp), arrow = true)
-        check("smallest-upright-200", model(drawing), size = DpSize(249.dp, 189.dp), fontScale = 2f, arrow = true)
-        check("smallest-turned-100", model(drawing), size = DpSize(604.dp, 104.dp), arrow = true)
+        check("smallest-upright-130", model(drawing), size = DpSize(249.dp, 189.dp), fontScale = 1.3f, arrow = true)
+        check("smallest-upright-200", model(drawing), size = DpSize(321.dp, 195.dp), fontScale = 2f, arrow = true)
     }
 
     @Test

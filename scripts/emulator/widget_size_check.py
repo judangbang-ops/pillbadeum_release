@@ -35,7 +35,9 @@ For each width (`wm density reset`, then the density that makes the screen 360dp
      drags miss the frame and the next check means nothing), then the bottom handle up to the widget's top and the
      right handle (when it has one) to the widget's left: the smallest size the launcher allows. Pixel Launcher on
      Android 8 and 11 draws the frame but leaves it out of the screen dump (run 43608286853), so its handles are then
-     taken at the middle of the widget's edges, where the captures show them.
+     taken at the middle of the widget's edges, where the captures show them. Pixel Launcher on API 36 shows 'Tap to
+     change widget settings' over the first frame; the next touch only closes it (run 43613226894: the grow did
+     nothing), so it is tapped away first.
   5. The turned screen's grid: Pixel Launcher's 'Allow home screen rotation' (Launcher3 pref_allowRotation) set in its
      preferences file, the rotation locked at 90 degrees, DeviceProfile read again, back upright. When the launcher
      does not turn, the screen is made wider than tall with `wm size` instead (noted in the report).
@@ -390,6 +392,10 @@ def swipe(x1: int, y1: int, x2: int, y2: int, ms: int = 1500) -> None:
 
 HANDLE_INSET = 14  # px from the widget's edge to a handle's middle in the API 26 and 30 captures (run 43608286853)
 SIDES = {"bottom": "아래", "right": "오른쪽"}
+# Launcher3 reconfigurable_widget_education_tip (English system), shown once over the first resize frame of a
+# reconfigurable widget. While it is open it is the launcher's top floating view, and its touch handling closes it on
+# the next touch without passing the touch on (ArrowTipView), so a handle drag then does nothing (API 36)
+WIDGET_TIP = re.compile(r"widget settings", re.IGNORECASE)
 
 
 def frame_handles(nodes: list[Node], host: Node) -> tuple[dict[str, tuple[int, int]], bool]:
@@ -419,6 +425,16 @@ def resize(r: Report, tag: str, side: str, target) -> str:
     x, y = host.center
     swipe(x, y, x, y, 2000)
     nodes = dump_ui()
+    tip = next((n for n in nodes if WIDGET_TIP.search(n.text)), None)
+    if tip is not None:
+        save_ui(r, f"{tag}-tip")
+        r.shot(f"{tag}-tip")
+        tap(*tip.center)
+        time.sleep(1)
+        nodes = dump_ui()
+        if by_rid(nodes, "widget_resize_frame") is None:  # the frame went with the tip: open it again
+            swipe(x, y, x, y, 2000)
+            nodes = dump_ui()
     save_ui(r, f"{tag}-frame")
     r.shot(f"{tag}-frame")
     handles, in_dump = frame_handles(nodes, host)
@@ -430,6 +446,8 @@ def resize(r: Report, tag: str, side: str, target) -> str:
         done = f"{SIDES[side]} 손잡이를 끎" + ("" if in_dump else "(틀이 화면 덤프에 없어 위젯 가장자리에서 잡음)")
     else:
         done = f"{SIDES[side]} 손잡이 없음"
+    if tip is not None:
+        done += "(위젯 설정 안내를 먼저 눌러 닫음)"
     sh("input keyevent KEYCODE_BACK")
     time.sleep(1)
     go_home()

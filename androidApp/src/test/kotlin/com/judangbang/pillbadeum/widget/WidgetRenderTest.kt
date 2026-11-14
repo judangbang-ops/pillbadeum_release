@@ -170,6 +170,16 @@ class WidgetRenderTest {
     }
 
     @Test
+    fun the_smallest_4x2_the_launchers_gave() {
+        // BUG-005 (scripts/emulator/widget_size_check.py): the smallest 4x2 Pixel Launcher gave on a screen 360dp wide.
+        // Upright: Android 11 (API 30), whose 5-column grid gives four cells 249x189dp. Turned: Android 14 (API 34),
+        // 604x104dp, when the home screen is allowed to turn.
+        check("smallest-upright-100", model(drawing), size = DpSize(249.dp, 189.dp), arrow = true)
+        check("smallest-upright-200", model(drawing), size = DpSize(249.dp, 189.dp), fontScale = 2f, arrow = true)
+        check("smallest-turned-100", model(drawing), size = DpSize(604.dp, 104.dp), arrow = true)
+    }
+
+    @Test
     fun empty_and_loading() {
         check("empty-100", model(emptyList()), arrow = false)
         check("loading-100", null, arrow = false)

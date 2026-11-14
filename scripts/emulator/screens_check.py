@@ -443,11 +443,15 @@ def wipe_widget_choices() -> list[str]:
 
 
 def find_pin_button(timeout: float = 15) -> Node | None:
+    """The add button on the launcher's sheet. On Android 8 the sheet's title is also "Add to Home screen" and its
+    button is [ADD AUTOMATICALLY] (screens2 run 43539426392, API 26: the title was tapped and nothing was added), so
+    the title is skipped and of the rest the lowest node is taken: the buttons sit at the bottom of the sheet."""
     end = time.time() + timeout
     while True:
-        for n in dump_ui():
-            if n.text.strip().lower() in PIN_BUTTONS or n.rid.endswith("/add_button"):
-                return n
+        hits = [n for n in dump_ui()
+                if (n.text.strip().lower() in PIN_BUTTONS or n.rid.endswith("/add_button")) and not n.rid.endswith("/title")]
+        if hits:
+            return max(hits, key=lambda n: n.center[1])
         if time.time() >= end:
             return None
         time.sleep(1)

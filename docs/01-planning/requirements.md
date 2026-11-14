@@ -49,10 +49,10 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | REQ-001 | 앱은 한 복용 항목의 한 창에 활성 판정(복용·건너뜀)을 최대 1개만 저장해야 함 | 기능 | Must | CTX-001 | 기획 v3 4장, 기록 규칙 1·4장, 킥오프 15:37 | RR-1, RR-2, RR-24. DB 유니크 `(intake_id, period_key, active)` | 있음 |
 | REQ-002 | 앱은 창을 기준 시간대(기본 Asia/Seoul)와 하루 시작 시각(기본 04:00)으로 계산해야 함. 매일 약은 [D 하루 시작, D+1 하루 시작), 주 1회 약은 기준 요일 하루 시작부터 7일 | 기능 | Must | CTX-001 | 기록 규칙 2장 | RR-3, RR-4, RR-8, RR-20 | 있음 |
-| REQ-003 | 위젯·앱·알림의 모든 판정 쓰기는 공통 기록 함수(RecordDose·VoidDose·ChangeJudgment)를 거쳐야 함 | 기능 | Must | CTX-001 | 기록 규칙 1·6장, 아키텍처 3장 | 코드 검사: 판정 DAO의 쓰기를 usecase 밖에서 부르지 않음. RR-2 | 있음 (알림 버튼도 `DidITakeCore.record`를 거침, R3 [PR #20](https://github.com/judangbang-ops/pillbadeum_release/pull/20)) |
+| REQ-003 | 위젯·앱·알림의 모든 판정 쓰기는 공통 기록 함수(RecordDose·VoidDose·ChangeJudgment)를 거쳐야 함 | 기능 | Must | CTX-001 | 기록 규칙 1·6장, 아키텍처 3장 | 코드 검사: 판정 DAO의 쓰기를 usecase 밖에서 부르지 않음. RR-2 | 있음, 코드 검사 통과 (TASK-034 [PR #32](https://github.com/judangbang-ops/pillbadeum_release/pull/32), [회귀 확인 보고서](../07-qa/2026-11-15-regression/report.md) 3장): CI의 `check_writes.py`가 PR마다 봄. 위젯 버튼, 알림 버튼(R3 [PR #20](https://github.com/judangbang-ops/pillbadeum_release/pull/20)), 첫 화면 [먹었어]는 `DidITakeCore.record`로 `RecordDose`, 기록 취소는 `VoidDose`, 판정 고치기(골라 기록, 건너뜀, 건너뜀 → 복용, 시각 고치기)는 `RecordInWindow`를 거침. 문장의 `ChangeJudgment`는 jvm 시험에만 쓰이고 앱은 부르지 않음(문장은 그대로 두고 동희님께 보고) |
 | REQ-004 | 위젯·알림 버튼이 그려진 때의 기간키가 지금 기간키와 다르면, 앱은 기록하지 않고 위젯을 다시 그린 뒤 "날짜가 바뀌었어요. 다시 눌러 주세요"를 보여야 함 | 기능 | Must | CTX-001 | 기록 규칙 7장 | RR-13, RR-23. 실기기에서 경계 직후 갱신 안 된 위젯을 탭 | 위젯 있음(실기기 확인 전), 알림 있음(R3 [PR #20](https://github.com/judangbang-ops/pillbadeum_release/pull/20), 기기 확인 전) |
 | REQ-005 | 보관된 항목이나 보관된 대상자의 항목 버튼을 누르면 앱은 기록하지 않고 위젯을 다시 그려야 함 | 기능 | Must | CTX-001 | 기록 규칙 7장, 검토 B5 | RR-9, RR-14. 대상자를 보관한 뒤 갱신되지 않은 버튼 탭 → `Gone`, 판정 행 없음 | 있음 (보관한 대상자의 항목도 `Gone`, PR #11) |
-| REQ-092 | 앱 데이터가 지워진 뒤 놓여 있던 위젯 버튼을 누르면 위젯은 기록하지 않고 다시 그려야 함 | 기능 | Should | CTX-004 | 01 확인 2 답 3(앱 데이터 지워짐을 02 반례로, 동희님 "추천 모두 승인", 2026-11-12 15:48 KST 이 스레드) | 에뮬레이터: 항목과 위젯 → 설정에서 저장공간 지우기 → 위젯 탭 → 판정 행 없음, 위젯이 항목 없는 모양으로 바뀜 | 확인 전 (없는 항목은 `RecordResult.Gone`으로 보임) |
+| REQ-092 | 앱 데이터가 지워진 뒤 놓여 있던 위젯 버튼을 누르면 위젯은 기록하지 않고 다시 그려야 함 | 기능 | Should | CTX-004 | 01 확인 2 답 3(앱 데이터 지워짐을 02 반례로, 동희님 "추천 모두 승인", 2026-11-12 15:48 KST 이 스레드) | 에뮬레이터: 항목과 위젯 → 설정에서 저장공간 지우기 → 위젯 탭 → 판정 행 없음, 위젯이 항목 없는 모양으로 바뀜 | 통과 (에뮬레이터 API 34, TASK-034 [PR #32](https://github.com/judangbang-ops/pillbadeum_release/pull/32), [회귀 확인 보고서](../07-qa/2026-11-15-regression/report.md) 14단계): 저장공간 지우기와 같은 `pm clear` 뒤 위젯에 남은 칸을 누르면 판정 0행·항목 0개이고, 위젯이 칸 없이 '앱에서 복용 항목을 추가해 주세요'로 다시 그려짐. 실기기는 보지 않음 |
 | REQ-006 | 앱은 판정을 지우지 않고, 취소는 무효 처리(`active` = NULL, 행 유지)로 해야 함 | 기능 | Must | CTX-001 | 기획 v3 5장 1번 | RR-6 | 있음 |
 | REQ-007 | 판정·항목·설정이 바뀌면 앱은 모든 위젯을 바로 다시 그려야 함 | 기능 | Must | CTX-004 | 아키텍처 6장 | 전제 위젯 미완료 → 동작 앱에서 기록 → 결과 위젯이 완료 (QA 7) | 있음 |
 | REQ-008 | 하루 시작 시각이 지나면 앱은 위젯을 새 기준 날짜로 다시 그려야 함 | 기능 | Must | CTX-004 | 아키텍처 6장, 시퀀스 4 | QA 9, QA 10 | 있음 (재부팅은 실기기 확인 전) |
@@ -267,7 +267,7 @@
 - 문장 (Claude가 읽고, '해야 함'·'않아야 함' 꼴을 정규식으로 셈): 94줄 모두 의무가 하나임. 한 의무에 여러 값을 묶어 남긴 줄: REQ-012(저장하는 칸들), REQ-030(골라 기록과 시각 고치기가 같은 규칙), REQ-032(저장하지 않는 조건 네 가지), REQ-036(두 곳에 보이는 의료 안내), REQ-045(알림 버튼 두 개의 저장)
 - 확인하지 못한 것
   - 정확 알람 허용을 끌 때 시스템이 앱에 무엇을 보내는지. [Android 14 정확 알람 문서](https://developer.android.com/about/versions/14/changes/schedule-exact-alarms)는 허용할 때 `ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED`를 보낸다고만 적고, 끌 때는 적지 않음. TASK-027에서 기기로 봄
-  - REQ-092가 지금 코드에서 어떻게 되는지. 기기에서 아직 안 봄(TASK-034)
+  - REQ-092가 지금 코드에서 어떻게 되는지. 기기에서 아직 안 봄(TASK-034). 2026-11-15 TASK-034 [PR #32](https://github.com/judangbang-ops/pillbadeum_release/pull/32)에서 에뮬레이터로 봄: 통과(REQ-092 줄)
   - 03 플로우와의 연결. 03 다시 하기에서 봄
 - 범위 확인 (2026-11-12 16:32 KST, 동희님 "추천 모두 승인"): 대상자 완전 삭제는 2차, REQ-089·092·093·094와 REQ-047 계기는 1차, [Notion 기능 대조 표](https://app.notion.com/p/415bf16cc3ec81fb94dbf8d9255092df)와 견줘 더할 것 없음(하루 여러 번은 항목을 따로). 0장에 적음
 

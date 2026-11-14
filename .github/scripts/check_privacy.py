@@ -108,24 +108,28 @@ def esc(text: str) -> str:
 
 
 def merger_sources(report: Path) -> dict[str, list[str]]:
-    """'kind#name' → where it came from: '[group:artifact:version]' or the app's own manifest path."""
+    """'kind#name' → where it came from: '[group:artifact:version]' or the app's own manifest path.
+    Each element starts at a line with no indent ('uses-permission#…', 'application', 'manifest'); the lines under it
+    say where it came from ('ADDED from …', 'MERGED from …') or are indented attribute lines."""
     sources: dict[str, list[str]] = {}
     current = None
+    record = re.compile(r"^(ADDED|MERGED|INJECTED|IMPLIED|REJECTED|REMOVED) from (\[[^\]]+\]|\S+)")
     for line in report.read_text(encoding="utf-8", errors="replace").splitlines():
-        if not line.strip():
+        if not line.strip() or line.startswith("--"):
             continue
-        if not line[0].isspace() and "#" in line and " " not in line.strip():
+        m = record.match(line)
+        if not line[0].isspace() and not m:
             current = line.strip()
             sources.setdefault(current, [])
             continue
-        m = re.match(r"^(ADDED|MERGED|INJECTED|IMPLIED) from (\[[^\]]+\]|\S+)", line)
         if m and current is not None:
             where = m.group(2)
             if where.startswith("["):
                 where = where[1:-1]
             else:
                 where = re.sub(r"^.*?/(androidApp|shared)/", r"\1/", where)
-                where = re.sub(r":\d+:\d+-\d+$", "", where)
+                # ':줄:칸-칸' 또는 ':줄:칸-줄:칸'
+                where = re.sub(r":\d+:\d+-\d+(:\d+)?$", "", where)
             entry = where if m.group(1) == "ADDED" else f"{where} ({m.group(1)})"
             if entry not in sources[current]:
                 sources[current].append(entry)

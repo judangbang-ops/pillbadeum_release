@@ -11,6 +11,8 @@ activity ${applicationId}.widget.WidgetPickActivity -
 # 앱 매니페스트: 위젯 공급자. 시스템(AppWidgetService)이 APPWIDGET_UPDATE 등을 보냄. 다른 앱이 보내도 위젯을 다시
 # 그릴 뿐임. 위젯 탭 기록은 Glance의 ActionCallbackBroadcastReceiver(내보내지 않음)로 가는 PendingIntent로만 됨
 receiver ${applicationId}.widget.DidITakeWidgetReceiver -
+# androidx.glance: 위젯의 목록(LazyColumn) 칸을 런처에 그려 주는 서비스. 시스템만 묶을 수 있음(BIND_REMOTEVIEWS)
+service androidx.glance.appwidget.GlanceRemoteViewsService android.permission.BIND_REMOTEVIEWS
 # androidx.work: 시스템의 JobScheduler만 묶을 수 있음(BIND_JOB_SERVICE)
 service androidx.work.impl.background.systemjob.SystemJobService android.permission.BIND_JOB_SERVICE
 # androidx.work: 진단 정보를 logcat에 남기는 수신기. adb 셸 등 DUMP 권한이 있어야 보낼 수 있음

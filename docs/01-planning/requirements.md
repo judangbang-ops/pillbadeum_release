@@ -167,18 +167,18 @@
 
 | ID | 요구 | 종류 | 우선 | 경계 | 출처 | 합격 기준 | 지금 코드 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| REQ-057 | 1차 앱은 서버·계정 없이 모든 데이터를 기기 안에만 둬야 함 | 비기능 | Must | 없음 | 킥오프 16:34, 기획 v3 2장·8장. 측정 방법은 Claude 제안 | 릴리즈 빌드의 병합 매니페스트에 `android.permission.INTERNET` 없음 | 있음 (PR마다 CI가 디버그 APK 권한을 기대 목록과 비교함. 릴리즈 병합 매니페스트는 확인 전) |
-| REQ-058 | 앱은 복용 기록·항목 이름·대상자 이름을 로그와 저장소에 남기지 않아야 함 | 비기능 | Must | 없음 | 기획 v3 8장, README 작업 규칙 | 코드 검사: 로그 호출에 이름 없음 | 확인 전 |
-| REQ-090 | 앱은 분석·크래시 보고 SDK를 넣지 않아야 함 | 비기능 | Must | 없음 | 기획 v3 8장, README 작업 규칙. 02 다시 하기(2026-11-12)에서 REQ-058를 나눔 | 의존성 목록에 분석·크래시 SDK 없음 | 확인 전 |
-| REQ-059 | 앱은 AI 기능과 외부 AI API를 넣지 않아야 함 | 비기능 | Must | 없음 | 킥오프 16:39, 기획 v3 7장 | 의존성 목록에 AI SDK 없음 | 있음 |
+| REQ-057 | 1차 앱은 서버·계정 없이 모든 데이터를 기기 안에만 둬야 함 | 비기능 | Must | 없음 | 킥오프 16:34, 기획 v3 2장·8장. 측정 방법은 Claude 제안 | 릴리즈 빌드의 병합 매니페스트에 `android.permission.INTERNET` 없음 | 있음 (PR마다 CI가 디버그·릴리즈 APK 권한을 기대 목록과 비교함. 릴리즈 병합 매니페스트에 `INTERNET`이 없음도 CI가 PR마다 봄: TASK-031, [PR #28](https://github.com/judangbang-ops/pillbadeum_release/pull/28)) |
+| REQ-058 | 앱은 복용 기록·항목 이름·대상자 이름을 로그와 저장소에 남기지 않아야 함 | 비기능 | Must | 없음 | 기획 v3 8장, README 작업 규칙 | 코드 검사: 로그 호출에 이름 없음 | 있음 (TASK-031, [PR #28](https://github.com/judangbang-ops/pillbadeum_release/pull/28): 앱 소스의 로그 호출 39개에 이름·기록이 없음을 CI가 PR마다 봄. 원문의 '저장소'는 코드 저장소임(기획 v3 8장, README 작업 규칙). 앱이 DB 밖에 쓰는 파일은 [개인정보 점검](../07-qa/2026-11-14-privacy/report.md) 6절) |
+| REQ-090 | 앱은 분석·크래시 보고 SDK를 넣지 않아야 함 | 비기능 | Must | 없음 | 기획 v3 8장, README 작업 규칙. 02 다시 하기(2026-11-12)에서 REQ-058를 나눔 | 의존성 목록에 분석·크래시 SDK 없음 | 있음 (TASK-031, [PR #28](https://github.com/judangbang-ops/pillbadeum_release/pull/28): 릴리즈 의존성 147개에 분석·크래시 SDK 없음. CI가 PR마다 봄) |
+| REQ-059 | 앱은 AI 기능과 외부 AI API를 넣지 않아야 함 | 비기능 | Must | 없음 | 킥오프 16:39, 기획 v3 7장 | 의존성 목록에 AI SDK 없음 | 있음 (TASK-031, [PR #28](https://github.com/judangbang-ops/pillbadeum_release/pull/28): 릴리즈 의존성에 AI SDK 없음. CI가 PR마다 봄) |
 | REQ-060 | 1차는 Google Play 비공개 테스트 트랙으로 배포해야 하고, iOS는 그 뒤에 함 | 비기능 | Must | 없음 | 결정 Q13 | 비공개 테스트 트랙에서 테스터가 설치함 | 없음 |
 | REQ-061 | 앱 패키지 이름(`applicationId`)은 첫 Play 업로드 전에 정하고 그 뒤 바꾸지 않아야 함 | 비기능 | Must | 없음 | 결정 Q9(2026-11-12 정함: `com.judangbang.pillbadeum`), Q13 | 첫 업로드의 패키지 이름 = 결정한 이름 | 있음 (`com.judangbang.pillbadeum`, [PR #4](https://github.com/judangbang-ops/pillbadeum_release/pull/4)로 2026-11-12 main에 합침) |
 | REQ-062 | 개인 APK로 쓰던 기록은 Play 비공개 테스트 버전으로 넘어갈 때 사라지지 않아야 함 | 비기능 | Must | CTX-005 | 기획 v3 2.2, Play 앱 서명 도움말, 4장 2번(2026-11-12 확정), 2026-11-12 검토 A1·A2 | 개인 APK를 쓰던 폰에 Play 버전을 덮어 깐 뒤 기록이 남아 있음. Play Console의 앱 서명 인증서 SHA-256이 우리 앱 서명 키의 지문과 같음. 올린 번들의 버전 번호가 깔려 있는 개인 APK보다 큼 | 일부 (2026-11-12). 앱 서명 키(동희님 PC와 Drive, GitHub에 없음)와 업로드 키(GitHub Secrets)를 따로 둠. 릴리즈 빌드는 CI가 업로드 키로 서명하고 개인 APK는 동희님 PC 스크립트가 앱 서명 키로 서명하며, 버전 번호는 빌드한 커밋의 커밋 수(TASK-002, PR #6·#10). 같은 방법으로 서명한 릴리즈 APK에서 버전 번호가 큰 다음 빌드를 덮어 깔아도 기록이 남음을 에뮬레이터에서 봄(TASK-051, PR #14). Play 앱 서명 인증서와 Play 버전 덮어 깔기는 TASK-050·TASK-038 |
 | REQ-063 | 비공개 테스트 전에 Play Console의 건강 앱 신고, 데이터 보안 양식, 개인정보처리방침 링크, 콘텐츠 등급, 타깃 연령을 마치고 앱 안에도 개인정보처리방침 링크를 둬야 함 | 비기능 | Must | 없음 | Play 데이터 보안·건강 콘텐츠 도움말, Notion '법·정책 확인' 표, 검토 B9 | Play Console '앱 콘텐츠' 항목이 모두 완료. 앱 설정(SCR-009)에서 방침이 열림 | 앱 안 링크 자리 있음 (SCR-009, TASK-020: 주소가 정해지면 브라우저로 엶, 지금은 '준비 중'). 주소와 Play Console은 TASK-035 |
 | REQ-064 | Play 앱 설명에 "의료기기가 아니며 질병을 진단·치료·예방하지 않는다"와 "의학적 조언은 의료인과 상의하라"를 넣어야 함 | 비기능 | Must | 없음 | Play 건강 콘텐츠 정책 | 스토어 설명 문안 | 없음 |
 | REQ-065 | 새 개인 개발자 계정이면 테스터 12명 이상이 14일 연속 참여한 뒤 프로덕션을 신청해야 함 | 비기능 | Must (새 개인 계정일 때) | 없음 | Play 테스트 요건(범위 문서 10절, 2026-11-11 확인), 결정 Q11(결정 전) | 비공개 테스트 참여 기록 | 없음 |
-| REQ-081 | 기록을 받는 알림 버튼 수신기와 앱의 PendingIntent는 다른 앱이 판정을 만들거나 바꿀 수 없게 해야 함(`exported="false"`, `FLAG_IMMUTABLE`) | 비기능 | Must | CTX-003 | 검토 B12 | 병합 매니페스트에서 그 수신기가 `exported="false"`, 코드 검사에서 PendingIntent에 `FLAG_IMMUTABLE` | 있음: 알림 버튼 수신기 `exported="false"`, PendingIntent `FLAG_IMMUTABLE` (R3 [PR #20](https://github.com/judangbang-ops/pillbadeum_release/pull/20)) |
-| REQ-083 | 1차 앱은 광고와 광고 SDK를 넣지 않아야 함 | 비기능 | Must | 없음 | 결정 Q8(2026-11-12, 1차 광고 없음) | 의존성 목록에 광고 SDK 없음. `INTERNET` 권한 없음(REQ-057) | 있음 |
+| REQ-081 | 기록을 받는 알림 버튼 수신기와 앱의 PendingIntent는 다른 앱이 판정을 만들거나 바꿀 수 없게 해야 함(`exported="false"`, `FLAG_IMMUTABLE`) | 비기능 | Must | CTX-003 | 검토 B12 | 병합 매니페스트에서 그 수신기가 `exported="false"`, 코드 검사에서 PendingIntent에 `FLAG_IMMUTABLE` | 있음: 알림 버튼 수신기 `exported="false"`, PendingIntent `FLAG_IMMUTABLE` (R3 [PR #20](https://github.com/judangbang-ops/pillbadeum_release/pull/20)). 릴리즈 병합 매니페스트의 exported와 앱 소스의 PendingIntent 5개를 CI가 PR마다 봄(TASK-031, [PR #28](https://github.com/judangbang-ops/pillbadeum_release/pull/28)): 위젯 고정 콜백 하나만 바꿀 수 있음(런처가 위젯 번호를 더함, 이 앱의 내보내지 않은 수신기를 가리킴) |
+| REQ-083 | 1차 앱은 광고와 광고 SDK를 넣지 않아야 함 | 비기능 | Must | 없음 | 결정 Q8(2026-11-12, 1차 광고 없음) | 의존성 목록에 광고 SDK 없음. `INTERNET` 권한 없음(REQ-057) | 있음 (TASK-031, [PR #28](https://github.com/judangbang-ops/pillbadeum_release/pull/28): 릴리즈 의존성에 광고 SDK 없음. CI가 PR마다 봄) |
 
 ### 2.11 접근성 (노인도 쓰는 초간단 화면)
 

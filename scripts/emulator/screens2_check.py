@@ -36,7 +36,9 @@ Flow on API 33 and later (34, 36), clock in Asia/Seoul, day 0 the run's date:
 
 API 26: steps 0-3, the battery row (notifications and exact alarms need no permission before Android 13 and 12), the
 backup line (Android 8.x does not back up, with or without a lock), six items, the widget at 100%, 115% and 130%
-(the largest size there) and the six taps (TASK-042 on the oldest Android). API 27: the backup line only (TC-035).
+(the largest size there) and the six taps (TASK-042 on the oldest Android). Before the taps, what the launcher does
+with a drag over the widget's list is noted: a slow straight drag photographed halfway, then a fast one, straight or
+wider than tall, which the taps then use (drag_list). API 27: the backup line only (TC-035).
 
 Names are typed in English (`adb shell input text` cannot type Korean). The debug APK is used: the database is read as
 root, and the debug receiver (androidApp/src/debug) adds items and redraws the widgets the way a write does.
@@ -51,6 +53,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 import time
 import traceback
@@ -547,10 +550,21 @@ def expected_columns(inner_dp: float, lo: float, hi: float) -> tuple[int | None,
     return None, limit
 
 
+# How drag_list moves a finger on API 28 and older, which have no `input motionevent`: "fast" (straight, within
+# FAST_DRAG_MS) or "diagonal" (as fast, wider than tall). probe_old_drag picks it on the launcher in step 11.
+OLD_DRAG = {"how": "fast"}
+FAST_DRAG_MS = 250
+SLOW_DRAG_DP_S = 25
+
+
 def drag_list(x: int, y1: int, y2: int) -> None:
-    """Moves a finger from y1 to y2 in the list and lifts it without a fling (PR #16, widget_scroll_check.drag_list):
-    from API 29 `input motionevent`, past the touch slop at once (a slow start is a long press that picks the widget up),
-    still for 0.4s before lifting; older images have no motionevent, so a swipe slow enough not to fling (25dp/s)."""
+    """Moves a finger from y1 to y2 in the list and lifts it (PR #16, widget_scroll_check.drag_list). From API 29
+    `input motionevent`: past the touch slop at once (a slow start is a long press that picks the widget up), still for
+    0.4s before lifting, so the list does not fling. Older images have no motionevent, and the slow swipe PR #16 used
+    there (25dp/s, in a test host) never moved the list on the API 26 launcher: 30 drags in screens2 run 43542096180,
+    the launcher taking the touch about 0.34s after it went down (logcat: its hotseat's layers were built then). So the
+    drag ends within FAST_DRAG_MS, before a launcher long press, and the list flings a little further (a few dp at this
+    speed); probe_old_drag says whether it goes straight or wider than tall."""
     d = DENSITY["d"]
     if API["n"] >= 29:
         sign = -1 if y2 < y1 else 1
@@ -565,9 +579,67 @@ def drag_list(x: int, y1: int, y2: int) -> None:
         time.sleep(0.4)
         sh(f"input motionevent UP {x} {y2}")
     else:
-        duration = max(800, int(abs(y2 - y1) / (25 * d) * 1000))
-        sh(f"input swipe {x} {y1} {x} {y2} {duration}")
+        # Wider than tall: the launcher's swipe up to the app drawer wants a path steeper than 45°, while the list
+        # starts once the finger is 8dp up or down, before the workspace's page swipe (its slop grows with the angle).
+        dx = round(abs(y2 - y1) * 1.1) if OLD_DRAG["how"] == "diagonal" else 0
+        sh(f"input swipe {x + dx // 2} {y1} {x - dx // 2} {y2} {FAST_DRAG_MS}")
     time.sleep(1.5)
+
+
+def list_place(nodes: list[Node]) -> dict[str, tuple[int, int]]:
+    """Where each tile of the list shows, top and bottom."""
+    return {k: (n.bounds[1], n.bounds[3]) for k, n in tiles_in(nodes, list_view(nodes)).items()}
+
+
+def list_moved(before: dict[str, tuple[int, int]], after: dict[str, tuple[int, int]]) -> bool:
+    return set(before) != set(after) or any(abs(a - b) > 8 for k in before for a, b in zip(before[k], after[k]))
+
+
+def probe_old_drag(r: Report) -> str:
+    """API 28 and older, once before the six taps (TASK-042 on Android 8): what this launcher does with a drag over
+    the widget's list, and which drag_list then uses. The slow straight drag of run 43542096180 again, photographed
+    halfway (a long press picks the widget up, the app drawer follows the finger, or the list moves); then a fast
+    straight drag, and if the list stays where it was, a fast one wider than tall. Raises when none moves it."""
+    d = DENSITY["d"]
+    seen: list[str] = []
+
+    def drag_and_look(label: str, drag) -> bool:
+        nodes = widget_page(widget_ready, 30)
+        box = list_view(nodes)
+        before = list_place(nodes)
+        drag(box)
+        nodes = dump_ui()
+        if list_view(nodes) is None:  # the app drawer or another page in front: back to the widget
+            seen.append(f"{label}: 위젯 목록이 사라짐(런처가 다른 화면을 엶)")
+            nodes = widget_page(widget_ready, 30)
+            return False
+        moved = list_moved(before, list_place(nodes))
+        seen.append(f"{label}: {'목록이 움직임' if moved else '목록 그대로'}")
+        return moved
+
+    def slow(box: Node) -> None:
+        x = (box.bounds[0] + box.bounds[2]) // 2
+        y1 = box.bounds[3] - 6
+        span = max((box.bounds[3] - box.bounds[1]) * 2 // 5, round(70 * d)) + round(8 * d)
+        duration = int(span / (SLOW_DRAG_DP_S * d) * 1000)
+        drag = subprocess.Popen(["adb", "shell", f"input swipe {x} {y1} {x} {y1 - span} {duration}"],
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(min(1.5, duration / 2000))
+        r.shot("widget-slow-drag")  # the launcher halfway through the drag; a dump would wait for it to end
+        drag.wait(timeout=60)
+        time.sleep(2)
+
+    def fast(box: Node) -> None:
+        move_list(box, content_up=True, px=max((box.bounds[3] - box.bounds[1]) * 2 // 5, round(70 * d)))
+
+    drag_and_look(f"느린 곧은 드래그({SLOW_DRAG_DP_S}dp/s, 반쯤에서 캡처)", slow)
+    OLD_DRAG["how"] = "fast"
+    if not drag_and_look(f"빠른 곧은 드래그({FAST_DRAG_MS / 1000:g}초)", fast):
+        OLD_DRAG["how"] = "diagonal"
+        if not drag_and_look(f"빠르고 가로가 더 긴 드래그({FAST_DRAG_MS / 1000:g}초)", fast):
+            raise RuntimeError(f"no drag moved the widget's list on this launcher: {'; '.join(seen)}")
+    r.note(f"API {API['n']} 런처에서 위젯 목록 끌기(관찰, TASK-042): {'; '.join(seen)}. 여섯 칸 탭은 마지막 방법으로 스크롤")
+    return "; ".join(seen)
 
 
 def move_list(box: Node, content_up: bool, px: int) -> None:
@@ -982,6 +1054,8 @@ def run(r: Report, steps: ShotSteps, apk: Path, api: int) -> None:
         font_scale("1.0")
         refresh_widgets()
         widget_page(widget_ready, 30)
+        if API["n"] < 29:
+            probe_old_drag(r)
         done, problems, kept = [], [], []
         for name in TAP_ORDER:
             node, box = reach_tile(name)

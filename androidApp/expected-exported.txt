@@ -1,0 +1,21 @@
+# 릴리즈 변형의 병합 매니페스트에서 다른 앱이 부를 수 있는(exported) 구성요소 기준 (TASK-031, 수신기 보호).
+# 한 줄: <종류> <이름> <보호 권한, 없으면 ->. 앱 패키지 이름은 ${applicationId}로 적음.
+# CI(.github/workflows/ci.yml의 '개인정보 점검')가 .github/scripts/check_privacy.py로 실제 목록과 비교해, 한 줄이라도
+# 늘거나 줄면 실패함. 의도한 변경이면 이 파일을 같은 PR에서 고치고, 왜 내보내는지와 다른 앱이 할 수 있는 일을 주석으로 적음.
+
+# 앱 매니페스트: 런처 아이콘(MAIN·LAUNCHER). 다른 앱이 열어도 첫 화면이 열릴 뿐임
+activity ${applicationId}.MainActivity -
+# 앱 매니페스트: 위젯 대상자 고르기(SCR-002). 런처가 위젯을 놓을 때와 다시 설정할 때 APPWIDGET_CONFIGURE로 엶.
+# 이 앱의 위젯 번호에만 동작함(WidgetPickActivity)
+activity ${applicationId}.widget.WidgetPickActivity -
+# 앱 매니페스트: 위젯 공급자. 시스템(AppWidgetService)이 APPWIDGET_UPDATE 등을 보냄. 다른 앱이 보내도 위젯을 다시
+# 그릴 뿐임. 위젯 탭 기록은 Glance의 ActionCallbackBroadcastReceiver(내보내지 않음)로 가는 PendingIntent로만 됨
+receiver ${applicationId}.widget.DidITakeWidgetReceiver -
+# androidx.glance: 위젯의 목록(LazyColumn) 칸을 런처에 그려 주는 서비스. 시스템만 묶을 수 있음(BIND_REMOTEVIEWS)
+service androidx.glance.appwidget.GlanceRemoteViewsService android.permission.BIND_REMOTEVIEWS
+# androidx.work: 시스템의 JobScheduler만 묶을 수 있음(BIND_JOB_SERVICE)
+service androidx.work.impl.background.systemjob.SystemJobService android.permission.BIND_JOB_SERVICE
+# androidx.work: 진단 정보를 logcat에 남기는 수신기. adb 셸 등 DUMP 권한이 있어야 보낼 수 있음
+receiver androidx.work.impl.diagnostics.DiagnosticsReceiver android.permission.DUMP
+# androidx.profileinstaller: 실행 속도 프로필 설치. DUMP 권한이 있어야 보낼 수 있음
+receiver androidx.profileinstaller.ProfileInstallReceiver android.permission.DUMP

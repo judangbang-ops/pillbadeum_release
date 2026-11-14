@@ -1145,7 +1145,7 @@ def run(r: Report, steps: Steps, apk: Path) -> None:
         if not at_home(nodes) or not said or after != before:
             raise RuntimeError(f"after [다시 시도]: first screen {at_home(nodes)}, {VITAMIN} {said}, "
                                f"active judgments {before} → {after}")
-        return (f"DB 파일 권한 {mode} → 000: '{shown}'와 [다시 시도]; 권한을 {mode}로 되돌리고 [다시 시도] → "
+        return (f"DB 파일 권한 {mode} → 000: '{shown}'와 [다시 시도]; 권한을 되돌리고({mode}) [다시 시도] → "
                 f"첫 화면 '{said[0]}', 활성 판정 {before} → {after}")
 
     steps("15-3. 읽기 오류와 [다시 시도] (TASK-016 SCR-004#error)",

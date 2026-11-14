@@ -76,7 +76,6 @@ from backup_restore_check import (
     wait_boot,
 )
 from explore import (
-    FRAME,
     IME_BLOCK,
     KEYBOARD_NOTES,
     LOG_PARTS,
@@ -107,7 +106,7 @@ NAMES = (MORNING, VITAMIN, WEEKLY)
 # they were added, like the widget's rows.
 s2.ITEMS = NAMES + (TYPED,)
 
-EMPTY_HOME = "아직 복용 항목이 없어요"  # HomeScreen's empty state (SCR-004#empty)
+EMPTY_HOME = "아직 복용 항목이 없어요."  # HomeScreen's empty state (SCR-004#empty), with its full stop
 EMPTY_WIDGET = "앱에서 복용 항목을 추가해 주세요"  # Labels.EMPTY_WIDGET, the widget with no items (SCR-001#empty)
 NO_RECORD = "기록 없음"  # Labels.NO_RECORD
 CANCEL_ASK = "기록을 취소할까요?"  # the question of [기록 취소] (REQ-029)
@@ -218,15 +217,46 @@ def tap_tile(name: str, twice: bool = False) -> Node:
     return node
 
 
-def keyboard_frame() -> tuple[int, int] | None:
-    """Top and bottom in pixels of the on-screen keyboard's window while it is visible."""
+# Since Android 11 a window's frame is printed as `Frames: parent=… display=… frame=[l,t][r,b]`; before, `mFrame=…`
+# (explore.FRAME reads only the old form, so on API 34 it never finds the keyboard: regression run 43627835213).
+WINDOW_FRAME = re.compile(r"\b(?:mFrame|frame)=\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]")
+# The area the keyboard takes from the apps, in `dumpsys window`: `InsetsSource id=… type=ime frame=[…] visible=true`
+IME_INSETS = re.compile(r"\btype=ime\b.*?\bframe=\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\].*?\bvisible=true")
+IMS_SHOWN = re.compile(r"\b(mInputShown|mIsInputViewShown|mWindowVisible|mDecorViewVisible)=true")
+
+
+def keyboard_state() -> tuple[list[str], int | None, str]:
+    """What says the on-screen keyboard is up, the top in pixels of the area it covers when a dump gives one, and the
+    dump lines read (kept as evidence). Three dumps, as their wording differs across versions: the keyboard's window in
+    `dumpsys window windows` (`isVisible=true` and its frame), the keyboard's insets in `dumpsys window` (the area the
+    app makes room for with imePadding, preferred for the top) and `dumpsys input_method`."""
+    signals: list[str] = []
+    kept: list[str] = []
+    window_top = insets_top = None
     block = IME_BLOCK.search(sh("dumpsys window windows", check=False))
-    if not block or "isVisible=true" not in block.group(1):
-        return None
-    frame = FRAME.search(block.group(1))
-    if not frame or int(frame.group(4)) <= int(frame.group(2)):
-        return None
-    return int(frame.group(2)), int(frame.group(4))
+    if block:
+        text = block.group(1)
+        kept += [line.strip() for line in text.splitlines()
+                 if re.search(r"isVisible=|isOnScreen=|frame=|mViewVisibility=", line, re.I)]
+        if re.search(r"\bisVisible=true", text):
+            signals.append("키보드 창 isVisible=true")
+            frame = WINDOW_FRAME.search(text)
+            if frame and int(frame.group(4)) > int(frame.group(2)):
+                window_top = int(frame.group(2))
+    for line in sh("dumpsys window", check=False).splitlines():
+        m = IME_INSETS.search(line)
+        if m and int(m.group(4)) > int(m.group(2)):
+            kept.append(line.strip())
+            signals.append("키보드 인셋 visible=true")
+            insets_top = int(m.group(2))
+            break
+    for line in sh("dumpsys input_method", check=False).splitlines():
+        m = IMS_SHOWN.search(line)
+        if m:
+            kept.append(line.strip())
+            signals.append(f"input_method {m.group(1)}=true")
+    top = insets_top if insets_top is not None else window_top
+    return sorted(set(signals)), top, "\n".join(kept)
 
 
 def add_item(r: Report, name: str, weekly: bool, choice: str, shot: str | None = None) -> None:
@@ -665,34 +695,37 @@ def run(r: Report, steps: ShotSteps) -> None:
                 raise RuntimeError("no name field on the item form")
             tap(field)
             sh(f"input text {TYPED}")
-            frame = None
-            for _ in range(8):
+            signals, top, kept = [], None, ""
+            for _ in range(10):
                 time.sleep(1)
-                frame = keyboard_frame()
-                if frame:
+                signals, top, kept = keyboard_state()
+                if signals and top is not None:
                     break
             nodes = dump_ui()
             save = next((n for n in nodes if n.text == "저장"), None)
             r.shot("form-keyboard")
             save_ui(r, "form-keyboard")
-            if frame is None:
-                raise RuntimeError("the soft keyboard did not come up")
+            (r.out / f"api{r.api}-keyboard-dumpsys.txt").write_text(kept + "\n", encoding="utf-8")
             if save is None:
-                raise RuntimeError(f"[저장] not on screen with the keyboard up (keyboard {frame})")
+                raise RuntimeError(f"[저장] not on screen with the keyboard up ({signals}, top {top})")
             _, h = screen_size()
-            if 0 < frame[0] < h:
-                above, how = save.bounds[3] <= frame[0] + 1, f"키보드 창 위쪽 {frame[0]}px"
+            # The form keeps its footer above the keyboard, so [저장] leaves the bottom of the screen while the keyboard
+            # is up (screens2_check.keyboard_up): the sign used when no dump says where the keyboard is
+            lifted = save.bounds[3] < h * 0.7
+            if not signals and not lifted:
+                raise RuntimeError(f"the soft keyboard did not come up: no dump says so and [저장] is at {save.bounds}")
+            if top is not None and 0 < top < h:
+                above, how = save.bounds[3] <= top + 1, f"키보드 위쪽 {top}px"
             else:
-                # The window dump gave no frame inside the screen: the form keeps its footer above the keyboard, so
-                # [저장] sits in the upper part of the screen while the keyboard is up (screens2_check.keyboard_up)
-                above, how = save.bounds[3] < h * 0.7, f"키보드 창 {frame}, 화면 높이 {h}px의 70% 위"
+                above, how = lifted, f"키보드 위치를 덤프에서 읽지 못해 화면 높이 {h}px의 70% 위로 봄"
+            up = ", ".join(signals) or "덤프 신호 없음, [저장]이 화면 위쪽 70% 안"
             tap(save)
             saved = tile(TYPED, 20) is not None
             r.shot("form-keyboard-saved")
             stored = query(f"SELECT COUNT(*) FROM intake WHERE name = '{TYPED}' AND archived_at IS NULL")[0][0]
             if not above or not saved or stored != 1:
-                raise RuntimeError(f"[저장] {save.bounds}, {how}; tile {saved}; DB {stored}")
-            return f"화면 키보드가 뜬 채({how}) 그 위 [저장] {save.bounds}를 눌러 '{TYPED}' 저장(DB 1행)"
+                raise RuntimeError(f"[저장] {save.bounds}, {how} ({up}); tile {saved}; DB {stored}")
+            return f"화면 키보드가 뜬 채({up}; {how}) 그 위 [저장] {save.bounds}를 눌러 '{TYPED}' 저장(DB 1행)"
         finally:
             sh("settings put secure show_ime_with_hard_keyboard 0", check=False)
 

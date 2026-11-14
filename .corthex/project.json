@@ -57,12 +57,12 @@
       "human": "github",
       "source": "docs/05-ui/screens.md",
       "truth": "source",
-      "note": "화면 정의를 한 파일에 둠. 화면 5장 7개는 2026-11-12 10:18 KST 확정. 2026-11-12 08 다시 하기(Claude): 흐름 FL ID, 화면마다 '명세:' 줄(SPEC), 01 용어로 글자 맞춤, 04 명세 3장의 화면 쪽 항목 정함. 출처 열은 API가 없어 공통 코드 함수 이름. 상태별 와이어프레임은 아직 없음(TASK-044). 화면 정의 승인(2026-11-13 01:04 KST, 동희님 '추천모두승인', 질문은 00:55 KST 메시지 2번). Claude 제안 다섯과 09에서 바꾼 셋 함께 승인. 상태별 그림은 TASK-044와 화면 작업 PR에서. 기록은 screens.md 6장"
+      "note": "화면 정의를 한 파일에 둠. 화면 5장 7개는 2026-11-12 10:18 KST 확정. 2026-11-12 08 다시 하기(Claude): 흐름 FL ID, 화면마다 '명세:' 줄(SPEC), 01 용어로 글자 맞춤, 04 명세 3장의 화면 쪽 항목 정함. 출처 열은 API가 없어 공통 코드 함수 이름. 상태별 와이어프레임은 아직 없음(TASK-044). 화면 정의 승인(2026-11-13 01:04 KST, 동희님 '추천모두승인', 질문은 00:55 KST 메시지 2번). Claude 제안 다섯과 09에서 바꾼 셋 함께 승인. 상태별 그림은 TASK-044와 화면 작업 PR에서. 기록은 screens.md 6장. 승인 뒤 화면 작업에서 바꾼 것(TASK-012~023, TASK-030)은 6장에 적고 모두 동희님이 정함(마지막은 2026-11-14 23:24 KST '추천 모두 승인', '필받음 재구축 인계' 채팅: TASK-023 다섯과 TASK-030 셋을 그대로 둠)"
     },
     "09-mockup": {
       "human": "github",
       "link": "docs/09-mockup/README.md",
-      "note": "2026-11-12 CORTHEX 09 다시 하기: 17:34 동희님 'AI 슬롭' 지적으로 Pillbox 토큰 후보를 버리고 1안 약봉투·2안 요일 약통을 claude.ai Design 캔버스(https://claude.ai/artifact/QW5JRsx1Zpz5ekeqHmjpKC)에 다시 그림. 18:27 KST 동희님이 결정 카드에서 '2안 요일 약통'을 고름. 그 뒤 화면 10개와 주요 상태를 2안으로 그림(보드 원본 docs/09-mockup/boards/). 토큰 원본은 DTCG design/base.tokens.json. 19:11 KST 동희님 '모두 승인'으로 09 확인 끝: 위젯 '더 있음'은 글자 없는 아래 화살표(REQ-078), 가장 작은 크기는 실제 4×2 칸(REQ-026), 토큰을 지금 값으로 굳힘. 가쟈누님 시안 v3(DidITake 7a800ac docs/05-ui/ui-mockup-v3.html)는 참고 자료. 2026-11-13 00:16 KST 04 명세 고정 질문 4(동희님 '추천 모두 승인')로 글꼴을 앱에 넣지 않고 기기 글꼴을 씀: font.family.base를 sans-serif로, 보드는 Pixel 기본 글꼴(Roboto·Noto Sans KR)로 다시 그리고 글자 200% 배치를 다시 잼(README 4장)"
+      "note": "2026-11-12 CORTHEX 09 다시 하기: 17:34 동희님 'AI 슬롭' 지적으로 Pillbox 토큰 후보를 버리고 1안 약봉투·2안 요일 약통을 claude.ai Design 캔버스(https://claude.ai/artifact/QW5JRsx1Zpz5ekeqHmjpKC)에 다시 그림. 18:27 KST 동희님이 결정 카드에서 '2안 요일 약통'을 고름. 그 뒤 화면 10개와 주요 상태를 2안으로 그림(보드 원본 docs/09-mockup/boards/). 토큰 원본은 DTCG design/base.tokens.json. 19:11 KST 동희님 '모두 승인'으로 09 확인 끝: 위젯 '더 있음'은 글자 없는 아래 화살표(REQ-078), 가장 작은 크기는 실제 4×2 칸(REQ-026), 토큰을 지금 값으로 굳힘. 가쟈누님 시안 v3(DidITake 7a800ac docs/05-ui/ui-mockup-v3.html)는 참고 자료. 2026-11-13 00:16 KST 04 명세 고정 질문 4(동희님 '추천 모두 승인')로 글꼴을 앱에 넣지 않고 기기 글꼴을 씀: font.family.base를 sans-serif로, 보드는 Pixel 기본 글꼴(Roboto·Noto Sans KR)로 다시 그리고 글자 200% 배치를 다시 잼(README 4장). 2026-11-14 23:24 KST TASK-030 접근성 점검 뒤 동희님 '추천 모두 승인'('필받음 재구축 인계' 채팅)으로 color.line.strong을 #8B909A에서 #838892로 바꿈(글자 아닌 것 3:1, README 0장)"
     },
     "10-wbs": {
       "human": "github",

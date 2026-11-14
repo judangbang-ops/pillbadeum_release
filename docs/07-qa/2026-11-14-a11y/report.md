@@ -163,7 +163,7 @@ WCAG 2.1의 1.4.11은 누르는 곳의 테두리와 상태를 알리는 그림�
 | `person.1.solid` | `surface.default` | 6.33:1 | SCR-002, SCR-004 |
 
 - 건너뜀은 위젯 칸에 '건너뜀'이라고 쓰여 있고, 이번 주 약통은 줄마다 '수 건너뜀'처럼 읽혀 색만으로 알리지는 않음. 띠 안의 테두리 버튼은 글자(17.93:1)로 버튼임을 알 수 있음. 지난 기록의 이전 달·다음 달 없음 화살표는 쓸 수 없는 상태라 1.4.11에서 빠짐
-- `line.strong`을 #838892로 바꾸면 흰색·`surface.sunken`·`surface.notice`·`surface.skip`에서 3.56·3.20·3.17·3.04:1이 됨(7절). 바꾸기로 정해 [PR #30](https://github.com/judangbang-ops/pillbadeum_release/pull/30)에서 바꿈(위 표는 바꾸기 전 6차 실행의 값)
+- `line.strong`을 #838892로 바꾸면 흰색·`surface.sunken`·`surface.notice`·`surface.skip`에서 3.56·3.20·3.17·3.04:1이 됨(7절). 바꾸기로 정해 [PR #30](https://github.com/judangbang-ops/pillbadeum_release/pull/30)에서 바꿈(위 표는 바꾸기 전 6차 실행의 값). 바꾼 뒤 7차 실행 [43605076696](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43605076696)(`5dc36fe`)도 38개 모두 통과했고(78쪽, 누르는 곳 429곳 가장 짧은 변 48dp, 글자 쌍 12가지 가장 낮은 것 5.22:1), 캡처에서 잰 `line.strong`은 흰 바탕 3.56:1(SCR-004·005·006·007·009), `surface.sunken` 3.20:1(SCR-005)(`a11y.json`의 `parts`). 위젯 글자 100% 캡처(`api34-79-widget-100-p1.png`)에서 `surface.skip` #ECEDEF 72,935픽셀과 새 `line.strong` #838892 3,753픽셀을 셈(옛 #8B909A 0픽셀. 스크립트가 아니라 Claude가 셈)
 
 ## 6. 확인하지 못한 것
 

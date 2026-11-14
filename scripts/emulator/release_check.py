@@ -9,7 +9,9 @@ Takes two release APKs of one commit signed with one test key, the way personal 
   2. Add an item in the app, place the home-screen widget, tap the item on the widget:
      one record with source WIDGET.
   3. RR-26: back up with the local test transport (encryption on), uninstall, install N again:
-     the widget-tapped record comes back. First start shows the restore notice. Add a second item and
+     the widget-tapped record comes back. The backup holds the placed widget too, so the system may start the
+     app for its widget right after the restore, and the restore check may have run before the script reads
+     the database. First start shows the restore notice. Add a second item and
      place the widget again: it shows the restore line (supplement R-3) until [확인했어요] in the app.
   4. Install N+1 over N: version N+1, the record stays, same device_id and marker, no restore notice.
   5. Tap the second item on the widget the launcher kept: the new build records it.
@@ -299,6 +301,26 @@ def tap_widget_item(name: str) -> bool:
 # Flow
 
 
+def restore_check_seen(state, old_id: str | None) -> str | None:
+    """RR-26, the read right after the reinstall: "before" when the app's restore check has not run yet (old
+    device_id, no marker), "after" when it has (new device_id, restored_from = the old one; the marker may still be
+    on its way), None for anything else.
+
+    Both happen. The backup also holds the widget placed before it, and right after the restore the system may start
+    the app for a broadcast to the widget provider before the script reads (run 43563317318: "Start proc ... for
+    broadcast {...DidITakeWidgetReceiver}" 0.07 s after "Restore complete", then "restore detected"). That entry
+    opens the core like any other (supplement R-1)."""
+    now_id = state.settings.get("device_id")
+    if not old_id:
+        return None
+    if now_id == old_id and state.marker is None:
+        return "before"
+    if (now_id and now_id != old_id and state.settings.get("restored_from_device_id") == old_id
+            and state.marker in (None, now_id)):
+        return "after"
+    return None
+
+
 def run_flow(apk: Path, next_apk: Path, r: Report) -> None:
     # 1. release variant, version N
     uninstall()
@@ -339,10 +361,13 @@ def run_flow(apk: Path, next_apk: Path, r: Report) -> None:
     time.sleep(2)
     install(apk)
     restored = read_state()
-    r.check("RR-26 백업 → 지우고 다시 설치 (릴리즈 N)", f"기록 1건(source {source})이 돌아옴, 표식 없음",
-            describe(restored) + f", source {restored.sources}",
-            restored.active_records == 1 and restored.sources == [source] and restored.marker is None
-            and restored.settings.get("device_id") == old_id)
+    seen = restore_check_seen(restored, old_id)
+    r.check("RR-26 백업 → 지우고 다시 설치 (릴리즈 N)",
+            f"기록 1건(source {source})이 돌아옴. 복원 확인 전이면 device_id 그대로·표식 없음, 시스템이 위젯 방송으로 "
+            "앱을 먼저 깨웠으면 새 device_id·restored_from = 옛 값",
+            describe(restored) + f", source {restored.sources}"
+            + ("; 앱이 먼저 깨어 복원 확인을 함" if seen == "after" else ""),
+            restored.active_records == 1 and restored.sources == [source] and seen is not None)
     launch_app()
     notice = screen_has(NOTICE, 10)
     r.shot("restored-notice")

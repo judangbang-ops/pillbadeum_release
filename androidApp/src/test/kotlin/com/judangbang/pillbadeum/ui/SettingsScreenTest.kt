@@ -182,6 +182,8 @@ class SettingsScreenTest {
         row("기준 시간대, Asia/Seoul").performClick()
         val seoul = compose.onNodeWithContentDescription("Asia/Seoul, UTC+09:00 · 이 휴대폰")
         seoul.assertIsSelected()
+        val height = seoul.fetchSemanticsNode().boundsInRoot.height / compose.density.density
+        assertTrue("at 100% the offset stays beside the name: $height dp", height < 60f)
         compose.assertTargetsAtLeast48dp()
         save("settings-zone-list")
         seoul.performClick()
@@ -433,6 +435,25 @@ class SettingsScreenTest {
         compose.onNodeWithContentDescription("23시부터 8시까지").performScrollTo()
         compose.assertTargetsAtLeast48dp()
         save("settings-quiet-200")
+    }
+
+    /**
+     * 200% text: in the base-zone list an offset goes under its zone, so `Asia/Seoul` keeps one line. The accessibility
+     * check (run 43579503348) found it broken into a letter or two a line beside `UTC+09:00 · 이 휴대폰`.
+     */
+    @Test
+    fun large_text_puts_zone_offsets_under_their_names() {
+        app.seedWeek(family = false)
+        RuntimeEnvironment.setFontScale(2f)
+        openSettings()
+        row("기준 시간대, Asia/Seoul").performScrollTo().performClick()
+        val seoul = compose.onNodeWithContentDescription("Asia/Seoul, UTC+09:00 · 이 휴대폰").fetchSemanticsNode().boundsInRoot
+        val height = seoul.height / compose.density.density
+        // The name's line (40 dp) over the offset's (35 dp), 4 dp between and 6 dp above and below, about 91 dp; a font
+        // that wraps the offset or breaks the name at '/' adds a line. Broken a letter or two a line, it was eight
+        assertTrue("the offset under the name: $height dp", height in 80f..150f)
+        compose.assertTargetsAtLeast48dp()
+        save("settings-zone-200")
     }
 
     /** REQ-094, SPEC-021: SCR-010's back returns to settings, settings' back to the first screen. */

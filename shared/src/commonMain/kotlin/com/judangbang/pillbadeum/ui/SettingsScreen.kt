@@ -482,18 +482,20 @@ private fun LinkRow(name: String, onClick: () -> Unit) {
 }
 
 /**
- * [start] and [end] on one line while [end] takes at most 45% of the width; else [end] goes under [start], so 200% text
- * keeps whole words (Claude's design: 09 draws the row at 100% only).
+ * [start] and [end] on one line while [end] takes at most 45% of the width, or with [besideIfAllFit] while both fit on
+ * the line whole; else [end] goes under [start], so 200% text keeps whole words (Claude's design: 09 draws the row at
+ * 100% only).
  */
 @Composable
-internal fun EndOrBelow(start: @Composable () -> Unit, end: @Composable () -> Unit) {
+internal fun EndOrBelow(start: @Composable () -> Unit, end: @Composable () -> Unit, besideIfAllFit: Boolean = false) {
     Layout(contents = listOf(start, end), modifier = Modifier.fillMaxWidth()) { (startMeasurables, endMeasurables), constraints ->
         val width = constraints.maxWidth
         val gap = 12.dp.roundToPx()
         val first = startMeasurables.single()
         val second = endMeasurables.single()
         val endWidth = second.maxIntrinsicWidth(Constraints.Infinity)
-        if (endWidth <= width * 0.45f) {
+        val allFit = besideIfAllFit && first.maxIntrinsicWidth(Constraints.Infinity) + gap + endWidth <= width
+        if (endWidth <= width * 0.45f || allFit) {
             val endPlaced = second.measure(Constraints(maxWidth = endWidth.coerceAtMost(width)))
             val startPlaced = first.measure(Constraints(maxWidth = (width - endPlaced.width - gap).coerceAtLeast(0)))
             val height = maxOf(startPlaced.height, endPlaced.height)
@@ -722,18 +724,25 @@ private fun ZoneDialog(current: String, device: String, now: () -> Instant, onPi
     }
 }
 
+/**
+ * A zone and its UTC offset at the end of the line. Like the settings rows' values, an offset wider than 45% of the line
+ * goes under the name (200% text broke `Asia/Seoul` into a letter or two a line beside `UTC+09:00 · 이 휴대폰`), unless
+ * both fit on the line whole: that offset takes 46% of the line at 100% at 360 dp.
+ */
 @Composable
 private fun ZoneRow(id: String, detail: String, selected: Boolean, onClick: () -> Unit) {
-    Row(
+    Box(
         Modifier.fillMaxWidth().heightIn(min = 52.dp)
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
             .clearAndSetSemantics { contentDescription = "$id, $detail" }
             .background(if (selected) Ui.Sunken else Ui.Surface)
             .padding(horizontal = 20.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        contentAlignment = Alignment.CenterStart,
     ) {
-        Words(id, Ui.type(16, if (selected) Ui.ExtraBold else FontWeight.Normal, lineHeight = 1.25f), Modifier.weight(1f))
-        Words(detail, Ui.type(14, color = Ui.Muted, lineHeight = 1.25f))
+        EndOrBelow(
+            start = { Words(id, Ui.type(16, if (selected) Ui.ExtraBold else FontWeight.Normal, lineHeight = 1.25f)) },
+            end = { Words(detail, Ui.type(14, color = Ui.Muted, lineHeight = 1.25f)) },
+            besideIfAllFit = true,
+        )
     }
 }

@@ -28,6 +28,8 @@ Flow (clock set in Asia/Seoul; day 0 is the run's date):
       buttons, the warning still there once the clock is right again (RR-64), the history cell, [그대로 두기].
   15. Phone in Europe/London (TASK-043): times on the phone's clock, dates still in Asia/Seoul. Then the base zone
       changed in 설정 (P-5): a day that ended before it opens as SCR-007#locked, with no button (TASK-018).
+      The database file made unreadable for the app: SCR-004#error and [다시 시도], which reads the records again once
+      the file can be opened (TASK-016).
   16. Mom archived again, text 200% and the display density set for a 360dp width: [되살리기] under the name (TASK-021).
   17. Installed again: the intro, and its [위젯 추가] asks the launcher to place the widget (TASK-022).
 
@@ -59,6 +61,7 @@ from zoneinfo import ZoneInfo
 from backup_restore_check import (
     ACTIVITY,
     DATA,
+    DB,
     HOME_MARK,
     PKG,
     Node,
@@ -116,6 +119,7 @@ GREEN = "초록"  # Labels.COLOR_NAMES[2]
 SEOUL_NOTE = "날짜는 기준 시간대(Asia/Seoul)로 셈해요."  # HomeScreen, when the phone is in another zone
 LOCKED = "설정을 바꾸기 전의 기록은 고칠 수 없어요"  # Labels.LOCKED, the band of SCR-007#locked
 LOCKED_NOTE = "하루 시작 시각이나 기준 시간대를 바꾸기 전에 끝난 날이에요."  # Labels.LOCKED_NOTE
+LOAD_FAILED = "기록을 불러오지 못했어요"  # Labels.LOAD_FAILED, SCR-004#error
 ZONE_ASK = "기준 시간대를 바꿀까요?"  # SettingsScreen, the P-5 question before the base zone changes
 LONDON = "Europe/London"
 SEOUL = "Asia/Seoul"
@@ -1107,6 +1111,46 @@ def run(r: Report, steps: Steps, apk: Path) -> None:
 
     steps("15-2. 기준 시간대를 바꾸기 전에 끝난 날 (TASK-018 SCR-007#locked)",
           f"설정에서 기준 시간대를 {LONDON}로 바꾼 뒤 지난 기록 맨 아래 칸: '{LOCKED}' 띠, 버튼 없음", locked)
+
+    # 15-3. SCR-004#error (TASK-016): the database file cannot be opened. With the app stopped, the file's mode is
+    # cleared as root, so the app's own user can neither read nor write it. Room's first read then fails in the bundled
+    # SQLite driver (SQLITE_CANTOPEN, "unable to open database file"); the app has no destructive fallback
+    # (buildDidITakeDatabase), and the step checks that every active judgment is still there afterwards. The first
+    # screen shows LOAD_FAILED and [다시 시도]; with the mode back, [다시 시도] calls AppContainer.core() again, which
+    # opens the database and reads the records. `am force-stop` also cancels the app's alarms; the open re-arms them
+    # (AppContainer.afterOpen).
+    def read_error() -> str:
+        db = f"{DATA}/databases/{DB}"
+        mode = sh(f"stat -c %a {db}").strip()
+        before = active_count()
+        sh(f"am force-stop {PKG}")
+        sh(f"chmod 000 {db}")
+        try:
+            sh(f"am start -n {ACTIVITY}")
+            nodes = wait_screen(lambda ns: any(LOAD_FAILED in n.text for n in ns), 30)
+            shown = next((n.text for n in nodes if LOAD_FAILED in n.text), "")
+            retry = exact("다시 시도", 5)
+            r.shot("home-error")
+            save_ui(r, "home-error")
+        finally:
+            sh(f"chmod {mode} {db}")
+        if not shown or retry is None:
+            raise RuntimeError(f"file mode {mode} → 000: texts {[n.text for n in nodes if n.text]}")
+        tap(retry)
+        nodes = wait_screen(lambda ns: at_home(ns) and bool(spoken(ns, VITAMIN)), 20)
+        said = spoken(nodes, VITAMIN)
+        after = active_count()
+        r.shot("home-error-retried")
+        save_ui(r, "home-error-retried")
+        if not at_home(nodes) or not said or after != before:
+            raise RuntimeError(f"after [다시 시도]: first screen {at_home(nodes)}, {VITAMIN} {said}, "
+                               f"active judgments {before} → {after}")
+        return (f"DB 파일 권한 {mode} → 000: '{shown}'와 [다시 시도]; 권한을 {mode}로 되돌리고 [다시 시도] → "
+                f"첫 화면 '{said[0]}', 활성 판정 {before} → {after}")
+
+    steps("15-3. 읽기 오류와 [다시 시도] (TASK-016 SCR-004#error)",
+          f"DB 파일을 열 수 없는 동안 '{LOAD_FAILED}'와 [다시 시도], 열 수 있게 된 뒤 [다시 시도] → 첫 화면, 기록 그대로",
+          read_error)
 
     # 16. TASK-021's end condition at 360dp: text 200% puts [되살리기] under the name. Mom is archived again and the
     # display density set for a 360dp width; last before the reinstall, since wm density also re-lays the launcher.

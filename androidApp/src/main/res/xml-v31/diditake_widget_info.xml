@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The widget on Android 12 and later; Android 8-11 read res/xml/diditake_widget_info.xml, whose launchers count
+    differently. Default and smallest size: the launcher's real 4x2 cells (REQ-026, decided 2026-11-12 19:11 KST).
+
+    Launcher3, which Pixel Launcher is built on (android14-release LauncherAppWidgetProviderInfo.initSpans), counts the
+    cells of minResizeWidth/Height for the upright and the turned home screen and keeps the larger count as the
+    smallest size. It places the widget at targetCellWidth x targetCellHeight when that lies between the smallest size
+    and the grid, else at the count of minWidth/Height. Widget heights on the Pixel 5 emulator, 4x5 grids, gesture
+    navigation (scripts/emulator/widget_size_check.py, run 43608286853, BUG-005):
+
+                          upright 1 row   turned 1 row   turned 2 rows
+      API 34, 393dp wide       98.9dp         53.5dp         119.3dp
+      API 34, 360dp wide       91.0dp         47.3dp         106.7dp
+      API 36, 393dp wide       94.9dp         60.7dp         131.6dp
+      API 36, 360dp wide       89.7dp         54.3dp         118.7dp
+
+    - height 102dp: within two turned rows at 360dp too. The 110dp before was not (106.7dp at API 34), so the smallest
+      size there was three rows, 2 was out of range and the widget was placed 4x3 (BUG-005). Above one row both ways, so
+      the smallest size stays two rows, also on a launcher that counts only the upright screen. By the rule 61-106dp
+      gives 4x2 placed and smallest in all four.
+    - width 270dp: above three upright cells (258.6dp at API 34, 393dp wide), within four.
+    updatePeriodMillis is 0: periodic updates are at least 30 minutes apart and not exact, so day
+    boundary refresh will use its own alarm instead (docs/02-design/architecture.md section 6).
+    configure: the person picker SCR-002 opens when the widget is placed (TASK-012). widgetFeatures reconfigurable
+    adds a Reconfigure button on touch and hold, from Android 12 (official Glance configuration guide, read
+    2026-11-13). configuration_optional is not set: it would skip the picker on placement, which SPEC-005 asks for
+    from two people on.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:configure="com.judangbang.pillbadeum.widget.WidgetPickActivity"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:minWidth="270dp"
+    android:minHeight="102dp"
+    android:minResizeWidth="270dp"
+    android:minResizeHeight="102dp"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="0"
+    android:widgetCategory="home_screen"
+    android:widgetFeatures="reconfigurable" />

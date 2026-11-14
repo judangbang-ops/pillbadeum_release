@@ -13,28 +13,38 @@ takes targetCellWidth/Height (4x2) only when both lie between those smallest cou
 minWidth/Height. A turned phone's rows are low: when two of them are lower than minResizeHeight, the smallest height
 is three rows, 2 is out of range, and the widget is placed at the count of minHeight (4x3 at 360dp in the
 accessibility check, BUG-005). Widget padding is 6dp less the cell spacing, a side, when the spacing is under 6dp, else
-none. Older Launcher3 (Android 8-11) has no targetCell and counts with the smaller cells of the two ways and the
-system's widget padding (8dp a side); this script only reads what those launchers do.
+none. Older Launcher3 (Android 8-11) has no targetCell and counts minWidth/Height and minResizeWidth/Height with the
+smaller cells of the two ways, the system's widget padding (8dp a side) and no spacing; this script only reads what
+those launchers do. So the widget has two definitions: res/xml-v31 (Android 12 and later) and res/xml (before).
 
 For each width (`wm density reset`, then the density that makes the screen 360dp wide):
-  1. Install the debug APK again: the widget of the width before goes with the old install.
-  2. Intro > [다음] > [위젯 추가]: the launcher's add sheet shows the widget's size ("4 × 2", Launcher3 widget_dims).
-     Its add button places the widget (TASK-022's request: no drag, also on Android 8).
+  1. Install the debug APK again: the widget of the width before goes with the old install. Then start the launcher
+     again: Pixel Launcher on Android 8 kept the removed install's APK path from the old widget and showed the new one
+     as 'Problem loading widget' (API 26 at 360dp, run 43608286853: "Package name com.judangbang.pillbadeum not found"
+     with the old path; not on API 30, 34 or 36).
+  2. Intro > [다음] > [위젯 추가]: the launcher's add sheet shows the widget's size ("4 × 2", Launcher3 widget_dims; it
+     is filled in a moment after the sheet shows). Its add button places the widget (TASK-022's request: no drag, also
+     on Android 8).
   3. Read what the launcher says (adb root): its grid for the upright screen (DeviceProfile in `dumpsys activity top`,
      Android 12 and later), the widget's cells and smallest cells (its workspace item in
      `dumpsys activity top --all`, else the launcher's database), and the sizes it gave the widget, in dp
      (/data/system/users/0/appwidgets.xml: min_width and max_height are the upright width and height, max_width and
      min_height the turned ones).
-  4. Touch and hold the widget and let go: the resize frame. Drag its bottom handle up to the widget's top, and its
-     right handle (when it has one) to the widget's left: the smallest size the launcher allows. Read the cells again.
+  4. Resize with the launcher's frame (touch and hold the widget and let go, then drag a handle; the frame closes with
+     BACK and HOME before the cells are read): the bottom handle one row down, which must give one row more (else the
+     drags miss the frame and the next check means nothing), then the bottom handle up to the widget's top and the
+     right handle (when it has one) to the widget's left: the smallest size the launcher allows. Pixel Launcher on
+     Android 8 and 11 draws the frame but leaves it out of the screen dump (run 43608286853), so its handles are then
+     taken at the middle of the widget's edges, where the captures show them.
   5. The turned screen's grid: Pixel Launcher's 'Allow home screen rotation' (Launcher3 pref_allowRotation) set in its
      preferences file, the rotation locked at 90 degrees, DeviceProfile read again, back upright. When the launcher
      does not turn, the screen is made wider than tall with `wm size` instead (noted in the report).
-From the two grids the script works out, by the rule above, the cells for the values in
-androidApp/src/main/res/xml/diditake_widget_info.xml (they should match what the launcher did), and which
-minHeight = minResizeHeight values would give 4x2 placed and 4x2 smallest at this width.
+From the two grids the script works out, by the rule above, the cells for the values of the definition this phone
+reads (they should match what the launcher did), and which minHeight = minResizeHeight values would give 4x2 placed
+and 4x2 smallest at this width.
 
-Checks for each width: the add sheet says 4 × 2; the placed widget is 4x2; after the shrink it is still 4x2.
+Checks for each width: the add sheet says 4 × 2; the placed widget draws the app's views (not the launcher's error
+view); it is 4x2; one row more after the grow; after the shrink it is 4x2.
 Writes report.md, widget-size.json, screenshots, screen dumps and the launcher's dumps to --out. Exits 1 when a check
 fails. Standard library only. Not product code. Helpers are in backup_restore_check.py, release_check.py,
 screens_check.py, screens2_check.py and explore.py.
@@ -73,10 +83,11 @@ from backup_restore_check import (
 )
 from explore import exact, tap_exact
 from release_check import go_home, save_ui, screen_size
-from screens2_check import widget_host, widget_page
+from screens2_check import widget_host, widget_page, within
 from screens_check import find_pin_button, our_widget_ids, physical_density
 
-WIDGET_INFO = Path(__file__).resolve().parents[2] / "androidApp/src/main/res/xml/diditake_widget_info.xml"
+RES = Path(__file__).resolve().parents[2] / "androidApp/src/main/res"
+WIDGET_XML = "diditake_widget_info.xml"
 ANDROID_NS = "{http://schemas.android.com/apk/res/android}"
 WANT = (4, 2)  # REQ-026: placed at 4x2 and never smaller than 4x2
 APPWIDGETS = "/data/system/users/0/appwidgets.xml"  # AppWidgetServiceImpl's saved state (binary XML from Android 12)
@@ -90,9 +101,17 @@ SIZE_LABEL = re.compile(r"^\s*(\d+)\s*[×xX]\s*(\d+)\s*$")
 # The widget's own values
 
 
-def widget_values() -> dict[str, float]:
-    """minWidth, minHeight, minResizeWidth, minResizeHeight (dp) and targetCellWidth/Height of the widget's XML."""
-    root = ET.parse(WIDGET_INFO).getroot()
+def widget_info(api: int) -> Path:
+    """The widget definition this phone reads: res/xml-v31 from Android 12, whose launchers take targetCellWidth and
+    targetCellHeight, else res/xml (Android 8-11)."""
+    v31 = RES / "xml-v31" / WIDGET_XML
+    return v31 if api >= 31 and v31.exists() else RES / "xml" / WIDGET_XML
+
+
+def widget_values(path: Path) -> dict[str, float]:
+    """minWidth, minHeight, minResizeWidth, minResizeHeight (dp) and targetCellWidth/Height (0 when absent) of a widget
+    definition."""
+    root = ET.parse(path).getroot()
     values: dict[str, float] = {}
     for name in ("minWidth", "minHeight", "minResizeWidth", "minResizeHeight", "targetCellWidth", "targetCellHeight"):
         raw = root.get(ANDROID_NS + name, "")
@@ -323,15 +342,24 @@ def place_by_intro(r: Report, tag: str) -> str:
         raise RuntimeError("no [위젯 추가] on the intro's second page")
     tap_exact("위젯 추가")
     button = find_pin_button()
-    nodes = dump_ui()
+    if button is None:
+        save_ui(r, f"{tag}-sheet")
+        r.shot(f"{tag}-sheet")
+        raise RuntimeError("the launcher's add sheet did not show")
+    # The sheet fills in the size a moment after its buttons show: on API 36 the first dump had an empty widget_dims
+    # (run 43608286853), so it is read a few times
+    label = ""
+    for _ in range(8):
+        nodes = dump_ui()
+        dims = next((n for n in nodes if n.rid.endswith("/widget_dims") and n.text.strip()), None)
+        if dims is None:
+            dims = next((n for n in nodes if SIZE_LABEL.match(n.text)), None)
+        if dims is not None:
+            label = dims.text.strip()
+            break
+        time.sleep(1)
     save_ui(r, f"{tag}-sheet")
     r.shot(f"{tag}-sheet")
-    if button is None:
-        raise RuntimeError("the launcher's add sheet did not show")
-    dims = next((n for n in nodes if n.rid.endswith("/widget_dims")), None)
-    if dims is None:
-        dims = next((n for n in nodes if SIZE_LABEL.match(n.text)), None)
-    label = dims.text.strip() if dims is not None else ""
     tap(button)
     time.sleep(4)
     if exact("시작하기", 15) is not None:
@@ -345,6 +373,12 @@ def label_cells(label: str) -> tuple[int, int] | None:
     return (int(m.group(1)), int(m.group(2))) if m else None
 
 
+def drawn(nodes: list[Node], host: Node) -> bool:
+    """Whether the placed widget shows the app's own views (ids of this package inside the host). The launcher's error
+    view ('Problem loading widget', API 26 at 360dp in run 43608286853) has none."""
+    return any(n.rid.startswith(f"{PKG}:id/") and within(n, host) for n in nodes)
+
+
 def by_rid(nodes: list[Node], name: str) -> Node | None:
     return next((n for n in nodes if n.rid.endswith(f"/{name}") and n.bounds[2] > n.bounds[0]), None)
 
@@ -354,39 +388,63 @@ def swipe(x1: int, y1: int, x2: int, y2: int, ms: int = 1500) -> None:
     time.sleep(2)
 
 
-def shrink(r: Report, tag: str, host: Node) -> str:
-    """Touch and hold the widget and let go, then drag the resize frame's handles inward as far as the widget goes.
-    Returns what was done. The frame (Launcher3 AppWidgetResizeFrame) hides the handles of a way the widget cannot be
-    resized (its smallest and largest cells are the same, or the smallest fills the grid)."""
+HANDLE_INSET = 14  # px from the widget's edge to a handle's middle in the API 26 and 30 captures (run 43608286853)
+SIDES = {"bottom": "아래", "right": "오른쪽"}
+
+
+def frame_handles(nodes: list[Node], host: Node) -> tuple[dict[str, tuple[int, int]], bool]:
+    """The middles of the resize frame's handles, and whether the frame was in the screen dump. The frame (Launcher3
+    AppWidgetResizeFrame) hides the handles of a way the widget cannot be resized (its smallest cells fill the grid),
+    so a side can be missing. Without the frame in the dump (Pixel Launcher on Android 8 and 11), the middles of the
+    widget's edges, HANDLE_INSET inside, where the captures show the four handles."""
+    if by_rid(nodes, "widget_resize_frame") is not None:
+        found = {}
+        for side in SIDES:
+            handle = by_rid(nodes, f"widget_resize_{side}_handle")
+            if handle is not None:
+                found[side] = handle.center
+        return found, True
+    x1, y1, x2, y2 = host.bounds
+    return {"bottom": ((x1 + x2) // 2, y2 - HANDLE_INSET), "right": (x2 - HANDLE_INSET, (y1 + y2) // 2)}, False
+
+
+def resize(r: Report, tag: str, side: str, target) -> str:
+    """Touch and hold our widget and let go: the launcher's resize frame. Drag its `side` handle to
+    target(host, handle middle) and let go: the launcher gives the widget the cells the handle ended on, never fewer
+    than its smallest cells. The frame is closed with BACK and HOME (Android 8-11 Launcher3 closes it on HOME).
+    Returns what was done, for the report."""
+    host = widget_host(widget_page(lambda ns: widget_host(ns) is not None, 30))
+    if host is None:
+        raise RuntimeError("our widget is not on the home screen before the resize")
     x, y = host.center
     swipe(x, y, x, y, 2000)
     nodes = dump_ui()
     save_ui(r, f"{tag}-frame")
     r.shot(f"{tag}-frame")
-    frame = by_rid(nodes, "widget_resize_frame")
-    if frame is None:
-        raise RuntimeError("the resize frame did not show after touch and hold")
-    done = []
-    bottom = by_rid(nodes, "widget_resize_bottom_handle")
-    if bottom is not None:
-        bx, by = bottom.center
-        swipe(bx, by, bx, host.bounds[1] + 10)
-        done.append("아래 손잡이를 위젯 위끝까지 끎")
+    handles, in_dump = frame_handles(nodes, host)
+    if side in handles:
+        hx, hy = handles[side]
+        tx, ty = target(host, (hx, hy))
+        swipe(hx, hy, tx, ty)
+        r.shot(f"{tag}-done")
+        done = f"{SIDES[side]} 손잡이를 끎" + ("" if in_dump else "(틀이 화면 덤프에 없어 위젯 가장자리에서 잡음)")
     else:
-        done.append("아래 손잡이 없음(세로로 줄일 수 없음)")
-    nodes = dump_ui()
-    right = by_rid(nodes, "widget_resize_right_handle")
-    if right is not None:
-        rx, ry = right.center
-        swipe(rx, ry, host.bounds[0] + 10, ry)
-        done.append("오른쪽 손잡이를 위젯 왼끝까지 끎")
-    else:
-        done.append("오른쪽 손잡이 없음(가로로 줄일 수 없음)")
-    save_ui(r, f"{tag}-shrunk")
-    r.shot(f"{tag}-shrunk")
+        done = f"{SIDES[side]} 손잡이 없음"
     sh("input keyevent KEYCODE_BACK")
-    time.sleep(2)
-    return ", ".join(done)
+    time.sleep(1)
+    go_home()
+    return done
+
+
+def read_span(r: Report, name: str, launcher: str, wid: int | None) -> tuple[tuple[int, int] | None, dict, str]:
+    """The widget's cells, its workspace item and the launcher dump they came from."""
+    dump = launcher_dump(r, name)
+    item = widget_item(dump, wid) or {}
+    return item.get("span") or launcher_db_span(launcher, wid), item, dump
+
+
+def cells_text(span: tuple[int, int] | None) -> str:
+    return f"{span[0]}×{span[1]}" if span else "읽지 못함"
 
 
 def allow_rotation(launcher: str) -> str:
@@ -477,52 +535,77 @@ def measure(r: Report, apk: Path, api: int, width_dp: int | None, values: dict[s
     res: dict = {"width": tag, "dpi": dpi, "width_dp": round(w_px / density, 1)}
     r.note(f"{name}: wm density {dpi}, 폭 {res['width_dp']}dp")
 
-    # 1-2. fresh install, the add sheet's size, the widget added
+    # 1-2. fresh install, the launcher started again (docstring, step 1), the add sheet's size, the widget added
     uninstall()
     time.sleep(2)
     install(apk)
+    if launcher:
+        sh(f"am force-stop {launcher}", check=False)
+        time.sleep(3)
+        go_home()
     label = place_by_intro(r, tag)
     res["label"] = label
     r.check(f"{name}: 추가 창의 위젯 크기", "4 × 2", label or "읽지 못함", label_cells(label) == WANT)
 
-    # 3. what the launcher made of it
-    nodes = widget_page(lambda ns: widget_host(ns) is not None, 30)
+    # 3. what the launcher made of it: the app's views come a moment after the host
+    nodes = widget_page(lambda ns: (h := widget_host(ns)) is not None and drawn(ns, h), 30)
     host = widget_host(nodes)
     r.shot(f"{tag}-placed")
     save_ui(r, f"{tag}-placed")
     if host is None:
         raise RuntimeError("our widget is not on the home screen")
+    shown = drawn(nodes, host)
+    r.check(f"{name}: 놓인 위젯이 앱 화면을 그림", "앱의 뷰", "앱의 뷰" if shown else "앱의 뷰 없음(런처의 오류 화면 등)",
+            shown)
     ids = our_widget_ids()
     wid = max(ids) if ids else None
-    up_dump = launcher_dump(r, f"{tag}-placed")
+    span, item, up_dump = read_span(r, f"{tag}-placed", launcher, wid)
     grid_up = device_profile(up_dump)
-    item = widget_item(up_dump, wid) or {}
-    span = item.get("span") or launcher_db_span(launcher, wid)
     host_dp = ((host.bounds[2] - host.bounds[0]) / density, (host.bounds[3] - host.bounds[1]) / density)
     options = widget_options(api, wid)
     res.update(widget_id=wid, item=item.get("line", ""), span=span, min_span=item.get("min"), options=options,
                host_dp=[round(v, 1) for v in host_dp], grid_upright=grid_up)
-    r.check(f"{name}: 놓인 위젯의 칸", "4×2", f"{span[0]}×{span[1]}" if span else "읽지 못함", span == WANT)
+    r.check(f"{name}: 놓인 위젯의 칸", "4×2", cells_text(span), span == WANT)
     r.note(f"{name}: 놓인 위젯 {host.bounds} = {host_dp[0]:.0f}×{host_dp[1]:.0f}dp, 런처가 위젯에 준 크기 "
            f"{describe_options(options)}, 가장 작은 칸 {item.get('min', '모름')}")
+    if api < 31 and options and span:
+        # Launcher3 before Android 12 gives the widget span x cell of each way the screen stands, less the system's
+        # widget padding (8dp a side), and counts cells with the smaller cell of the two ways (no spacing)
+        cell = min((options["min_width"] + 16) / span[0], (options["max_width"] + 16) / span[0])
+        row_h = min((options["max_height"] + 16) / span[1], (options["min_height"] + 16) / span[1])
+        ranges = {"width": (round(3 * cell - 16, 1), round(4 * cell - 16, 1)),
+                  "height": (round(row_h - 16, 1), round(2 * row_h - 16, 1))}
+        res.update(old_cell=round(cell, 1), old_row=round(row_h, 1), old_ranges=ranges)
+        r.note(f"{name}: 위젯이 받은 크기로 센 옛 런처의 칸(작은 쪽, 시스템 위젯 여백 8dp씩): 칸 너비 {cell:.1f}dp, "
+               f"줄 높이 {row_h:.1f}dp. minWidth·minResizeWidth가 {ranges['width'][0]:.1f}dp 넘고 "
+               f"{ranges['width'][1]:.1f}dp 이하, minHeight·minResizeHeight가 {ranges['height'][0]:.1f}dp 넘고 "
+               f"{ranges['height'][1]:.1f}dp 이하면 4×2로 놓이고 4×2보다 작아지지 않음")
 
-    # 4. as small as the launcher lets it be. The dump pressed HOME, which shows the first page, and the launcher may
-    # have put the widget on the second (screens2_check.widget_page): found again before the touch and hold.
-    host = widget_host(widget_page(lambda ns: widget_host(ns) is not None, 30))
-    if host is None:
-        raise RuntimeError("our widget is not on the home screen before the shrink")
-    how = shrink(r, tag, host)
+    # 4. resize with the frame. Each drag finds the widget again (the dumps press HOME, which shows the first page, and
+    # the launcher may have put the widget on the second, screens2_check.widget_page). One row down first: a row is
+    # the grid's cell and spacing (Android 12 and later), else the widget's height over its rows.
+    if span is None:
+        raise RuntimeError("the placed widget's cells could not be read")
+    row = (grid_up["cell_y"] + grid_up["space_y"]) if grid_up else (host.bounds[3] - host.bounds[1]) / span[1]
+    how_grow = resize(r, f"{tag}-grow", "bottom", lambda h, p: (p[0], p[1] + round(row)))
+    grown, _, _ = read_span(r, f"{tag}-grown", launcher, wid)
+    want = (span[0], span[1] + 1)
+    r.check(f"{name}: 크기 조절 틀로 한 줄 늘린 칸", cells_text(want), f"{cells_text(grown)} ({how_grow})",
+            grown == want)
+    how_v = resize(r, f"{tag}-shrink-v", "bottom", lambda h, p: (p[0], h.bounds[1] + 10))
+    how_h = resize(r, f"{tag}-shrink-h", "right", lambda h, p: (h.bounds[0] + 10, p[1]))
+    how = f"{how_v}, {how_h}"
     nodes = widget_page(lambda ns: widget_host(ns) is not None, 30)
     host_after = widget_host(nodes)
-    after_dump = launcher_dump(r, f"{tag}-shrunk")
-    item_after = widget_item(after_dump, wid) or {}
-    span_after = item_after.get("span") or launcher_db_span(launcher, wid)
+    r.shot(f"{tag}-shrunk")
+    save_ui(r, f"{tag}-shrunk")
+    span_after, item_after, _ = read_span(r, f"{tag}-shrunk", launcher, wid)
     options_after = widget_options(api, wid)
-    res.update(shrink=how, span_after=span_after, options_after=options_after,
+    res.update(grow=how_grow, grown=grown, shrink=how, span_after=span_after, options_after=options_after,
                host_after_dp=[round((host_after.bounds[2] - host_after.bounds[0]) / density, 1),
                               round((host_after.bounds[3] - host_after.bounds[1]) / density, 1)] if host_after else None)
-    r.check(f"{name}: 가장 작게 줄인 뒤의 칸", "4×2 (4×1·3×2로 줄지 않음)",
-            f"{span_after[0]}×{span_after[1]} ({how})" if span_after else f"읽지 못함 ({how})", span_after == WANT)
+    r.check(f"{name}: 가장 작게 줄인 뒤의 칸", "4×2 (4×1·3×2로 줄지 않음)", f"{cells_text(span_after)} ({how})",
+            span_after == WANT)
     r.note(f"{name}: 줄인 뒤 런처가 위젯에 준 크기 {describe_options(options_after)}")
 
     # 5. the turned screen's grid, and the rule worked out over both
@@ -560,11 +643,13 @@ def main() -> int:
     sh("settings put global heads_up_notifications_enabled 0", check=False)
     sh("svc power stayon true", check=False)
     sh("settings put system screen_off_timeout 1800000", check=False)
-    values = widget_values()
+    info = widget_info(api)
+    values = widget_values(info)
     launcher = launcher_package()
     r.note(f"기기: API {api}, {sh('getprop ro.product.model').strip()}, 런처 {launcher or '모름'}, "
            f"화면 {screen_size()[0]}×{screen_size()[1]}px, 기본 밀도 {physical_density()}")
-    r.note("위젯 값(" + WIDGET_INFO.name + "): " + ", ".join(f"{k} {v:g}" for k, v in values.items()))
+    r.note(f"위젯 값({info.relative_to(RES.parent.parent.parent.parent)}): "
+           + ", ".join(f"{k} {v:g}" for k, v in values.items()))
 
     results = []
     try:
@@ -593,9 +678,15 @@ def main() -> int:
             r.note("모든 폭에서 4×2로 놓이고 4×2보다 작아지지 않는 minHeight = minResizeHeight: "
                    + (f"{both[0]}~{both[-1]}dp" if both and both[-1] - both[0] + 1 == len(both)
                       else (", ".join(map(str, both)) + "dp" if both else "없음")))
+        old = [res["old_ranges"] for res in results if "old_ranges" in res]
+        if len(old) > 1:
+            w = (max(o["width"][0] for o in old), min(o["width"][1] for o in old))
+            h = (max(o["height"][0] for o in old), min(o["height"][1] for o in old))
+            r.note(f"모든 폭에서 옛 런처가 4×2로 놓고 4×2보다 줄이지 않는 값: minWidth·minResizeWidth {w[0]:.1f}dp 초과 "
+                   f"{w[1]:.1f}dp 이하, minHeight·minResizeHeight {h[0]:.1f}dp 초과 {h[1]:.1f}dp 이하")
         (args.out / "widget-size.json").write_text(
-            json.dumps({"api": api, "launcher": launcher, "values": values, "widths": results}, ensure_ascii=False,
-                       indent=2, default=list), encoding="utf-8")
+            json.dumps({"api": api, "launcher": launcher, "definition": str(info.relative_to(RES)), "values": values,
+                        "widths": results}, ensure_ascii=False, indent=2, default=list), encoding="utf-8")
         r.write()
         try:
             (args.out / f"api{api}-logcat.txt").write_text(adb("logcat", "-d", check=False, timeout=60),

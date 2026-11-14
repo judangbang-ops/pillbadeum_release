@@ -2,16 +2,17 @@
 # 첫 실행 안내의 [위젯 추가]로 놓고, 런처의 추가 창 크기 글('4 × 2'), 놓인 칸, 크기 조절 틀로 가장 작게 줄인 칸을 읽고,
 # 런처의 세로·가로 화면 칸 크기로 Launcher3 규칙을 계산함. 흐름과 이유는 scripts/emulator/widget_size_check.py 첫 주석.
 #
-# - 위젯 정의(diditake_widget_info.xml), 이 스크립트·워크플로나 도우미를 바꾼 PR과 수동 실행에서만 돎. PR에 다시
-#   푸시할 때는 이 확인이 마지막으로 모두 성공한 커밋 뒤로 아래 paths가 바뀌었을 때만 돎(gate 작업,
-#   .github/scripts/push_gate.py)
-# - 34·36: Android 12부터의 Launcher3 규칙(targetCell). 30·26: targetCell이 없는 옛 런처
+# - 위젯 정의(res/xml-v31과 res/xml의 diditake_widget_info.xml), 이 스크립트·워크플로나 도우미를 바꾼 PR과 수동
+#   실행에서만 돎. PR에 다시 푸시할 때는 이 확인이 마지막으로 모두 성공한 커밋 뒤로 아래 paths가 바뀌었을 때만 돎
+#   (gate 작업, .github/scripts/push_gate.py)
+# - 34·36: Android 12부터의 Launcher3 규칙(targetCell, res/xml-v31). 30·26: targetCell이 없는 옛 런처(res/xml)
 # - 서명 키·비밀값을 쓰지 않음. 디버그 APK로 봄
 name: 에뮬레이터 위젯 크기 확인
 
 on:
   pull_request:
     paths:
+      - androidApp/src/main/res/xml-v31/diditake_widget_info.xml
       - androidApp/src/main/res/xml/diditake_widget_info.xml
       - scripts/emulator/widget_size_check.py
       # widget_size_check.py가 쓰는 도우미(화면 덤프·탭·설치·위젯 찾기·시계). 바꾸면 이 확인도 다시 돎
@@ -70,6 +71,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: >-
           python3 .github/scripts/push_gate.py
+          androidApp/src/main/res/xml-v31/diditake_widget_info.xml
           androidApp/src/main/res/xml/diditake_widget_info.xml
           scripts/emulator/widget_size_check.py
           scripts/emulator/screens2_check.py

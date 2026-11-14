@@ -153,6 +153,7 @@ MINUTE_PROMISE = re.compile(r"\d+\s*분")  # REQ-048: no sentence of the access 
 ALLOW_TEXTS = ("Allow",)
 DENY_TEXTS = ("Don't allow", "Don\u2019t allow", "Deny")
 NOTIFICATION_PERMISSION = "android.permission.POST_NOTIFICATIONS"
+EXACT_SWITCH_TEXT = "Allow setting alarms"  # the switch row of 설정 > Alarms & reminders for this app (English image)
 
 # WidgetLayout (shared/src/commonMain/.../status/WidgetLayout.kt), dp: two tiles a row while a tile's text width holds
 # LONGEST_PIECE_EM at the name size (16sp), tiles at least TILE_MIN_HEIGHT tall
@@ -1180,7 +1181,9 @@ def permission_steps(r: Report, steps: ShotSteps) -> None:
         pkg, texts = system_screen()
         r.shot("system-exact-alarms")
         save_ui(r, "system-exact-alarms")
-        switch = next((n for n in dump_ui() if n.cls.endswith("Switch")), None)
+        # A Switch on older settings screens; the Compose settings of API 34 draw the row as a View read by its text
+        # (screens2 run 43539426392 found no Switch there and allowed with appops)
+        switch = next((n for n in dump_ui() if n.cls.endswith("Switch") or n.text.startswith(EXACT_SWITCH_TEXT)), None)
         how = "시스템 화면의 스위치"
         if switch is not None:
             tap(switch)

@@ -35,8 +35,11 @@ object Tokens {
     /** `color.line.subtle`: decorative divider, never the only carrier of meaning. */
     const val LINE_SUBTLE: Long = 0xFFE3E5E9
 
-    /** `color.line.strong`: input borders, the skipped disc (3.2:1 on white). */
-    const val LINE_STRONG: Long = 0xFF8B909A
+    /**
+     * `color.line.strong`: input borders, the skipped disc. 3.56:1 on white and at least 3:1 on the light surfaces
+     * (`surface.sunken`, `notice`, `skip`), for WCAG 1.4.11. Was #8B909A until 2026-11-14 (2.74:1 on `surface.skip`).
+     */
+    const val LINE_STRONG: Long = 0xFF838892
 
     /** `color.person.1`~`6`, in token order. A person stores only the lid color ([PersonPalette.solid]). */
     val PEOPLE: List<PersonPalette> = listOf(

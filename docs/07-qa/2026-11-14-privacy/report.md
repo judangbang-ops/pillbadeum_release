@@ -144,4 +144,4 @@ REQ-058의 원문은 기획 v3 8장 "저장소에는 실제 복용 기록·가�
 
 ## 8. 결정할 것
 
-- WorkManager가 넣는 `ACCESS_NETWORK_STATE`·`FOREGROUND_SERVICE`·`WAKE_LOCK`(검토 B8): 그대로 둠(Claude 판단). 뺄 수는 있지만(`tools:node="remove"`) 위젯과 알람이 쓰는 WorkManager 작업을 실기기에서 다시 봐야 함. `INTERNET`이 없어 보낼 수 없으므로 얻는 것은 Play 권한 목록의 '네트워크 연결 보기' 같은 줄이 빠지는 것뿐임
+- WorkManager가 넣는 `ACCESS_NETWORK_STATE`·`FOREGROUND_SERVICE`·`WAKE_LOCK`(검토 B8): 그대로 둠(Claude 판단. **정함**: 2026-11-14 23:24 KST 동희님이 '필받음 재구축 인계' 채팅에서 '추천 모두 승인'). 뺄 수는 있지만(`tools:node="remove"`) 위젯과 알람이 쓰는 WorkManager 작업을 실기기에서 다시 봐야 함. `INTERNET`이 없어 보낼 수 없으므로 얻는 것은 Play 권한 목록의 '네트워크 연결 보기' 같은 줄이 빠지는 것뿐임

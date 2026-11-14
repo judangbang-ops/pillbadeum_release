@@ -1,0 +1,127 @@
+# 2026-11-11 프로토타입 QA(judangbang-ops/DidITake docs/07-qa/2026-11-11-prototype/report.md)의 13항목을 마지막 빌드로
+# 다시 함 (TASK-034). 위젯 탭·다시 탭·동시 두 번 탭·앱에서 취소·다시 기록은 DB 행으로, 시계 변경·04:00 경계 알람·주 1회 창은
+# 위젯이 스스로 다시 그린 것으로, 위젯 크기는 런처가 놓은 칸으로, 키보드는 [저장]이 키보드 위에 있고 눌리는지로 봄.
+# 흐름과 이유는 scripts/emulator/regression_check.py 첫 주석.
+#
+# - 이 스크립트·워크플로를 바꾼 PR과 수동 실행에서만 돎 (약 40분, 무료 분 한도).
+#   PR에 다시 푸시할 때는 그 푸시가 아래 paths를 바꿨을 때만 돎(gate 작업, .github/scripts/push_gate.py)
+# - 서명 키·비밀값을 쓰지 않음. 디버그 APK로 봄(DB를 root로 읽음)
+name: 에뮬레이터 회귀 확인
+
+on:
+  pull_request:
+    paths:
+      - scripts/emulator/regression_check.py
+      # regression_check.py가 쓰는 도우미(화면 덤프·탭·위젯 놓기·위젯 읽기·시계·DB·런처 칸 읽기). 바꾸면 회귀 확인도 다시 돎
+      - scripts/emulator/screens2_check.py
+      - scripts/emulator/screens_check.py
+      - scripts/emulator/widget_size_check.py
+      - scripts/emulator/explore.py
+      - scripts/emulator/backup_restore_check.py
+      - scripts/emulator/release_check.py
+      - scripts/emulator/reminder_check.py
+      - scripts/emulator/emulator_boot.py
+      - .github/scripts/push_gate.py
+      - .github/workflows/regression.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: regression-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    # 둘러보기(explore.yml)의 gate와 같음: 이 PR에서 이 확인이 마지막으로 모두 성공한 커밋 뒤로 위 경로가 바뀌었는지 보고
+    # 정함. 실패한 확인은 기준이 되지 않아 다음 푸시에서 다시 돎. PR을 열 때·다시 열 때·알 수 없을 때는 돎.
+    # 경로는 위 on.pull_request.paths와 같게 둠. 수동 실행에서는 건너뜀
+    name: 이번 푸시가 바꾼 파일
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read # 지난 실행을 읽음
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - id: gate
+        env:
+          GATE_ACTION: ${{ github.event.action }}
+          GATE_AFTER: ${{ github.event.after }}
+          GATE_JOB: "회귀 확인 (API"
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 .github/scripts/push_gate.py
+          scripts/emulator/regression_check.py
+          scripts/emulator/screens2_check.py
+          scripts/emulator/screens_check.py
+          scripts/emulator/widget_size_check.py
+          scripts/emulator/explore.py
+          scripts/emulator/backup_restore_check.py
+          scripts/emulator/release_check.py
+          scripts/emulator/reminder_check.py
+          scripts/emulator/emulator_boot.py
+          .github/scripts/push_gate.py
+          .github/workflows/regression.yml
+
+  regression:
+    name: 회귀 확인 (API 34)
+    needs: gate
+    # gate가 run=false라고 할 때만 건너뜀. 수동 실행(gate 건너뜀)이나 gate 실패 때는 돎
+    if: ${{ !cancelled() && needs.gate.outputs.run != 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: gradle/actions/wrapper-validation@0723195856401067f7a2779048b490ace7a47d7c # v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: 디버그 APK (./gradlew :androidApp:assembleDebug)
+        run: |
+          ./gradlew :androidApp:assembleDebug
+          # 에뮬레이터와 CPU·메모리를 나누지 않게 Gradle 데몬을 끔 (2026-11-12 둘러보기 5회차의 시스템 ANR)
+          ./gradlew --stop
+
+      # KVM, 시스템 이미지, AVD를 준비하고 부팅을 기다림 (둘러보기와 같은 액션, Pixel 런처)
+      - uses: ./.github/actions/android-emulator
+        with:
+          api: "34"
+          cores: "4"
+
+      - name: 회귀 확인 (scripts/emulator/regression_check.py)
+        run: |
+          python3 scripts/emulator/regression_check.py \
+            --apk androidApp/build/outputs/apk/debug/androidApp-debug.apk \
+            --out "$RUNNER_TEMP/regression"
+
+      - name: 결과 표
+        if: ${{ !cancelled() }}
+        run: |
+          report="$RUNNER_TEMP/regression/report.md"
+          if [ -f "$report" ]; then cat "$report" >> "$GITHUB_STEP_SUMMARY"; else echo "보고서 없음" >> "$GITHUB_STEP_SUMMARY"; fi
+          cp "$RUNNER_TEMP/emulator.log" "$RUNNER_TEMP/regression/" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() }}
+        with:
+          name: regression-api34
+          path: ${{ runner.temp }}/regression/
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: ignore

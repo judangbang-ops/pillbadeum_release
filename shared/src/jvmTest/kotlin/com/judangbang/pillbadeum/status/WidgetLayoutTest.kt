@@ -102,9 +102,17 @@ class WidgetLayoutTest {
     }
 
     @Test
+    fun the_top_is_a_48dp_button() {
+        // REQ-067 (TASK-030): the header row is at least 32dp inside 8dp above and below, so the top is 48dp.
+        assertEquals(48f, WidgetLayout.TOP_MIN + 2 * WidgetLayout.TOP_PAD_V)
+        assertEquals(WidgetLayout.TARGET, WidgetLayout.TOP_MIN + 2 * WidgetLayout.TOP_PAD_V)
+        assertTrue(WidgetLayout.TOP_MIN >= WidgetLayout.CHIP_MIN, "the day chip fits the row")
+    }
+
+    @Test
     fun the_message_takes_the_header_place_and_can_bring_the_arrow() {
         val message = "비타민D: 건너뜀으로 기록됨 (09:10). 바꾸려면 앱에서"
-        // Two lines of message (about 53dp) instead of the 28dp header: four short tiles (134dp) no longer fit.
+        // Two lines of message (about 53dp) instead of the 32dp header row: four short tiles (134dp) no longer fit.
         assertFalse(WidgetLayout.plan(model(simple(4)), 350f, 213f, WidgetLayout.Fonts.DEFAULT, null).overflow)
         assertTrue(WidgetLayout.plan(model(simple(4)), 350f, 213f, WidgetLayout.Fonts.DEFAULT, message).overflow)
         assertFalse(WidgetLayout.plan(model(simple(2)), 350f, 213f, WidgetLayout.Fonts.DEFAULT, message).overflow)

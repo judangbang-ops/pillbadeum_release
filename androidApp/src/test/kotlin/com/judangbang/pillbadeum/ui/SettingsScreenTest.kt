@@ -182,6 +182,8 @@ class SettingsScreenTest {
         row("기준 시간대, Asia/Seoul").performClick()
         val seoul = compose.onNodeWithContentDescription("Asia/Seoul, UTC+09:00 · 이 휴대폰")
         seoul.assertIsSelected()
+        val height = seoul.fetchSemanticsNode().boundsInRoot.height / compose.density.density
+        assertTrue("at 100% the offset stays beside the name: $height dp", height < 60f)
         compose.assertTargetsAtLeast48dp()
         save("settings-zone-list")
         seoul.performClick()
@@ -433,6 +435,38 @@ class SettingsScreenTest {
         compose.onNodeWithContentDescription("23시부터 8시까지").performScrollTo()
         compose.assertTargetsAtLeast48dp()
         save("settings-quiet-200")
+    }
+
+    /**
+     * 200% text: in the base-zone list an offset goes under its zone, so `Asia/Seoul` keeps one line. The accessibility
+     * check (run 43579503348) found it broken into a letter or two a line beside `UTC+09:00 · 이 휴대폰`. An offset also
+     * goes under a zone with a word too wide to sit beside it: run 43582314689 and this render showed `Africa/Addis_Ababa`
+     * broken into `Africa/`, `Addis_Aba`, `ba` beside `UTC+03:00`.
+     *
+     * This render is not the phone's in one way: Compose takes a text's min intrinsic width from `java.text.BreakIterator`,
+     * which on a phone is ICU and breaks after '/', and on this JVM is the JDK's and does not. So here every zone counts
+     * as one word and every offset goes under; on the emulator (run 43585038873) `Africa/Abidjan` keeps its offset
+     * beside, `Africa/` over `Abidjan`, and only names like `Africa/Addis_Ababa` move it under.
+     */
+    @Test
+    fun large_text_puts_zone_offsets_under_their_names() {
+        app.seedWeek(family = false)
+        RuntimeEnvironment.setFontScale(2f)
+        openSettings()
+        row("기준 시간대, Asia/Seoul").performScrollTo().performClick()
+        val seoul = compose.onNodeWithContentDescription("Asia/Seoul, UTC+09:00 · 이 휴대폰").fetchSemanticsNode().boundsInRoot
+        val height = seoul.height / compose.density.density
+        // The name's line over the offset's, 4 dp between and 6 dp above and below: about 87 dp in this render; a font
+        // that wraps the offset or breaks the name at '/' adds a line. Broken a letter or two a line, it was eight
+        assertTrue("the offset under the name: $height dp", height in 80f..150f)
+        val addis = "Africa/Addis_Ababa, UTC+03:00"
+        compose.onNode(hasScrollToIndexAction()).performScrollToNode(hasContentDescription(addis))
+        val addisHeight = compose.onNodeWithContentDescription(addis).fetchSemanticsNode().boundsInRoot.height / compose.density.density
+        // `Africa/Addis_Ababa` (about 242 dp of the 288) on one line over its offset, like Seoul's; beside the offset its
+        // three lines took 115 dp
+        assertTrue("Addis_Ababa whole on one line, its offset under it: $addisHeight dp", addisHeight < 100f)
+        compose.assertTargetsAtLeast48dp()
+        save("settings-zone-200")
     }
 
     /** REQ-094, SPEC-021: SCR-010's back returns to settings, settings' back to the first screen. */

@@ -483,17 +483,27 @@ private fun LinkRow(name: String, onClick: () -> Unit) {
 
 /**
  * [start] and [end] on one line while [end] takes at most 45% of the width; else [end] goes under [start], so 200% text
- * keeps whole words (Claude's design: 09 draws the row at 100% only).
+ * keeps whole words (Claude's design: 09 draws the row at 100% only). With [fitStartWords], [end] also stays beside while
+ * both fit on the line whole, and goes under whenever a word of [start] would not fit beside it: a zone's name can have
+ * a word as long as `Addis_Ababa`, which 200% text broke into `Addis_Aba` and `ba` beside `UTC+03:00`.
  */
 @Composable
-internal fun EndOrBelow(start: @Composable () -> Unit, end: @Composable () -> Unit) {
+internal fun EndOrBelow(start: @Composable () -> Unit, end: @Composable () -> Unit, fitStartWords: Boolean = false) {
     Layout(contents = listOf(start, end), modifier = Modifier.fillMaxWidth()) { (startMeasurables, endMeasurables), constraints ->
         val width = constraints.maxWidth
         val gap = 12.dp.roundToPx()
         val first = startMeasurables.single()
         val second = endMeasurables.single()
         val endWidth = second.maxIntrinsicWidth(Constraints.Infinity)
-        if (endWidth <= width * 0.45f) {
+        val room = width - gap - endWidth
+        val beside = if (fitStartWords) {
+            // A text's min intrinsic width is its widest unbreakable run: `Addis_Ababa` in `Africa/Addis_Ababa`
+            first.maxIntrinsicWidth(Constraints.Infinity) <= room ||
+                (endWidth <= width * 0.45f && first.minIntrinsicWidth(Constraints.Infinity) <= room)
+        } else {
+            endWidth <= width * 0.45f
+        }
+        if (beside) {
             val endPlaced = second.measure(Constraints(maxWidth = endWidth.coerceAtMost(width)))
             val startPlaced = first.measure(Constraints(maxWidth = (width - endPlaced.width - gap).coerceAtLeast(0)))
             val height = maxOf(startPlaced.height, endPlaced.height)
@@ -722,18 +732,26 @@ private fun ZoneDialog(current: String, device: String, now: () -> Instant, onPi
     }
 }
 
+/**
+ * A zone and its UTC offset at the end of the line. Like the settings rows' values, an offset wider than 45% of the line
+ * goes under the name (200% text broke `Asia/Seoul` into a letter or two a line beside `UTC+09:00 · 이 휴대폰`), unless
+ * both fit on the line whole: that offset takes 46% of the line at 100% at 360 dp. The offset also goes under when a
+ * word of the name would not fit beside it (`Africa/Addis_Ababa` at 200%), so no name is broken inside a word.
+ */
 @Composable
 private fun ZoneRow(id: String, detail: String, selected: Boolean, onClick: () -> Unit) {
-    Row(
+    Box(
         Modifier.fillMaxWidth().heightIn(min = 52.dp)
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
             .clearAndSetSemantics { contentDescription = "$id, $detail" }
             .background(if (selected) Ui.Sunken else Ui.Surface)
             .padding(horizontal = 20.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        contentAlignment = Alignment.CenterStart,
     ) {
-        Words(id, Ui.type(16, if (selected) Ui.ExtraBold else FontWeight.Normal, lineHeight = 1.25f), Modifier.weight(1f))
-        Words(detail, Ui.type(14, color = Ui.Muted, lineHeight = 1.25f))
+        EndOrBelow(
+            start = { Words(id, Ui.type(16, if (selected) Ui.ExtraBold else FontWeight.Normal, lineHeight = 1.25f)) },
+            end = { Words(detail, Ui.type(14, color = Ui.Muted, lineHeight = 1.25f)) },
+            fitStartWords = true,
+        )
     }
 }

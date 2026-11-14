@@ -123,6 +123,11 @@ class WidgetRenderTest {
         check("message-200", model(drawing), message = skippedMessage, fontScale = 2f, arrow = true)
 
     @Test
+    fun a_one_line_message_is_still_a_48dp_button() =
+        // REQ-067 (TASK-030): the shortest message kind, one line on a 4x2.
+        check("message-short-100", model(drawing), message = "아침약: 이미 기록됨 (08:02). 변경 없음", arrow = true)
+
+    @Test
     fun the_restore_band() =
         check("restore-100", model(short(4), restore = "복원됨 · 마지막 기록 11/09${nb}21:40 · 앱에서 확인"), arrow = true)
 
@@ -250,6 +255,13 @@ class WidgetRenderTest {
                 if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
             }
             walk(root)
+        }
+
+        // REQ-067 (TASK-030): every button (the top, a tile, a band) is at least 48dp both ways; a pixel for rounding.
+        val density = root.resources.displayMetrics.density
+        for (button in views.filter { it.isClickable && shown(it) }) {
+            val size = "${button.width / density}×${button.height / density}dp"
+            assertTrue("$name: a ${button.javaClass.simpleName} button is $size", minOf(button.width, button.height) >= 48 * density - 1)
         }
 
         val arrowShown = views.any { it is ImageView && it.contentDescription == Labels.MORE && shown(it) }

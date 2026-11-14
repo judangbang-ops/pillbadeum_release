@@ -42,17 +42,34 @@ object WidgetLayout {
     )
 
     const val PAD_H: Float = 12f
+
+    /** Below the list. Above, the top's own padding ([TOP_PAD_V]) takes the widget's top padding. */
     const val PAD_V: Float = 10f
 
-    /** Between the header and the list, between tiles and between rows (`space.xs`). */
+    /** Between the restore band and the list, between tiles and between rows (`space.xs`). */
     const val GAP: Float = 6f
+
+    /**
+     * A button's least height (`size.target`, REQ-067). The top (the header, or the tap message in its place) and the
+     * bands are buttons that open the app or the person picker (TASK-030: the header was 28dp tall).
+     */
+    const val TARGET: Float = 48f
+
+    /**
+     * Above and below the header or the tap message, inside the top's button: the widget's top padding (the day chip
+     * stays 10dp from the top, as drawn) and the gap above the list. The header row is at least [TARGET] less these.
+     */
+    const val TOP_PAD_V: Float = 8f
+
+    /** The header row's least height, so the top is [TARGET] tall: 32dp, the 28dp day chip in the middle. */
+    const val TOP_MIN: Float = TARGET - 2 * TOP_PAD_V
     const val HEADER_PAD_H: Float = 4f
     const val HEADER_GAP: Float = 8f
     const val HEADER_LINE_GAP: Float = 2f
     const val CHIP_MIN: Float = 28f
     const val CHIP_PAD_H: Float = 6f
 
-    /** The message and restore bands (`radius.button`, padding `space.xs` / `space.md`). */
+    /** The message and restore bands (`radius.button`, padding `space.xs` / `space.md`); a band alone is [TARGET] tall at least. */
     const val BAND_PAD_H: Float = 12f
     const val BAND_PAD_V: Float = 6f
     const val TILE_PAD_START: Float = 12f
@@ -86,9 +103,10 @@ object WidgetLayout {
         val textWidth = tileTextWidth(inner, columns)
         val whoAbove = model.buttons.filter { it.who != null && !whoFits(it, textWidth, fonts) }.map { it.intakeId }.toSet()
 
-        val top = if (message != null) bandHeight(message, inner, fonts) else headerHeight(model, headerWraps, inner, fonts)
-        val restore = model.restoreLine?.let { GAP + bandHeight(it, inner, fonts) } ?: 0f
-        val listHeight = height - 2 * PAD_V - top - restore - GAP
+        val shown = if (message != null) bandHeight(message, inner, fonts) else headerHeight(model, headerWraps, inner, fonts)
+        val top = 2 * TOP_PAD_V + max(TOP_MIN, shown)
+        val restore = model.restoreLine?.let { max(TARGET, bandHeight(it, inner, fonts)) + GAP } ?: 0f
+        val listHeight = height - PAD_V - top - restore
         val rows = model.buttons.chunked(columns).map { row ->
             row.maxOf { tileHeight(it, it.intakeId in whoAbove, textWidth, fonts) }
         }

@@ -1,0 +1,176 @@
+# 옛 빌드에서 덮어 설치하는 업데이트 확인 (TASK-012, 보충 R-3, RR-74). 위젯 대상자 고르기가 들어오기 전 빌드로 위젯을 놓고
+# 기록한 뒤 이 커밋의 빌드를 `adb install -r`로 덮어 깔아, 그 위젯이 '전체'로 채워져 대상자가 둘이 되어도 다시 설정을 묻지
+# 않는지, 옛 빌드의 기록과 설치 표식이 남는지 봄. 흐름과 이유는 scripts/emulator/upgrade_check.py 첫 주석.
+#
+# - 옛 빌드는 입력 from의 커밋(기본 8c50d47: 2026-11-13 PR #19 전의 main)을 같은 실행에서 빌드함. 개인 APK를 나눠 준 뒤에는
+#   그 커밋으로 수동 실행해 '나눠 준 빌드 → 이번 빌드'를 볼 수 있음(TASK-047)
+# - 앱 코드(shared/, androidApp/, Gradle 설정)나 이 스크립트·워크플로를 바꾼 PR과 수동 실행에서 돎 (약 25분).
+#   시험 코드(shared/src/jvmTest/, androidApp/src/test/)만 바꾼 PR에서는 돌지 않음.
+#   PR에 다시 푸시할 때는 그 푸시가 아래 paths를 바꿨을 때만 돎(gate 작업, .github/scripts/push_gate.py)
+# - 서명 키·비밀값을 쓰지 않음. 두 디버그 APK는 이 실행의 디버그 키 하나로 서명되어 덮어 깔 수 있음
+name: 에뮬레이터 업데이트 확인
+
+on:
+  pull_request:
+    paths:
+      # 앱 코드와 빌드 설정. 시험 코드만 바뀌면 APK가 같아 돌지 않음(뒤의 ! 줄이 앞 줄에서 뺌)
+      - shared/**
+      - androidApp/**
+      - "!shared/src/jvmTest/**"
+      - "!androidApp/src/test/**"
+      - gradle/**
+      - "*.gradle.kts"
+      - gradle.properties
+      - gradlew
+      - gradlew.bat
+      - scripts/emulator/upgrade_check.py
+      # upgrade_check.py가 쓰는 도우미(화면 덤프·탭·위젯 놓기·위젯 상태 읽기·시계·DB). 바꾸면 업데이트 확인도 다시 돎
+      - scripts/emulator/screens_check.py
+      - scripts/emulator/explore.py
+      - scripts/emulator/backup_restore_check.py
+      - scripts/emulator/release_check.py
+      - scripts/emulator/reminder_check.py
+      - scripts/emulator/emulator_boot.py
+      - .github/scripts/push_gate.py
+      - .github/workflows/upgrade.yml
+  workflow_dispatch:
+    inputs:
+      from:
+        description: "옛 빌드의 커밋 (기본: 대상자 고르기 전의 main)"
+        required: false
+        default: 8c50d4735ab3624d1e4689a18d55fe4bdfc86808
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upgrade-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    # 둘러보기(explore.yml)의 gate와 같음: 이 PR에서 이 확인이 마지막으로 모두 성공한 커밋 뒤로 위 경로가 바뀌었는지 보고
+    # 정함. 실패한 확인은 기준이 되지 않아 다음 푸시에서 다시 돎. PR을 열 때·다시 열 때·알 수 없을 때는 돎.
+    # 경로는 위 on.pull_request.paths와 같게 둠. 수동 실행에서는 건너뜀
+    name: 이번 푸시가 바꾼 파일
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read # 지난 실행을 읽음
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - id: gate
+        env:
+          GATE_ACTION: ${{ github.event.action }}
+          GATE_AFTER: ${{ github.event.after }}
+          GATE_JOB: "업데이트 확인 (API"
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 .github/scripts/push_gate.py
+          shared/
+          androidApp/
+          ':!shared/src/jvmTest/'
+          ':!androidApp/src/test/'
+          gradle/
+          '*.gradle.kts'
+          gradle.properties
+          gradlew
+          gradlew.bat
+          scripts/emulator/upgrade_check.py
+          scripts/emulator/screens_check.py
+          scripts/emulator/explore.py
+          scripts/emulator/backup_restore_check.py
+          scripts/emulator/release_check.py
+          scripts/emulator/reminder_check.py
+          scripts/emulator/emulator_boot.py
+          .github/scripts/push_gate.py
+          .github/workflows/upgrade.yml
+
+  upgrade:
+    name: 업데이트 확인 (API 34)
+    needs: gate
+    # gate가 run=false라고 할 때만 건너뜀. 수동 실행(gate 건너뜀)이나 gate 실패 때는 돎
+    if: ${{ !cancelled() && needs.gate.outputs.run != 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # PR에는 입력이 없어 기본 커밋을 씀
+      FROM: ${{ inputs.from || '8c50d4735ab3624d1e4689a18d55fe4bdfc86808' }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # 옛 커밋과 버전 번호(커밋 수)를 위해 이력 전체를 받음
+          fetch-depth: 0
+          persist-credentials: false
+
+      # 옛 커밋을 작업 폴더 안에 펼쳐, 다음 단계의 Gradle 래퍼 검증이 두 래퍼를 함께 봄
+      - name: 옛 커밋 펼치기
+        run: |
+          git cat-file -e "$FROM^{commit}"
+          git worktree add --detach old-build "$FROM"
+          echo "옛 커밋 $(git -C old-build log -1 --format='%h %ad %s' --date=iso)"
+
+      - uses: gradle/actions/wrapper-validation@0723195856401067f7a2779048b490ace7a47d7c # v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: 디버그 APK 둘 (옛 커밋, 이 커밋)
+        run: |
+          mkdir -p "$RUNNER_TEMP/apk"
+          # 버전 번호는 release.yml처럼 그 커밋까지의 커밋 수. 이 커밋이 더 커서 덮어 설치가 업데이트가 됨
+          old_code=$(git -C old-build rev-list --count HEAD)
+          new_code=$(git rev-list --count HEAD)
+          echo "versionCode 옛 $old_code ($(git -C old-build rev-parse --short HEAD)), 지금 $new_code ($(git rev-parse --short HEAD))"
+          (cd old-build && PILLBADEUM_VERSION_CODE="$old_code" ./gradlew :androidApp:assembleDebug && ./gradlew --stop)
+          cp old-build/androidApp/build/outputs/apk/debug/androidApp-debug.apk "$RUNNER_TEMP/apk/old-$old_code.apk"
+          PILLBADEUM_VERSION_CODE="$new_code" ./gradlew :androidApp:assembleDebug
+          # 에뮬레이터와 CPU·메모리를 나누지 않게 Gradle 데몬을 끔 (2026-11-12 둘러보기 5회차의 시스템 ANR)
+          ./gradlew --stop
+          cp androidApp/build/outputs/apk/debug/androidApp-debug.apk "$RUNNER_TEMP/apk/new-$new_code.apk"
+          ls -l "$RUNNER_TEMP/apk"
+
+      # KVM, 시스템 이미지, AVD를 준비하고 부팅을 기다림 (둘러보기와 같은 액션, Pixel 런처)
+      - uses: ./.github/actions/android-emulator
+        with:
+          api: "34"
+          cores: "4"
+
+      - name: 업데이트 확인 (scripts/emulator/upgrade_check.py)
+        env:
+          # PR이면 PR 머리 커밋과 실제로 빌드한 main 합침 커밋을 함께 적음
+          COMMIT: ${{ github.event_name == 'pull_request' && format('{0} (PR 머리 {1})', github.sha, github.event.pull_request.head.sha) || github.sha }}
+        run: |
+          python3 scripts/emulator/upgrade_check.py \
+            --old "$(ls "$RUNNER_TEMP"/apk/old-*.apk)" \
+            --new "$(ls "$RUNNER_TEMP"/apk/new-*.apk)" \
+            --old-commit "$FROM" \
+            --new-commit "$COMMIT" \
+            --out "$RUNNER_TEMP/upgrade"
+
+      - name: 결과 표
+        if: ${{ !cancelled() }}
+        run: |
+          report="$RUNNER_TEMP/upgrade/report.md"
+          if [ -f "$report" ]; then cat "$report" >> "$GITHUB_STEP_SUMMARY"; else echo "보고서 없음" >> "$GITHUB_STEP_SUMMARY"; fi
+          cp "$RUNNER_TEMP/emulator.log" "$RUNNER_TEMP/upgrade/" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() }}
+        with:
+          name: upgrade-api34
+          path: ${{ runner.temp }}/upgrade/
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: ignore

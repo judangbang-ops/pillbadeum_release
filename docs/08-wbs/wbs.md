@@ -181,6 +181,8 @@
 | TASK-050 | Play Console에 앱을 만들고 앱 서명 키 넘기기: 동희님이 앱을 만들고, Play 앱 서명에서 직접 관리하는 키로 바꾸기를 고름. 키 내보내기(Play Console이 안내하는 도구)와 올릴 파일 준비는 Claude가 동희님 PC에서 함. 넘길 때 Play 도움말을 다시 읽음 (2026-11-12 검토 A1) | REQ-062 | Play Console, 동희님 PC | TASK-002, TASK-048 | 동희님 | 0.5일 | Play Console의 앱 서명 인증서 SHA-256 = 앱 서명 키 지문 (캡처). 키·비밀번호가 Git·로그·채팅에 없음 |
 | TASK-051 | 개인 APK를 나눠 주기 전 에뮬레이터 확인: TASK-002의 release 변형 APK(같은 빌드를 시험 키로 서명해도 됨)를 깔고 위젯 탭 기록 → 백업·복원 → 버전 번호가 큰 다음 빌드를 덮어 깔아도 기록이 남는지 봄 (2026-11-12 검토 A3). **끝남** (2026-11-12, [PR #14](https://github.com/judangbang-ops/pillbadeum_release/pull/14)) | REQ-055, REQ-062 | 에뮬레이터, `docs/07-qa/` | TASK-002, TASK-004, TASK-028, TASK-029 | Claude | 0.5일 | `docs/07-qa/`에 로그와 캡처: release 변형이고 디버그 불가, 위젯 탭 기록, 백업 → 지우고 다시 설치 → 기록이 돌아옴(RR-26), 다음 빌드를 덮어 깐 뒤 기록이 남음 |
 
+- TASK-035 초안: [PR #36](https://github.com/judangbang-ops/pillbadeum_release/pull/36). [방침 초안](../release/privacy-policy.md)은 공개할 글만 담고, 문장마다의 근거(코드·QA 보고서·요구)와 Play·개인정보 보호법 요건 대조, 정할 것은 [근거와 정할 것](../release/privacy-policy-basis.md)에 둠. 앱 코드는 바꾸지 않음. 남은 것: 동희님이 정할 것(앱 이름 TASK-045, 개발자 이름과 연락처, 공개 위치, 시행일)과 공개 승인, 공개한 뒤 앱 설정의 주소(`PRIVACY_POLICY_URL`, SCR-009)와 그 시험(TC-036·TC-075)
+
 ## 2. 명세와 작업 (10 다시 하기, 2026-11-12)
 
 [04 기능 명세](../04-functional-spec/spec.md)의 줄마다 그 동작을 만들거나 확인하는 작업. 프로토타입에 이미 있는 동작(SPEC-003·023·024 등)은 회귀 확인 TASK-034가 맡음. 작업 표의 근거 열은 요구(REQ)이고, 이 표가 작업에서 명세로 가는 길임. `check_docs.py`가 모든 SPEC 줄에 작업이 있는지 봄.

@@ -24,6 +24,7 @@
 - **확인하지 못한 것**: `onRestored`가 실제로 오는지(에뮬레이터는 앱을 지웠다가 복원해 위젯이 사라짐. TASK-032 기기 간 이전에서 `onRestored: old … -> new …` 줄을 봄), 실제로 나눠 준 서명 APK 위의 업데이트(TASK-047 뒤), Play를 거친 업데이트(TASK-048), 앱을 열기 전 위젯 탭, 갤럭시 런처
 - **알게 된 것**: 첫 실행 안내가 생기기 전 빌드에서 올리면 안내가 한 번 다시 뜸. 개인 APK를 아직 나눠 주지 않아 실제 사용자에게는 일어나지 않음
 - **다음 행동**: PR #35의 남은 에뮬레이터 검사가 끝나면 머지. 이어서 R4 남은 것(TASK-035·036은 Claude 초안, TASK-045는 앱 이름을 여쭌 뒤, TASK-032·052는 실기기)
+- **머지**: 2026-11-15 17:35 KST에 main에 머지함(`3f1cd39`). 머지 전 마지막 푸시(문서 `fd624bf`)에서 업데이트 확인이 한 번 더 돎: 4회차 [43694560118](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43694560118)(빌드 `75d7de7`, 버전 번호 111 → 242) 6줄 통과, 덮어 설치 0.881초 뒤 채움, 로그캣에 `FATAL EXCEPTION`·ANR 없음. CI [43694560117](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43694560117) 통과, 알림·기기 스크립트·릴리즈 변형 확인은 바뀐 파일이 없어 gate가 건너뜀
 
 ### TASK-046 릴리즈 변형 확인 ([PR #34](https://github.com/judangbang-ops/pillbadeum_release/pull/34))
 

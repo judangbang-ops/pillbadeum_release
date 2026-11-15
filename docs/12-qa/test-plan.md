@@ -109,7 +109,7 @@
 | TC-072 | Play 비공개 테스트로 배포 | REQ-060 | Play Console (TASK-048~050) | 안 함 |
 | TC-073 | 패키지 이름을 첫 업로드 전에 정하고 바꾸지 않음 | REQ-061 | 빌드 설정, 첫 업로드 | 정함 (TASK-001, `com.judangbang.pillbadeum`). 업로드는 안 함 |
 | TC-074 | 개인 APK 기록이 Play 버전으로 넘어갈 때 남음 | REQ-062 | 실기기: 개인 APK 위에 Play 버전 설치 (TASK-047·050) | 안 함 |
-| TC-075 | Play Console 앱 콘텐츠 완료, 앱 안 개인정보처리방침 | REQ-063 | Play Console, SCR-009 | 안 함 |
+| TC-075 | Play Console 앱 콘텐츠 완료, 앱 안 개인정보처리방침 | REQ-063 | Play Console, SCR-009 | 안 함. 답 초안 있음([앱 콘텐츠 답](../release/play-app-content.md), [방침](../release/privacy-policy.md), 2026-11-15) |
 | TC-076 | 스토어 설명에 의료기기 아님·의료인 상의 문구 | REQ-064 | 스토어 설명 문안 (TASK-037) | 안 함 |
 | TC-077 | 새 개인 계정이면 테스터 12명 14일 | REQ-065 | 비공개 테스트 참여 기록 | 안 함 |
 

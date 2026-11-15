@@ -5,7 +5,8 @@
 #
 # - 옛 빌드는 입력 from의 커밋(기본 8c50d47: 2026-11-13 PR #19 전의 main)을 같은 실행에서 빌드함. 개인 APK를 나눠 준 뒤에는
 #   그 커밋으로 수동 실행해 '나눠 준 빌드 → 이번 빌드'를 볼 수 있음(TASK-047)
-# - 앱 코드(shared/, androidApp/, Gradle 설정)나 이 스크립트·워크플로를 바꾼 PR과 수동 실행에서 돎 (약 25분).
+# - 앱 코드(shared/, androidApp/, Gradle 설정)나 이 스크립트·워크플로를 바꾼 PR과 수동 실행에서 돎 (약 6~11분,
+#   2026-11-15 PR #35의 세 실행).
 #   시험 코드(shared/src/jvmTest/, androidApp/src/test/)만 바꾼 PR에서는 돌지 않음.
 #   PR에 다시 푸시할 때는 그 푸시가 아래 paths를 바꿨을 때만 돎(gate 작업, .github/scripts/push_gate.py)
 # - 서명 키·비밀값을 쓰지 않음. 두 디버그 APK는 이 실행의 디버그 키 하나로 서명되어 덮어 깔 수 있음

@@ -3,7 +3,7 @@
 - 대상: TASK-034. 2026-11-11 DidITake 프로토타입 QA(가쟈누님 저장소 `judangbang-ops/DidITake`의 [`docs/07-qa/2026-11-11-prototype/report.md`](https://github.com/judangbang-ops/DidITake/blob/7a24d73/docs/07-qa/2026-11-11-prototype/report.md), 아래 '프로토타입 QA')의 13항목을 마지막 빌드에서 다시 하고, 판정 쓰기가 공통 기록 함수만 거치는지 코드에서 봄(REQ-003). TASK-034의 근거 요구인 REQ-092(앱 데이터를 지운 뒤 남은 위젯 버튼)도 같은 실행에서 봄
 - 빌드: `2909a29`의 디버그 APK. 앱 코드는 main `d994b38`(R0~R3, R2 화면 작업, BUG-005까지)과 같고, 이 PR은 스크립트·CI·문서만 바꿈. DB를 root로 읽으려고 디버그를 씀. 릴리즈 변형의 위젯 탭 기록은 [릴리즈 변형 확인](../2026-11-12-release-variant/report.md)이 봄
 - 환경: GitHub Actions `ubuntu-latest`의 Android 에뮬레이터 API 34 `google_apis` x86_64, Pixel 5 프로필(1080×2340px, 밀도 2.75), Pixel Launcher, 하드웨어 키보드 켬. 프로토타입 QA는 API 34 `google_apis` arm64-v8a, Pixel 7 프로필
-- 방법: [`regression.yml`](../../../.github/workflows/regression.yml)이 [`scripts/emulator/regression_check.py`](../../../scripts/emulator/regression_check.py)를 돌림. 이 스크립트나 워크플로를 바꾼 PR과 수동 실행에서만 돎(약 40분)
+- 방법: [`regression.yml`](../../../.github/workflows/regression.yml)이 [`scripts/emulator/regression_check.py`](../../../scripts/emulator/regression_check.py)를 돌림. 이 스크립트나 워크플로를 바꾼 PR과 수동 실행에서만 돎(약 40분). 2026-11-15부터는 앱 코드를 바꾼 PR에서도 돎(7장)
   - 시계는 서울 시간대로 두고 앞으로만 옮김. 첫날은 실행한 날(2026-11-15 일요일) 08:30. 이름은 프로토타입 QA처럼 영어(`adb shell input text`가 한글을 넣지 못함): Morning(매일 아침), Vitamin(매일 저녁), Weekly(주 1회 월)
   - 위젯은 사람처럼 놓음(홈 화면 길게 누르기 → Widgets → 검색 → 끌어 놓기). 기록은 위젯 칸을 눌러 함
   - 판정은 화면 덤프의 TalkBack 문장(`content-desc`, 예: `Morning, 복용함, 오늘 08:33`), 위젯에 그린 글, 앱 DB의 `dose_record` 행으로 함. 위젯을 다시 그리라고 시키는 디버그 수신기는 쓰지 않음: 기록·시계 바꿈·하루 시작 뒤 위젯 모습은 앱이 스스로 그린 것
@@ -88,7 +88,7 @@ Weekly    2026-11-16  TAKEN WIDGET 활성 10:00              12단계, 금 11/20
   3. `DoseRecordDao`에 새 `@Query("DELETE FROM dose_record …")` 메서드를 더하고 androidApp `AppContainer.kt`에서 부름 → 쓰기 메서드가 6개로 늘고 usecase 밖 1곳
   4. shared androidMain `DatabaseBuilder.android.kt`에서 `clockFlagDao().resolve(…)`를 부름 → usecase 밖 1곳
 - 앱의 쓰기 길 (코드를 읽어 봄): 위젯 버튼(`DidITakeWidget.kt:201`), 알림 버튼(`Reminders.kt:140`), 첫 화면 [먹었어](`App.kt:393`)는 `DidITakeCore.record`로 `RecordDose`, 기록 취소(`App.kt:402`·`657`)는 `VoidDose`, 판정 고치기(골라 기록, 건너뜀, 건너뜀 → 복용, 시각 고치기, `App.kt:634`~`651`)는 `RecordInWindow`를 거침
-- 찾은 것 (요구 문장과 코드의 차이): REQ-003 문장은 공통 기록 함수를 'RecordDose·VoidDose·ChangeJudgment'로 적는데, `ChangeJudgment`는 제품 코드에서 부르지 않고 jvm `RecordRulesCounterexampleTest.c07_*`만 씀. 앱의 건너뜀 → 복용은 `RecordInWindow.record`의 `replacing`(`App.kt:651`)이고, 무효와 새 행을 한 트랜잭션에서 쓰며 새 행이 들어가지 않으면 무효도 되돌림(`voidOrRollBack`·`insertOrRollBack`, jvm `RecordInWindowTest`). 판정 쓰기가 모두 usecase를 거치므로 REQ-003의 합격 기준(판정 DAO의 쓰기를 usecase 밖에서 부르지 않음)은 통과. 문장의 함수 이름은 요구라 고치지 않고 동희님께 보고함
+- 찾은 것 (요구 문장과 코드의 차이): REQ-003 문장은 공통 기록 함수를 'RecordDose·VoidDose·ChangeJudgment'로 적는데, `ChangeJudgment`는 제품 코드에서 부르지 않고 jvm `RecordRulesCounterexampleTest.c07_*`만 씀. 앱의 건너뜀 → 복용은 `RecordInWindow.record`의 `replacing`(`App.kt:651`)이고, 무효와 새 행을 한 트랜잭션에서 쓰며 새 행이 들어가지 않으면 무효도 되돌림(`voidOrRollBack`·`insertOrRollBack`, jvm `RecordInWindowTest`). 판정 쓰기가 모두 usecase를 거치므로 REQ-003의 합격 기준(판정 DAO의 쓰기를 usecase 밖에서 부르지 않음)은 통과. 문장의 함수 이름은 요구라 고치지 않고 동희님께 보고함. **정함**: 2026-11-15 14:58 KST 동희님이 '필받음 재구축 인계' 채팅에서 '추천 모두 승인'. REQ-003 문장을 'RecordDose·VoidDose·RecordInWindow'로 고침([PR #33](https://github.com/judangbang-ops/pillbadeum_release/pull/33))
 - 한계: 글을 읽는 검사라 형식을 따지지 않음. DAO 형식 이름이나 `doseRecordDao()` 같은 getter가 글에 없는 파일(다른 이름의 변수로 DAO를 넘겨받은 파일)의 호출은 놓칠 수 있고, 같은 이름의 다른 메서드를 그런 파일에서 부르면 잘못 잡을 수 있음. 표 이름을 조립해 `execSQL`에 넘기는 SQL은 놓침. 시험 코드는 보지 않음
 
 ## 4. 시험
@@ -116,3 +116,4 @@ Weekly    2026-11-16  TAKEN WIDGET 활성 10:00              12단계, 금 11/20
 ## 7. 다음에 할 것 (제안)
 
 - 이 확인은 스크립트를 바꿀 때만 돎. 저장소가 공개라 Actions 분 한도가 없으니, 앱 코드(`shared/`, `androidApp/`)를 바꾼 PR에서도 돌게 하면 R4 이후의 회귀를 PR마다 잡을 수 있음(한 번에 약 40분). 정하시면 `regression.yml`의 경로를 넓힘
+  - **정함**: 2026-11-15 14:58 KST 동희님이 '필받음 재구축 인계' 채팅에서 '추천 모두 승인'. [PR #33](https://github.com/judangbang-ops/pillbadeum_release/pull/33)에서 `regression.yml`의 경로에 `shared/`, `androidApp/`(시험 코드 `shared/src/jvmTest/`·`androidApp/src/test/`는 뺌), `gradle/`, 맨 위 `*.gradle.kts`, `gradle.properties`, `gradlew`를 더함. PR에 다시 푸시할 때는 지난번처럼 그 푸시가 이 경로를 바꿨을 때만 돎

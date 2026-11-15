@@ -182,6 +182,7 @@
 | TASK-051 | 개인 APK를 나눠 주기 전 에뮬레이터 확인: TASK-002의 release 변형 APK(같은 빌드를 시험 키로 서명해도 됨)를 깔고 위젯 탭 기록 → 백업·복원 → 버전 번호가 큰 다음 빌드를 덮어 깔아도 기록이 남는지 봄 (2026-11-12 검토 A3). **끝남** (2026-11-12, [PR #14](https://github.com/judangbang-ops/pillbadeum_release/pull/14)) | REQ-055, REQ-062 | 에뮬레이터, `docs/07-qa/` | TASK-002, TASK-004, TASK-028, TASK-029 | Claude | 0.5일 | `docs/07-qa/`에 로그와 캡처: release 변형이고 디버그 불가, 위젯 탭 기록, 백업 → 지우고 다시 설치 → 기록이 돌아옴(RR-26), 다음 빌드를 덮어 깐 뒤 기록이 남음 |
 
 - TASK-035 초안: [PR #36](https://github.com/judangbang-ops/pillbadeum_release/pull/36). [방침 초안](../release/privacy-policy.md)은 공개할 글만 담고, 문장마다의 근거(코드·QA 보고서·요구)와 Play·개인정보 보호법 요건 대조, 정할 것은 [근거와 정할 것](../release/privacy-policy-basis.md)에 둠. 앱 코드는 바꾸지 않음. 남은 것: 동희님이 정할 것(앱 이름 TASK-045, 개발자 이름과 연락처, 공개 위치, 시행일)과 공개 승인, 공개한 뒤 앱 설정의 주소(`PRIVACY_POLICY_URL`, SCR-009)와 그 시험(TC-036·TC-075)
+- TASK-036 답 초안: [PR #38](https://github.com/judangbang-ops/pillbadeum_release/pull/38). [앱 콘텐츠 답](../release/play-app-content.md)에 항목별 답과 도움말 원문 근거를 둠. 검토 B9의 물음(자동 백업이 데이터 보안의 '수집'인가)은 도움말에 Android 자동 백업 문장이 없어, 종단 간 암호화 예외와 사용자 클라우드 예외로 '수집 아님'이라 판단함(Claude). 새로 알게 된 것: Play는 새 계정에 "건강 앱(예: 의료 앱 및 인간 대상 연구 앱)"이면 조직 계정을 요구함. 이 앱이 거기 드는지는 도움말에 없어 결정 Q11(TASK-048)에 걸림. 남은 것: 동희님의 계정 종류·타겟 연령 결정, 앱을 만든 뒤(TASK-050) 입력과 완료 화면 캡처
 
 ## 2. 명세와 작업 (10 다시 하기, 2026-11-12)
 

@@ -2,13 +2,16 @@
 # 같은 커밋의 서명 안 한 릴리즈 APK를 버전 번호 N과 N+1로 두 번 빌드하고, 이 실행에서만 쓰는 임시 키 하나로
 # 개인 APK와 같은 방법(scripts/sign-personal-apk.ps1: zipalign 확인 → apksigner, v4 서명 끔)으로 서명함.
 # 에뮬레이터(API 34)에서 N을 깔고 위젯 탭 기록 → 백업 → 지우고 다시 설치(RR-26) → N+1을 덮어 깔아도 기록이 남는지 봄.
+# N+1로 알림 버튼 셋([먹었어]·[오늘 건너뜀]·[30분 뒤])도 누름(TASK-046).
 # 경우와 기대 동작은 scripts/emulator/release_check.py 첫 주석.
 #
 # - 업로드 키·앱 서명 키·Secrets를 쓰지 않음. 임시 키는 서명 단계 안에서만 만들고 지움
 # - main에서는 release.yml과 같은 앱 빌드 경로가 바뀐 푸시마다 돎. 그래서 개인 APK로 서명할 main 커밋에는
 #   이 확인의 결과가 있음(Actions의 그 커밋 실행). PR에서는 빌드 설정과 이 확인의 코드가 바뀔 때만 돌고,
 #   PR에 다시 푸시할 때는 그 푸시가 PR paths를 바꿨을 때만 돎(gate 작업, .github/scripts/push_gate.py)
-# - 실행마다 약 10분(2026-11-12 실측, APK 둘 약 3분 + 에뮬레이터 약 7분)
+# - 수동 실행에서 minify를 켜면 코드 축소(R8)를 켠 릴리즈 APK로 같은 흐름을 봄(-Ppillbadeum.minify=true, TASK-046).
+#   제품 빌드(release.yml)는 축소하지 않음(TASK-002)
+# - 실행마다 약 10분(2026-11-12 실측, APK 둘 약 3분 + 에뮬레이터 약 7분). 알림 버튼 단계가 더해져 늘어남
 name: 릴리즈 변형 에뮬레이터 확인
 
 on:
@@ -33,6 +36,11 @@ on:
       - .github/scripts/push_gate.py
       - .github/workflows/release-emulator.yml
   workflow_dispatch:
+    inputs:
+      minify:
+        description: 코드 축소(R8)와 리소스 축소를 켠 릴리즈 APK로 확인 (TASK-046 비교용. 제품 빌드는 끔)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -98,19 +106,23 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      # 버전 번호는 release.yml·ci.yml처럼 빌드한 커밋까지의 커밋 수(N). N+1은 '다음 빌드'를 흉내 냄
+      # 버전 번호는 release.yml·ci.yml처럼 빌드한 커밋까지의 커밋 수(N). N+1은 '다음 빌드'를 흉내 냄.
+      # 코드 축소는 수동 실행의 minify를 켤 때만 켬(push·PR에서는 inputs가 비어 false)
       - name: 서명하지 않은 릴리즈 APK 두 개 (./gradlew :androidApp:assembleRelease)
         shell: bash
+        env:
+          MINIFY: ${{ inputs.minify && 'true' || 'false' }}
         run: |
           test "$(git rev-parse --is-shallow-repository)" = false
           n="$(git rev-list --count HEAD)"
-          echo "versionCode N = $n, N+1 = $((n + 1)) ($(git rev-parse --short HEAD))"
+          echo "versionCode N = $n, N+1 = $((n + 1)) ($(git rev-parse --short HEAD)), 코드 축소 $MINIFY"
           mkdir -p "$RUNNER_TEMP/unsigned"
           for code in "$n" "$((n + 1))"; do
-            PILLBADEUM_VERSION_CODE="$code" ./gradlew :androidApp:assembleRelease
+            PILLBADEUM_VERSION_CODE="$code" ./gradlew :androidApp:assembleRelease -Ppillbadeum.minify="$MINIFY"
             cp androidApp/build/outputs/apk/release/androidApp-release-unsigned.apk "$RUNNER_TEMP/unsigned/release-$code.apk"
           done
           echo "VERSION_N=$n" >> "$GITHUB_ENV"
+          echo "MINIFY=$MINIFY" >> "$GITHUB_ENV"
 
       # 임시 키(RSA 2048, 유효 1일)는 이 단계 안에서만 만들고 끝나면 지움. 비밀번호는 무작위이고 로그에서 가림
       - name: 임시 키로 두 APK 서명 (zipalign 확인 → apksigner, 개인 APK와 같은 방법)
@@ -150,6 +162,11 @@ jobs:
             sed -n 1p <<< "$badging"
             grep -q "^package: name='com.judangbang.pillbadeum' versionCode='$code' " <<< "$badging"
             if grep -q 'application-debuggable' <<< "$badging"; then echo "디버그 가능한 APK"; exit 1; fi
+            # REQ-057: 이 APK(코드 축소를 켰으면 켠 것)도 권한이 androidApp/expected-permissions.txt와 같음 (TASK-046)
+            "$build_tools/aapt2" dump permissions "$out" > "$RUNNER_TEMP/permissions-$code.txt"
+            python3 .github/scripts/check_permissions.py "$RUNNER_TEMP/permissions-$code.txt" \
+              androidApp/expected-permissions.txt "릴리즈 APK $code (코드 축소 $MINIFY)" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "- release-$code.apk: $(stat -c %s "$out") 바이트 (코드 축소 $MINIFY)" | tee -a "$GITHUB_STEP_SUMMARY"
           done
 
       - uses: actions/upload-artifact@v6
@@ -160,13 +177,25 @@ jobs:
           overwrite: true
           if-no-files-found: error
 
+      # 코드 축소를 켠 빌드의 R8 출력: mapping.txt(줄인 이름 → 원래 이름), usage.txt(뺀 코드), 빠진 클래스가 있으면
+      # missing_rules.txt. 축소한 빌드에서 깨진 곳을 찾고 proguard-rules.pro를 고치는 데 씀
+      - uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() && inputs.minify }}
+        with:
+          name: release-check-r8
+          path: androidApp/build/outputs/mapping/release/
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: warn
+
   release:
     name: 릴리즈 변형 (API 34)
     needs: apks
     # gate를 건너뛴 실행에서도 돌게 apks 결과만 봄(기본 조건은 건너뛴 gate 때문에 이 작업까지 건너뜀)
     if: ${{ !cancelled() && needs.apks.result == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # 알림 버튼 단계(시계를 옮긴 뒤 시스템이 멈칫하는 동안 기다림, 최대 3분)와 콜드 스타트 5회를 더해 25분에서 늘림
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v6
         with:
@@ -186,11 +215,14 @@ jobs:
         env:
           # PR이면 PR 머리 커밋과 실제로 빌드한 main 합침 커밋을 함께 적음
           COMMIT: ${{ github.event_name == 'pull_request' && format('{0} (PR 머리 {1})', github.sha, github.event.pull_request.head.sha) || github.sha }}
+          MINIFY: ${{ inputs.minify && 'true' || 'false' }}
         run: |
           apks=($(ls "$RUNNER_TEMP"/apk/release-*.apk | sort -V))
           test "${#apks[@]}" = 2
+          minify=()
+          if [ "$MINIFY" = true ]; then minify=(--minify); fi
           python3 scripts/emulator/release_check.py --apk "${apks[0]}" --next-apk "${apks[1]}" \
-            --out "$RUNNER_TEMP/release-check" --commit "$COMMIT"
+            --out "$RUNNER_TEMP/release-check" --commit "$COMMIT" "${minify[@]}"
 
       - name: 결과 표
         if: ${{ !cancelled() }}

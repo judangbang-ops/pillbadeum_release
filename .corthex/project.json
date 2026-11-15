@@ -4,8 +4,8 @@
   "team": true,
   "language": "ko",
   "records": {
-    "kind": "notion",
-    "location": "https://app.notion.com/p/415bf16cc3ec81898818f38c317943e1"
+    "kind": "git",
+    "location": "docs/10-records/progress.md"
   },
   "repos": {
     "diditake": "https://github.com/judangbang-ops/DidITake"

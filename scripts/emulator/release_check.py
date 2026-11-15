@@ -15,6 +15,14 @@ Takes two release APKs of one commit signed with one test key, the way personal 
      place the widget again: it shows the restore line (supplement R-3) until [확인했어요] in the app.
   4. Install N+1 over N: version N+1, the record stays, same device_id and marker, no restore notice.
   5. Tap the second item on the widget the launcher kept: the new build records it.
+  6. TASK-046, the reminder buttons in the release build: make three items in the app with [알림 받기] on (first
+     reminder 08:00, supplement N-3), move the clock to a minute before the planned exact alarm, and press [먹었어],
+     [오늘 건너뜀] and [30분 뒤] in the notification shade: TAKEN and SKIPPED with source NOTIFICATION, one snooze
+     30 minutes after the press, the three reminders gone. The permission windows and the exact-alarm screen are not
+     seen here (the debug build's screen checks show them): notifications are allowed with `pm grant` and exact alarms
+     with `appops`, before the items are made.
+  7. For the report, not a check: the APKs' size and dex files, and five cold starts of the app (`am start -W`), so a
+     build with code shrinking (R8, `--minify`) can be compared with one without (TASK-046).
 
 The widget is placed the way a person does it: touch and hold the home screen > Widgets > search
 DidITake > drag its preview onto the home screen. (Touch and hold on the app icon is not used: on the
@@ -23,18 +31,24 @@ launcher cannot be driven, or the placed widget does not show the item, that is 
 the flow records in the app instead, so the backup and update checks still run.
 
 Writes report.md, screenshots and logs to --out. Exits 1 when a check fails.
-Standard library only. Not product code. Screen and file helpers are in backup_restore_check.py.
+Standard library only. Not product code. Screen and file helpers are in backup_restore_check.py; step 6 takes the clock
+and notification helpers of explore.py and reminder_check.py, imported inside it because both import this file.
 """
 
 from __future__ import annotations
 
 import argparse
 import re
+import statistics
 import sys
 import time
+import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 from backup_restore_check import (
+    ACTIVITY,
+    HOME_MARK,
     UI_XML,
     ITEM_A,
     ITEM_B,
@@ -53,6 +67,7 @@ from backup_restore_check import (
     dump_ui,
     ensure_transport,
     find,
+    find_exact,
     install,
     launch_app,
     only_db_files,
@@ -79,6 +94,12 @@ RESTORED_LINE = "복원됨"  # Labels.restoreWidgetLine (supplement R-3)
 # BUG-004: the app switches this WorkManager receiver on when it starts (RescheduleReceiverKeeper), so
 # placing the first widget no longer causes a PACKAGE_CHANGED that resets it to the loading view.
 RESCHEDULE_RECEIVER = "androidx.work.impl.background.systemalarm.RescheduleReceiver"
+# Step 6 (TASK-046): items with reminders, named as in reminder_check.py so its notification helpers know them.
+REMINDER_ITEMS = ("PillA", "PillB", "PillC")
+REMINDER_SWITCH = "알림 받기"  # Labels.REMINDER_SWITCH: a daily item's switch row is read as this alone
+REMINDER_START = "첫 알림 시각"  # Labels.REMINDER_START; the time button is read as `첫 알림 시각, 8시`
+ITEM_SAVED = "저장했어요"  # Labels.ITEM_SAVED, the quiet-hours notice after [저장] (not expected at 08:00)
+NOTIFICATION_PERMISSION = "android.permission.POST_NOTIFICATIONS"
 
 
 # ------------------------------------------------------------------------------------------------
@@ -298,6 +319,174 @@ def tap_widget_item(name: str) -> bool:
 
 
 # ------------------------------------------------------------------------------------------------
+# Reminders in the release build (step 6, TASK-046)
+
+
+def seek_node(match, what: str, tries: int = 5) -> Node:
+    """The first node `match` accepts that is fully on screen, scrolling the screen down to find it."""
+    w, h = screen_size()
+    for attempt in range(tries):
+        node = next((n for n in dump_ui() if match(n) and on_screen(n, h)), None)
+        if node is not None:
+            return node
+        if attempt < tries - 1:
+            sh(f"input swipe {w // 2} {h * 3 // 4} {w // 2} {h // 4} 400")
+            time.sleep(1)
+    raise RuntimeError(f"{what} not found after scrolling")
+
+
+def add_reminder_item(name: str) -> str:
+    """App home > [항목 추가] > name > [알림 받기] on > [저장], as a person makes an item with reminders (TASK-023).
+    The daily item keeps the form's time of day, whose first reminder is 08:00 (supplement N-3). Notifications are
+    already allowed, so the switch asks nothing. Returns how the form reads the first reminder (`첫 알림 시각, 8시`)."""
+    from explore import tap_scrolled, type_into  # explore imports this file (module note)
+
+    launch_app()
+    tap_scrolled("항목 추가")
+    type_into("약 이름", name)
+    tap(seek_node(lambda n: n.desc == REMINDER_SWITCH, f"[{REMINDER_SWITCH}] of {name}"))
+    start = None
+    end = time.time() + 10
+    while start is None and time.time() < end:
+        start = next((n for n in dump_ui() if n.desc.startswith(f"{REMINDER_START}, ")), None)
+        if start is None:
+            time.sleep(1)
+    if start is None:
+        raise RuntimeError(f"no '{REMINDER_START}' after [{REMINDER_SWITCH}] of {name}")
+    save = find_exact("저장", 10)
+    if save is None:
+        raise RuntimeError(f"no [저장] on the form of {name}")
+    tap(save)
+    if find_exact(ITEM_SAVED, 3) is not None:
+        ok = find_exact("확인", 5)
+        if ok is not None:
+            tap(ok)
+    if find_exact(HOME_MARK, 15) is None:
+        raise RuntimeError(f"the first screen did not come back after saving {name}")
+    return start.desc
+
+
+def notification_buttons(r: Report) -> None:
+    """Step 6 (TASK-046): the reminders and their three buttons in the release build. See the module note."""
+    from explore import phone_now, set_clock  # both modules import this file (module note)
+    from reminder_check import (
+        SKIP,
+        SNOOZE,
+        TAKEN,
+        collapse_shade,
+        dose_names,
+        doses,
+        expand_shade,
+        judgments,
+        lock_notices,
+        posted,
+        press_in_shade,
+        query,
+        show_alarms,
+        show_posted,
+        snoozes,
+        title,
+        wait_alarm,
+        wait_posted,
+    )
+
+    def planned(found) -> list:
+        return [a for a in found if not a.windowed]  # without the inexact path's second alarm
+
+    granted = sh(f"pm grant {PKG} {NOTIFICATION_PERMISSION}", check=False).strip()
+    sh(f"appops set {PKG} SCHEDULE_EXACT_ALARM allow", check=False)
+    exact_op = sh(f"appops get {PKG} SCHEDULE_EXACT_ALARM", check=False).strip()
+    r.note(f"6단계 준비: 알림 권한은 `pm grant`로{f' ({granted})' if granted else ''}, 정확 알람은 `appops`로 허용함 "
+           f"('{exact_op}'). 권한 창과 정확 알람 화면은 디버그 빌드의 화면 확인에서 봄")
+    starts = [add_reminder_item(name) for name in REMINDER_ITEMS]
+    r.shot("reminder-items")
+    rules = [row for row in query("SELECT i.name, r.enabled, r.start_time FROM reminder_rule r "
+                                  "JOIN intake i ON i.id = r.intake_id ORDER BY i.name") if row[0] in REMINDER_ITEMS]
+    found = wait_alarm(lambda a: len(planned(a)) == 1, 30)
+    alarm = planned(found)
+    form = starts[0] if len(set(starts)) == 1 else ", ".join(starts)
+    r.check("알림 켠 항목 셋 (릴리즈, TASK-023·024)",
+            f"앱에서 [{REMINDER_SWITCH}]를 켜고 저장: 규칙 셋 다 켜짐·08:00, 다음 칸의 정확 알람 1개",
+            f"양식 '{form}'; 규칙 {rules}; 알람 {show_alarms(found)}",
+            rules == [(n, 1, "08:00") for n in REMINDER_ITEMS] and len(alarm) == 1 and alarm[0].exact
+            and alarm[0].millis is not None)
+    if len(alarm) != 1 or alarm[0].millis is None:
+        return
+    at = alarm[0].millis // 1000
+    if at - phone_now() > 90:
+        moved = set_clock(datetime.fromtimestamp(at - 60, timezone.utc))
+        r.note(f"6단계: 시계를 알람 1분 전으로 옮김 → {moved} (알람 {alarm[0].describe()})")
+    items = wait_posted(lambda ps: set(REMINDER_ITEMS) <= set(dose_names(ps)), 240)
+    titles = {title(n) for n in REMINDER_ITEMS}
+    shown = [p for p in doses(items) if p.title in titles]
+    buttons = sorted({" · ".join(p.actions) for p in shown})
+    rang = len(shown) == len(REMINDER_ITEMS) and all(set(p.actions) == {TAKEN, SNOOZE, SKIP} for p in shown)
+    sh("input keyevent KEYCODE_WAKEUP", check=False)
+    sh("wm dismiss-keyguard", check=False)
+    go_home()
+    expand_shade()
+    r.shot("reminders-shade")
+    save_ui(r, "reminders-shade")
+    collapse_shade()
+    r.check("알림 울림 (릴리즈, TASK-024·025)", f"세 항목 알림 '<이름> 먹어~!'에 [{TAKEN}]·[{SNOOZE}]·[{SKIP}]",
+            f"{show_posted(items)}; 버튼 {buttons}", rang)
+    if not rang:
+        return
+
+    taken, skipped, snoozed = REMINDER_ITEMS
+    press_in_shade(taken, TAKEN)
+    press_in_shade(skipped, SKIP)
+    before = phone_now() * 1000
+    press_in_shade(snoozed, SNOOZE)
+    ids = {str(name): str(i) for name, i in query("SELECT name, id FROM intake")}
+    state = {k: v for k, v in judgments(ids).items() if k in REMINDER_ITEMS}
+    until = snoozes(ids)
+    left = posted()
+    found = wait_alarm(lambda a: len(planned(a)) == 1, 15)
+    alarm = planned(found)
+    snooze_at = until.get(snoozed)
+    on_time = snooze_at is not None and 30 * 60_000 <= snooze_at - before <= 32 * 60_000
+    gone = not set(REMINDER_ITEMS) & set(dose_names(left)) and not lock_notices(left)
+    r.check("알림 버튼 (릴리즈, TC-011·TC-012)",
+            f"{taken} 복용(TAKEN, NOTIFICATION), {skipped} 건너뜀(SKIPPED, NOTIFICATION), {snoozed} 미룸 1건(누른 때부터 "
+            "30분 뒤), 세 알림과 잠금 화면 알림이 사라짐, 다음 알람 = 미룬 시각",
+            f"판정 {state}; 미룸 {list(until)} (누른 때부터 "
+            f"{'?' if snooze_at is None else round((snooze_at - before) / 60_000, 1)}분); 남은 알림 {show_posted(left)}; "
+            f"알람 {show_alarms(found)}",
+            state.get(taken) == ("TAKEN", "NOTIFICATION") and state.get(skipped) == ("SKIPPED", "NOTIFICATION")
+            and snoozed not in state and list(until) == [snoozed] and on_time and gone
+            and len(alarm) == 1 and alarm[0].millis is not None and abs(alarm[0].millis - snooze_at) < 1000)
+    r.shot("after-buttons")
+
+
+# ------------------------------------------------------------------------------------------------
+# For the report: size and start time (step 7, TASK-046)
+
+
+def apk_summary(apk: Path) -> str:
+    """The APK's size and its dex files: one file and fewer bytes when code shrinking (R8) is on."""
+    with zipfile.ZipFile(apk) as z:
+        dex = [i for i in z.infolist() if re.fullmatch(r"classes\d*\.dex", i.filename)]
+    return (f"{apk.name} {apk.stat().st_size / 1_000_000:.2f} MB, dex {len(dex)}개 "
+            f"(풀면 {sum(i.file_size for i in dex) / 1_000_000:.2f} MB)")
+
+
+def cold_starts(times: int = 5) -> list[int]:
+    """TotalTime in ms of `am start -W` right after `am force-stop`: the app's cold start, to compare builds. Not a
+    check: an emulator on a shared runner is noisy. Run last, because a force stop also drops the app's alarms."""
+    found: list[int] = []
+    for _ in range(times):
+        sh(f"am force-stop {PKG}", check=False)
+        time.sleep(2)
+        out = sh(f"am start -W -n {ACTIVITY}", check=False, timeout=60)
+        m = re.search(r"TotalTime: (\d+)", out)
+        if m:
+            found.append(int(m.group(1)))
+        time.sleep(3)
+    return found
+
+
+# ------------------------------------------------------------------------------------------------
 # Flow
 
 
@@ -436,6 +625,9 @@ def run_flow(apk: Path, next_apk: Path, r: Report) -> None:
             not screen_has(NOTICE, 0))
     r.shot("app-after-update")
 
+    # 6. the reminder buttons with the release build N+1 (TASK-046)
+    notification_buttons(r)
+
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -443,6 +635,8 @@ def main() -> int:
     parser.add_argument("--next-apk", required=True, type=Path, help="same key, version N+1")
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--commit", default="", help="commit the APKs were built from, for the report")
+    parser.add_argument("--minify", action="store_true",
+                        help="the APKs were built with code shrinking (-Ppillbadeum.minify=true); names the report")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
 
@@ -450,18 +644,27 @@ def main() -> int:
     wait_boot()
     become_root()
     api = api_level()
-    r = Report(args.out, api, title=f"릴리즈 변형 확인 API {api}")
+    build = "코드 축소 켬" if args.minify else "코드 축소 끔"
+    r = Report(args.out, api, title=f"릴리즈 변형 확인 API {api} ({build})")
     for setting in ("window_animation_scale", "transition_animation_scale", "animator_duration_scale"):
         sh(f"settings put global {setting} 0")
     sh("settings put secure show_ime_with_hard_keyboard 0", check=False)
     sh("svc power stayon true", check=False)
     sh("settings put system screen_off_timeout 1800000", check=False)
+    from explore import set_zone  # explore imports this file (module note)
+
+    # Seoul like the other checks, before the first install, so the app's base zone and the report's times are KST
+    zone = set_zone()
     setup_transport()
-    r.note(f"기기: API {api}, {sh('getprop ro.product.model').strip()}, APK {args.apk.name} → {args.next_apk.name}"
-           + (f", 커밋 {args.commit}" if args.commit else ""))
+    r.note(f"기기: API {api}, {sh('getprop ro.product.model').strip()}, 시간대 {zone}, APK {args.apk.name} → "
+           f"{args.next_apk.name}" + (f", 커밋 {args.commit}" if args.commit else ""))
+    r.note(f"빌드 ({build}): {apk_summary(args.apk)}; {apk_summary(args.next_apk)}")
     try:
         ensure_transport(r)
         run_flow(args.apk, args.next_apk, r)
+        starts = cold_starts()
+        r.note(f"7단계 앱 콜드 스타트 (`am start -W`의 TotalTime, {len(starts)}회, 판정 아님): {starts} ms"
+               + (f", 중앙값 {statistics.median(starts):.0f} ms" if starts else ""))
     except Exception as exc:
         r.check("스크립트", "끝까지 돎", f"{type(exc).__name__}: {exc}", False)
         try:

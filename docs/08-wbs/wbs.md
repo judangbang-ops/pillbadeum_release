@@ -183,6 +183,7 @@
 
 - TASK-035 초안: [PR #36](https://github.com/judangbang-ops/pillbadeum_release/pull/36). [방침 초안](../release/privacy-policy.md)은 공개할 글만 담고, 문장마다의 근거(코드·QA 보고서·요구)와 Play·개인정보 보호법 요건 대조, 정할 것은 [근거와 정할 것](../release/privacy-policy-basis.md)에 둠. 앱 코드는 바꾸지 않음. 남은 것: 동희님이 정할 것(앱 이름 TASK-045, 개발자 이름과 연락처, 공개 위치, 시행일)과 공개 승인, 공개한 뒤 앱 설정의 주소(`PRIVACY_POLICY_URL`, SCR-009)와 그 시험(TC-036·TC-075)
 - TASK-036 답 초안: [PR #38](https://github.com/judangbang-ops/pillbadeum_release/pull/38). [앱 콘텐츠 답](../release/play-app-content.md)에 항목별 답과 도움말 원문 근거를 둠. 검토 B9의 물음(자동 백업이 데이터 보안의 '수집'인가)은 도움말에 Android 자동 백업 문장이 없어, 종단 간 암호화 예외와 사용자 클라우드 예외로 '수집 아님'이라 판단함(Claude). 새로 알게 된 것: Play는 새 계정에 "건강 앱(예: 의료 앱 및 인간 대상 연구 앱)"이면 조직 계정을 요구함. 이 앱이 거기 드는지는 도움말에 없어 결정 Q11(TASK-048)에 걸림. 남은 것: 동희님의 계정 종류·타겟 연령 결정, 앱을 만든 뒤(TASK-050) 입력과 완료 화면 캡처
+- TASK-037 초안: [PR #39](https://github.com/judangbang-ops/pillbadeum_release/pull/39). [스토어 등록정보](../release/store-listing.md)에 근거·그림 계획·정할 것을, [붙여 넣을 글](../release/listing/ko-KR/)에 앱 이름·간단한 설명(49자)·자세한 설명(1,213자)을 둠. 자세한 설명에 건강 정책의 고지 둘(의료기기 아님·의료 전문가 상의)이 있음. CI 문구 검사(`.github/scripts/check_wording.py`)가 등록정보 글의 길이·고지·금지 문구와 앱 문구의 의학 판단 문구를 PR마다 봄(TC-061·TC-076). 지금의 QA 캡처(540×1170, 긴 변이 2.167배)는 Play 스크린샷 규격(긴 변이 짧은 변의 두 배 이하)에 맞지 않아 1080×1920으로 따로 찍기로 함. 남은 것: 앱 이름(TASK-045) 뒤 스크린샷·아이콘·그래픽 이미지, 동희님이 정할 연락 이메일·카테고리(추천 의료), 입력은 TASK-038
 
 ## 2. 명세와 작업 (10 다시 하기, 2026-11-12)
 

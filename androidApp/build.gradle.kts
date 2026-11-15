@@ -26,6 +26,13 @@ if (releaseSigningMissing.isNotEmpty() && releaseSigningMissing.size < releaseSi
     throw GradleException("릴리즈 서명 환경 변수가 일부만 있음. 없는 것: ${releaseSigningMissing.joinToString()}")
 }
 
+// 코드 축소(R8)와 리소스 축소 (TASK-046). 1차 기본은 끔(TASK-002). -Ppillbadeum.minify=true를 주면 켠 릴리즈 빌드를
+// 만듦: 릴리즈 변형 확인(release-emulator.yml)을 수동 실행하며 minify를 켜면 그 빌드로 핵심 흐름을 시험함
+val minifyRelease: Boolean = providers.gradleProperty("pillbadeum.minify").orNull?.let { raw ->
+    raw.trim().toBooleanStrictOrNull()
+        ?: throw GradleException("pillbadeum.minify는 true나 false여야 함 (지금 값: '$raw')")
+} ?: false
+
 android {
     namespace = "com.judangbang.pillbadeum"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
@@ -54,8 +61,10 @@ android {
     buildTypes {
         release {
             // 개인 APK와 Play AAB 모두 이 변형임 (debuggable 아님, CI가 확인함).
-            // 코드 축소(R8)는 1차에 끔. 켜려면 TASK-046에서 릴리즈 빌드로 핵심 흐름을 다시 시험함 (독립 검토 A3)
-            isMinifyEnabled = false
+            // 코드 축소(R8)는 1차에 끔(TASK-002). 켠 빌드는 위 minifyRelease로만 만들어 시험함 (TASK-046, 독립 검토 A3)
+            isMinifyEnabled = minifyRelease
+            isShrinkResources = minifyRelease
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.findByName("release")
         }
     }

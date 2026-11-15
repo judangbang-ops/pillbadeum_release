@@ -10,6 +10,21 @@
 
 ## 2026-11-15
 
+### TASK-012 남은 몫: 옛 빌드에서 덮어 설치하는 업데이트 확인 ([PR #35](https://github.com/judangbang-ops/pillbadeum_release/pull/35))
+
+- **목표**: TASK-012의 남은 둘을 끝냄. (1) 대상자 고르기 전부터 놓인 위젯은 '전체'(보충 R-3, RR-74)를 앱 시험이 아니라 실제 런처·실제 덮어 설치로 봄. (2) `onRestored` 실험 결과를 적음
+- **한 일**: 앱 코드는 바꾸지 않음
+  - `scripts/emulator/upgrade_check.py`와 `.github/workflows/upgrade.yml`(새로): 한 실행에서 대상자 고르기 전 커밋 `8c50d47`과 PR 커밋을 디버그 APK로 빌드하고, 옛 빌드에서 대상자 둘(나 Vitamin, 옛 항목 화면의 [+ 사람 추가]로 만든 Mom BPpill)로 위젯을 놓아 위젯에서 기록한 뒤 `adb install -r`로 올림. 앱 코드나 그 스크립트·도우미를 바꾼 PR마다 돎. 수동 실행은 입력 `from`으로 옛 커밋을 바꿈
+  - [QA 보고서](../07-qa/2026-11-15-upgrade/report.md), wbs TASK-012 **끝남**과 진행 메모, 시험 계획 TC-052와 방법 목록
+- **확인한 것**
+  - 3회차 [43692177610](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43692177610)(`47aefbd`, 버전 번호 111 → 241)에서 6줄 모두 통과: 앱을 열기 전부터 새 빌드가 다시 그린 그 위젯이 '나 Vitamin'·'Mom BPpill'을 보이고 다시 설정을 묻지 않음, 첫 실행 안내 한 번, 채움 로그 한 번과 저장된 선택 `*`, 그 위젯에서 누른 Mom 항목이 기록됨(활성 판정 2건 모두 `WIDGET`), 대조(상태를 지우면 "위젯을 다시 설정해 주세요", 다시 채우지 않음)
+  - 채운 때: 세 실행 모두 덮어 설치 0.588~0.997초 뒤, 시스템이 깨운 새 빌드의 첫 프로세스(1·3회차 경계 알람 수신기, 2회차 위젯 수신기)가 채웠고 앱을 연 것은 그 8.061~9.426초 뒤
+  - 1회차 [43689285870](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43689285870)·2회차 [43691218110](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43691218110)도 그때 스크립트로 6줄 통과. 세 실행 로그캣에 앱의 `FATAL EXCEPTION`·ANR 없음
+- **고친 것(확인 절차)**: 1회차의 1·2단계 화면 덤프가 탭 전 화면이었음(`save_ui`가 마지막 덤프를 남김), 3단계 기대가 "첫 실행에서 채움"이었음, 업데이트 전 대상자가 하나라 채우기가 늦거나 빠져도 통과할 수 있었음. 셋 다 고침(보고서 5장)
+- **확인하지 못한 것**: `onRestored`가 실제로 오는지(에뮬레이터는 앱을 지웠다가 복원해 위젯이 사라짐. TASK-032 기기 간 이전에서 `onRestored: old … -> new …` 줄을 봄), 실제로 나눠 준 서명 APK 위의 업데이트(TASK-047 뒤), Play를 거친 업데이트(TASK-048), 앱을 열기 전 위젯 탭, 갤럭시 런처
+- **알게 된 것**: 첫 실행 안내가 생기기 전 빌드에서 올리면 안내가 한 번 다시 뜸. 개인 APK를 아직 나눠 주지 않아 실제 사용자에게는 일어나지 않음
+- **다음 행동**: PR #35의 남은 에뮬레이터 검사가 끝나면 머지. 이어서 R4 남은 것(TASK-035·036은 Claude 초안, TASK-045는 앱 이름을 여쭌 뒤, TASK-032·052는 실기기)
+
 ### TASK-046 릴리즈 변형 확인 ([PR #34](https://github.com/judangbang-ops/pillbadeum_release/pull/34))
 
 - **목표**: 핵심 흐름 가운데 릴리즈 빌드로 보지 않은 알림 버튼을 릴리즈 변형 확인에 더하고, 코드 축소(R8)를 켠 빌드를 같은 흐름으로 돌려 끈 빌드와 견줌. 켤지는 결과를 보고 정함(1차 기본은 끔, TASK-002)
@@ -26,6 +41,7 @@
   - 서명한 APK 넷의 권한이 기준 목록과 같음(8줄, `INTERNET` 없음). CI [43685796434](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43685796434) 통과
 - **확인하지 못한 것**: 실기기의 릴리즈 빌드 알림·잠금 화면(TASK-032·052), 잠금 화면에서 누른 버튼과 미룬 알람이 다시 울리는 것의 릴리즈 몫(디버그 빌드로만 봄), Play에서 받는 크기(TASK-038), 실기기 콜드 스타트
 - **다음 행동**: PR #34의 남은 에뮬레이터 검사가 끝나면 머지. 이어서 R4 남은 것(TASK-032·052는 실기기), TASK-035·036, TASK-045는 앱 이름을 여쭌 뒤
+- **머지**: 2026-11-15 16:09 KST에 main에 머지함(`92983ce`). 머지 전 마지막 푸시(문서)의 CI [43688375033](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43688375033) 통과, 에뮬레이터 검사 9개는 그 푸시가 앱 코드·스크립트를 바꾸지 않아 gate가 건너뜀
 
 ### 동희님 결정 반영: REQ-003 함수 이름, 회귀 확인 범위, 알림 제목 ([PR #33](https://github.com/judangbang-ops/pillbadeum_release/pull/33), `9e59f10`)
 

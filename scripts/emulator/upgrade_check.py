@@ -4,9 +4,11 @@
 
 Why: the person picker came with TASK-012 (PR #19). A widget placed by a build before it has no person choice, and
 from two people on a widget without one asks to be set up again (SCR-001#reconfigure), as after a restore. So the
-first start of the build with the picker fills every placed widget without a choice with 전체, once per install
-(WidgetChoices.prepare). The app tests check this on Robolectric (WidgetPickTest.rr74_*); this script checks it with a
-real launcher, a real widget placed by the old APK and `adb install -r`, as a person updating would.
+first process of the build with the picker fills every placed widget without a choice with 전체, once per install
+(WidgetChoices.prepare, run by AppContainer.core() before anything draws, from whichever entry comes first: the app,
+the widget, an alarm or a system broadcast). The app tests check this on Robolectric (WidgetPickTest.rr74_*); this
+script checks it with a real launcher, a real widget placed by the old APK and `adb install -r`, as a person updating
+would.
 
 Takes two debug APKs signed with one key: --old, built from a commit before the picker (by default 8c50d47, main of
 2026-11-13 before PR #19), and --new, built from this commit with a bigger version number. Flow (Asia/Seoul):
@@ -16,10 +18,13 @@ Takes two debug APKs signed with one key: --old, built from a commit before the 
      one record with source WIDGET. The widget's Glance state has no person choice. If the old widget stays on its
      loading view (BUG-004, fixed after that build) Vitamin is recorded in the old app instead and that is noted.
   2. The new build installed over it (`adb install -r`): a bigger version number, the record and the install marker
-     stay.
+     stay. Before anyone opens the app, the report notes what the widget shows, whether the fill is already logged and
+     why the new build's first process started (in run 43689285870 MY_PACKAGE_REPLACED woke DayBoundaryReceiver and
+     the widget was filled and drawn by the new build about a second after the update). Only noted, not judged.
   3. The new build opened: the intro shows once (the old build's data has no intro_seen_at, SPEC-002) and is passed with
-     [건너뛰기]. The app logs that it filled one widget with 전체, the widget's state holds "*" (WidgetChoice.EVERYONE),
-     and the widget shows Vitamin.
+     [건너뛰기]. Since the update the app has logged exactly once that it filled one widget with 전체 (when, against the
+     first start, goes into the report), the widget's state holds "*" (WidgetChoice.EVERYONE), and the widget shows
+     Vitamin.
   4. Mom added (설정 > 대상자 관리) with BPpill (Mom, 매일 저녁): the widget placed before the update reads 나 Vitamin and
      Mom BPpill, and does not ask to be set up again (RR-74).
   5. Control: the widget's state deleted, as a restore leaves it, and the widget drawn again: with two people it asks to
@@ -46,12 +51,14 @@ from backup_restore_check import (
     ACTIVITY,
     HOME_MARK,
     INTRO_MARK,
+    PKG,
     Report,
     adb,
     add_item,
     api_level,
     become_root,
     button_for,
+    dump_ui,
     find,
     find_exact,
     install,
@@ -127,10 +134,30 @@ def clear_log() -> None:
     adb("logcat", "-c", check=False)
 
 
-def filled_lines() -> list[str]:
-    """What WidgetChoices.prepare logged since the last clear_log()."""
+def filled_log() -> list[tuple[str, str]]:
+    """What WidgetChoices.prepare logged since the last clear_log(), as (time, message).
+    A line reads "11-15 08:31:54.541 I/WidgetChoices( 7053): widget choices ready: …"."""
     out = adb("logcat", "-d", "-v", "time", "-s", "WidgetChoices", check=False)
-    return [line.split(": ", 1)[-1].strip() for line in out.splitlines() if FILLED_LOG in line]
+    found = []
+    for line in out.splitlines():
+        if FILLED_LOG in line:
+            parts = line.split()
+            found.append((parts[1] if len(parts) > 1 else "?", line.split(": ", 1)[-1].strip()))
+    return found
+
+
+def filled_lines() -> list[str]:
+    return [message for _, message in filled_log()]
+
+
+def process_start() -> str:
+    """Why the app's first process since the last clear_log() was started, from ActivityManager's
+    "Start proc 7053:com.judangbang.pillbadeum/u0a192 for broadcast {…/….boundary.DayBoundaryReceiver}"."""
+    out = adb("logcat", "-d", "-v", "time", "-s", "ActivityManager", check=False)
+    for line in out.splitlines():
+        if "Start proc" in line and f":{PKG}/" in line and " for " in line:
+            return f"{line.split()[1]} {line.split(' for ', 1)[1].strip().replace(f'{PKG}/{PKG}.', '')}"
+    return "기록 없음"
 
 
 def widget_spoken(nodes) -> list[str]:
@@ -193,6 +220,7 @@ def run(r: Report, steps: Steps, old_apk: Path, new_apk: Path, old_commit: str) 
             how = "옛 앱에서 기록(위젯에 항목이 안 보임)"
         go_home()
         r.shot("old-widget-after-tap")
+        dump_ui()  # save_ui keeps the last dump: read the screen again so the dump matches the screenshot
         save_ui(r, "old-widget-after-tap")
         state = read_state()
         choices = stored_choices()
@@ -213,13 +241,20 @@ def run(r: Report, steps: Steps, old_apk: Path, new_apk: Path, old_commit: str) 
         out = adb("install", "-r", "-t", str(new_apk), timeout=180)
         if "Success" not in out:
             raise RuntimeError(f"install -r: {out.strip()}")
+        seen["installed_at"] = sh("date +%H:%M:%S", check=False).strip()
         time.sleep(5)
         info = package_info()
         seen["new_version"] = info["versionCode"]
         state = read_state()
-        go_home()
+        # Before anyone opens the app: what the widget shows, the fill and why the new build's process started.
+        # Only noted: any entry may open the app first (AppContainer.core)
+        nodes = home_nodes(lambda ns: bool(spoken(ns, VITAMIN)), 15)
         r.shot("widget-after-update")
         save_ui(r, "widget-after-update")
+        before = filled_log()
+        r.note(f"앱을 열기 전(덮어 설치 {seen['installed_at']}): 위젯 {spoken(nodes, VITAMIN) or '항목 안 보임'}, "
+               f"새 빌드 첫 프로세스 {process_start()}, 채움 로그 "
+               f"{' / '.join(f'{t} {m}' for t, m in before) or '아직 없음'}")
         if not int(info["versionCode"]) > int(seen["old_version"]):
             raise RuntimeError(f"versionCode {seen['old_version']} -> {info['versionCode']}")
         if state.active_records != 1 or ",".join(state.sources) != seen["sources"]:
@@ -236,6 +271,7 @@ def run(r: Report, steps: Steps, old_apk: Path, new_apk: Path, old_commit: str) 
     def first_start() -> str:
         sh("input keyevent KEYCODE_WAKEUP", check=False)
         sh("wm dismiss-keyguard", check=False)
+        opened = sh("date +%H:%M:%S", check=False).strip()
         sh(f"am start -n {ACTIVITY}")
         intro = find_exact(INTRO_MARK, 30) is not None
         if intro:
@@ -245,7 +281,8 @@ def run(r: Report, steps: Steps, old_apk: Path, new_apk: Path, old_commit: str) 
             raise RuntimeError("the new build's first screen did not show")
         r.shot("new-app")
         time.sleep(3)
-        lines = filled_lines()
+        log = filled_log()
+        lines = [message for _, message in log]
         choices = stored_choices()
         nodes = home_nodes(lambda ns: bool(spoken(ns, VITAMIN)))
         widget = spoken(nodes, VITAMIN)
@@ -259,9 +296,14 @@ def run(r: Report, steps: Steps, old_apk: Path, new_apk: Path, old_commit: str) 
             raise RuntimeError(f"stored choices {choices}, expected ['*'] (전체)")
         if not widget:
             raise RuntimeError(f"the widget does not show {VITAMIN}")
-        return f"첫 실행 안내 뜸([건너뛰기]), 앱 로그 '{lines[0]}', 저장된 선택 {choices}, 위젯 '{widget[0]}'"
+        # "08:31:54.541" against "08:32:02": the same day, so the strings compare in time order
+        when = "첫 실행 전" if log[0][0] < opened else "첫 실행 뒤"
+        return (f"첫 실행({opened}) 안내 뜸([건너뛰기]), 업데이트 뒤 앱 로그 한 번 {log[0][0]} '{lines[0]}'({when}), "
+                f"저장된 선택 {choices}, 위젯 '{widget[0]}'")
 
-    steps("3. 지금 빌드 첫 실행", "첫 실행 안내가 한 번 뜨고, 앱이 위젯 하나를 '전체'(*)로 채움, 위젯에 Vitamin", first_start)
+    steps("3. 지금 빌드 첫 실행",
+          "첫 실행 안내가 한 번 뜸. 업데이트 뒤 앱이 위젯 하나를 '전체'(*)로 한 번 채움(앱을 여는 것보다 먼저일 수 있음), "
+          "위젯에 Vitamin", first_start)
 
     # 4. a second person: the widget placed before the update shows everyone (RR-74)
     def two_people() -> str:

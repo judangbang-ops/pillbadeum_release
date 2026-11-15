@@ -3,7 +3,9 @@
 # 위젯이 스스로 다시 그린 것으로, 위젯 크기는 런처가 놓은 칸으로, 키보드는 [저장]이 키보드 위에 있고 눌리는지로 봄.
 # 흐름과 이유는 scripts/emulator/regression_check.py 첫 주석.
 #
-# - 이 스크립트·워크플로를 바꾼 PR과 수동 실행에서만 돎 (약 40분, 무료 분 한도).
+# - 앱 코드(shared/, androidApp/, Gradle 설정)나 이 스크립트·워크플로를 바꾼 PR과 수동 실행에서 돎 (약 40분).
+#   시험 코드(shared/src/jvmTest/, androidApp/src/test/)만 바꾼 PR에서는 돌지 않음. 앱 코드 PR에서도 돌게 한 것은
+#   2026-11-15 동희님 결정(저장소가 공개라 Actions 분 한도가 없음)
 #   PR에 다시 푸시할 때는 그 푸시가 아래 paths를 바꿨을 때만 돎(gate 작업, .github/scripts/push_gate.py)
 # - 서명 키·비밀값을 쓰지 않음. 디버그 APK로 봄(DB를 root로 읽음)
 name: 에뮬레이터 회귀 확인
@@ -11,6 +13,16 @@ name: 에뮬레이터 회귀 확인
 on:
   pull_request:
     paths:
+      # 앱 코드와 빌드 설정. 시험 코드만 바뀌면 APK가 같아 돌지 않음(뒤의 ! 줄이 앞 줄에서 뺌)
+      - shared/**
+      - androidApp/**
+      - "!shared/src/jvmTest/**"
+      - "!androidApp/src/test/**"
+      - gradle/**
+      - "*.gradle.kts"
+      - gradle.properties
+      - gradlew
+      - gradlew.bat
       - scripts/emulator/regression_check.py
       # regression_check.py가 쓰는 도우미(화면 덤프·탭·위젯 놓기·위젯 읽기·시계·DB·런처 칸 읽기). 바꾸면 회귀 확인도 다시 돎
       - scripts/emulator/screens2_check.py
@@ -60,6 +72,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: >-
           python3 .github/scripts/push_gate.py
+          shared/
+          androidApp/
+          ':!shared/src/jvmTest/'
+          ':!androidApp/src/test/'
+          gradle/
+          '*.gradle.kts'
+          gradle.properties
+          gradlew
+          gradlew.bat
           scripts/emulator/regression_check.py
           scripts/emulator/screens2_check.py
           scripts/emulator/screens_check.py

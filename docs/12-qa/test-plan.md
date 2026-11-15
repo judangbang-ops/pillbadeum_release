@@ -12,7 +12,7 @@
   - `jvm`: `./gradlew :shared:jvmTest`의 시험. CI가 PR마다 돌림
   - 앱 시험: `./gradlew :androidApp:testDebugUnitTest`의 Robolectric 시험(`WidgetRenderTest`, `AppScreenTest`, `WidgetPickTest`, 알림 흐름 `ReminderFlowTest` 등). Android 15의 뷰·Compose·글꼴로 위젯과 앱 화면을 그리고 PNG를 남김. 2026-11-13 `3de3b16`(PR #19)부터 CI가 PR마다 돌림. 그 전에 '로컬'이라 적은 결과는 그때 컨테이너에서 돌린 것. 런처·실기기·TalkBack 자체는 아님
   - 둘러보기: [`scripts/emulator/explore.py`](../../scripts/emulator/explore.py)가 Actions 에뮬레이터(API 34)에서 앱을 사람처럼 쓰고 단계마다 캡처함. 이 앱은 브라우저 화면이 없어 CORTHEX의 브라우저 대리인(ego lite·Aside) 대신 이것이 흐름을 걷는 몫을 함
-  - 에뮬레이터: 그 밖의 에뮬레이터 스크립트(`backup_restore_check.py`, `release_check.py`, 알림 `reminder_check.py`, R2 화면 캡처 `screens_check.py`·`screens2_check.py`, 접근성 `a11y_check.py`, 위젯 크기 `widget_size_check.py`, 프로토타입 13항목 회귀 `regression_check.py`)
+  - 에뮬레이터: 그 밖의 에뮬레이터 스크립트(`backup_restore_check.py`, `release_check.py`, 알림 `reminder_check.py`, R2 화면 캡처 `screens_check.py`·`screens2_check.py`, 접근성 `a11y_check.py`, 위젯 크기 `widget_size_check.py`, 프로토타입 13항목 회귀 `regression_check.py`. 회귀 확인은 2026-11-15부터 앱 코드를 바꾼 PR마다 돎)
   - 실기기: 시험용 갤럭시(Android 14 이상). 동희님 폰이 아이폰이라 2026-11-13 동희님이 마련해 동희님 PC에 USB로 꽂아 두기로 함(05·07·08·10 확인 4번). Claude가 그 PC에서 확인을 돌리고, 두 대가 필요한 기기 간 이전 때만 가족 폰을 빌림(TASK-047·032·052)
   - 검사: CI의 권한 검사, 문서 검사, 코드 검사(개인정보 `check_privacy.py`, 판정 쓰기 경로 `check_writes.py`)
 - **지금**: 2026-11-12에 확인한 결과와 그 커밋. '앱에 없음'은 그 화면이나 기능이 아직 없다는 뜻이고, 괄호의 작업이 만듦

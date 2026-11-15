@@ -14,7 +14,7 @@
   - 둘러보기: [`scripts/emulator/explore.py`](../../scripts/emulator/explore.py)가 Actions 에뮬레이터(API 34)에서 앱을 사람처럼 쓰고 단계마다 캡처함. 이 앱은 브라우저 화면이 없어 CORTHEX의 브라우저 대리인(ego lite·Aside) 대신 이것이 흐름을 걷는 몫을 함
   - 에뮬레이터: 그 밖의 에뮬레이터 스크립트(`backup_restore_check.py`, 서명한 릴리즈 빌드로 위젯·백업·알림 버튼을 보는 `release_check.py`, 알림 `reminder_check.py`, R2 화면 캡처 `screens_check.py`·`screens2_check.py`, 접근성 `a11y_check.py`, 위젯 크기 `widget_size_check.py`, 프로토타입 13항목 회귀 `regression_check.py`, 대상자 고르기 전 빌드에서 덮어 설치하는 업데이트 `upgrade_check.py`. 회귀 확인과 업데이트 확인은 2026-11-15부터 앱 코드를 바꾼 PR마다 돎)
   - 실기기: 시험용 갤럭시(Android 14 이상). 동희님 폰이 아이폰이라 2026-11-13 동희님이 마련해 동희님 PC에 USB로 꽂아 두기로 함(05·07·08·10 확인 4번). Claude가 그 PC에서 확인을 돌리고, 두 대가 필요한 기기 간 이전 때만 가족 폰을 빌림(TASK-047·032·052)
-  - 검사: CI의 권한 검사, 문서 검사, 코드 검사(개인정보 `check_privacy.py`, 판정 쓰기 경로 `check_writes.py`)
+  - 검사: CI의 권한 검사, 문서 검사, 코드 검사(개인정보 `check_privacy.py`, 판정 쓰기 경로 `check_writes.py`, 스토어 설명·앱 문구 `check_wording.py`)
 - **지금**: 2026-11-12에 확인한 결과와 그 커밋. '앱에 없음'은 그 화면이나 기능이 아직 없다는 뜻이고, 괄호의 작업이 만듦
 - API가 없어(06 뺌) 응답 코드별 사례는 없음. 대신 공통 함수의 결과(`RecordResult`의 Recorded·Already·Stale·Gone·Error 등)가 화면 상태로 가는지를 TC-078~087이 봄
 
@@ -94,8 +94,8 @@
 | TC-057 | TalkBack이 버튼을 이름과 상태로 읽음 | REQ-068 | 에뮬레이터: 위젯·앱 버튼의 `content-desc` 읽기 | 통과 (에뮬레이터 화면 덤프. TalkBack으로 듣기는 TASK-032): TASK-030 [접근성 점검](../07-qa/2026-11-14-a11y/report.md)(`e27af2e`, [실행 43585038873](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43585038873))에서 모든 화면의 누르는 곳에 읽을 말이 있음. 위젯과 첫 화면 칸은 `나 종합비타민, 복용함, 오늘 09:01`·`나 유산균, 건너뜀`·`엄마 혈압약, 미완료, 기록 없음`·`나 골다공증약, 이번 주 미완료, 마지막 복용 11월 7일 토요일 09:01`처럼 대상자·이름·상태를 읽고 버튼은 따로 읽힘(보고서 3절, 전체는 근거 `detail.md`). 문장은 PR #19에서 화면 정의대로 바꿈(`Labels.spoken`, jvm `LabelsTest`). 대상자 한 명이면 이름 앞의 대상자가 빠짐(앱 시험 `AppScreenTest`, 에뮬레이터 화면 확인 `screens_check.py` 3·5·13-1단계, [실행 43471126530](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43471126530)). 지난 기록은 날짜 줄이 제목이고 칸 하나가 한 문장이며 누르면 '판정 고치기'로 읽힘(jvm `HistoryLabelsTest`, TASK-019). Compose의 스위치·탭 역할은 화면 덤프에 나오지 않아 코드로 확인함(보고서 6절) |
 | TC-058 | 글자·배경 명암비 4.5:1 이상 | REQ-069 | 색 쌍 계산 | 통과: 디자인이 글자에 쓰는 토큰 쌍 32개가 모두 4.5:1 이상(가장 낮은 것 `person.2.solid` 위의 흰 글자 4.71:1, `a11y_check.py --tokens-only`), TASK-030 [접근성 점검](../07-qa/2026-11-14-a11y/report.md)(`e27af2e`, [실행 43585038873](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43585038873))의 에뮬레이터 캡처에서 잰 쌍 12개도 모두 4.5:1 이상(가장 낮은 것 `surface.skip` #ECEDEF 위의 `ink.muted` #5C6270 5.22:1). 큰 글씨의 3:1은 쓰지 않음. 글자가 아닌 것의 3:1(WCAG 1.4.11)은 REQ-069 밖이라 보고서 5.3절에 적음. 2026-11-14 동희님 결정으로 `color.line.strong`을 #8B909A에서 #838892로 바꿔([PR #30](https://github.com/judangbang-ops/pillbadeum_release/pull/30)) 흰색·`surface.sunken`·`surface.notice`·`surface.skip`에서 3.56·3.20·3.17·3.04:1. 바꾼 뒤 7차 실행 [43605076696](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43605076696)(`5dc36fe`)에서도 글자 쌍 12가지가 모두 4.5:1 이상(가장 낮은 것 5.22:1) |
 | TC-059 | 위젯 탭 뒤 완료 표시 P95 1초(앱 살아 있음)·3초(내려가 있음) | REQ-070 | 실기기 20회 (TASK-032) | 안 함 |
-| TC-060 | 알림 지연을 분으로 약속하는 문구 없음. 지연은 실기기에서 잼 | REQ-048 | 문구 검사, 실기기 하룻밤 (TASK-032) | 문구 검사 일부: 권한 안내 문장 6개에 분 단위 숫자 없음(jvm `AccessNoticeTest`, TASK-026). 알림 문구(R3 PR #20의 `ReminderLabels`·`ReminderChannels`)에도 지연을 분으로 약속하는 문장 없음(Claude가 읽어 봄, 2026-11-13. [30분 뒤]는 미루기 버튼). 실기기 측정은 TASK-032 |
-| TC-061 | 복용량 권고·빠뜨렸을 때 처치·상호작용 판정 문구 없음 | REQ-087 | 문구 검사: `strings.xml`, `Labels.kt`, 스토어 설명 | 안 함 |
+| TC-060 | 알림 지연을 분으로 약속하는 문구 없음. 지연은 실기기에서 잼 | REQ-048 | 문구 검사, 실기기 하룻밤 (TASK-032) | 문구 검사 일부: 권한 안내 문장 6개에 분 단위 숫자 없음(jvm `AccessNoticeTest`, TASK-026). 알림 문구(R3 PR #20의 `ReminderLabels`·`ReminderChannels`)에도 지연을 분으로 약속하는 문장 없음(Claude가 읽어 봄, 2026-11-13. [30분 뒤]는 미루기 버튼). CI 문구 검사(`check_wording.py`, TASK-037, 2026-11-15)가 앱 문구 전체와 스토어 설명에서 'n분 안에'·'n분 이내' 같은 약속을 PR마다 찾음: 없음. 실기기 측정은 TASK-032 |
+| TC-061 | 복용량 권고·빠뜨렸을 때 처치·상호작용 판정 문구 없음 | REQ-087 | 문구 검사: `strings.xml`, `Labels.kt`, 스토어 설명 | 통과 (CI 문구 검사 `check_wording.py`, TASK-037, 2026-11-15): 제품 Kotlin 코드의 한글 문자열 429개(15개 파일)·`strings.xml`과 스토어 설명에 복용량·약의 양·두 배·빠뜨린 약의 처치·상호작용·효과 문구 없음. PR마다 자동 검사 |
 | TC-062 | `USE_EXACT_ALARM`을 선언하지 않음 | REQ-052 | CI: APK 권한 목록 = `androidApp/expected-permissions.txt` | 통과 (CI, `45faa8f`) |
 | TC-063 | 서버·계정 없이 기기 안에만 둠: `INTERNET` 권한 없음 | REQ-057 | CI: `check_permissions.py`(디버그·릴리즈 APK) | 통과 (CI, `45faa8f`). 릴리즈 병합 매니페스트도 PR마다 봄(CI 개인정보 점검, `56ebcf6`의 [실행 43563317312](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43563317312), TASK-031) |
 | TC-064 | 로그·저장소에 기록·이름을 남기지 않음 | REQ-058 | 코드 검사: `Log.` 호출 | 통과 (CI 개인정보 점검, `56ebcf6`의 [실행 43563317312](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43563317312): 앱 소스의 로그 호출 39개 모두 이름·기록 없음). PR마다 자동 검사. 앱이 DB 밖에 쓰는 파일은 [개인정보 점검 보고서](../07-qa/2026-11-14-privacy/report.md) 6절 |
@@ -110,7 +110,7 @@
 | TC-073 | 패키지 이름을 첫 업로드 전에 정하고 바꾸지 않음 | REQ-061 | 빌드 설정, 첫 업로드 | 정함 (TASK-001, `com.judangbang.pillbadeum`). 업로드는 안 함 |
 | TC-074 | 개인 APK 기록이 Play 버전으로 넘어갈 때 남음 | REQ-062 | 실기기: 개인 APK 위에 Play 버전 설치 (TASK-047·050) | 안 함 |
 | TC-075 | Play Console 앱 콘텐츠 완료, 앱 안 개인정보처리방침 | REQ-063 | Play Console, SCR-009 | 안 함. 답 초안 있음([앱 콘텐츠 답](../release/play-app-content.md), [방침](../release/privacy-policy.md), 2026-11-15) |
-| TC-076 | 스토어 설명에 의료기기 아님·의료인 상의 문구 | REQ-064 | 스토어 설명 문안 (TASK-037) | 안 함 |
+| TC-076 | 스토어 설명에 의료기기 아님·의료인 상의 문구 | REQ-064 | 스토어 설명 문안 (TASK-037) | 초안 통과 (CI `check_wording.py`, 2026-11-15): [자세한 설명](../release/listing/ko-KR/full_description.txt)에 '의료기기가 아니며 … 진단·처치·치료·예방하지 않아요'와 '의학적인 조언 … 의료 전문가와 상의'가 있음. Play 입력은 TASK-038 |
 | TC-077 | 새 개인 계정이면 테스터 12명 14일 | REQ-065 | 비공개 테스트 참여 기록 | 안 함 |
 
 ## 4. 화면 상태

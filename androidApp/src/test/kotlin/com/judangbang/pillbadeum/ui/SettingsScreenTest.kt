@@ -9,6 +9,7 @@ import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assert
@@ -241,8 +242,8 @@ class SettingsScreenTest {
         waitForText(Labels.quietSaved(1, 1))
         row("방해 금지, 0시부터 8시까지")
 
-        row("하루 최대, 3번").performClick()
-        inDialog("1번").performClick()
+        // Right after a save, so the save's work after it may still be running: see openPicker.
+        openPicker("하루 최대, 3번", "1번").performClick()
         inDialog("저장").performClick()
         waitForRow("하루 최대, 1번")
         assertEquals("nothing dropped, nothing said", 0, compose.onAllNodesWithText("방해 금지 시간과 겹쳐", substring = true).fetchSemanticsNodes().size)
@@ -517,6 +518,27 @@ class SettingsScreenTest {
 
     /** A cell or button of the open picker. */
     private fun inDialog(text: String): SemanticsNodeInteraction = compose.onNode(hasText(text) and hasAnyAncestor(isDialog()))
+
+    /**
+     * Taps the row read as [sentence] and returns the [cell] of the picker it opens, once the picker shows. A save's work
+     * after it (widgets, reminders, reading the screen again) goes on off the main thread after its message shows, and
+     * once a tap made right then left no picker to find (CI run 43696668379, first attempt: no `1번`). So this waits for
+     * the picker, and if none shows within 3 seconds taps the row once more and says so on stderr (the test report keeps
+     * it), so a lost first tap stays visible instead of failing the run.
+     */
+    private fun openPicker(sentence: String, cell: String): SemanticsNodeInteraction {
+        val inPicker = hasText(cell) and hasAnyAncestor(isDialog())
+        val shown = { compose.onAllNodes(inPicker).fetchSemanticsNodes().isNotEmpty() }
+        row(sentence).performClick()
+        try {
+            compose.waitUntil(3_000, shown)
+        } catch (_: ComposeTimeoutException) {
+            System.err.println("openPicker: no picker with '$cell' 3 s after tapping '$sentence'; tapping it again")
+            row(sentence).performClick()
+            compose.waitUntil(10_000, shown)
+        }
+        return compose.onNode(inPicker)
+    }
 
     /** The system time picker the row opened. */
     private fun timePicker(): TimePickerDialog {

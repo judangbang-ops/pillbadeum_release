@@ -17,11 +17,13 @@
 - **정해 주실 것·하실 것 (동희님)**
   1. Play 개발자 지원에 계정 종류(Q11) 문의를 보내고 답을 알려 주심. 글은 [앱 콘텐츠 답](../release/play-app-content.md) 0장. Play 계정 만들기(TASK-048)가 이 답을 기다림
   2. 아이콘·그래픽 이미지·스크린샷을 보심. 바꾸실 것은 업로드(TASK-038) 전에. 알림 장면(2번)이 걱정되시면 빼고 올림
-  3. 시험용 갤럭시를 PC에 연결(TASK-032·052, BUG-004를 고치는 TASK-054)
+  3. 시험용 갤럭시를 PC에 연결(TASK-032·052와 BUG-004의 실기기 확인 TASK-054)
   4. Play 계정과 앱 만들기, 비공개 테스트 업로드(TASK-048·050·036·038). 업로드와 외부 공개는 동희님 확인을 받은 뒤
 - **확인한 것**: 행에 쓴 WBS 숫자(작업 54개 중 44개 끝남, 크기로 46.5일 / 54.0일, 기간이 열린 TASK-047·039 빼고)는 `check_docs.py` 출력과 wbs 표의 **끝남**에서 옮김
 - **받은 말**: 16:30 KST쯤, 세션 작업자가 다시 시작된 직후 이 세션에 "추천대로 모두 승인"과 세 줄(앱 이름, 개발자 이름, 연락 이메일)이 다시 옴. 오전 10:05·10:09 KST에 받은 말과 글자까지 같고 [PR #41](https://github.com/judangbang-ops/pillbadeum_release/pull/41)에서 모두 반영해 바꿀 것이 없음. 이번 묶음에서 Claude가 정한 것(아이콘 도형과 색, 보기 데이터, 장면 순서, 그래픽 이미지 배치, BUG-007의 2초 기다림)은 지금대로 둠
-- **다음 행동**: 동희님의 Q11 답과 갤럭시 연결을 기다림. 연결되면 [갤럭시 확인 순서](../07-qa/device-check.md)대로 TASK-032·052를 확인하고 TASK-054(BUG-004)를 고침
+- **다음 행동**: 동희님의 Q11 답과 갤럭시 연결을 기다림. 연결되면 [갤럭시 확인 순서](../07-qa/device-check.md)대로 TASK-032·052와 BUG-004의 실기기 확인(2장 4번 `bug004`, TASK-054)을 함
+- **바로잡음** (16:45 KST쯤): 처음에는 위 3번과 다음 행동에 'BUG-004를 고치는 TASK-054'라고 썼음. 고침은 [PR #19](https://github.com/judangbang-ops/pillbadeum_release/pull/19)의 `RescheduleReceiverKeeper`에 이미 있고 에뮬레이터 릴리즈 변형 확인에서 통과하며, 남은 것은 실기기 확인이라 고침(근거는 wbs 1.3 진행 메모의 TASK-054). 노션 행 본문에도 'BUG-004 고침(TASK-054)'이 있어 다음 묶음의 노션 행에서 바로잡음
+- **머지**: 이 기록은 [PR #48](https://github.com/judangbang-ops/pillbadeum_release/pull/48)으로 2026-11-16 16:37 KST에 main에 머지함(`c7e85a3`). CI [43824546448](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43824546448) 1차 시도에서 통과
 
 ### TASK-022 첫 실행 안내 끝 ([PR #47](https://github.com/judangbang-ops/pillbadeum_release/pull/47))
 

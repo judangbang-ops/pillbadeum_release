@@ -10,6 +10,27 @@
 
 ## 2026-11-16
 
+### 갤럭시 없이: 지인 테스트로 바꾸고 앱 서명 키 개인 APK를 만듦
+
+- **목표**: 남은 실기기 확인(TASK-032·052·054)을 시험용 갤럭시 없이 어떻게 할지 정하고, 테스터에게 줄 APK와 안내를 준비함
+- **받은 말**: 동희님이 프로젝트 채팅에서 18:06 KST "야 여기 학원컴인데 여기서 작업해 그리고 나 갤럭시 없는데 어떻게 하지?", 18:15 KST 다 완성되면 가쟈누님과 가족 두 분께 "apk로 해보라할거야". 18:07 KST 새 프로젝트 스레드 '갤럭시 확인과 Play 출시 준비'를 열며 "aisde나 agent desktop 활용하라고 하고"
+- **정함**
+  - 실기기 확인은 동희님 주변의 갤럭시 사용자 세 분이 자기 폰에서 손으로 함(동희님, 위 18:15). 실기기를 빌리거나 원격 실기기를 쓰는 다른 길은 더 알아보지 않음
+  - APK는 앱 서명 키 개인 APK(Claude가 고름): 고친 빌드와 Play 버전을 지우지 않고 덮어 깔 수 있음(REQ-062). [WBS 3장](../08-wbs/wbs.md#3-순서) 'TASK-047의 가족 폰' 줄의 조건(TASK-002 키 확인, TASK-051)은 끝나 있음. 남는 위험은 검토 A1(TASK-050에서 키를 못 넘기면 그 폰들은 지우고 다시 깖)
+- **한 일**
+  - 학원 PC(DESKTOP-PPIDTSI, Windows 11 Pro 10.0.26200)에서 원격 세션으로 함. 도구: adb 1.0.41, build-tools 37.0.0, emulator 37.2.13.0, 시스템 이미지 android-36 google_apis x86_64, JDK 17.0.20, gh(kodonghui 로그인), Windows PowerShell 5.1, Aside 1.26.1115. agent-desktop은 없음. 모든 단계가 명령(git·gh·PowerShell·adb)으로 되어 Aside·agent-desktop은 쓰지 않음
+  - 비어 있던 작업 폴더에 저장소를 받음(main `6f0740c`). `scripts\sign-personal-apk.ps1 -RunId 43822256148`로 [release.yml 실행 43822256148](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43822256148)(main `92c5cb6`)의 서명 전 APK를 앱 서명 키로 서명함. 키·비밀번호 파일은 스크립트만 읽음
+  - 같은 PC에 AVD `pillbadeum_check`(android-36 google_apis x86_64, pixel_7, Play 없음, 데이터 6G)를 새로 만들어 개인 APK를 깔고 엶. 마롱 앱의 AVD `marong_test`는 설정만 읽음. AVD는 남겨 둠
+  - 개인 APK를 그 PC의 다운로드 폴더와 Google Drive `14. 개발환경/apk`에 둠
+  - [테스터 안내](../07-qa/galaxy-testers.md)를 씀: 모두에게(설치, 첫 위젯, 일주일), 한 분께(잠금 화면, 큰 글씨, 다시 시작), 이 방법으로 못 보는 것. [갤럭시 확인 순서](../07-qa/device-check.md) 머리와 WBS(진행 메모, 3장 TASK-047 가족 폰 줄)에 이 방법을 적음
+- **확인한 것** (학원 PC 원격 세션의 명령 출력에서 옮김)
+  - 개인 APK `pillbadeum-0.1.0-274-personal.apk`: 14,248,887바이트, SHA-256 `45D52A93647E1C3A94830C3CF3D333E3771C45D328EA2B7CBDA947F5F9709AD9`, 패키지 `com.judangbang.pillbadeum`, versionCode 274, versionName 0.1.0, 서명 v2·v3, 인증서 SHA-256 `35:64:B6:82:4B:1E:3D:A0:74:7A:2E:97:96:6E:F5:5D:B9:CC:93:C5:E8:8A:7D:45:24:64:2F:E6:2A:32:95:36`(앱 서명 키와 같음). 스크립트의 정렬 검사(`zipalign -c -P 16 4`)와 서명 전후 패키지 비교를 지나 종료 코드 0. Drive 사본도 크기·SHA-256이 같음
+  - 에뮬레이터: 97초 만에 `sys.boot_completed=1`, 출력 "Windows Hypervisor Platform accelerator is operational". Windows 기능 목록에는 HypervisorPlatform이 꺼짐(2)으로 나오지만 에뮬레이터는 WHPX로 돎
+  - 설치 "Success", `dumpsys package`: versionCode=274, minSdk=26, targetSdk=36. 열자 `MainActivity`의 첫 실행 안내 1쪽([건너뛰기], 요일 약통 그림, [다음])이 보였고 6초 뒤에도 프로세스가 살아 있음. `logcat -d` 72,109줄 중 FATAL EXCEPTION 0줄. ANR 6줄은 모두 Google 앱(gms 등)이고 필받음은 없음. 화면 위에 "Google Play services isn't responding" 창이 떴는데 갓 부팅한 에뮬레이터의 시스템 앱 쪽임
+  - 사이드로드 제한: Google 개발자 인증 요건은 2026-09-30부터 브라질·인도네시아·싱가포르·태국의 참여 스토어에만 걸리고 직접 받은 APK에는 아직 걸리지 않으며, 전 세계 확대는 2027년([개발자 인증](https://developer.android.com/developer-verification), [FAQ](https://developer.android.com/developer-verification/guides/faq), 조사 에이전트가 읽음)
+- **확인하지 못한 것**: 갤럭시(One UI)에서의 설치와 동작(테스터 몫). 학원 PC 에뮬레이터에서는 위젯·알림을 보지 않음(같은 빌드는 [release-emulator 43822256152](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43822256152)에서 15개 경우 통과). 개인 APK를 클라우드에서 따로 다시 검사하지는 않음. 카톡이 APK 파일을 받는지
+- **다음 행동**: 동희님이 APK와 [테스터 안내](../07-qa/galaxy-testers.md) 2장의 글을 세 분께 보냄. 결과가 오면 `docs/07-qa/<첫 결과 날짜>-galaxy/report.md`. Play 쪽은 결정 Q11 지원 문의가 먼저임([앱 콘텐츠 답](../release/play-app-content.md) 0장)
+
 ### 노션 '최근 업데이트'에 묶음 최종본 한 행 (PR #41~#47)
 
 - **목표**: 2026-11-15 15:31 KST 동희님 지시("노션에는 한번에 최종본만 올리고")대로, PR #34~#39 행 뒤의 작업 묶음을 노션에 한 번만 올림

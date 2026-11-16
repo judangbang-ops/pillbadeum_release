@@ -6,18 +6,28 @@ import android.content.Intent
 import android.util.Log
 import com.judangbang.pillbadeum.DidITakeCore
 import com.judangbang.pillbadeum.container
+import com.judangbang.pillbadeum.data.ScheduleParams
+import com.judangbang.pillbadeum.domain.DoseKind
 import com.judangbang.pillbadeum.domain.ReminderSettings
 import com.judangbang.pillbadeum.domain.ScheduleRule
+import com.judangbang.pillbadeum.domain.ScheduleSpan
+import com.judangbang.pillbadeum.domain.SlotLabel
+import com.judangbang.pillbadeum.domain.cellHolding
+import com.judangbang.pillbadeum.status.JudgeLoad
 import com.judangbang.pillbadeum.usecase.IntakeDraft
 import com.judangbang.pillbadeum.usecase.PersonChange
 import com.judangbang.pillbadeum.usecase.PersonColors
 import com.judangbang.pillbadeum.usecase.SaveIntakeResult
 import com.judangbang.pillbadeum.usecase.SaveReminderResult
 import com.judangbang.pillbadeum.usecase.SaveReminderSettingsResult
+import com.judangbang.pillbadeum.usecase.WindowWriteResult
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.LocalTime
+import kotlinx.datetime.toInstant
 
 /**
  * Debug builds only (`androidApp/src/debug`): sets up what the item and settings screens (TASK-023, TASK-020) set,
@@ -29,8 +39,10 @@ import kotlinx.datetime.LocalTime
  * Not exported: only the shell as root (`adb root` on an emulator image) can reach it.
  *
  * - `SEED`: items with reminders on. Extras: `names` (comma-separated), `start` (HH:mm, default 08:00),
- *   `weekly` (a DayOfWeek name; daily when absent), `person` (added when no active person has that name),
- *   `max_per_day` (reminder settings, unchanged when absent). Result data: `seeded <id>,<id>,...`.
+ *   `weekly` (a DayOfWeek name; daily when absent), `slot` (a SlotLabel name, the time of day of a daily item; none
+ *   when absent), `person` (added when no active person has that name), `color` (int, the place in
+ *   PersonColors.PALETTE of a person added here; the first color when absent), `max_per_day` (reminder settings,
+ *   unchanged when absent). Result data: `seeded <id>,<id>,...`.
  * - `NAMES_ON_LOCK`: extra `show` (boolean), the "이름 표시" setting (SPEC-034). Result data: `names_on_lock <value>`.
  * - `START`: extras `name` and `start` (HH:mm): the item's reminders stay on from the new first time, as the item
  *   screen saves it (RR-56). Result data: `start <name> <HH:mm>`.
@@ -39,8 +51,12 @@ import kotlinx.datetime.LocalTime
  * - `SETTINGS`: extras `max_per_day` and `interval_minutes` (int, each optional, at least one): the common reminder
  *   settings "하루 최대" and "간격" (N-1, N-4), the rest unchanged. Result data:
  *   `settings max_per_day <value> interval <minutes>`.
+ * - `RECORD`: extra `records`, entries `<name>|<yyyy-MM-ddTHH:mm>|<TAKEN or SKIPPED>` joined by `;`: each writes a
+ *   judgment into the cell of that item holding that local time (base zone), the way SCR-007 records a past day from
+ *   SCR-008 (`[먹은 시각 고르기]` at that time, or `[건너뜀]`; supplement P-1~P-4). The store screenshots
+ *   (`scripts/emulator/store_shots.py`, TASK-037) fill a month of history with it. Result data: `recorded <count>`.
  *
- * The commands are in the script (an XML or KDoc comment cannot hold every character of them).
+ * The commands are in the scripts (an XML or KDoc comment cannot hold every character of them).
  */
 class ReminderSeedReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -75,6 +91,7 @@ class ReminderSeedReceiver : BroadcastReceiver() {
                 "archived $name"
             }
             ACTION_SETTINGS -> settings(core, intent)
+            ACTION_RECORD -> record(core, intent)
             else -> return "unknown action ${intent.action}"
         }
         context.container.afterWrite()
@@ -86,6 +103,7 @@ class ReminderSeedReceiver : BroadcastReceiver() {
         require(names.isNotEmpty()) { "no names" }
         val start = LocalTime.parse(intent.getStringExtra("start") ?: "08:00")
         val rule = intent.getStringExtra("weekly")?.let { ScheduleRule.Weekly(DayOfWeek.valueOf(it)) } ?: ScheduleRule.Daily
+        val slot = intent.getStringExtra("slot")?.let { SlotLabel.valueOf(it) }
         if (intent.hasExtra("max_per_day")) {
             saveMaxPerDay(core, intent.getIntExtra("max_per_day", ReminderSettings.DEFAULT_MAX_PER_DAY))
         }
@@ -94,10 +112,11 @@ class ReminderSeedReceiver : BroadcastReceiver() {
         val person = if (personName == null) {
             people.first()
         } else {
-            people.firstOrNull { it.name == personName } ?: core.people.add(personName, PersonColors.DEFAULT)
+            people.firstOrNull { it.name == personName }
+                ?: core.people.add(personName, PersonColors.PALETTE[intent.getIntExtra("color", 0)])
         }
         val ids = names.map { name ->
-            val saved = core.saveIntake.create(IntakeDraft(personId = person.id, name = name, rule = rule))
+            val saved = core.saveIntake.create(IntakeDraft(personId = person.id, name = name, rule = rule, slotLabel = slot))
             val id = (saved as? SaveIntakeResult.Saved)?.intakeId ?: error("item $name not saved: $saved")
             val reminder = core.reminders.saveRule(id, enabled = true, start = start)
             check(reminder is SaveReminderResult.Saved) { "reminder of $name not saved: $reminder" }
@@ -130,6 +149,40 @@ class ReminderSeedReceiver : BroadcastReceiver() {
         return "settings max_per_day ${now.maxPerDay} interval ${now.interval.inWholeMinutes}"
     }
 
+    /**
+     * Each entry the way SCR-007 writes it ([DidITakeCore.recordIn]): the cell is the one [cellHolding] finds for the
+     * time, read with [com.judangbang.pillbadeum.status.LoadJudgeCell] as the screen reads it. A dose is stored at that
+     * time; a skip of a past window at the window's start (P-3). Any entry the use case refuses stops the rest.
+     */
+    private suspend fun record(core: DidITakeCore, intent: Intent): String {
+        val entries = intent.getStringExtra("records").orEmpty().split(';').map { it.trim() }.filter { it.isNotEmpty() }
+        require(entries.isNotEmpty()) { "no records" }
+        val settings = core.windowSettings()
+        val intakes = core.db.intakeDao().listActive()
+        for (entry in entries) {
+            val parts = entry.split('|')
+            require(parts.size == 3) { "not <name>|<time>|<kind>: $entry" }
+            val (name, time, kindName) = parts
+            val intake = intakes.firstOrNull { it.name == name } ?: error("no active item $name")
+            val kind = DoseKind.valueOf(kindName)
+            val at = LocalDateTime.parse(time).toInstant(settings.baseZone)
+            val spans = core.db.scheduleVersionDao().listByIntake(intake.id).filter { it.archivedAt == null }.map {
+                ScheduleSpan(
+                    versionId = it.id,
+                    rule = ScheduleParams.toRule(it),
+                    from = Instant.fromEpochMilliseconds(it.effectiveFrom),
+                    to = it.effectiveTo?.let(Instant::fromEpochMilliseconds),
+                )
+            }
+            val (span, window) = cellHolding(at, spans, settings) ?: error("no cell of $name holds $time")
+            val load = core.loadJudgeCell(intake.id, span.versionId, window.periodKey)
+            val cell = (load as? JudgeLoad.Ready)?.cell ?: error("cell ${window.periodKey} of $name not read: $load")
+            val written = core.recordIn(cell, kind, takenAt = at.takeIf { kind == DoseKind.TAKEN })
+            check(written is WindowWriteResult.Recorded) { "$entry not recorded: $written" }
+        }
+        return "recorded ${entries.size}"
+    }
+
     private suspend fun saveMaxPerDay(core: DidITakeCore, maxPerDay: Int) {
         val saved = core.reminders.saveSettings(core.reminders.settings().copy(maxPerDay = maxPerDay))
         check(saved is SaveReminderSettingsResult.Saved) { "reminder settings not saved: $saved" }
@@ -142,5 +195,6 @@ class ReminderSeedReceiver : BroadcastReceiver() {
         const val ACTION_START = "com.judangbang.pillbadeum.debug.START"
         const val ACTION_ARCHIVE_PERSON = "com.judangbang.pillbadeum.debug.ARCHIVE_PERSON"
         const val ACTION_SETTINGS = "com.judangbang.pillbadeum.debug.SETTINGS"
+        const val ACTION_RECORD = "com.judangbang.pillbadeum.debug.RECORD"
     }
 }

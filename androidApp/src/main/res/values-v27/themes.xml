@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Theme.Pillbadeum (values/themes.xml) with a white navigation bar and dark buttons, which need Android 8.1. -->
+    <style name="Theme.Pillbadeum" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/white</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">@android:color/white</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+</resources>

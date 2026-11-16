@@ -27,7 +27,7 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        android:theme="@style/Theme.Pillbadeum">
 
         <activity
             android:windowSoftInputMode="adjustResize"
@@ -44,14 +44,15 @@
             Android 12+, from the widget's Reconfigure button (res/xml-v31/diditake_widget_info.xml), so it is
             exported with the APPWIDGET_CONFIGURE filter. It only acts on this app's own widget ids. Translucent so that
             nothing shows while it decides; with one person it never draws (REQ-018). Its own task affinity sends a pick
-            started from the widget back to the home screen, not into the app.
+            started from the widget back to the home screen, not into the app. The theme (res/values*/themes.xml) gives
+            the system bars dark icons over its white screen from Android 15 (BUG-006).
         -->
         <activity
             android:name=".widget.WidgetPickActivity"
             android:excludeFromRecents="true"
             android:exported="true"
             android:taskAffinity=""
-            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            android:theme="@style/Theme.Pillbadeum.Pick">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
             </intent-filter>

@@ -428,6 +428,7 @@ def run(r: Report, steps: Steps, apk: Path) -> None:
         while not handled_after(marker) and time.time() - waited < HANDLED_WAIT:
             time.sleep(2)
         handled = handled_after(marker)
+        seen = time.time() - waited  # until the script read it; the app's own time is in the log
         time.sleep(5)
         clock = set_clock(at(0, 12, 29, 30))
         due = int(at(0, 12, 30, 5).timestamp())
@@ -441,7 +442,7 @@ def run(r: Report, steps: Steps, apk: Path) -> None:
             raise RuntimeError(f"locale {locale}")
         if zone != "Asia/Seoul":
             raise RuntimeError(f"time zone {zone}")
-        after = (f"앱이 시간대 바뀜을 처리한 뒤({len(handled)}줄, {int(time.time() - waited)}초 안)" if handled
+        after = (f"앱이 시간대 바뀜을 처리한 뒤(로그 {len(handled)}줄, 기다린 지 {seen:.1f}초에 읽음)" if handled
                  else f"앱 로그 없이 {HANDLED_WAIT}초 기다린 뒤")
         return f"언어 {locale}, 다시 켠 뒤 {booted}, 시간대 {zone}, {after} 시계 {clock}"
 

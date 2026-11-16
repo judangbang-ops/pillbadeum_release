@@ -25,13 +25,20 @@ Flow:
    3. The phone in Korean (persist.sys.locale and a reboot). The emulator gives the phone the computer's time zone
       (UTC) and clock again when it boots (first run), so the zone is set again and the clock goes to day 0 12:29:30:
       the app takes the clock going back (RR-81) and rings 비타민D's 12:30 reminder at 12:30, or when the alarm
-      broadcast comes after 12:30.
+      broadcast comes after 12:30. The clock moves only once the app has logged the zone change done (its day-boundary
+      receiver refreshes the widget first). In the third run (43812534973) the clock went back 350 ms after the zone
+      change and the widget kept the day the phone booted (월 11/16, 0 / 6) to the end: Glance draws in a session that is
+      WorkManager work, stamped with the phone's time when it is put in (WorkManager 2.7.1 EnqueueRunnable). Put in just
+      before the clock went back three days, it was due three days later (GreedyScheduler leaves work that is not yet
+      due), and Glance 1.2.0 counts a waiting session as running (SessionManager.isSessionRunning: RUNNING or
+      ENQUEUED), so each later refresh went to that session and none was drawn.
    4. A month of history written by the debug receiver (RECORD) as SCR-007 writes a past day (see history()), and the
       database counted against it. Day 0's 유산균, 아침 혈압약 and 골다공증약 are among it: whatever reminder of
       theirs the clock change brought goes (N-13), and only 비타민D's is left in the shade.
    5. System UI demo mode (clock, full battery and signal, no notification icons); other apps' notifications snoozed.
    6. Store 2: the notification shade with 비타민D's reminder and its three buttons. Its [먹었어] is then tapped.
-   7. Store 1: the home screen with the widget, 4 of the 6 taken. Store 3: the app's first screen (SCR-004). Store 4:
+   7. Store 1: the home screen with the widget, 4 of the 6 taken; its header has to read day 0 (금, 11/13 and 4 / 6).
+      Store 3: the app's first screen (SCR-004). Store 4:
       지난 기록 (SCR-008). Store 5: 아침 혈압약's form (SCR-006), scrolled to "누구 약인가요?" so that the reminder
       rows (알림 받기, 첫 알림 시각) show. Store 6: the widget with text at 200%.
    8. The app list with 필받음's icon (TASK-045). Text back at 100%, demo mode off.
@@ -103,6 +110,8 @@ DEMO = "com.android.systemui.demo"
 SHADE_IDS = (":id/expand_button",)
 EDGE = 8  # px: where the widget's left handle is dragged, the home screen's left edge
 TOUCH_SLOP = 21  # px: 8 dp at 420 dpi, the part of a drag a list takes before it scrolls
+LOG_TAG = "StoreShots"  # this script's markers in the log
+HANDLED_WAIT = 60  # s: longest wait for the app to log a zone change done
 
 
 def day_zero(today: date) -> date:
@@ -277,6 +286,33 @@ def active_items() -> list[str]:
     return sorted(str(row[0]) for row in query("SELECT name FROM intake WHERE archived_at IS NULL"))
 
 
+def mark(name: str) -> str:
+    """A marker of this script in the log, to read what the app logged after it."""
+    marker = f"mark-{name}-{int(time.time())}"
+    sh(f"log -t {LOG_TAG} {marker}")
+    return marker
+
+
+def handled_after(marker: str) -> list[str]:
+    """What the app's day-boundary receiver logged after `marker`. After a clock or zone change it refreshes the widgets
+    and then arms the next boundary alarm, which logs "next day boundary refresh at …"; when the refresh fails it logs
+    "boundary refresh failed" (DayBoundaryReceiver). Empty while neither came, or when the marker is gone."""
+    out = adb("logcat", "-d", "-v", "time", "-s", f"{LOG_TAG}:I", "DayBoundaryAlarm:I", "DayBoundaryReceiver:E",
+              check=False, timeout=60)
+    lines = [line.rstrip() for line in out.splitlines()]
+    begin = max((i for i, line in enumerate(lines) if line.endswith(marker)), default=None)
+    return [] if begin is None else [line for line in lines[begin + 1:] if LOG_TAG not in line]
+
+
+def header_texts(nodes: list[Node]) -> list[str]:
+    """The texts in our widget, top to bottom, with the no-break spaces that keep words whole as spaces."""
+    host = widget_host(nodes)
+    if host is None:
+        return []
+    inside = [n for n in nodes if n.text and host.bounds[1] <= n.center[1] <= host.bounds[3]]
+    return [n.text.replace(" ", " ") for n in sorted(inside, key=lambda n: (n.bounds[1], n.bounds[0]))]
+
+
 def in_widget(nodes: list[Node]) -> list[str]:
     """The example items whose tiles show on the widget (a tile reads `엄마 아침 혈압약, …`)."""
     host = widget_host(nodes)
@@ -384,7 +420,14 @@ def run(r: Report, steps: Steps, apk: Path) -> None:
         reboot()
         locale = sh("getprop persist.sys.locale").strip()
         booted = sh("date '+%Y-%m-%d %H:%M %Z'").strip()
+        marker = mark("zone")
         zone = set_zone()
+        # The widget refresh for the zone change has to start before the clock goes back (docstring, step 3)
+        waited = time.time()
+        while not handled_after(marker) and time.time() - waited < HANDLED_WAIT:
+            time.sleep(2)
+        handled = handled_after(marker)
+        time.sleep(5)
         clock = set_clock(at(0, 12, 29, 30))
         due = int(at(0, 12, 30, 5).timestamp())
         deadline = time.time() + 120
@@ -397,7 +440,9 @@ def run(r: Report, steps: Steps, apk: Path) -> None:
             raise RuntimeError(f"locale {locale}")
         if zone != "Asia/Seoul":
             raise RuntimeError(f"time zone {zone}")
-        return f"언어 {locale}, 다시 켠 뒤 {booted}, 시간대 {zone}, 시계 {clock}"
+        after = (f"앱이 시간대 바뀜을 처리한 뒤({len(handled)}줄, {int(time.time() - waited)}초 안)" if handled
+                 else f"앱 로그 없이 {HANDLED_WAIT}초 기다린 뒤")
+        return f"언어 {locale}, 다시 켠 뒤 {booted}, 시간대 {zone}, {after} 시계 {clock}"
 
     if not steps("3. 한국어로 다시 켜기, 0일 12:29:30", "ko-KR, Asia/Seoul, 0일 12:29", korean):
         return
@@ -452,17 +497,28 @@ def run(r: Report, steps: Steps, apk: Path) -> None:
     steps("6. 스토어 2: 펼친 복용 알림", f"{VITAMIN} 알림의 버튼 셋, [{TAKEN}]으로 기록됨", reminder)
 
     # 7. Store 1, 3, 4, 5
+    # The widget's header on day 0: the weekday chip, `필받음 · 11/13` and `4 / 6` (day 0's three in the history and
+    # 비타민D's [먹었어]). The third run's widget kept the day the phone booted (docstring, step 3).
+    taken0 = sum(1 for e in entries if e.split("|")[1].startswith(day0.isoformat()) and e.endswith("|TAKEN")) + 1
+    header = ("월화수목금토일"[day0.weekday()], f"· {day0.month}/{day0.day:02d}", f"{taken0} / {len(ITEMS)}")
+
+    def header_missing(nodes: list[Node]) -> list[str]:
+        texts = header_texts(nodes)
+        return [want for want in header if not any(t == want or t.endswith(f" {want}") for t in texts)]
+
     def home_widget() -> str:
-        nodes = widget_page(lambda ns: len(in_widget(ns)) == len(ITEMS), 30)
+        nodes = widget_page(lambda ns: len(in_widget(ns)) == len(ITEMS) and not header_missing(ns), 30)
         shown = in_widget(nodes)
+        texts = header_texts(nodes)
         if len(shown) != len(ITEMS):
             raise RuntimeError(f"the widget shows {shown}")
-        host = widget_host(nodes)
-        texts = [n.text for n in nodes if n.text and host is not None and host.bounds[1] <= n.center[1] <= host.bounds[3]]
+        missing = header_missing(nodes)
+        if missing:
+            raise RuntimeError(f"the widget's header lacks {missing}: {' / '.join(texts)}")
         store(1, "widget")
         return f"칸 {', '.join(shown)}; 위젯 글 {' / '.join(texts)}"
 
-    steps("7. 스토어 1: 홈 화면 위젯", "칸 여섯, 넷 먹음", home_widget)
+    steps("7. 스토어 1: 홈 화면 위젯", f"칸 여섯, 머리에 0일({' '.join(header)})", home_widget)
 
     def first_screen() -> str:
         go_home()

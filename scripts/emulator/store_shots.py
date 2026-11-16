@@ -40,7 +40,8 @@ Flow:
    7. Store 1: the home screen with the widget, 4 of the 6 taken; its header has to read day 0 (금, 11/13 and 4 / 6).
       Store 3: the app's first screen (SCR-004). Store 4:
       지난 기록 (SCR-008). Store 5: 아침 혈압약's form (SCR-006), scrolled to "누구 약인가요?" so that the reminder
-      rows (알림 받기, 첫 알림 시각) show. Store 6: the widget with text at 200%.
+      rows (알림 받기, 첫 알림 시각) show. Store 6: the widget with text at 200%, without the status bar's clock,
+      whose digits the bar cuts at that size.
    8. The app list with 필받음's icon (TASK-045). Text back at 100%, demo mode off.
 
 Each store picture is saved as store-N-name.png, the screen as captured, with its screen dump. The 24-bit copies in
@@ -586,8 +587,15 @@ def run(r: Report, steps: Steps, apk: Path) -> None:
         shown = in_widget(nodes)
         if not shown:
             raise RuntimeError("no tile on the widget at text 200%")
-        store(6, "widget-200")
-        return f"보이는 칸 {', '.join(shown)}"
+        # At text 200% the status bar's clock grows past the bar's top and its digits are cut (fourth run), so it is
+        # hidden for this picture (StatusBarManager's disable flag, as Play asks the bar to be tidied)
+        sh("cmd statusbar send-disable-flag clock", check=False)
+        time.sleep(2)
+        try:
+            store(6, "widget-200")
+        finally:
+            sh("cmd statusbar send-disable-flag none", check=False)
+        return f"보이는 칸 {', '.join(shown)}, 상태 표시줄 시계 숨김"
 
     steps("11. 스토어 6: 글자 200%의 위젯", "큰 글씨의 칸", big_text)
     font_scale("1.0")

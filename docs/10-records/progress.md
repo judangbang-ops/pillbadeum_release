@@ -19,6 +19,7 @@
   - 스토어 아이콘: `docs/release/listing/ko-KR/images/icon.png`(512×512, 32-bit PNG, 14KB). 앱의 두 벡터 파일을 SVG로 옮겨 보이는 72dp를 Chromium으로 그림. 옮긴 SVG로 원·둥근 네모 48·192px와 밝은·어두운 테마 아이콘도 그려 봄
   - 에뮬레이터 스크립트: 런처의 위젯 목록에서 앱을 이름으로 찾는데 `adb shell input text`는 한글을 못 침. 라틴 글자 이름은 지금처럼 검색하고, 한글 이름은 목록을 위에서부터 반 화면쯤씩 느린 밀기(1.5초)로 훑음(`release_check.drag_list`, 빠른 밀기는 목록이 튕겨 줄을 지나침). 목록이 더 움직이지 않으면 끝으로 봄. 위젯 미리 보기 아래의 위젯 이름(`widget_name`)은 앱 줄로 치지 않음
   - 업데이트 확인(`upgrade_check.py`)의 옛 빌드는 이름이 DidITake라 `--old-label`로 그 이름을 넘기고, 워크플로가 옛 커밋의 `app_name`을 읽어 줌. ANR 창 판별은 두 이름을 다 봄
+  - PR 검사에서 고친 것: 기기 스크립트 확인 API 36([실행 43790874626](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43790874626), `a80736e`)이 첫 위젯을 놓지 못해 실패함(두 번 모두 'widget preview not on screen'). 저장된 덤프에서 '필받음' 줄이 위젯 목록 맨 끝(1492~1739px)이라 펼친 미리보기가 1783px부터 화면 아래 끝 2340px까지 잘려 있었고, 스크립트의 밀기로 올라오지 않았음. 미리보기는 다 보일 때만 잡았기 때문임. 다 보이는 것이 없으면 제스처 막대 위로 150px 이상 보이는 잘린 미리보기를 잡고 그 보이는 곳의 가운데를 길게 눌러 끌게 함(`release_check.widget_preview`, 사람도 보이는 곳을 누름). 두 덤프를 새 규칙에 넣어 (540, 2002)를 고르는 것을 확인. 같은 실행의 API 34는 통과
   - jvm 시험의 기대 문구 셋(`StatusBoardTest` 머리글, `AccessNoticeTest` 배터리 문장, `WidgetLayoutTest` 머리글 낱말 잇기), 문서(화면 정의 SCR-005·004·009 문구와 6장, 요구 REQ-036 칸, wbs TASK-045 **진행**과 메모, 스토어 등록정보 1·4.4·9장, README)
 - **Claude가 정한 것 (바꾸실 수 있음)**: 아이콘 도형(후보 셋 중 캡슐과 체크 배지)과 색. 바꾸시려면 TASK-038 전에
 - **확인한 것**: `check_docs.py` no problems, `check_wording.py` 문제 없음(앱 문구 한글 문자열 430개, 16개 파일). 스크립트는 `py_compile` 통과. 앱 빌드·시험과 에뮬레이터 확인은 CI 실행으로 적음(아래 머지 줄). 로컬 Gradle은 Maven Central 429로 쓰지 못함

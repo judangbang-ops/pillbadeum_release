@@ -43,6 +43,7 @@ import statistics
 import sys
 import time
 import zipfile
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -89,6 +90,10 @@ from backup_restore_check import (
 WIDGET_LABEL = "필받음"  # app_name / widget_label in androidApp/src/main/res/values/strings.xml (TASK-045)
 # Screens of the full widget picker read from the top before giving up, about half a screen apart (drag_list)
 PICKER_PAGES = 16
+# Launcher3 ids of a widget preview, the outer first
+PREVIEW_IDS = ("widget_preview_container", "widget_preview", "widget_cell_content")
+# Pixels of a preview cut by the bottom edge that have to show above the gesture bar for it to be held (widget_preview)
+CUT_PREVIEW_MIN = 150
 # The widget's person picker (SCR-002, TASK-012): Labels.PICK_TITLE. It opens on the drop from two people on; with one
 # person it closes by itself and the widget shows everyone (REQ-018).
 PICK_TITLE = "이 위젯에 누구 약을 보일까요?"
@@ -184,14 +189,29 @@ def on_screen(node: Node, h: int) -> bool:
 
 def widget_preview(h: int, below: int = 0) -> Node | None:
     """The app's widget preview in an open widget sheet (Launcher3 ids), or its size label ("4 × 2").
-    In the full picker only nodes under the app's row (`below`) count."""
+    In the full picker only nodes under the app's row (`below`) count.
+
+    When none shows whole, a preview cut by the bottom edge counts if at least CUT_PREVIEW_MIN px of it are above the
+    gesture bar, and its part above the bar is returned, so that its centre is on it. On API 36 the app's row (필받음,
+    after the Latin names) comes last in the list and its open preview stays cut there: the swipe in
+    open_full_widget_picker did not bring it up (device_kit_check.py, run 43790874626), and a person holds what shows."""
     nodes = [n for n in dump_ui() if n.bounds[1] >= below]
-    for name in ("widget_preview_container", "widget_preview", "widget_cell_content"):
+    for name in PREVIEW_IDS:
         hit = next((n for n in nodes if n.rid.endswith(f"/{name}") and on_screen(n, h)), None)
         if hit is not None:
             return hit
     # The size label sits in the same cell; the label itself takes no touches, so the cell gets the hold.
-    return next((n for n in nodes if re.fullmatch(r"\d+\s*[×x]\s*\d+", n.text) and on_screen(n, h)), None)
+    size = next((n for n in nodes if re.fullmatch(r"\d+\s*[×x]\s*\d+", n.text) and on_screen(n, h)), None)
+    if size is not None:
+        return size
+    bar = h - 120
+    for name in PREVIEW_IDS:
+        cut = next((n for n in nodes if n.rid.endswith(f"/{name}") and n.bounds[2] > n.bounds[0]
+                    and 0 <= n.bounds[1] <= bar - CUT_PREVIEW_MIN and n.bounds[3] > bar), None)
+        if cut is not None:
+            x1, y1, x2, _ = cut.bounds
+            return replace(cut, bounds=(x1, y1, x2, bar))
+    return None
 
 
 def drag_list(w: int, y1: int, y2: int) -> None:

@@ -719,7 +719,7 @@ def weekly_line_inside(expected: str, tries: int = 8) -> tuple[Node | None, Node
 
 
 def widget_header(nodes: list[Node]) -> tuple[str, str]:
-    """The header's date ('DidITake · 11/14') and count ('0 / 6') on the home screen."""
+    """The header's date ('필받음 · 11/14') and count ('0 / 6') on the home screen."""
     head = next((n.text for n in nodes if n.text.startswith(f"{WIDGET_LABEL} · ")), "")
     count = next((n.text for n in nodes if re.fullmatch(r"\d+ / \d+", n.text)), "")
     return head, count

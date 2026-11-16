@@ -18,7 +18,7 @@ data class WidgetModel(
     val countLabel: String,
     /** `수`: the base date's weekday, in the header's dark chip (09 BoxWidget). */
     val weekday: String,
-    /** `DidITake · 11/11` beside the chip. */
+    /** `필받음 · 11/11` beside the chip. */
     val headerDate: String,
     /** [countLabel] in the header's two weights: bold `1 / 3`, then `완료 · 건너뜀 1` ([Labels.countParts]). */
     val countDone: String,

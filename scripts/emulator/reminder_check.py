@@ -645,7 +645,8 @@ def collapse_shade() -> None:
 # System UI describes a notification icon (status bar, the lock screen's shelf) as "<app> notification: <title>"
 # (StatusBarIconView.contentDescForNotification). On API 30 that title is the private one even while the lock screen
 # hides the content: with names shown and the device set to hide sensitive content, the shelf icons of the overflow
-# read "DidITake notification: PillA 먹어~!" to accessibility, and the screen shows no name (run 43365673905).
+# read "DidITake notification: PillA 먹어~!" to accessibility, and the screen shows no name (run 43365673905, under the
+# app's name then; 필받음 since TASK-045).
 ICON_DESC = re.compile(r"^.+ notification: ")
 
 

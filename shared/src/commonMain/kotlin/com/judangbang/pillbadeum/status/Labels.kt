@@ -32,7 +32,8 @@ import kotlinx.datetime.toLocalDateTime
  * RR-76).
  */
 object Labels {
-    const val APP_NAME: String = "DidITake"
+    /** The app's name, as androidApp `app_name` and `widget_label` (TASK-045, decided 2026-11-16). */
+    const val APP_NAME: String = "필받음"
     const val NO_RECORD: String = "기록 없음"
     const val STALE: String = "날짜가 바뀌었어요. 다시 눌러 주세요"
     const val ERROR: String = "기록하지 못했어요. 앱에서 확인해 주세요"
@@ -183,7 +184,7 @@ object Labels {
         return "${board.doneCount} / ${board.totalCount}" to rest
     }
 
-    /** `DidITake · 11/12`: app name and base date beside the weekday chip of the widget header (09 BoxWidget). */
+    /** `필받음 · 11/12`: app name and base date beside the weekday chip of the widget header (09 BoxWidget). */
     fun widgetDate(date: LocalDate): String = "$APP_NAME · ${monthDay(date)}"
 
     /** `매일 아침`, `매일`, `주 1회 월요일` (09 BoxHome). */

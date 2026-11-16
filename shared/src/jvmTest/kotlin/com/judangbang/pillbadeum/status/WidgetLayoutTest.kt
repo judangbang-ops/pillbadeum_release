@@ -131,7 +131,8 @@ class WidgetLayoutTest {
         assertEquals("바${wj}꾸${wj}려${wj}면 앱${wj}에${wj}서", WidgetLayout.keepWords("바꾸려면 앱에서"))
         assertEquals("비${wj}타${wj}민${wj}D: (09:10)", WidgetLayout.keepWords("비타민D: (09:10)"))
         assertEquals("어${wj}제${nb}08:00", WidgetLayout.keepWords("어제${nb}08:00"), "nothing next to a no-break space")
-        assertEquals("DidITake · 11/12", WidgetLayout.keepWords("DidITake · 11/12"))
+        assertEquals("필${wj}받${wj}음 · 11/12", WidgetLayout.keepWords("필받음 · 11/12"), "the widget header")
+        assertEquals("Vitamin · 11/12", WidgetLayout.keepWords("Vitamin · 11/12"), "no Korean, nothing joined")
         // The joiners take no width, so the estimate is the same with or without them.
         val message = "비타민D: 건너뜀으로 기록됨 (09:10). 바꾸려면 앱에서"
         assertEquals(WidgetLayout.width(message, 14f), WidgetLayout.width(WidgetLayout.keepWords(message), 14f))

@@ -119,6 +119,10 @@ jobs:
           git cat-file -e "$FROM^{commit}"
           git worktree add --detach old-build "$FROM"
           echo "옛 커밋 $(git -C old-build log -1 --format='%h %ad %s' --date=iso)"
+          # 런처의 위젯 목록에서 옛 빌드를 찾을 이름: 그 커밋의 app_name (TASK-045 전은 DidITake, 뒤는 필받음)
+          label=$(python3 -I -c 'import sys, xml.etree.ElementTree as E; print(next(e.text for e in E.parse(sys.argv[1]).getroot() if e.get("name") == "app_name"))' old-build/androidApp/src/main/res/values/strings.xml)
+          echo "옛 빌드 이름 $label"
+          echo "OLD_LABEL=$label" >> "$GITHUB_ENV"
 
       - uses: gradle/actions/wrapper-validation@0723195856401067f7a2779048b490ace7a47d7c # v5
 
@@ -158,6 +162,7 @@ jobs:
             --old "$(ls "$RUNNER_TEMP"/apk/old-*.apk)" \
             --new "$(ls "$RUNNER_TEMP"/apk/new-*.apk)" \
             --old-commit "$FROM" \
+            --old-label "$OLD_LABEL" \
             --new-commit "$COMMIT" \
             --out "$RUNNER_TEMP/upgrade"
 

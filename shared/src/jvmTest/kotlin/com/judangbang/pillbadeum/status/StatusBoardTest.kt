@@ -45,7 +45,7 @@ class StatusBoardTest {
         assertEquals("0 / 0 완료", model.countLabel)
         // 09 BoxWidget header: weekday chip, app name and date, the count in two weights (TASK-014)
         assertEquals("수", model.weekday)
-        assertEquals("DidITake · 11/11", model.headerDate)
+        assertEquals("필받음 · 11/11", model.headerDate)
         assertEquals("0 / 0" to "완료", model.countDone to model.countRest)
         assertTrue(model.buttons.isEmpty())
     }

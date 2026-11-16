@@ -12,7 +12,7 @@ Flow (clock set in Asia/Seoul; day 0 is the run's date; the clock only moves for
    1. Install and open: the intro's two pages, [시작하기], the empty first screen with its [항목 추가] note (QA 1).
    2. Morning (매일 아침), Vitamin (매일 저녁) and Weekly (주 1회 월) added: three tiles, read as not taken, and three
       items with those schedules in the database (QA 2).
-   3. The widget placed by hand: `DidITake · MM/DD` and `0 / 3`, each tile read as `<name>, 미완료, 기록 없음` (weekly
+   3. The widget placed by hand: `필받음 · MM/DD` and `0 / 3`, each tile read as `<name>, 미완료, 기록 없음` (weekly
       `이번 주 미완료`) with `기록 없음` drawn, and no person before the names: with one person the widget shows none
       (REQ-018), where the prototype drew a person badge (QA 3).
    4. The widget's cells as the launcher placed them: 4x2, the first row's tiles whole with their names, and the arrow

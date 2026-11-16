@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Background layer of the launcher icon (TASK-045): the app's blue (#2B59C3), as on the store icon. -->
+    <color name="ic_launcher_background">#2B59C3</color>
+</resources>

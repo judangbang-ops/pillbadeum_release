@@ -43,7 +43,7 @@ class AccessNoticeTest {
         )
         sentences.forEach { assertFalse(Regex("[0-9]+\\s*분").containsMatchIn(it), it) }
         assertEquals(
-            "제한되어 있어 알림이 늦을 수 있어요. 열리는 화면에서 DidITake을(를) 찾아 배터리 최적화를 꺼 주세요.",
+            "제한되어 있어 알림이 늦을 수 있어요. 열리는 화면에서 필받음을 찾아 배터리 최적화를 꺼 주세요.",
             Labels.BATTERY_NOTE,
         )
     }

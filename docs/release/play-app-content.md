@@ -5,6 +5,8 @@
 > 도움말 원문은 2026-11-15에 조사 에이전트가 읽었다. 대부분 영어판이고, 계정 유형 쪽은 한국어판도 읽었다. 인용은 그 보고에서 옮겼으며, Claude가 도움말을 직접 다시 열지는 못했다(자동 접속 확인 화면).
 >
 > Play Console 화면의 문항 문구는 앱을 만들기 전이라 보지 못했다. 화면 문구가 이 문서와 다르면 각 절의 근거로 판단한다.
+>
+> 2026-11-16: 동희님이 0장(계정 종류는 Play 지원에 먼저 물음)과 6장(18세 이상만)을 정하셨다. 방침은 공개했다(2장). 0장에 지원 문의 글을 더했다.
 
 ## 0. 먼저 정할 것: 개발자 계정 종류 (결정 Q11, TASK-048)
 
@@ -39,15 +41,95 @@
 - **Claude 추천**: 다를 먼저 하고, 답에 따라 가 또는 나를 고른다. 계정을 이미 만드셨으면 그 종류에 맞춰 다음 일을 고친다(종류를 알려 주세요).
 - **반대 의견**: 도움말이 예로 든 것(의료 기관이 만든 앱, 연구 앱)과 이 앱은 거리가 있다. 그래서 개인 계정으로도 될 가능성이 있고, 바로 나로 가는 편이 빠르다.
 
+### 정한 것
+
+- **정함**: 다(계정을 만들기 전에 Play 개발자 지원에 묻기). 2026-11-16 10:05 KST, 동희님 "추천대로 모두 승인"('필받음 재구축 인계' 채팅). 질문은 2026-11-15 출시 준비 묶음 보고의 '정해 주실 것' 2번이었다.
+- 동희님이 아래 글을 보내고 답을 받으면, 그 답으로 가(조직) 또는 나(개인)를 고른다. 답은 이 장에 적는다.
+- 동희님이 Play에 보일 개발자 이름으로 주신 '고동희'는 개인 이름이다. 지원이 조직 계정이 필요하다고 답하면 개발자 이름도 조직 이름이 되므로, 방침 8장과 스토어 등록정보를 고친다.
+
+### 문의하는 곳
+
+2026-11-16에 Claude가 양식 화면(로그인 전, 한국어·영어)을 Chromium으로 열어 읽었다.
+
+- 양식: [Google Play 관련 문제 신고](https://support.google.com/googleplay/android-developer/contact/general_contact?hl=ko)
+  - "Play Console 계정을 만들거나 액세스할 수 없는 경우에만 이 양식을 사용하세요." 계정을 만들기 전이라 이 양식을 쓴다.
+  - "현재 한국어, 영어, 중국어, 일본어로 작성된 이메일에만 응답해 드릴 수 있습니다." 그래서 한국어로 보내도 된다.
+  - "Google 계정에 로그인하면 더 빠르고 정확한 도움을 받을 수 있습니다." Play Console을 만들 Google 계정으로 로그인해서 보낸다.
+  - "개인 식별 정보가 포함된 서류나 신분증을 제출하지 마세요."
+- 조사 에이전트가 같은 날 읽은 [계정을 만들 때 필요한 정보](https://support.google.com/googleplay/android-developer/answer/13628312) 도움말에 "Tip: If you must onboard without a D-U-N-S number, contact support before you create your Google Play developer account."가 있다.
+- 확인하지 못한 것: 답이 오는 데 걸리는 시간. 에이전트는 양식에 "Our Support Team will reply by email within 2 business days."가 있다고 보고했으나, Claude가 연 로그인 전 화면에는 그 문장이 없었다.
+
+### 양식에 넣을 것
+
+| 칸 | 넣을 것 |
+| --- | --- |
+| 이름, 성 | 동희, 고 (선택 칸) |
+| 이메일 주소 (필수) | Play Console을 만들 Google 계정의 주소 |
+| 내 위치 (필수) | 대한민국 |
+| 개발자 이름 | 고동희 |
+| 개발자 계정 ID | 비움 (아직 없음) |
+| 앱 패키지 이름 | com.judangbang.pillbadeum |
+| 문제를 가장 잘 설명하는 카테고리 (필수) | 개발자 계정 만들기 |
+| 조직 유형 | 개인 |
+| 문제 설명 (필수) | 아래 글 |
+| 첨부 | 없음 |
+
+### 문제 설명에 넣을 글
+
+```text
+안녕하세요. Google Play 개발자 계정을 만들기 전에 어떤 계정 유형이 필요한지 확인하고 싶어 문의드립니다.
+
+[앱]
+- 이름: 필받음 (패키지 com.judangbang.pillbadeum), Android 앱. 아직 Play에 올리지 않았습니다.
+- 하는 일: 사용자가 자기 약이나 가족의 약을 먹었는지 기록합니다. 홈 화면 위젯을 눌러 먹은 시각을 남기고, 사용자가 정한 시각에 복용 알림을 보냅니다.
+- 하지 않는 일: 복용량 권고, 진단, 치료, 약 정보 제공, 약물 상호작용 판정을 하지 않습니다. 의료기기가 아니며 병원·약국과 연결하지 않습니다.
+- 데이터: 휴대폰 안에만 저장합니다. 앱에 인터넷 권한이 없고, 회원 가입·로그인·광고·분석 도구가 없습니다.
+- 만든 사람: 개인 개발자입니다. 의료 기관이나 의료인이 아닙니다.
+- 건강 앱 신고에서는 'Medication and Treatment Management'를 고를 예정입니다.
+
+[질문]
+'개발자 계정 유형 선택' 도움말(https://support.google.com/googleplay/android-developer/answer/13634885)에는 "건강 앱(예: 의료 앱 및 인간 대상 연구 앱)"을 제공하면 조직 계정을 선택해야 한다고 되어 있습니다.
+1. 위 앱을 개인 계정으로 게시할 수 있나요, 아니면 조직 계정이 필요한가요?
+2. 조직 계정이 필요하다면, D-U-N-S 번호가 없는 개인 개발자는 어떻게 하면 되나요?
+
+감사합니다.
+```
+
+영어로 보내야 할 때 쓰는 같은 글이다.
+
+```text
+Hello. Before creating a Google Play developer account, I would like to confirm which account type I need.
+
+App
+- Name: 필받음 (Pillbadeum), package com.judangbang.pillbadeum. Android. Not published yet.
+- What it does: users record whether they took their own or a family member's medicine. They tap a home-screen widget to log the time taken, and the app sends reminder notifications at times the user sets.
+- What it does not do: no dosage advice, diagnosis, treatment, drug information, or drug-interaction checks. It is not a medical device and does not connect to hospitals or pharmacies.
+- Data: stored only on the phone. The app has no INTERNET permission, and has no sign-up, login, ads, or analytics.
+- Developer: an individual, not a healthcare provider or professional.
+- In the Health apps declaration, I plan to select "Medication and Treatment Management".
+
+Questions
+The help article "Choose a developer account type" (https://support.google.com/googleplay/android-developer/answer/13634885) says an organization account is required for "Health apps, such as medical apps and human subjects research apps."
+1. Can this app be published from a personal account, or does it need an organization account?
+2. If an organization account is needed, what should an individual developer without a D-U-N-S number do?
+
+Thank you.
+```
+
+- 글의 사실 근거
+  - 하는 일과 하지 않는 일: [스토어 등록정보](store-listing.md) 2.3의 근거 표와 REQ-087
+  - 인터넷 권한·광고·분석 도구 없음: [개인정보 점검](../07-qa/2026-11-14-privacy/report.md)(PR마다 CI가 다시 봄), 결정 Q8
+  - 건강 앱 분류: 8장
+
 ## 1. 요약
 
 | 앱 콘텐츠 항목 | 답 | 절 | 동희님 |
 | --- | --- | --- | --- |
-| 개인정보처리방침 | TASK-035 방침을 공개한 주소 | 2 | 공개 위치와 승인 (TASK-035) |
+| 개인정보처리방침 | 방침 주소 (2장) | 2 | 입력 (방침은 2026-11-16 공개) |
 | 앱 액세스 | 모든 기능을 특별한 액세스 권한 없이 쓸 수 있음 | 3 | 입력 |
 | 광고 | 광고 없음 | 4 | 입력 |
 | 콘텐츠 등급 | 설문의 모든 문항에 '아니요' | 5 | 화면 문항을 보고 입력 |
-| 타겟층 및 콘텐츠 | 18세 이상만 | 6 | 확인 뒤 입력 |
+| 타겟층 및 콘텐츠 | 18세 이상만 | 6 | 입력 (2026-11-16 정함) |
 | 데이터 보안 | 수집·공유하는 데이터 없음 | 7 | 입력 |
 | 건강 앱 | Medication and Treatment Management 하나 | 8 | 입력 |
 | 광고 ID | 사용하지 않음 | 9 | 입력 |
@@ -56,13 +138,14 @@
 
 ## 2. 개인정보처리방침
 
-- **답**: [TASK-035 방침](privacy-policy.md)을 공개한 주소. 같은 주소를 앱 설정(SCR-009, `PRIVACY_POLICY_URL`)에도 넣는다.
+- **답**: `https://github.com/judangbang-ops/pillbadeum_release/blob/main/docs/release/privacy-policy.md`
+  - [방침](privacy-policy.md) 파일의 main 주소다. 같은 주소를 앱 설정(SCR-009, `PRIVACY_POLICY_URL`)에도 넣는다.
 - **근거**
   - 데이터 보안 도움말: "Even developers with apps that do not collect any user data must complete this form" 그리고 "provide a link to their privacy policy."
   - 앱 액세스·광고 도움말: "You must link to a privacy policy on your store listing and within your app, even if your app" "doesn't access personal or sensitive user data or target children."
   - 건강 콘텐츠 정책: "Your app must post a privacy policy link in the designated field within Play Console"
   - 타겟층 도움말: "You must also have added a privacy policy."
-- **먼저 할 일**: 방침 공개(동희님 승인). 정할 것은 [근거와 정할 것](privacy-policy-basis.md) 3장에 있다.
+- **공개**: 2026-11-16 동희님 결정(공개 위치, 문안 승인, 개발자 이름, 연락처)으로 공개했다. 정한 것은 [근거와 정할 것](privacy-policy-basis.md) 3장에 있다.
 
 ## 3. 앱 액세스
 
@@ -84,7 +167,7 @@
 
 ## 5. 콘텐츠 등급
 
-- **설문 이메일**: `{연락 이메일}`. 방침 8장과 같은 주소를 쓴다(TASK-035 정할 것 3).
+- **설문 이메일**: elddlwkd@gmail.com. 방침 8장, 스토어 등록정보 6장과 같은 주소다(2026-11-16 동희님).
 - **카테고리**: 게임이 아닌 앱 가운데 유틸리티·생산성 쪽을 고른다(Claude 추천). 도움말에 카테고리 목록이 없어 화면에서 고른다.
 - **문항**: 모두 '아니요'다. 문항은 폭력, 공포, 성적 내용, 욕설, 도박, 약물·술·담배, 사용자끼리의 소통이나 공유, 위치 공유, 디지털 상품 구매 같은 것으로 알려져 있으나, 이번에 원문을 읽지 못했다.
   - 약물 문항: 이 앱이 다루는 것은 사용자가 적은 합법 의약품의 복용 기록이다. 약물 사용을 권하거나 묘사하지 않으므로 '아니요'로 본다(Claude 판단). IARC 기준 문서는 읽지 못했다.
@@ -100,7 +183,8 @@
   - 도움말: "Any apps that have at least one target audience age group that includes children must comply with" 가족 정책 요건. 아동을 대상에 넣을 까닭이 없다.
   - 스토어 등록정보(TASK-037)에도 아동을 겨냥하는 요소를 넣지 않는다. 도움말에 "If your app is not primarily designed for children under 13 but your listing contains marketing elements that suggest otherwise" 이면 "Google Play may reject your app."이라고 적혀 있다.
 - **'미성년자 액세스 제한'**: 켜지 않는다(Claude 추천). 도움말은 이 기능을 "If your app is only suitable or designed for an adult audience" 일 때 쓰라고 한다. 이 앱의 내용은 성인용이 아니다.
-- **동희님 확인**: 18세 이상만으로 할지 확인해 주세요. 반대 의견은, 청소년이 자기 약을 기록하는 데 쓸 수도 있어 16~17세를 넣는 것이다. 그러면 아동 기준과의 관계를 다시 봐야 한다(도움말: "if your app targets any users who are under the age of 21, you must consider if they would be considered children").
+- **정함**: 18세 이상만. 2026-11-16 10:05 KST, 동희님 "추천대로 모두 승인"(질문은 2026-11-15 출시 준비 묶음 보고의 '정해 주실 것' 4번).
+- 물을 때 붙인 반대 의견: 청소년이 자기 약을 기록하는 데 쓸 수도 있어 16~17세를 넣는 것이다. 그러면 아동 기준과의 관계를 다시 봐야 한다(도움말: "if your app targets any users who are under the age of 21, you must consider if they would be considered children").
 
 ## 7. 데이터 보안
 
@@ -180,6 +264,7 @@ Play Console이 위 항목을 물으면, 이 표의 '이 앱' 칸대로 답한�
   - [포그라운드 서비스](https://support.google.com/googleplay/android-developer/answer/13392821)
 - 릴리즈 병합 매니페스트의 권한과 구성요소: 위 CI 실행의 `privacy-release`. 대상 SDK 36, 최소 26
 - [개인정보 점검 보고서](../07-qa/2026-11-14-privacy/report.md)(TASK-031)
+- [Google Play 관련 문제 신고 양식](https://support.google.com/googleplay/android-developer/contact/general_contact?hl=ko): 2026-11-16 Claude가 Chromium으로 한국어·영어 화면(로그인 전)을 엶
 
 ### 확인하지 못한 것
 
@@ -190,13 +275,15 @@ Play Console이 위 항목을 물으면, 이 표의 '이 앱' 칸대로 답한�
 - 건강 앱 신고의 둘째 쪽
 - 정부·금융·뉴스 도움말
 - 새 개인 계정의 테스트 요건(12명, 14일) 도움말
-- 조직 계정 규칙이 개인이 만든 복용 기록 앱에 걸리는지(0장)
+- 조직 계정 규칙이 개인이 만든 복용 기록 앱에 걸리는지(0장). Play 지원에 물어 답을 받기로 함
 
 ## 13. 정할 것 (동희님)
 
-1. 개발자 계정 종류 (결정 Q11): 0장. 추천은 계정을 만들기 전에 Play 개발자 지원에 묻는 것이다
+2026-11-16 10:05 KST 동희님 "추천대로 모두 승인"으로 셋 다 정했다.
+
+1. 개발자 계정 종류 (결정 Q11): 계정을 만들기 전에 Play 개발자 지원에 묻기로 했다. **남은 일**: 동희님이 0장의 글을 보내고, 답을 알려 주시면 계정 종류를 고른다
 2. 타겟 연령: 18세 이상만 (6장)
-3. 개인정보처리방침의 공개 위치·연락처·시행일과 공개 승인: [TASK-035](privacy-policy-basis.md) 3장
+3. 개인정보처리방침: 저장소 파일 주소로 공개하고 문안을 승인했다. 개발자 이름과 연락처는 동희님이 주신 값이다([근거와 정할 것](privacy-policy-basis.md) 3장)
 
 ## 14. 입력한 뒤
 

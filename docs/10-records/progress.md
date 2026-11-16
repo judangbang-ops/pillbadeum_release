@@ -28,6 +28,10 @@
 - **확인한 것**: `check_docs.py` no problems, `check_wording.py` 문제 없음. 고친 코드의 앱 시험과 에뮬레이터 알림 확인(API 26·30·34·36)은 CI 실행으로 적음(머지 줄). 로컬 Gradle은 Maven Central 429로 쓰지 못함
 - **확인하지 못한 것**: 실제 폰에서 두 알람이 정말 함께 울리는지와 목록에 오르기까지 걸리는 시간. 에뮬레이터 알림 확인은 1단계 뒤로 정확 알람을 허용해서 이 길을 울리지 않음. 갤럭시 확인(TASK-032)의 비정확 알람 단계에서 봄
 - **다음 행동**: TASK-037 스토어 스크린샷 6장과 그래픽 이미지
+- **머지**: 2026-11-16 14:12 KST에 main에 머지함(`924aec0`).
+  - `85dad71`의 검사 5개 모두 1차 시도에 통과: CI [43805579429](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43805579429)(앱 시험 127개 모두 통과, `ReminderListLagTest` 둘 포함), 알림 [43805579499](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43805579499)(API 26·30·34·36), 회귀 [43805579432](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43805579432), 업데이트 [43805579434](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43805579434), 기기 스크립트 [43805579444](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43805579444)
+  - 알림 확인 API 36(아티팩트 `reminders-api36`): 보고서 41줄 통과·실패 0. RR-91에서 08:40에 늦게 온 08:00 알람 뒤 PillA·PillC·PillD·PillE 넷과 "복용 시간이에요"가 모두 뜸. 시스템 로그에 항목 알림 키의 'Cannot find enqueued record'는 없음(남은 것은 Android 자동 묶음 요약 키뿐). 2초 기다림을 넘긴 로그(`not listed by the system`)도 없음
+  - 버그를 처음 본 실행에서도 때에 따라 통과했으므로, 한 번의 통과로 경쟁이 없어졌다고 단정하지는 않음. 근거는 순서를 바꾼 이유(옛 알림 정리가 새 알림보다 먼저 감)와 앱 시험 `ReminderListLagTest`
 
 ### BUG-006 Android 15 이상에서 상태 표시줄 아이콘이 흰 화면에 묻힘 ([PR #44](https://github.com/judangbang-ops/pillbadeum_release/pull/44))
 

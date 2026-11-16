@@ -10,6 +10,25 @@
 
 ## 2026-11-16
 
+### TASK-022 첫 실행 안내 끝 ([PR #47](https://github.com/judangbang-ops/pillbadeum_release/pull/47))
+
+- **목표**: TASK-022(첫 실행 안내와 [위젯 추가])의 남은 것인 앱 이름이 든 캡처와 TalkBack을 확인해 끝냄(SPEC-002, REQ-080·036·074, TC-002)
+- **한 일**
+  - 새로 돌리지 않고, 이미 돈 에뮬레이터 실행의 아티팩트(7일 보관)를 받아 봄
+    - PR #46의 마지막 커밋 `1cf4e34`: 회귀 확인 [43818404064](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43818404064) 1단계의 안내 두 쪽, 접근성 확인 [43818404042](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43818404042)의 SCR-005 글자 100%·200%
+    - 앱 이름을 바꾼 PR #43의 `64ecbe8`: 화면 확인 [43794389361](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43794389361) 17단계([위젯 추가] → 런처의 놓기 창 → 놓인 위젯), 둘러보기 [43794389204](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43794389204) 1단계
+    - `64ecbe8` 뒤 main의 앱 코드 변경은 테마(BUG-006)와 알림 모으기(BUG-007)뿐이라 안내 화면과 위젯 고정 코드는 그대로임(`git diff 64ecbe8 92c5cb6`)
+  - 문서: wbs TASK-022 **끝남**과 메모, 시험 계획 TC-002, 화면 정의 SCR-005, 요구 REQ-080 상태 칸
+  - [갤럭시 확인 순서](../07-qa/device-check.md) 2.4: 깨끗한 설치 뒤 첫 실행 안내의 [위젯 추가]를 One UI 홈에서 눌러 보는 단계와 합격 기준을 더함. 3.1의 3번은 그 위젯을 그대로 씀. REQ-080 상태 칸은 실제 런처의 확인 창을 '에뮬레이터·실기기에서' 본다고 했으나 순서에 그 단계가 없었음(기기 스크립트의 `additem`은 안내를 [건너뛰기]로 넘김)
+- **확인한 것**
+  - 회귀 1단계(`1cf4e34`): 안내 1쪽에 '필받음은 기록 도구예요. 복용 방법은 의사·약사와 상의해 주세요.'(REQ-036)와 '한 약은 한 휴대폰에서 기록해 주세요. 휴대폰끼리는 기록이 이어지지 않아요.'(REQ-074). 2쪽에 '필받음 · 11/12' 위젯 그림, "'위젯'에서 필받음 찾기", [위젯 추가]·[시작하기]. [시작하기] 뒤 '아직 복용 항목이 없어요.'와 [항목 추가]. 상태 표시줄은 BUG-006대로 흰 바탕에 어두운 아이콘
+  - 접근성(`1cf4e34`) SCR-005: 글자 100%는 쪽 1개, 누르는 곳 2가지(가장 작은 [건너뛰기] 78.7×48dp). 200%는 쪽 2개(가장 작은 [건너뛰기] 124×48dp). 글자 명암비 최소 5.50:1(ink.muted / surface.sunken). 화면 덤프의 글이 모두 TalkBack이 읽는 말로 있음
+  - 화면 확인 17단계(`64ecbe8`): 다시 깐 앱에서 [위젯 추가] → Pixel 런처의 놓기 창('필받음 widget', '4 × 2', [Add to home screen]) → 위젯 [3], 선택 ['*']. 놓인 위젯이 '필받음 · 11/18', '0 / 0 완료', '앱에서 복용 항목을 추가해 주세요'를 그림
+  - '첫 실행에만 보임'은 앱 시험 `IntroScreenTest`(`spec002_the_first_start_shows_the_intro_once`, `skipping_leaves_the_intro_for_good`). CI의 앱 화면 시험에서 돎
+  - `check_docs.py` no problems, `check_wording.py` 문제 없음
+- **확인하지 못한 것**: 갤럭시 홈(One UI)이 고정 요청을 받는지와 그 창의 모양(TASK-032에서 봄)
+- **다음 행동**: 이번 묶음(PR #41~#47)의 노션 최종본 한 행과 동희님 보고. 그 뒤 실기기 확인(TASK-032·052·054)은 시험용 갤럭시가 준비되면
+
 ### TASK-037 스토어 스크린샷과 TASK-045 그래픽 이미지 ([PR #46](https://github.com/judangbang-ops/pillbadeum_release/pull/46))
 
 - **목표**: Play 스토어용 휴대전화 스크린샷(1080×1920, 24-bit PNG)과 그래픽 이미지(1024×500)를 실제 앱 화면으로 만들어 저장소에 둠(TASK-037, TASK-045). 런처의 앱 목록에 이름과 아이콘이 보이는 캡처도 남김
@@ -53,6 +72,9 @@
 - **확인한 것**: `check_docs.py` no problems, `check_wording.py` 문제 없음. 스크립트는 `py_compile` 통과. 그림 규격은 위 5번 실행. 검사 결과는 아래 머지 줄
 - **확인하지 못한 것**: Play Console에서 그림이 받아지는지(TASK-038). 갤럭시 런처에서의 위젯 크기와 칸 배치(TASK-032)
 - **다음 행동**: 이번 묶음의 노션 최종본 한 행과 동희님 보고. 그 뒤 실기기 확인(TASK-032·052)은 동희님 폰이 준비되면
+- **머지**: 2026-11-16 16:13 KST에 main에 머지함(`92c5cb6`).
+  - `1cf4e34`의 검사 13개 모두 1차 시도에 통과: CI [43818403849](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43818403849), 스토어 스크린샷 [43818403874](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43818403874), 알림 [43818403951](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43818403951), 접근성 [43818404042](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43818404042), 회귀 [43818404064](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43818404064), 기기 스크립트 [43818403988](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43818403988), 릴리즈 변형 [43818403884](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43818403884). 나머지 여섯(화면 확인과 2부, 위젯 크기, 업데이트, 둘러보기, 에뮬레이터 확인)은 이 푸시가 경로 조건의 파일을 바꾸지 않아 gate가 건너뜀
+  - 스토어 스크린샷 여섯 번째 실행(`1cf4e34`): 13단계 모두 통과. 3단계는 '로그 1줄, 기다린 지 0.4초에 읽음'(logcat에서 앱 로그는 표지 뒤 0.36초). 사진 1~4·6은 다섯 번째 실행과 화소까지 같고, 5번은 같은 화면이 9화소 아래에 있음(목록을 그만큼 덜 내림). 저장소의 그림은 다섯 번째 실행 것 그대로 둠
 
 ### BUG-007 늦게 온 알람 뒤 새 알림 하나가 사라짐 ([PR #45](https://github.com/judangbang-ops/pillbadeum_release/pull/45))
 

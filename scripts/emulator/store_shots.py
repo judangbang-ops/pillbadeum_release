@@ -9,21 +9,29 @@ Day 0 is the last Friday on or before the run's date (Asia/Seoul), so that the w
 
 Flow:
    0. Setup in English, as the other scripts (the launcher steps read its English words): clock on day -31 09:00,
-      animations and heads-up popups off, a 24-hour clock, the debug APK installed, notifications allowed.
+      animations and heads-up popups off, a 24-hour clock, the debug APK installed, notifications allowed, and exact
+      alarms allowed (appops), as a person does from the app's [허용하기]: without them the first screen opens with
+      "알림이 늦을 수 있어요" (first run, 2026-11-16) and the reminder may ring minutes late.
    1. The app opened (the intro passed with [건너뛰기]) and the example items made by the debug receiver (SEED), in
       this order: 나 비타민D (매일 점심, 알림 12:30); 엄마 (주황) 아침 혈압약 (매일 아침, 08:00), 저녁약 (매일 저녁, 19:00)
       and 골다공증약 (주 1회 금요일, 09:00). Names on the lock screen on (NAMES_ON_LOCK, SPEC-034): with names hidden,
       the default, a separate "복용 시간이에요" stands in for the reminders on the lock screen and shows in the shade too.
    2. The widget dragged from the launcher's widget list (its picture shows 필받음's row with the icon, TASK-045), 전체
-      picked, and made one row taller so that its four tiles show.
-   3. The phone in Korean (persist.sys.locale and a reboot), the clock on day 0 12:30:20: 비타민D's reminder is due.
+      picked, made as wide as the home screen and one row taller, so that its four tiles show two in a row. This
+      launcher has five columns, where four cells are 296 dp and the widget puts one tile in a row (WidgetLayout.plan);
+      a phone with four columns gives a 4x2 widget that width. It lands on the grid's last row, so it grows upwards.
+   3. The phone in Korean (persist.sys.locale and a reboot). The emulator gives the phone the computer's time zone
+      (UTC) and clock again when it boots (first run), so the zone is set again and the clock goes to day 0 12:29:30:
+      the app takes the clock going back (RR-81) and rings 비타민D's 12:30 reminder at 12:30, or when the alarm
+      broadcast comes after 12:30.
    4. A month of history written by the debug receiver (RECORD) as SCR-007 writes a past day (see history()), and the
       database counted against it. Day 0's 아침 혈압약 and 골다공증약 are among it, so that their reminders, which
       the clock change and the alarm brought, go (N-13) and only 비타민D's is left in the shade.
    5. System UI demo mode (clock, full battery and signal, no notification icons); other apps' notifications snoozed.
    6. Store 2: the notification shade with 비타민D's reminder and its three buttons. Its [먹었어] is then tapped.
    7. Store 1: the home screen with the widget, 3 of the 4 taken. Store 3: the app's first screen (SCR-004). Store 4:
-      지난 기록 (SCR-008). Store 5: 아침 혈압약's form (SCR-006). Store 6: the widget with text at 200%.
+      지난 기록 (SCR-008). Store 5: 아침 혈압약's form (SCR-006), scrolled to "누구 약인가요?" so that the reminder
+      rows (알림 받기, 첫 알림 시각) show. Store 6: the widget with text at 200%.
    8. The app list with 필받음's icon (TASK-045). Text back at 100%, demo mode off.
 
 Each store picture is saved as store-N-name.png, the screen as captured, with its screen dump. The 24-bit copies in
@@ -59,7 +67,7 @@ from backup_restore_check import (
     uninstall,
     wait_boot,
 )
-from explore import LOG_PARTS, Steps, exact, font_scale, night, reboot, set_clock, set_zone, tile
+from explore import LOG_PARTS, Steps, exact, font_scale, night, phone_now, reboot, set_clock, set_zone, tile
 from release_check import go_home, place_widget, save_ui
 from reminder_check import (
     ACTION_SEED,
@@ -90,6 +98,8 @@ BATCH = 24  # RECORD entries per broadcast
 ACTION_RECORD = f"{PKG}.debug.RECORD"
 DEMO = "com.android.systemui.demo"
 SHADE_IDS = (":id/expand_button",)
+EDGE = 8  # px: where the widget's left handle is dragged, the home screen's left edge
+TOUCH_SLOP = 21  # px: 8 dp at 420 dpi, the part of a drag a list takes before it scrolls
 
 
 def day_zero(today: date) -> date:
@@ -284,11 +294,14 @@ def run(r: Report, steps: Steps, apk: Path) -> None:
         uninstall()
         install(apk)
         sh(f"pm grant {PKG} android.permission.POST_NOTIFICATIONS", check=False)
+        sh(f"appops set {PKG} SCHEDULE_EXACT_ALARM allow", check=False)
+        sh("cmd appops write-settings", check=False)  # kept through the reboot of step 3
+        exact = sh(f"appops get {PKG} SCHEDULE_EXACT_ALARM", check=False).strip()
         if f"{SIZE[0]}x{SIZE[1]}" not in size:
             raise RuntimeError(f"the screen is not {SIZE[0]}x{SIZE[1]}: {size}")
-        return f"{size}, 시간대 {zone}, 시계 {clock}"
+        return f"{size}, 시간대 {zone}, 시계 {clock}, 정확 알람 {exact}"
 
-    if not steps("0. 준비 (영어, -31일 09:00)", f"화면 {SIZE[0]}x{SIZE[1]}, 앱 설치, 알림 허용", setup):
+    if not steps("0. 준비 (영어, -31일 09:00)", f"화면 {SIZE[0]}x{SIZE[1]}, 앱 설치, 알림·정확 알람 허용", setup):
         return
 
     # 1. The items
@@ -315,28 +328,44 @@ def run(r: Report, steps: Steps, apk: Path) -> None:
     # 2. The widget
     def widget() -> str:
         picker = place_widget(r, "widget", pick="전체")
-        grow = resize(r, "widget-grow", "bottom", lambda h, p: (p[0], p[1] + (h.bounds[3] - h.bounds[1]) // 2 + 20))
+        wide = resize(r, "widget-wide", "left", lambda h, p: (EDGE, p[1]))
+        tall = resize(r, "widget-tall", "top", lambda h, p: (p[0], p[1] - (h.bounds[3] - h.bounds[1]) // 2 - 20))
         nodes = widget_page(lambda ns: len(in_widget(ns)) == len(ITEMS), 30)
         shown = in_widget(nodes)
+        host = widget_host(nodes)
         r.shot("widget-grown")
+        save_ui(r, "widget-grown")
         if len(shown) != len(ITEMS):
-            raise RuntimeError(f"the widget shows {shown} ({grow})")
-        return f"대상자 고르기 {'열림' if picker else '안 열림'}, {grow}, 칸 {', '.join(shown)}"
+            raise RuntimeError(f"the widget shows {shown} ({wide}; {tall})")
+        if host is None or host.bounds[2] - host.bounds[0] < SIZE[0] * 4 // 5:
+            raise RuntimeError(f"the widget is not as wide as the home screen: {host.bounds if host else None}")
+        return f"대상자 고르기 {'열림' if picker else '안 열림'}, {wide}, {tall}, 위젯 {host.bounds}, 칸 {', '.join(shown)}"
 
-    steps("2. 위젯 놓기·한 줄 늘리기 (TASK-045 위젯 목록)", "전체를 고른 위젯에 칸 넷", widget)
+    steps("2. 위젯 놓기, 화면 폭만큼·한 줄 더 (TASK-045 위젯 목록)", "전체를 고른 위젯에 칸 넷, 위젯 폭이 화면의 4/5 이상",
+          widget)
 
     # 3. Korean, day 0
     def korean() -> str:
         sh("setprop persist.sys.locale ko-KR")
         reboot()
         locale = sh("getprop persist.sys.locale").strip()
-        clock = set_clock(at(0, 12, 30, 20))
+        booted = sh("date '+%Y-%m-%d %H:%M %Z'").strip()
+        zone = set_zone()
+        clock = set_clock(at(0, 12, 29, 30))
+        due = int(at(0, 12, 30, 5).timestamp())
+        deadline = time.time() + 120
+        while phone_now() < due and time.time() < deadline:
+            time.sleep(2)
+        # The alarm rings at 12:30 by itself; this one covers an alarm the clock change left armed for later. A second
+        # collect right after the first leaves its reminders up (BUG-007, RR-94).
         sh(f"am broadcast -n {REMINDER_RECEIVER} -a {REMINDER_ALARM}", check=False)
         if locale != "ko-KR":
             raise RuntimeError(f"locale {locale}")
-        return f"언어 {locale}, 시계 {clock}"
+        if zone != "Asia/Seoul":
+            raise RuntimeError(f"time zone {zone}")
+        return f"언어 {locale}, 다시 켠 뒤 {booted}, 시간대 {zone}, 시계 {clock}"
 
-    if not steps("3. 한국어로 다시 켜기, 0일 12:30", "ko-KR, 0일 12:30", korean):
+    if not steps("3. 한국어로 다시 켜기, 0일 12:29:30", "ko-KR, Asia/Seoul, 0일 12:29", korean):
         return
 
     # 4. The history
@@ -436,13 +465,26 @@ def run(r: Report, steps: Steps, apk: Path) -> None:
             raise RuntimeError("the edit form did not open")
         if not any(BP in n.text for n in nodes if "EditText" in n.cls):
             raise RuntimeError(f"the form's name is not {BP}")
+        # Up to "누구 약인가요?", so that the reminder rows come into view; a slow drag, so that the list does not fling
+        who = next((n for n in nodes if n.text == "누구 약인가요?"), None)
+        scroller = next((n for n in nodes if n.cls.endswith("ScrollView")), None)
+        if who is not None and scroller is not None:
+            lift = who.bounds[1] - scroller.bounds[1] - 24 + TOUCH_SLOP
+            x = SIZE[0] // 2
+            sh(f"input swipe {x} {scroller.bounds[3] - 40} {x} {scroller.bounds[3] - 40 - lift} 2000")
+            time.sleep(2)
+            nodes = dump_ui()
+        rows = [t for t in ("누구 약인가요?", "얼마나 자주?", "언제 먹나요?", "알림 받기", "첫 알림 시각")
+                if any(n.text == t for n in nodes)]
+        if "알림 받기" not in rows:
+            raise RuntimeError(f"the reminder rows are not in view: {rows}")
         store(5, "form")
         sh("input keyevent KEYCODE_BACK")
         time.sleep(1)
         to_home()
-        return f"{BP} 수정 화면"
+        return f"{BP} 수정 화면, 보이는 줄 {', '.join(rows)}"
 
-    steps("10. 스토어 5: 항목 수정 (SCR-006)", f"{BP}의 이름·대상자·주기·시간대·알림", form)
+    steps("10. 스토어 5: 항목 수정 (SCR-006)", f"{BP}의 대상자·주기·시간대와 알림 받기·첫 알림 시각", form)
 
     # 8. Store 6 and the app list
     def big_text() -> str:

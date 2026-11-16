@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        From Android 15 the picker is drawn edge to edge too, so its white screen is under the bars: dark icons and
+        buttons (BUG-006). While it reads the people and draws nothing, the launcher shows through under dark icons.
+    -->
+    <style name="Theme.Pillbadeum.Pick" parent="@android:style/Theme.Translucent.NoTitleBar">
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+</resources>

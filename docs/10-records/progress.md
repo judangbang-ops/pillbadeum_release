@@ -10,6 +10,20 @@
 
 ## 2026-11-16
 
+### BUG-006 Android 15 이상에서 상태 표시줄 아이콘이 흰 화면에 묻힘 ([PR #44](https://github.com/judangbang-ops/pillbadeum_release/pull/44))
+
+- **목표**: Android 15 이상에서 앱 화면과 위젯 대상자 고르기(SCR-002) 위의 시계·배터리 아이콘이 보이게 함(REQ-069 명암)
+- **찾은 것**: TASK-037 스크린샷을 준비하며 지난 캡처를 보다 Claude가 찾음. 에뮬레이터 알림 확인 API 36의 `api36-10-app-taken.png`(`47aefbd`, [실행 43692177634](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43692177634))에서 맨 위 188줄이 모두 #FFFFFF. 상태 표시줄 아이콘이 흰 바탕에 흰색이었음
+  - 원인: targetSdk 36이라 Android 15부터 앱이 상태 표시줄 밑까지 그려지고(edge-to-edge 강제) 상태 표시줄 색(`statusBarColor`)은 쓰이지 않음. 아이콘 색은 테마의 `windowLightStatusBar`만 정하는데, 앱이 쓰던 플랫폼 테마 `Theme.Material.Light.NoActionBar`는 이를 켜지 않음. API 34 캡처는 회색(#757575) 띠에 흰 아이콘이라 보였음. 앱 코드에서 시스템 바 모양을 바꾸는 곳은 없음
+- **한 일**
+  - 앱 테마 `Theme.Pillbadeum`(`res/values/themes.xml`): 상태 표시줄 흰색에 어두운 아이콘. Android 8.1 이상(`values-v27`)은 아래 내비게이션 바도 흰색에 어두운 버튼. 매니페스트의 앱 테마를 이것으로 바꿈
+  - 고르기 화면 테마 `Theme.Pillbadeum.Pick`: 지금처럼 반투명. Android 15 이상(`values-v35`)에서는 흰 화면이 시스템 바 밑에 오므로 어두운 아이콘·버튼. Android 14 이하에서는 시스템이 그리는 어두운 띠 그대로임
+  - 앱 시험 `SystemBarsTest`(새로, Robolectric Android 15): 두 화면이 두 테마를 쓰는지, 두 테마가 어두운 아이콘·버튼을 켜는지, 앱 테마의 상태·내비게이션 바가 흰색인지 봄
+  - 문서: 시험 계획 6장 BUG-006, 화면 정의 6장
+- **Claude가 정한 것 (바꾸실 수 있음)**: Android 14 이하도 회색 띠 대신 흰 띠로 함. 화면이 모두 흰색이라 띠가 화면과 이어져 보이게 함. 아래 내비게이션 바도 같은 이유로 흰색
+- **확인한 것**: `check_docs.py` no problems, `check_wording.py` 문제 없음. 앱 빌드·시험과 에뮬레이터 캡처는 CI 실행으로 적음(아래 머지 줄). 로컬 Gradle은 Maven Central 429로 쓰지 못함
+- **다음 행동**: TASK-037 스토어 스크린샷 6장과 그래픽 이미지
+
 ### TASK-045 앱 이름 필받음과 아이콘 ([PR #43](https://github.com/judangbang-ops/pillbadeum_release/pull/43))
 
 - **목표**: 2026-11-16 정하신 앱 이름 '필받음'을 앱에 넣고, 런처 아이콘과 스토어 512px 아이콘을 만듦(TASK-045, REQ-060). 스토어 스크린샷(TASK-037)이 이름이 든 화면을 찍을 수 있게 함
@@ -25,6 +39,9 @@
 - **확인한 것**: `check_docs.py` no problems, `check_wording.py` 문제 없음(앱 문구 한글 문자열 430개, 16개 파일). 스크립트는 `py_compile` 통과. 앱 빌드·시험과 에뮬레이터 확인은 CI 실행으로 적음(아래 머지 줄). 로컬 Gradle은 Maven Central 429로 쓰지 못함
 - **남은 것**: 그래픽 이미지(1024×500)와 런처·위젯 목록 캡처는 TASK-037 스크린샷과 같은 PR에서. 그 뒤 TASK-045 **끝남**
 - **다음 행동**: TASK-037 스토어 스크린샷 6장과 그래픽 이미지
+- **머지**: 2026-11-16 12:25 KST에 main에 머지함(`2c68978`).
+  - `64ecbe8`의 검사 12개가 모두 1차 시도에서 통과: CI [43794389185](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43794389185)(JVM 시험과 앱 화면 시험, 디버그·릴리즈 APK), 기기 스크립트 확인 [43794389224](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43794389224)(API 34·36), 업데이트 확인 [43794389245](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43794389245)(옛 빌드 DidITake에서 필받음으로), 릴리즈 변형 [43794389203](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43794389203), 회귀 [43794389181](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43794389181), 화면 확인 [43794389361](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43794389361)과 2부 [43794389171](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43794389171), 둘러보기 [43794389204](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43794389204), 알림 [43794389270](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43794389270)(API 26·30·34·36), 위젯 크기 [43794389265](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43794389265), 접근성 [43794389314](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43794389314), 에뮬레이터 확인 [43794389228](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43794389228)
+  - 첫 커밋 `a80736e`에서는 기기 스크립트 확인 API 36만 실패했음(위 '한 일'의 PR 검사에서 고친 것). 고친 뒤 API 36에서 첫 위젯 놓기(BUG-004 첫 위젯), 위젯 탭, 기록 지연 단계가 모두 통과함(작업 로그)
 
 ### TASK-035 끝: 앱 설정의 방침 링크 ([PR #42](https://github.com/judangbang-ops/pillbadeum_release/pull/42))
 

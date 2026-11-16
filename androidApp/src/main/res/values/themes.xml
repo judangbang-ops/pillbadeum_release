@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        The app's window (BUG-006). Every screen is white (Ui.Surface), so the status bar is white with dark icons.
+        From Android 15 the app is drawn edge to edge under a transparent status bar (targetSdk 35 and later), and the
+        platform theme's light icons were white on white; only windowLightStatusBar counts there. Android 8.1 and later
+        also get a white navigation bar with dark buttons (values-v27).
+    -->
+    <style name="Theme.Pillbadeum" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/white</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+
+    <!--
+        SCR-002, the widget's person picker: translucent so that nothing shows while it decides (AndroidManifest.xml).
+        Up to Android 14 the system draws its own dark bars over it. From Android 15 its white screen is under the bars,
+        which get dark icons there (values-v35).
+    -->
+    <style name="Theme.Pillbadeum.Pick" parent="@android:style/Theme.Translucent.NoTitleBar" />
+</resources>

@@ -1,0 +1,132 @@
+# Play 스토어 휴대전화 스크린샷(TASK-037)과 런처의 앱 이름·아이콘 캡처(TASK-045)를 에뮬레이터에서 예시 데이터로 찍음.
+# 흐름과 이유는 scripts/emulator/store_shots.py 첫 주석. 스토어 규격(9:16, 1080×1920 이상, 긴 변이 짧은 변의 두 배 이하)에
+# 맞추려고 Pixel 2(1080×1920) 기기 정의로 AVD를 만듦. 다른 확인은 Pixel 5(1080×2340)를 씀.
+#
+# - 이 스크립트·워크플로를 바꾼 PR과 수동 실행에서만 돎 (약 30분, 무료 분 한도).
+#   PR에 다시 푸시할 때는 그 푸시가 아래 paths를 바꿨을 때만 돎(gate 작업, .github/scripts/push_gate.py)
+# - 서명 키·비밀값을 쓰지 않음. 디버그 APK로 찍음(디버그 수신기로 예시 항목과 지난 기록을 만들고 DB를 root로 읽음).
+#   화면은 릴리즈 빌드와 같음(디버그 빌드에만 있는 것은 그 수신기뿐)
+# - 아티팩트의 store-N-*.png가 찍은 그대로의 화면. 저장소의 24-bit PNG와 그래픽 이미지는 이 아티팩트로
+#   scripts/release/store_images.py가 만듦 (docs/release/store-listing.md 4.3·4.4)
+name: 스토어 스크린샷
+
+on:
+  pull_request:
+    paths:
+      - scripts/emulator/store_shots.py
+      # store_shots.py가 쓰는 도우미(화면 덤프·탭·위젯 놓기와 크기·시계·알림·DB 읽기). 바꾸면 다시 찍음
+      - scripts/emulator/explore.py
+      - scripts/emulator/backup_restore_check.py
+      - scripts/emulator/release_check.py
+      - scripts/emulator/reminder_check.py
+      - scripts/emulator/screens_check.py
+      - scripts/emulator/screens2_check.py
+      - scripts/emulator/widget_size_check.py
+      - scripts/emulator/emulator_boot.py
+      - androidApp/src/debug/**
+      - .github/actions/android-emulator/**
+      - .github/scripts/push_gate.py
+      - .github/workflows/store-shots.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: store-shots-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    # 화면 확인(screens.yml)의 gate와 같음. 경로는 위 on.pull_request.paths와 같게 둠. 수동 실행에서는 건너뜀
+    name: 이번 푸시가 바꾼 파일
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read # 지난 실행을 읽음
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - id: gate
+        env:
+          GATE_ACTION: ${{ github.event.action }}
+          GATE_AFTER: ${{ github.event.after }}
+          GATE_JOB: "스토어 스크린샷 (API"
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 .github/scripts/push_gate.py
+          scripts/emulator/store_shots.py
+          scripts/emulator/explore.py
+          scripts/emulator/backup_restore_check.py
+          scripts/emulator/release_check.py
+          scripts/emulator/reminder_check.py
+          scripts/emulator/screens_check.py
+          scripts/emulator/screens2_check.py
+          scripts/emulator/widget_size_check.py
+          scripts/emulator/emulator_boot.py
+          androidApp/src/debug/
+          .github/actions/android-emulator/
+          .github/scripts/push_gate.py
+          .github/workflows/store-shots.yml
+
+  shots:
+    name: 스토어 스크린샷 (API 34, Pixel 2)
+    needs: gate
+    # gate가 run=false라고 할 때만 건너뜀. 수동 실행(gate 건너뜀)이나 gate 실패 때는 돎
+    if: ${{ !cancelled() && needs.gate.outputs.run != 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: gradle/actions/wrapper-validation@0723195856401067f7a2779048b490ace7a47d7c # v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: 디버그 APK (./gradlew :androidApp:assembleDebug)
+        run: |
+          ./gradlew :androidApp:assembleDebug
+          # 에뮬레이터와 CPU·메모리를 나누지 않게 Gradle 데몬을 끔 (2026-11-12 둘러보기 5회차의 시스템 ANR)
+          ./gradlew --stop
+
+      # KVM, 시스템 이미지, AVD를 준비하고 부팅을 기다림 (다른 확인과 같은 액션, 기기 정의만 Pixel 2)
+      - uses: ./.github/actions/android-emulator
+        with:
+          api: "34"
+          cores: "4"
+          device: pixel_2
+
+      - name: 스토어 스크린샷 (scripts/emulator/store_shots.py)
+        run: |
+          python3 scripts/emulator/store_shots.py \
+            --apk androidApp/build/outputs/apk/debug/androidApp-debug.apk \
+            --out "$RUNNER_TEMP/store"
+
+      - name: 결과 표
+        if: ${{ !cancelled() }}
+        run: |
+          report="$RUNNER_TEMP/store/report.md"
+          if [ -f "$report" ]; then cat "$report" >> "$GITHUB_STEP_SUMMARY"; else echo "보고서 없음" >> "$GITHUB_STEP_SUMMARY"; fi
+          cp "$RUNNER_TEMP/emulator.log" "$RUNNER_TEMP/store/" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() }}
+        with:
+          name: store-shots-api34
+          path: ${{ runner.temp }}/store/
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: ignore

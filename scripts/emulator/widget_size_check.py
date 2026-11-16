@@ -391,7 +391,8 @@ def swipe(x1: int, y1: int, x2: int, y2: int, ms: int = 1500) -> None:
 
 
 HANDLE_INSET = 14  # px from the widget's edge to a handle's middle in the API 26 and 30 captures (run 43608286853)
-SIDES = {"bottom": "아래", "right": "오른쪽"}
+# top and left: the store screenshots (store_shots.py) grow a widget that sits on the grid's last row
+SIDES = {"bottom": "아래", "right": "오른쪽", "top": "위", "left": "왼쪽"}
 # Launcher3 reconfigurable_widget_education_tip (English system), shown once over the first resize frame of a
 # reconfigurable widget. While it is open it is the launcher's top floating view, and its touch handling closes it on
 # the next touch without passing the touch on (ArrowTipView), so a handle drag then does nothing (API 36)
@@ -411,7 +412,8 @@ def frame_handles(nodes: list[Node], host: Node) -> tuple[dict[str, tuple[int, i
                 found[side] = handle.center
         return found, True
     x1, y1, x2, y2 = host.bounds
-    return {"bottom": ((x1 + x2) // 2, y2 - HANDLE_INSET), "right": (x2 - HANDLE_INSET, (y1 + y2) // 2)}, False
+    return {"bottom": ((x1 + x2) // 2, y2 - HANDLE_INSET), "right": (x2 - HANDLE_INSET, (y1 + y2) // 2),
+            "top": ((x1 + x2) // 2, y1 + HANDLE_INSET), "left": (x1 + HANDLE_INSET, (y1 + y2) // 2)}, False
 
 
 def resize(r: Report, tag: str, side: str, target) -> str:

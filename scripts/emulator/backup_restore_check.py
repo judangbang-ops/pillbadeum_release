@@ -235,6 +235,10 @@ ANR_TITLE = "isn't responding"
 # app_name in androidApp/src/main/res/values/strings.xml, and the name builds before TASK-045 (2026-11-16) had, which
 # upgrade_check.py installs as its old build
 APP_LABELS = ("필받음", "DidITake")
+# The dialog's [Wait] button and title by id, for a phone not in English (store_shots.py runs in Korean, where the
+# title reads '…이(가) 응답하지 않음' and the button '대기')
+ANR_WAIT_ID = "android:id/aerr_wait"
+ALERT_TITLE_ID = "android:id/alertTitle"
 CLOSED_DIALOGS: list[str] = []
 
 # Where the screen dump is written. Not /sdcard: before the first unlock after a reboot the shared storage is still
@@ -269,9 +273,12 @@ def dump_ui(tries: int = 25) -> list[Node]:
             nodes.append(Node(el.get("text", "").replace("\u2060", ""), el.get("content-desc", ""), el.get("class", ""),
                               tuple(int(v) for v in m.groups()), el.get("resource-id", "")))
         title = next((n.text for n in nodes if ANR_TITLE in n.text), None)
+        wait = (next((n for n in nodes if n.rid == ANR_WAIT_ID), None)
+                or next((n for n in nodes if n.text == "Wait"), None))
+        if title is None and wait is not None and wait.rid == ANR_WAIT_ID:
+            title = next((n.text for n in nodes if n.rid == ALERT_TITLE_ID and n.text), "ANR dialog")
         if title is not None and (any(label in title for label in APP_LABELS) or PKG in title):
             raise RuntimeError(f"the app is not responding (ANR dialog): {title}")
-        wait = next((n for n in nodes if n.text == "Wait"), None)
         if title is None or wait is None:
             return nodes
         CLOSED_DIALOGS.append(title)

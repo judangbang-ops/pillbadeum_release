@@ -706,9 +706,6 @@ object Labels {
     /** The medical notice of the settings (REQ-036, SPEC-036). */
     const val SETTINGS_MEDICAL: String = "의료기기가 아니며 질병을 진단·치료·예방하지 않아요."
 
-    /** `개인정보처리방침` before its address is decided (TASK-035). */
-    const val NOT_READY: String = "준비 중"
-
     /** No browser could open the privacy policy: its address instead (SPEC-036). */
     fun noBrowser(url: String): String = "브라우저를 열 수 없어요. 주소: $url"
 

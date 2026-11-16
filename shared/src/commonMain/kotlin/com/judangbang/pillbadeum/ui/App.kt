@@ -152,7 +152,7 @@ internal sealed interface Route {
  * @param onDataChanged called after every write (record, cancel, item, person, restore notice, settings) so the
  *   platform can redraw its widgets and plan its reminders again.
  * @param phone what the settings screen and the intro read from and ask of the phone (SCR-009, TASK-020; SCR-005, TASK-022).
- * @param privacyPolicyUrl the privacy policy's address, null until TASK-035 decides it (REQ-063).
+ * @param privacyPolicyUrl the privacy policy's address (REQ-063); tests pass another one.
  * @param refreshKey bump to read the database again (on resume: the widget may have recorded meanwhile).
  * @param homeRequests bump to show the first screen (a notification or the widget opened the app, R3 memo); the intro
  *   stays until it is finished.
@@ -163,7 +163,7 @@ fun App(
     open: suspend () -> DidITakeCore,
     onDataChanged: suspend () -> Unit,
     phone: Phone,
-    privacyPolicyUrl: String? = PRIVACY_POLICY_URL,
+    privacyPolicyUrl: String = PRIVACY_POLICY_URL,
     refreshKey: Int = 0,
     homeRequests: Int = 0,
     backHandler: @Composable (enabled: Boolean, onBack: () -> Unit) -> Unit = { _, _ -> },

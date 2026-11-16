@@ -116,7 +116,7 @@ class SettingsScreenTest {
         assertEquals("SCR-009#empty: no archived row", 0, compose.onAllNodesWithContentDescription("보관한 항목", substring = true).fetchSemanticsNodes().size)
         compose.onNodeWithText(Labels.BACKUP_ON).assertExists()
         row("버전, 0.1.0")
-        row("개인정보처리방침, ${Labels.NOT_READY}")
+        row("개인정보처리방침, 브라우저에서 열기")
         compose.onNodeWithText(Labels.SETTINGS_MEDICAL).assertExists()
         compose.assertTargetsAtLeast48dp()
         save("settings-normal")

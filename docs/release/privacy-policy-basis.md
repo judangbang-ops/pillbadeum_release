@@ -144,6 +144,6 @@
 ## 5. 공개한 뒤 할 일
 
 - 끝남: 방침 파일의 `{ }` 칸을 채우고 맨 위 초안 상자를 지우고 시행일을 적음(2026-11-16 결정 반영 PR)
-- 앱: `shared/src/commonMain/kotlin/com/judangbang/pillbadeum/ui/SettingsScreen.kt`의 `PRIVACY_POLICY_URL`에 주소를 넣고, 앱 시험 `SettingsScreenTest`의 '준비 중' 줄을 링크 줄로 고침(TC-036). 다음 PR
+- 끝남: `shared/src/commonMain/kotlin/com/judangbang/pillbadeum/ui/SettingsScreen.kt`의 `PRIVACY_POLICY_URL`에 주소를 넣고, 앱 시험 `SettingsScreenTest`의 '준비 중' 줄을 링크 줄로 고침(TC-036, PR #42). jvm `PrivacyPolicyUrlTest`가 이 파일이 그 주소에 있는지 봄. **이 파일을 옮기거나 이름을 바꾸지 않음**: 앱에 들어간 주소는 업데이트 없이 못 바꿈
 - Play Console '앱 콘텐츠'의 개인정보처리방침 칸(TASK-036, TC-075)
-- wbs TASK-035 **끝남**, 진행 기록: 앱 주소를 넣은 PR이 합쳐진 뒤
+- 끝남: wbs TASK-035 **끝남**과 진행 기록(PR #42)

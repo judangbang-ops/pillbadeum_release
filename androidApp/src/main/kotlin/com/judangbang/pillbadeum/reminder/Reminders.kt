@@ -14,7 +14,10 @@ import com.judangbang.pillbadeum.usecase.ReminderNotice
 import com.judangbang.pillbadeum.usecase.ShownReminder
 import com.judangbang.pillbadeum.usecase.SnoozeResult
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.TimeZone
@@ -33,6 +36,10 @@ object Reminders {
 
     /** How long "이미 기록됨 (08:02)" stays before it closes (SCR-003#already; Claude default). */
     private val RESULT_TIMEOUT = 10.seconds
+
+    /** How long a collect waits for the system to list its reminders ([awaitListed]), and how often it looks. */
+    private val LIST_WAIT = 2.seconds
+    private val LIST_POLL = 25.milliseconds
 
     private val lock = Mutex()
 
@@ -60,8 +67,11 @@ object Reminders {
         val collected = step(context, "collect") { core ->
             val run = core.planReminders.fire(alarmRang)
             ReminderAlarm.arm(context, run.nextAlarmAt)
-            if (run.notices.isNotEmpty()) show(context, core, run.notices)
+            // The notifications on screen are put in line before the new reminders go up, not after (BUG-007): a review
+            // after them still read the last window's reminder of an item the system had not replaced yet, and its
+            // cancel took the new reminder of that item as well.
             syncLocked(context, core)
+            if (run.notices.isNotEmpty()) show(context, core, run.notices)
         }
         if (!collected) ReminderAlarm.retry(context, context.container.now(), attempt, alarmRang)
     }
@@ -111,6 +121,30 @@ object Reminders {
         val contents = notices.mapNotNull { ReminderLabels.content(board, it, zone) }
         ReminderNotifications.postDoses(context, contents, core.settings.showNamesOnLock(), board.now)
         Log.i(TAG, "${contents.size} reminder(s) shown")
+        awaitListed(context, contents)
+    }
+
+    /**
+     * Keeps the lock until the system lists the reminders just shown, at most [LIST_WAIT] (BUG-007). Android lists a
+     * notification a moment after `notify` (while its notification assistant looks at it, up to about 200 ms), and a
+     * cancel of the same tag and id in that moment takes the new one away too ("Cannot find enqueued record" in the
+     * system log). The next step reads the list before it cancels anything: the second alarm of the inexact path, which
+     * rings with the first ([ReminderAlarm]), or a write right after. Read too early, the list does not have the new
+     * reminders yet, so that step takes "복용 시간이에요" off as if none were left, and it may still have an old reminder
+     * of the same item, whose cancel takes the new one.
+     */
+    private suspend fun awaitListed(context: Context, contents: List<ReminderContent>) {
+        val wanted = contents.mapTo(HashSet()) { it.intakeId to it.periodKey }
+        val deadline = TimeSource.Monotonic.markNow() + LIST_WAIT
+        while (true) {
+            val listed = ReminderNotifications.shownDoses(context).mapTo(HashSet()) { it.content.intakeId to it.content.periodKey }
+            if (listed.containsAll(wanted)) return
+            if (deadline.hasPassedNow()) {
+                Log.w(TAG, "${(wanted - listed).size} reminder(s) not listed by the system after $LIST_WAIT")
+                return
+            }
+            delay(LIST_POLL)
+        }
     }
 
     private suspend fun syncLocked(context: Context, core: DidITakeCore) {

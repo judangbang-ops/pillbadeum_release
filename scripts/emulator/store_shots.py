@@ -13,11 +13,13 @@ Flow:
       alarms allowed (appops), as a person does from the app's [허용하기]: without them the first screen opens with
       "알림이 늦을 수 있어요" (first run, 2026-11-16) and the reminder may ring minutes late.
    1. The app opened (the intro passed with [건너뛰기]) and the example items made by the debug receiver (SEED), in
-      this order: 나 비타민D (매일 점심, 알림 12:30); 엄마 (주황) 아침 혈압약 (매일 아침, 08:00), 저녁약 (매일 저녁, 19:00)
-      and 골다공증약 (주 1회 금요일, 09:00). Names on the lock screen on (NAMES_ON_LOCK, SPEC-034): with names hidden,
-      the default, a separate "복용 시간이에요" stands in for the reminders on the lock screen and shows in the shade too.
+      this order: 나 유산균 (매일 아침, 알림 08:00), 비타민D (매일 점심, 12:30) and 오메가3 (매일 저녁, 19:30); 엄마 (주황)
+      아침 혈압약 (매일 아침, 08:00), 저녁약 (매일 저녁, 19:00) and 골다공증약 (주 1회 금요일, 09:00). Six, so that the
+      widget's three rows are full (with four, the second run left a third of it empty). Names on the lock screen on
+      (NAMES_ON_LOCK, SPEC-034): with names hidden, the default, a separate "복용 시간이에요" stands in for the
+      reminders on the lock screen and shows in the shade too.
    2. The widget dragged from the launcher's widget list (its picture shows 필받음's row with the icon, TASK-045), 전체
-      picked, made as wide as the home screen and one row taller, so that its four tiles show two in a row. This
+      picked, made as wide as the home screen and one row taller, so that its six tiles show two in a row. This
       launcher has five columns, where four cells are 296 dp and the widget puts one tile in a row (WidgetLayout.plan);
       a phone with four columns gives a 4x2 widget that width. It lands on the grid's last row, so it grows upwards.
    3. The phone in Korean (persist.sys.locale and a reboot). The emulator gives the phone the computer's time zone
@@ -25,11 +27,11 @@ Flow:
       the app takes the clock going back (RR-81) and rings 비타민D's 12:30 reminder at 12:30, or when the alarm
       broadcast comes after 12:30.
    4. A month of history written by the debug receiver (RECORD) as SCR-007 writes a past day (see history()), and the
-      database counted against it. Day 0's 아침 혈압약 and 골다공증약 are among it, so that their reminders, which
-      the clock change and the alarm brought, go (N-13) and only 비타민D's is left in the shade.
+      database counted against it. Day 0's 유산균, 아침 혈압약 and 골다공증약 are among it: whatever reminder of
+      theirs the clock change brought goes (N-13), and only 비타민D's is left in the shade.
    5. System UI demo mode (clock, full battery and signal, no notification icons); other apps' notifications snoozed.
    6. Store 2: the notification shade with 비타민D's reminder and its three buttons. Its [먹었어] is then tapped.
-   7. Store 1: the home screen with the widget, 3 of the 4 taken. Store 3: the app's first screen (SCR-004). Store 4:
+   7. Store 1: the home screen with the widget, 4 of the 6 taken. Store 3: the app's first screen (SCR-004). Store 4:
       지난 기록 (SCR-008). Store 5: 아침 혈압약's form (SCR-006), scrolled to "누구 약인가요?" so that the reminder
       rows (알림 받기, 첫 알림 시각) show. Store 6: the widget with text at 200%.
    8. The app list with 필받음's icon (TASK-045). Text back at 100%, demo mode off.
@@ -90,8 +92,9 @@ ZONE = ZoneInfo("Asia/Seoul")
 SIZE = (1080, 1920)  # the Pixel 2 the workflow makes
 MOM = "엄마"  # the second person; the first is 나 (ManagePeople.DEFAULT_PERSON_NAME)
 MOM_COLOR = 1  # PersonColors.PALETTE[1], 주황
-VITAMIN, BP, EVENING, BONE = "비타민D", "아침 혈압약", "저녁약", "골다공증약"
-ITEMS = (VITAMIN, BP, EVENING, BONE)
+PROBIOTIC, VITAMIN, OMEGA = "유산균", "비타민D", "오메가3"  # 나's
+BP, EVENING, BONE = "아침 혈압약", "저녁약", "골다공증약"  # 엄마's
+ITEMS = (PROBIOTIC, VITAMIN, OMEGA, BP, EVENING, BONE)
 WEEKDAY = "FRIDAY"  # 골다공증약's day; day 0 is one
 DAYS = 31  # days of history before day 0
 BATCH = 24  # RECORD entries per broadcast
@@ -110,15 +113,20 @@ def day_zero(today: date) -> date:
 def history(day0: date) -> list[str]:
     """RECORD entries (`<name>|<yyyy-MM-ddTHH:mm>|<kind>`), oldest first, the same in every run (random.Random(37)):
 
-    - 아침 혈압약 07:40~08:25 (day -31 09:10, once the app was set up); 건너뜀 on day -11, nothing on day -20
+    - 유산균 07:50~08:40; 건너뜀 on days -1 and -13, nothing on days -6 and -19
     - 비타민D 12:10~13:20; nothing on days -4, -17 and -23
+    - 오메가3 19:20~20:30; 건너뜀 on day -9, nothing on day -25
+    - 아침 혈압약 07:40~08:25; 건너뜀 on day -11, nothing on day -20
     - 저녁약 18:50~19:50; 건너뜀 on days -2 and -15
+    - on day -31 the morning items at 10:05 and 10:07, once the app was set up (a dose before an item was made has no
+      cell)
     - 골다공증약, whose week runs from Friday to Thursday: day -31 (a Tuesday, the first week) 10:00, the Fridays -28,
       -21 and -7 at 09:00~09:40, and for the week of day -14 the Saturday after, 10:30
-    - day 0: 아침 혈압약 08:05 and 골다공증약 09:12. 비타민D comes from its reminder's [먹었어]; 저녁약 is still to
-      come
+    - day 0: 유산균 08:10, 아침 혈압약 08:05 and 골다공증약 09:12. 비타민D comes from its reminder's [먹었어];
+      오메가3 and 저녁약 are still to come
 
-    A day with nothing shows as 빠짐 in 지난 기록; a 건너뜀 of a past day is stored at the day's start (P-3)."""
+    A day with nothing shows as 빠짐 in 지난 기록; a 건너뜀 of a past day is stored at the day's start (P-3). 유산균's
+    건너뜀 on day -1 shows on 지난 기록's first screen; it leaves 유산균's tile on day 0 as it is (taken)."""
     rnd = random.Random(37)
 
     def between(d: date, start: str, end: str) -> str:
@@ -130,14 +138,24 @@ def history(day0: date) -> list[str]:
     out = []
     for k in range(DAYS, 0, -1):
         d = day0 - timedelta(days=k)
+        if k in (1, 13):
+            out.append(f"{PROBIOTIC}|{d.isoformat()}T08:00|SKIPPED")
+        elif k == DAYS:
+            out.append(f"{PROBIOTIC}|{d.isoformat()}T10:07|TAKEN")
+        elif k not in (6, 19):
+            out.append(f"{PROBIOTIC}|{between(d, '07:50', '08:40')}|TAKEN")
         if k == 11:
             out.append(f"{BP}|{d.isoformat()}T08:00|SKIPPED")
         elif k == DAYS:
-            out.append(f"{BP}|{d.isoformat()}T09:10|TAKEN")
+            out.append(f"{BP}|{d.isoformat()}T10:05|TAKEN")
         elif k != 20:
             out.append(f"{BP}|{between(d, '07:40', '08:25')}|TAKEN")
         if k not in (4, 17, 23):
             out.append(f"{VITAMIN}|{between(d, '12:10', '13:20')}|TAKEN")
+        if k == 9:
+            out.append(f"{OMEGA}|{d.isoformat()}T19:30|SKIPPED")
+        elif k != 25:
+            out.append(f"{OMEGA}|{between(d, '19:20', '20:30')}|TAKEN")
         if k in (2, 15):
             out.append(f"{EVENING}|{d.isoformat()}T19:00|SKIPPED")
         else:
@@ -145,6 +163,7 @@ def history(day0: date) -> list[str]:
     for k, at in ((31, "10:00"), (28, None), (21, None), (13, "10:30"), (7, None)):
         d = day0 - timedelta(days=k)
         out.append(f"{BONE}|{d.isoformat()}T{at}|TAKEN" if at else f"{BONE}|{between(d, '09:00', '09:40')}|TAKEN")
+    out.append(f"{PROBIOTIC}|{day0.isoformat()}T08:10|TAKEN")
     out.append(f"{BP}|{day0.isoformat()}T08:05|TAKEN")
     out.append(f"{BONE}|{day0.isoformat()}T09:12|TAKEN")
     return out
@@ -248,6 +267,16 @@ def reminder_button(name: str, label: str, tries: int = 4) -> Node | None:
     return None
 
 
+def on_screen(nodes: list[Node]) -> list[str]:
+    """The example items whose tiles the app's first screen shows. Six tiles take three rows, and the third is at the
+    screen's foot, so it may be out of the screen dump."""
+    return [name for name in ITEMS if any(n.desc.split(", ")[0].endswith(name) for n in nodes)]
+
+
+def active_items() -> list[str]:
+    return sorted(str(row[0]) for row in query("SELECT name FROM intake WHERE archived_at IS NULL"))
+
+
 def in_widget(nodes: list[Node]) -> list[str]:
     """The example items whose tiles show on the widget (a tile reads `엄마 아침 혈압약, …`)."""
     host = widget_host(nodes)
@@ -308,7 +337,9 @@ def run(r: Report, steps: Steps, apk: Path) -> None:
     def items() -> str:
         launch_app()
         ids = [
+            seed_item(PROBIOTIC, "08:00", slot="MORNING"),
             seed_item(VITAMIN, "12:30", slot="NOON"),
+            seed_item(OMEGA, "19:30", slot="EVENING"),
             seed_item(BP, "08:00", slot="MORNING", person=MOM),
             seed_item(EVENING, "19:00", slot="EVENING", person=MOM),
             seed_item(BONE, "09:00", weekly=WEEKDAY, person=MOM),
@@ -316,13 +347,16 @@ def run(r: Report, steps: Steps, apk: Path) -> None:
         names_on_lock(True)
         go_home()
         launch_app()
-        nodes = wait_screen(lambda ns: all(any(n.desc.split(", ")[0].endswith(i) for n in ns) for i in ITEMS), 20)
-        shown = [i for i in ITEMS if any(n.desc.split(", ")[0].endswith(i) for n in nodes)]
-        if len(shown) != len(ITEMS):
+        nodes = wait_screen(lambda ns: len(on_screen(ns)) == len(ITEMS), 20)
+        shown = on_screen(nodes)
+        made = active_items()
+        if made != sorted(ITEMS):
+            raise RuntimeError(f"the database has {made}")
+        if len(shown) < 4:
             raise RuntimeError(f"the first screen shows {shown}")
         return f"{len(ids)}개 만듦, 첫 화면에 {', '.join(shown)}"
 
-    if not steps("1. 예시 항목 (디버그 수신기 SEED)", "나 1개·엄마 3개, 첫 화면에 넷 모두, 잠금 화면 이름 표시", items):
+    if not steps("1. 예시 항목 (디버그 수신기 SEED)", "나 3개·엄마 3개가 DB에, 첫 화면에 넷 이상, 잠금 화면 이름 표시", items):
         return
 
     # 2. The widget
@@ -341,7 +375,7 @@ def run(r: Report, steps: Steps, apk: Path) -> None:
             raise RuntimeError(f"the widget is not as wide as the home screen: {host.bounds if host else None}")
         return f"대상자 고르기 {'열림' if picker else '안 열림'}, {wide}, {tall}, 위젯 {host.bounds}, 칸 {', '.join(shown)}"
 
-    steps("2. 위젯 놓기, 화면 폭만큼·한 줄 더 (TASK-045 위젯 목록)", "전체를 고른 위젯에 칸 넷, 위젯 폭이 화면의 4/5 이상",
+    steps("2. 위젯 놓기, 화면 폭만큼·한 줄 더 (TASK-045 위젯 목록)", "전체를 고른 위젯에 칸 여섯, 위젯 폭이 화면의 4/5 이상",
           widget)
 
     # 3. Korean, day 0
@@ -428,20 +462,20 @@ def run(r: Report, steps: Steps, apk: Path) -> None:
         store(1, "widget")
         return f"칸 {', '.join(shown)}; 위젯 글 {' / '.join(texts)}"
 
-    steps("7. 스토어 1: 홈 화면 위젯", "칸 넷, 셋 먹음", home_widget)
+    steps("7. 스토어 1: 홈 화면 위젯", "칸 여섯, 넷 먹음", home_widget)
 
     def first_screen() -> str:
         go_home()
         launch_app()
         to_home()
-        nodes = wait_screen(lambda ns: all(any(n.desc.split(", ")[0].endswith(i) for n in ns) for i in ITEMS), 20)
-        missing = [i for i in ITEMS if not any(n.desc.split(", ")[0].endswith(i) for n in nodes)]
-        if missing:
-            raise RuntimeError(f"the first screen lacks {missing}")
+        nodes = wait_screen(lambda ns: len(on_screen(ns)) == len(ITEMS), 20)
+        shown = on_screen(nodes)
+        if len(shown) < 4:
+            raise RuntimeError(f"the first screen shows {shown}")
         store(3, "today")
-        return "항목 넷"
+        return f"보이는 항목 {', '.join(shown)}"
 
-    steps("8. 스토어 3: 앱 첫 화면 (SCR-004)", "오늘과 이번 주, 항목 넷", first_screen)
+    steps("8. 스토어 3: 앱 첫 화면 (SCR-004)", "오늘의 항목, 두 줄 이상", first_screen)
 
     def past() -> str:
         open_history()
@@ -474,8 +508,9 @@ def run(r: Report, steps: Steps, apk: Path) -> None:
             sh(f"input swipe {x} {scroller.bounds[3] - 40} {x} {scroller.bounds[3] - 40 - lift} 2000")
             time.sleep(2)
             nodes = dump_ui()
+        # 알림 받기 is read from its switch row and 첫 알림 시각 from its time button (`첫 알림 시각, 8시`)
         rows = [t for t in ("누구 약인가요?", "얼마나 자주?", "언제 먹나요?", "알림 받기", "첫 알림 시각")
-                if any(n.text == t for n in nodes)]
+                if any(n.text == t or n.desc.split(", ")[0] == t for n in nodes)]
         if "알림 받기" not in rows:
             raise RuntimeError(f"the reminder rows are not in view: {rows}")
         store(5, "form")

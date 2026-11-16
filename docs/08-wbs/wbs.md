@@ -113,6 +113,7 @@
 - R2가 R3에 넘긴 것: 알림 본문 첫 줄과 알림 시각의 기기 시간대(`ReminderLabels`가 위젯 줄과 같은 `Labels`를 씀), 알림을 누르면 여는 화면을 `MainActivity.homeIntent`로. 둘 다 R3 PR #20의 `c70ea5d`에서 함
 - BUG-005 위젯의 기본 크기(REQ-026): [PR #31](https://github.com/judangbang-ops/pillbadeum_release/pull/31). 접근성 점검(TASK-030)이 찾은, 폭 360dp의 Pixel 런처가 위젯을 4×3으로 놓는 것을 고침. 에뮬레이터 위젯 크기 확인 `scripts/emulator/widget_size_check.py`(`widget-size.yml`, API 34·36·30·26, 기본 폭과 폭 360dp)를 더함: 첫 실행 안내의 [위젯 추가]로 놓고 런처 추가 창의 크기 글, 놓인 칸, 크기 조절 틀로 한 줄 늘린 칸과 가장 작게 줄인 칸을 읽고, 런처의 세로·가로 칸으로 Launcher3 규칙을 계산해 견줌. 첫 실행(고치기 전 270×110dp)에서 잰 칸으로 높이 102dp와 옛 런처용 너비 230dp를 골라, 위젯 정의를 Android 12 이상(`res/xml-v31`, `targetCell` 4×2)과 8~11(`res/xml`)로 나눔. `5836d10`의 [실행 43615451592](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43615451592)에서 네 API의 두 폭 모두 4×2로 놓이고 4×2보다 줄지 않음. 렌더 시험에 런처가 준 가장 작은 세로 4×2 둘(Android 11의 249×189dp 글자 100%·130%, Android 14 이상의 321×195dp 글자 200%)을 더함. 남은 것: Galaxy(One UI 런처)는 TASK-052. 가로로 돌린 홈 화면은 확인하지 않음(시험 계획 7장의 PR #31 줄)
 - TASK-054 BUG-004 (2026-11-16 확인): 고침은 [PR #19](https://github.com/judangbang-ops/pillbadeum_release/pull/19)의 `RescheduleReceiverKeeper`(앱이 시작할 때 `AppContainer`가 부름). 끝난 조건의 에뮬레이터 몫은 채움: 릴리즈 변형 확인(`release_check.py`) API 34의 'BUG-004 첫 위젯 전 RescheduleReceiver' 검사가 [43360186991](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43360186991)(`7043925`)에서 처음 통과했고, 가장 최근 [43818403884](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43818403884)(`1cf4e34`)에서도 '켜짐'으로 통과하고 놓은 위젯에 항목(TestA)이 보임. [시험 계획](../12-qa/test-plan.md) BUG-004와 [갤럭시 확인 순서](../07-qa/device-check.md) 2장 4번(`bug004`)대로 실기기에서 본 뒤 BUG-004를 닫고 끝남으로 함
+- TASK-032·052·054 실기기 방법 (2026-11-16): 시험용 갤럭시가 없어서(동희님 18:06 KST "나 갤럭시 없는데 어떻게 하지?"), 가족·지인 세 분이 자기 갤럭시에 앱 서명 키 개인 APK를 깔고 [테스터 안내](../07-qa/galaxy-testers.md)대로 손으로 봄(동희님 18:15 KST 프로젝트 채팅 "apk로 해보라할거야"). 테스터 방법으로 못 보는 것(RR-13, RR-29, logcat·알람 목록처럼 adb로만 읽는 값)은 안내 1장에 적고, 갤럭시를 PC에 꽂을 수 있게 되면 [갤럭시 확인 순서](../07-qa/device-check.md)대로 봄. 결과는 `docs/07-qa/<첫 결과 날짜>-galaxy/report.md`
 
 ### 1.4 앱 화면
 
@@ -281,7 +282,7 @@ flowchart LR
   - TASK-035: 개인정보처리방침을 올릴 공개 위치와 공개 승인 (동희님) → 2026-11-16 이 저장소의 파일 주소로 정하고 공개함
   - TASK-049: Play 서비스 계정 키를 Secrets에 넣는 승인 (동희님)
   - TASK-002·TASK-049의 보호 수준 (2026-11-12 검토 B1, 결정 Q17): (가) 지금 요금제를 받아들임. 서명은 `pull_request`를 받지 않는 `release.yml`에서만 하고, TASK-049는 하지 않고 Play 업로드는 손으로 함. (나) GitHub 유료 요금제로 올려 환경 비밀값을 태그로 묶은 뒤 TASK-049를 함. Claude 추천 (가): 업로드 키는 Play에서 다시 만들 수 있고 앱 서명 키는 GitHub에 없어 지금 피해가 한정됨. 반론: 배포 파이프라인 끝의 업로드 한 단계가 손으로 남음. TASK-049 전에 동희님이 고름
-  - TASK-047의 가족 폰: Claude 제안은 TASK-050 뒤. 계정(TASK-048)이 늦어져 더 일찍 깔기로 하시면, 적어도 TASK-002의 키 확인(11:33에 RSA 4096 확인함)과 TASK-051을 마친 뒤 깖 (2026-11-12 검토 A1)
+  - TASK-047의 가족 폰: Claude 제안은 TASK-050 뒤. 계정(TASK-048)이 늦어져 더 일찍 깔기로 하시면, 적어도 TASK-002의 키 확인(11:33에 RSA 4096 확인함)과 TASK-051을 마친 뒤 깖 (2026-11-12 검토 A1) → 2026-11-16 18:15 KST 동희님이 프로젝트 채팅에서 가족·지인 세 분께 APK로 해 보게 하기로 함("apk로 해보라할거야"). Claude가 앱 서명 키 개인 APK로 고름(고친 빌드와 Play 버전을 덮어 깔 수 있음). 두 조건은 끝나 있음. 남는 위험: TASK-050에서 키를 못 넘기면 그 폰은 지우고 다시 깖([테스터 안내](../07-qa/galaxy-testers.md))
   - 결정 Q15의 남은 부분(주 1회 묻기): 가쟈누님과 정함. 넣기로 하면 TASK-004·TASK-041 뒤에 작업을 더하고 보충 6장을 고침
 - 사람의 손이 필요한 줄: TASK-032·TASK-036·TASK-038·TASK-039·TASK-047·TASK-048·TASK-050·TASK-052(동희님)
 

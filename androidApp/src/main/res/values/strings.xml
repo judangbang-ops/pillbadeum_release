@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">DidITake</string>
-    <string name="widget_label">DidITake</string>
+    <string name="app_name">필받음</string>
+    <string name="widget_label">필받음</string>
 </resources>

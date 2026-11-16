@@ -10,6 +10,22 @@
 
 ## 2026-11-16
 
+### TASK-045 앱 이름 필받음과 아이콘 ([PR #43](https://github.com/judangbang-ops/pillbadeum_release/pull/43))
+
+- **목표**: 2026-11-16 정하신 앱 이름 '필받음'을 앱에 넣고, 런처 아이콘과 스토어 512px 아이콘을 만듦(TASK-045, REQ-060). 스토어 스크린샷(TASK-037)이 이름이 든 화면을 찍을 수 있게 함
+- **한 일**
+  - 이름: `strings.xml`의 `app_name`·`widget_label`과 `Labels.APP_NAME`을 '필받음'으로. 런처·위젯 목록·알림의 앱 이름, 위젯 머리글('필받음 · 11/16'), 첫 실행 안내("필받음은 기록 도구예요.", 09 그대로가 됨), 배터리·설정 안내("필받음을 찾아")가 바뀜. 조사는 이미 이름 끝 글자에 맞춰 붙음(`withTopic`·`withObject`)
+  - 런처 아이콘: 적응형 아이콘 `mipmap-anydpi-v26/ic_launcher.xml`(바탕 색 #2B59C3, 앞 층, Android 13 이상 테마 아이콘용 단색 층)과 매니페스트 `android:icon`. minSdk 26이라 비트맵은 두지 않음. 앞 층은 비스듬한 캡슐과 흰 원 안의 체크이고, 캡슐은 체크 둘레를 잘라(클립 경로) 바탕색 틈으로 떨어뜨림. 모두 안전 원(지름 66dp) 안
+  - 스토어 아이콘: `docs/release/listing/ko-KR/images/icon.png`(512×512, 32-bit PNG, 14KB). 앱의 두 벡터 파일을 SVG로 옮겨 보이는 72dp를 Chromium으로 그림. 옮긴 SVG로 원·둥근 네모 48·192px와 밝은·어두운 테마 아이콘도 그려 봄
+  - 에뮬레이터 스크립트: 런처의 위젯 목록에서 앱을 이름으로 찾는데 `adb shell input text`는 한글을 못 침. 라틴 글자 이름은 지금처럼 검색하고, 한글 이름은 목록을 위에서부터 반 화면쯤씩 느린 밀기(1.5초)로 훑음(`release_check.drag_list`, 빠른 밀기는 목록이 튕겨 줄을 지나침). 목록이 더 움직이지 않으면 끝으로 봄. 위젯 미리 보기 아래의 위젯 이름(`widget_name`)은 앱 줄로 치지 않음
+  - 업데이트 확인(`upgrade_check.py`)의 옛 빌드는 이름이 DidITake라 `--old-label`로 그 이름을 넘기고, 워크플로가 옛 커밋의 `app_name`을 읽어 줌. ANR 창 판별은 두 이름을 다 봄
+  - PR 검사에서 고친 것: 기기 스크립트 확인 API 36([실행 43790874626](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43790874626), `a80736e`)이 첫 위젯을 놓지 못해 실패함(두 번 모두 'widget preview not on screen'). 저장된 덤프에서 '필받음' 줄이 위젯 목록 맨 끝(1492~1739px)이라 펼친 미리보기가 1783px부터 화면 아래 끝 2340px까지 잘려 있었고, 스크립트의 밀기로 올라오지 않았음. 미리보기는 다 보일 때만 잡았기 때문임. 다 보이는 것이 없으면 제스처 막대 위로 150px 이상 보이는 잘린 미리보기를 잡고 그 보이는 곳의 가운데를 길게 눌러 끌게 함(`release_check.widget_preview`, 사람도 보이는 곳을 누름). 두 덤프를 새 규칙에 넣어 (540, 2002)를 고르는 것을 확인. 같은 실행의 API 34는 통과
+  - jvm 시험의 기대 문구 셋(`StatusBoardTest` 머리글, `AccessNoticeTest` 배터리 문장, `WidgetLayoutTest` 머리글 낱말 잇기), 문서(화면 정의 SCR-005·004·009 문구와 6장, 요구 REQ-036 칸, wbs TASK-045 **진행**과 메모, 스토어 등록정보 1·4.4·9장, README)
+- **Claude가 정한 것 (바꾸실 수 있음)**: 아이콘 도형(후보 셋 중 캡슐과 체크 배지)과 색. 바꾸시려면 TASK-038 전에
+- **확인한 것**: `check_docs.py` no problems, `check_wording.py` 문제 없음(앱 문구 한글 문자열 430개, 16개 파일). 스크립트는 `py_compile` 통과. 앱 빌드·시험과 에뮬레이터 확인은 CI 실행으로 적음(아래 머지 줄). 로컬 Gradle은 Maven Central 429로 쓰지 못함
+- **남은 것**: 그래픽 이미지(1024×500)와 런처·위젯 목록 캡처는 TASK-037 스크린샷과 같은 PR에서. 그 뒤 TASK-045 **끝남**
+- **다음 행동**: TASK-037 스토어 스크린샷 6장과 그래픽 이미지
+
 ### TASK-035 끝: 앱 설정의 방침 링크 ([PR #42](https://github.com/judangbang-ops/pillbadeum_release/pull/42))
 
 - **목표**: 앱 설정(SCR-009)의 [개인정보처리방침]이 공개한 방침을 열게 함(REQ-063, TC-036). TASK-035의 마지막 몫
@@ -20,6 +36,9 @@
   - 문서: 화면 정의 SCR-009 앱 정보 줄, 시험 계획 TC-036, 요구 REQ-063, wbs TASK-035 **끝남**, 방침 근거 5장
 - **확인한 것**: 결과는 CI 실행으로 적음(아래 머지 줄). 로컬 Gradle은 Maven Central이 429(요청 과다)를 돌려줘 설정 단계에서 멈춤
 - **다음 행동**: TASK-045(앱 이름 필받음과 아이콘)
+- **머지**: 2026-11-16 11:12 KST에 main에 머지함(`1e875a4`).
+  - CI [43786320289](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43786320289) 1차 시도에서 통과(JVM 시험과 앱 화면 시험, 새 `PrivacyPolicyUrlTest`와 바꾼 `SettingsScreenTest` 포함, 디버그·릴리즈 APK). 에뮬레이터 회귀 확인 [43786320371](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43786320371)과 업데이트 확인 [43786320261](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43786320261)도 1차에서 통과
+  - 기기 스크립트 확인 [43786320246](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43786320246): API 36은 1차에서 통과. API 34는 1차에서 재부팅 뒤 잠금 해제가 시간 안에 끝나지 않아('PIN 입력 못 함') 실패함. 아티팩트 기록에서 PIN 입력 화면은 떴지만 잠금이 풀린 것은 스크립트가 `locksettings clear`를 한 뒤였음. 이 PR이 바꾼 설정 화면 링크와 무관한 에뮬레이터 잠금 화면 문제로 보고, 실패한 작업만 다시 돌려 2차에서 통과
 
 ### 결정 반영: 출시 준비 결정과 앱 이름 ([PR #41](https://github.com/judangbang-ops/pillbadeum_release/pull/41))
 

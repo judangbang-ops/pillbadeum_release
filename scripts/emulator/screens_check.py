@@ -411,7 +411,7 @@ def subprocess_bytes(path: str) -> bytes:
 
 
 def our_widget_ids() -> list[int]:
-    """Ids of the DidITake widgets on the home screen, from `dumpsys appwidget`."""
+    """Ids of the app's widgets on the home screen, from `dumpsys appwidget`."""
     ids, current = [], None
     for line in sh("dumpsys appwidget", check=False).splitlines():
         m = re.match(r"\s*\[\d+\] id=(\d+)", line)

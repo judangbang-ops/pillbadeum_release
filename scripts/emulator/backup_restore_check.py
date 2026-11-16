@@ -232,7 +232,9 @@ BOUNDS = re.compile(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]")
 # puts an ANR dialog over every app, so the screen below cannot be read. Such a dialog is closed with [Wait]
 # and listed in the report. Our own app not responding is a failure, never closed.
 ANR_TITLE = "isn't responding"
-APP_LABEL = "DidITake"  # app_name in androidApp/src/main/res/values/strings.xml
+# app_name in androidApp/src/main/res/values/strings.xml, and the name builds before TASK-045 (2026-11-16) had, which
+# upgrade_check.py installs as its old build
+APP_LABELS = ("필받음", "DidITake")
 CLOSED_DIALOGS: list[str] = []
 
 # Where the screen dump is written. Not /sdcard: before the first unlock after a reboot the shared storage is still
@@ -267,7 +269,7 @@ def dump_ui(tries: int = 25) -> list[Node]:
             nodes.append(Node(el.get("text", "").replace("\u2060", ""), el.get("content-desc", ""), el.get("class", ""),
                               tuple(int(v) for v in m.groups()), el.get("resource-id", "")))
         title = next((n.text for n in nodes if ANR_TITLE in n.text), None)
-        if title is not None and (APP_LABEL in title or PKG in title):
+        if title is not None and (any(label in title for label in APP_LABELS) or PKG in title):
             raise RuntimeError(f"the app is not responding (ANR dialog): {title}")
         wait = next((n for n in nodes if n.text == "Wait"), None)
         if title is None or wait is None:

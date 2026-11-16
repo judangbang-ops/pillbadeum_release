@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Widget size check (BUG-005, REQ-026, TC-054): the launcher places the DidITake widget at 4x2 and lets it shrink no
+"""Widget size check (BUG-005, REQ-026, TC-054): the launcher places the app's widget at 4x2 and lets it shrink no
 further than 4x2, at the Pixel 5's own width (393dp) and at 360dp.
 
 Why the size can differ: Launcher3, which Pixel Launcher is built on (android14-release, read 2026-11-14:

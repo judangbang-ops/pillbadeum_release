@@ -24,8 +24,8 @@ Takes two release APKs of one commit signed with one test key, the way personal 
   7. For the report, not a check: the APKs' size and dex files, and five cold starts of the app (`am start -W`), so a
      build with code shrinking (R8, `--minify`) can be compared with one without (TASK-046).
 
-The widget is placed the way a person does it: touch and hold the home screen > Widgets > search
-DidITake > drag its preview onto the home screen. (Touch and hold on the app icon is not used: on the
+The widget is placed the way a person does it: touch and hold the home screen > Widgets > scroll to
+필받음 > drag its preview onto the home screen. (Touch and hold on the app icon is not used: on the
 API 34 image the icon in the dock is an app suggestion whose menu has no Widgets entry.) If the
 launcher cannot be driven, or the placed widget does not show the item, that is a failed check and
 the flow records in the app instead, so the backup and update checks still run.
@@ -43,6 +43,7 @@ import statistics
 import sys
 import time
 import zipfile
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -86,7 +87,13 @@ from backup_restore_check import (
     wipe_backup,
 )
 
-WIDGET_LABEL = "DidITake"  # app_name / widget_label in androidApp/src/main/res/values/strings.xml
+WIDGET_LABEL = "필받음"  # app_name / widget_label in androidApp/src/main/res/values/strings.xml (TASK-045)
+# Screens of the full widget picker read from the top before giving up, about half a screen apart (drag_list)
+PICKER_PAGES = 16
+# Launcher3 ids of a widget preview, the outer first
+PREVIEW_IDS = ("widget_preview_container", "widget_preview", "widget_cell_content")
+# Pixels of a preview cut by the bottom edge that have to show above the gesture bar for it to be held (widget_preview)
+CUT_PREVIEW_MIN = 150
 # The widget's person picker (SCR-002, TASK-012): Labels.PICK_TITLE. It opens on the drop from two people on; with one
 # person it closes by itself and the widget shows everyone (REQ-018).
 PICK_TITLE = "이 위젯에 누구 약을 보일까요?"
@@ -181,59 +188,114 @@ def on_screen(node: Node, h: int) -> bool:
 
 
 def widget_preview(h: int, below: int = 0) -> Node | None:
-    """The DidITake widget's preview in an open widget sheet (Launcher3 ids), or its size label ("4 × 2").
-    In the full picker only nodes under the DidITake row (`below`) count."""
+    """The app's widget preview in an open widget sheet (Launcher3 ids), or its size label ("4 × 2").
+    In the full picker only nodes under the app's row (`below`) count.
+
+    When none shows whole, a preview cut by the bottom edge counts if at least CUT_PREVIEW_MIN px of it are above the
+    gesture bar, and its part above the bar is returned, so that its centre is on it. On API 36 the app's row (필받음,
+    after the Latin names) comes last in the list and its open preview stays cut there: the swipe in
+    open_full_widget_picker did not bring it up (device_kit_check.py, run 43790874626), and a person holds what shows."""
     nodes = [n for n in dump_ui() if n.bounds[1] >= below]
-    for name in ("widget_preview_container", "widget_preview", "widget_cell_content"):
+    for name in PREVIEW_IDS:
         hit = next((n for n in nodes if n.rid.endswith(f"/{name}") and on_screen(n, h)), None)
         if hit is not None:
             return hit
     # The size label sits in the same cell; the label itself takes no touches, so the cell gets the hold.
-    return next((n for n in nodes if re.fullmatch(r"\d+\s*[×x]\s*\d+", n.text) and on_screen(n, h)), None)
+    size = next((n for n in nodes if re.fullmatch(r"\d+\s*[×x]\s*\d+", n.text) and on_screen(n, h)), None)
+    if size is not None:
+        return size
+    bar = h - 120
+    for name in PREVIEW_IDS:
+        cut = next((n for n in nodes if n.rid.endswith(f"/{name}") and n.bounds[2] > n.bounds[0]
+                    and 0 <= n.bounds[1] <= bar - CUT_PREVIEW_MIN and n.bounds[3] > bar), None)
+        if cut is not None:
+            x1, y1, x2, _ = cut.bounds
+            return replace(cut, bounds=(x1, y1, x2, bar))
+    return None
 
 
-def open_full_widget_picker(r: Report, tag: str, w: int, h: int) -> int:
-    """Home > touch and hold empty space > Widgets > search DidITake, so its preview shows near the top."""
+def drag_list(w: int, y1: int, y2: int) -> None:
+    """Scrolls a list with a slow swipe from y1 to y2 (1.5 s). Let go that slowly, the list flings on only a little past
+    where the finger stopped, so no row is skipped between two reads; a quick swipe (0.4 s) flings it on by most of a
+    screen. One `input swipe` moves from the first step, so a widget preview under the finger is not held long enough
+    to be picked up (separate `input motionevent` calls can be slower than the long-press time)."""
+    sh(f"input swipe {w // 2} {y1} {w // 2} {y2} 1500")
+    time.sleep(1)
+
+
+def picker_row(nodes: list[Node], label: str) -> Node | None:
+    """The app's row in the widget picker: its name, not the search field holding it, nor a widget's own name under a
+    preview (Launcher3 `widget_name`, also in the suggested widgets above the list)."""
+    return next((n for n in nodes if n.text == label and not n.cls.endswith("EditText")
+                 and not n.rid.endswith("/widget_name")), None)
+
+
+def open_full_widget_picker(r: Report, tag: str, w: int, h: int, label: str = WIDGET_LABEL) -> int:
+    """Home > touch and hold empty space > Widgets > the row of the app named `label`, opened so its previews show.
+
+    A name in Latin letters (`DidITake`, the builds before TASK-045 that upgrade_check.py installs) is typed in the
+    picker's search. `adb shell input text` cannot type Korean, so for 필받음 the list is read from the top down, about
+    half a screen at a time with a slow swipe (drag_list), as a person scrolls to the app. Apps are listed by name in
+    the system language, and Korean comes after Latin letters in English, so the row is near the end. Returns the
+    bottom of the row."""
     go_home()
     sh(f"input swipe {w // 2} {h // 2} {w // 2} {h // 2} 1500")
     tap_text("Widgets", 10)
-    search = next((n for n in dump_ui() if n.cls.endswith("EditText") and "Search" in (n.text + n.desc)), None)
-    if search is not None:
-        tap(search)
-        sh(f"input text {WIDGET_LABEL}")
-        time.sleep(2)
     header = None
-    for _ in range(8):
-        header = next((n for n in dump_ui() if n.text == WIDGET_LABEL and not n.cls.endswith("EditText")), None)
-        if header is not None:
-            break
-        sh(f"input swipe {w // 2} {h * 3 // 4} {w // 2} {h // 4} 400")
-        time.sleep(1)
+    if label.isascii():
+        search = next((n for n in dump_ui() if n.cls.endswith("EditText") and "Search" in (n.text + n.desc)), None)
+        if search is not None:
+            tap(search)
+            sh(f"input text {label}")
+            time.sleep(2)
+        for _ in range(8):
+            header = picker_row(dump_ui(), label)
+            if header is not None:
+                break
+            sh(f"input swipe {w // 2} {h * 3 // 4} {w // 2} {h // 4} 400")
+            time.sleep(1)
+    else:
+        time.sleep(1)  # the sheet slides up; the first swipe should scroll the list, not the sheet
+        seen: list[str] | None = None
+        for _ in range(PICKER_PAGES):
+            nodes = dump_ui()
+            header = picker_row(nodes, label)
+            if header is not None:
+                break
+            texts = [n.text for n in nodes if n.text]
+            if texts == seen:
+                break  # the list did not move: its end
+            seen = texts
+            drag_list(w, h * 3 // 4, h // 4)
+        if header is not None and header.bounds[1] > h // 2:
+            # Up to the top quarter, so the previews open on the screen (at the end of the list it may not move)
+            drag_list(w, h * 3 // 4, h * 3 // 4 - (header.bounds[1] - h // 4))
+            header = picker_row(dump_ui(), label) or header
     if header is None:
         save_ui(r, f"{tag}-picker-no-app")
-        raise RuntimeError(f"widget picker has no '{WIDGET_LABEL}'")
+        raise RuntimeError(f"widget picker has no '{label}'")
     if widget_preview(h, header.bounds[3]) is None:
         tap(header)
         time.sleep(1)
-    header = next((n for n in dump_ui() if n.text == WIDGET_LABEL and not n.cls.endswith("EditText")), header)
+    header = picker_row(dump_ui(), label) or header
     if widget_preview(h, header.bounds[3]) is None:
         # The previews open under the row, past the bottom edge when the row is low (first run, 2026-11-12).
         sh(f"input swipe {w // 2} {h * 3 // 4} {w // 2} {h // 2} 1000")
         time.sleep(1)
-        header = next((n for n in dump_ui() if n.text == WIDGET_LABEL and not n.cls.endswith("EditText")), None)
+        header = picker_row(dump_ui(), label)
         if header is None:
             # Without the row the previews of other apps could be taken for ours.
             save_ui(r, f"{tag}-picker-scrolled")
-            raise RuntimeError(f"the '{WIDGET_LABEL}' row scrolled out of the picker")
+            raise RuntimeError(f"the '{label}' row scrolled out of the picker")
     return header.bounds[3]
 
 
-def place_widget(r: Report, tag: str, pick: str = "전체") -> bool:
-    """Drags the DidITake widget preview onto the middle of the home screen. When the person picker opens on the
-    drop (two or more people, TASK-012), takes its picture and taps `pick`: 전체 or a person's name.
+def place_widget(r: Report, tag: str, pick: str = "전체", label: str = WIDGET_LABEL) -> bool:
+    """Drags the widget preview of the app named `label` onto the middle of the home screen. When the person picker
+    opens on the drop (two or more people, TASK-012), takes its picture and taps `pick`: 전체 or a person's name.
     Returns whether the picker opened (with one person it does not, REQ-018)."""
     w, h = screen_size()
-    below = open_full_widget_picker(r, tag, w, h)
+    below = open_full_widget_picker(r, tag, w, h, label)
     preview = widget_preview(h, below)
     save_ui(r, f"{tag}-picker")
     r.shot(f"{tag}-picker")

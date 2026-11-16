@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Foreground layer of the launcher icon (mipmap-anydpi-v26/ic_launcher.xml). 108dp, of which a launcher shows the
+     middle 72dp; everything stays inside the 66dp safe circle (capsule 24.3dp, badge 31.6dp from the middle).
+     The capsule is cut around the badge (the clip path's square and circle wind opposite ways), so a gap of the
+     background's colour parts them. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group>
+        <clip-path android:pathData="M0,0h108v108h-108z M52,67.5a15.5,15.5 0 1,0 31,0a15.5,15.5 0 1,0 -31,0z" />
+        <group
+            android:pivotX="50"
+            android:pivotY="50"
+            android:rotation="-45">
+            <!-- The light half reaches 1 under the white one, so no line of background shows between them. -->
+            <path
+                android:fillColor="#9DB6EC"
+                android:pathData="M49,38.5h12.5a11.5,11.5 0 0,1 0,23h-12.5z" />
+            <path
+                android:fillColor="#FFFFFF"
+                android:pathData="M50,38.5h-11.5a11.5,11.5 0 0,0 0,23h11.5z" />
+        </group>
+    </group>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M55,67.5a12.5,12.5 0 1,0 25,0a12.5,12.5 0 1,0 -25,0z" />
+    <path
+        android:pathData="M61.6,68l4,4l7.8,-8.4"
+        android:strokeWidth="3.6"
+        android:strokeColor="#2B59C3"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

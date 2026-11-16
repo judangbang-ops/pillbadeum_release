@@ -11,7 +11,9 @@ script checks it with a real launcher, a real widget placed by the old APK and `
 would.
 
 Takes two debug APKs signed with one key: --old, built from a commit before the picker (by default 8c50d47, main of
-2026-11-13 before PR #19), and --new, built from this commit with a bigger version number. Flow (Asia/Seoul):
+2026-11-13 before PR #19), and --new, built from this commit with a bigger version number. --old-label is the old
+build's app name, by which its widget is found in the launcher: DidITake before TASK-045 (2026-11-16), 필받음 after.
+Flow (Asia/Seoul):
 
   0. Seoul time zone, today 08:30, the old build installed.
   1. The old build, with two people as a family using it would have: Vitamin (나), then BPpill for Mom, who is added on
@@ -173,7 +175,7 @@ def both_people(nodes) -> bool:
     return has_desc(nodes, f"{ME} {VITAMIN}, ") and has_desc(nodes, f"{MOM} {BP}, ")
 
 
-# The new widget's header reads "DidITake · 11/15" (the app's name may change, TASK-045); the old one has "11/15 (일)"
+# The new widget's header reads "<app> · 11/15" ("필받음 · 11/15" since TASK-045); the old one has "11/15 (일)"
 NEW_HEADER = re.compile(r"^.+ · \d{1,2}/\d{1,2}$")
 
 
@@ -242,7 +244,7 @@ def owners() -> list[str]:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def run(r: Report, steps: Steps, old_apk: Path, new_apk: Path, old_commit: str) -> None:
+def run(r: Report, steps: Steps, old_apk: Path, new_apk: Path, old_commit: str, old_label: str) -> None:
     today = datetime.now(ZONE).date()
     morning = datetime(today.year, today.month, today.day, 8, 30, tzinfo=ZONE)
     seen: dict[str, str] = {}
@@ -277,12 +279,12 @@ def run(r: Report, steps: Steps, old_apk: Path, new_apk: Path, old_commit: str) 
         if items != [f"{ME} {VITAMIN}", f"{MOM} {BP}"]:
             raise RuntimeError(f"items in the old build: {items}")
         try:
-            picker = place_widget(r, "old-widget")
+            picker = place_widget(r, "old-widget", label=old_label)
         except RuntimeError as exc:
             r.note(f"옛 빌드 위젯 놓기 첫 시도 실패, 20초 뒤 한 번 더: {exc}")
             go_home()
             time.sleep(20)
-            picker = place_widget(r, "old-widget-retry")
+            picker = place_widget(r, "old-widget-retry", label=old_label)
         ids = our_widget_ids()
         if picker:
             raise RuntimeError("a person picker opened in the old build")
@@ -447,6 +449,8 @@ def main() -> int:
     parser.add_argument("--old", type=Path, required=True, help="debug APK of the old build")
     parser.add_argument("--new", type=Path, required=True, help="debug APK of this commit, a bigger version number")
     parser.add_argument("--old-commit", default="", help="the commit the old APK was built from, for the report")
+    parser.add_argument("--old-label", default="DidITake",
+                        help="the old build's app name, as the launcher's widget list shows it (필받음 from TASK-045 on)")
     parser.add_argument("--new-commit", default="", help="the commit the new APK was built from, for the report")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
@@ -458,7 +462,7 @@ def main() -> int:
     r = Report(args.out, api, f"옛 빌드에서 업데이트 확인 API {api}")
     steps = Steps(r)
     try:
-        run(r, steps, args.old, args.new, args.old_commit)
+        run(r, steps, args.old, args.new, args.old_commit, args.old_label)
     except Exception as exc:
         traceback.print_exc()
         r.check("업데이트 확인 진행", "끝까지 감", f"{type(exc).__name__}: {exc}", False)

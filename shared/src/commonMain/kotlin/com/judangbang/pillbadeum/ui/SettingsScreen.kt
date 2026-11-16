@@ -66,8 +66,12 @@ import kotlin.time.Instant
 import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 
-/** The privacy policy's public address (REQ-063). TASK-035 decides it; until then its row says `준비 중`. */
-internal val PRIVACY_POLICY_URL: String? = null
+/**
+ * The privacy policy's public address (REQ-063, TASK-035): the policy file on this repository's main branch, published
+ * 2026-11-16. An installed app cannot change it, so the file stays at this path (jvm `PrivacyPolicyUrlTest`).
+ */
+internal const val PRIVACY_POLICY_URL: String =
+    "https://github.com/judangbang-ops/pillbadeum_release/blob/main/docs/release/privacy-policy.md"
 
 /** What SCR-009 shows: `#loading`, a read error, or the settings (`#normal`). */
 internal sealed interface SettingsState {
@@ -127,7 +131,7 @@ internal class SettingsActions(
 internal fun SettingsScreen(
     state: SettingsState,
     phone: PhoneState,
-    privacyUrl: String?,
+    privacyUrl: String,
     message: String?,
     now: () -> Instant,
     actions: SettingsActions,
@@ -167,7 +171,7 @@ private object Open {
 }
 
 @Composable
-private fun SettingsBody(view: SettingsView?, phone: PhoneState, privacyUrl: String?, now: () -> Instant, actions: SettingsActions) {
+private fun SettingsBody(view: SettingsView?, phone: PhoneState, privacyUrl: String, now: () -> Instant, actions: SettingsActions) {
     var open by rememberSaveable { mutableStateOf<String?>(null) }
     var archivedOpen by rememberSaveable { mutableStateOf(false) }
 
@@ -232,11 +236,7 @@ private fun SettingsBody(view: SettingsView?, phone: PhoneState, privacyUrl: Str
 
         SectionTitle("앱 정보")
         ValueRow("버전", phone.appVersion.ifBlank { "-" }, onClick = null)
-        if (privacyUrl != null) {
-            LinkRow("개인정보처리방침") { actions.openPrivacy(privacyUrl) }
-        } else {
-            ValueRow("개인정보처리방침", Labels.NOT_READY, onClick = null)
-        }
+        LinkRow("개인정보처리방침") { actions.openPrivacy(privacyUrl) }
         Words(
             Labels.SETTINGS_MEDICAL,
             Ui.type(14, color = Ui.Muted),

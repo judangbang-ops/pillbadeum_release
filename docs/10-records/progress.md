@@ -10,6 +10,17 @@
 
 ## 2026-11-16
 
+### TASK-035 끝: 앱 설정의 방침 링크 ([PR #42](https://github.com/judangbang-ops/pillbadeum_release/pull/42))
+
+- **목표**: 앱 설정(SCR-009)의 [개인정보처리방침]이 공개한 방침을 열게 함(REQ-063, TC-036). TASK-035의 마지막 몫
+- **한 일**
+  - `ui/SettingsScreen.kt`: `PRIVACY_POLICY_URL`을 방침 파일의 main 주소로 정함. 주소가 없을 때의 '준비 중' 줄과 그 문구(`Labels.NOT_READY`)를 지움. `App`의 `privacyPolicyUrl`은 null을 받지 않음(시험은 다른 주소를 넘김)
+  - 앱 시험 `SettingsScreenTest`의 기본 화면: '개인정보처리방침, 준비 중' 대신 '개인정보처리방침, 브라우저에서 열기'
+  - jvm `PrivacyPolicyUrlTest`(새로): 주소가 이 저장소 main의 파일을 가리키고, 그 파일이 있고, `{ }` 빈칸과 초안 상자 없이 시행일 줄이 있는지 봄. 앱에 들어간 주소는 업데이트 없이 못 바꾸므로, 방침 파일을 옮기면 CI가 막음
+  - 문서: 화면 정의 SCR-009 앱 정보 줄, 시험 계획 TC-036, 요구 REQ-063, wbs TASK-035 **끝남**, 방침 근거 5장
+- **확인한 것**: 결과는 CI 실행으로 적음(아래 머지 줄). 로컬 Gradle은 Maven Central이 429(요청 과다)를 돌려줘 설정 단계에서 멈춤
+- **다음 행동**: TASK-045(앱 이름 필받음과 아이콘)
+
 ### 결정 반영: 출시 준비 결정과 앱 이름 ([PR #41](https://github.com/judangbang-ops/pillbadeum_release/pull/41))
 
 - **목표**: 2026-11-15 묶음 보고의 '정해 주실 것'에 대한 동희님 답을 문서에 넣음. 방침을 공개함
@@ -37,6 +48,7 @@
   - SCR-007의 버튼마다 부르는 함수: `ui/JudgeOutcomes.kt`와 `usecase/ClockFlags.kt`의 주석과 결과 형을 읽음
 - **확인하지 못한 것**: Play 지원의 답(동희님이 보낸 뒤). 공개 주소가 로그인 없이 열리는지는 머지 뒤에 봄
 - **다음 행동**: TASK-035 남은 것(앱 설정의 방침 주소와 시험), TASK-045(앱 이름 필받음과 아이콘), 그 뒤 스토어 스크린샷
+- **머지**: 2026-11-16 10:25 KST에 main에 머지함(`6c2c44b`). CI [43785585958](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43785585958) 1차 시도에서 통과. 머지 뒤 방침 공개 주소를 로그인 없이(curl, 쿠키 없음) 열어 HTTP 200과 제목·시행일·연락처를 봄
 
 ## 2026-11-15
 

@@ -10,6 +10,25 @@
 
 ## 2026-11-16
 
+### BUG-007 늦게 온 알람 뒤 새 알림 하나가 사라짐 ([PR #45](https://github.com/judangbang-ops/pillbadeum_release/pull/45))
+
+- **목표**: 지난 창의 알림이 떠 있는 채 다음 창의 알람이 울려도 항목마다 새 알림이 뜨게 함(REQ-041, SPEC-010·013)
+- **찾은 것**: PR #44의 알림 확인 API 36 1차 시도([실행 43798196358](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43798196358), 작업 133072458077)에서 RR-91이 실패함. 08:40에 늦게 온 08:00 알람 뒤 앱 로그는 알림 4개를 띄웠다고 했으나 시스템에는 PillA·PillC·PillD만 있었음. 시스템 로그에 PillE 키의 'Cannot find enqueued record'. 같은 코드가 `64ecbe8`(PR #43)과 재실행에서는 통과해서, 때에 따라 나는 경쟁임
+  - 원인: 모으기(`Reminders.collect`)가 새 알림을 띄운 **뒤** 떠 있는 알림을 정리했음. Android는 `notify`를 받고 조금 뒤에 알림을 목록에 올림. 그래서 정리가 읽은 목록에 PillE의 지난 창(전날) 알림이 아직 있었고, 창이 끝났다며 지운 요청이 같은 태그·번호의 새 알림까지 지움. Android 알림 서비스는 지운 키를 기다리는 줄에서도 뺌
+  - 같은 이유로, 새 알림이 목록에 오르기 전에 다음 단계가 목록을 읽으면 남은 알림이 없다고 보고 "복용 시간이에요"를 내릴 수 있음. 정확 알람이 허용되지 않으면(Android 14부터 새로 깐 앱의 기본) 같은 시각에 건 두 알람이 함께 울려, 둘째 모으기가 곧바로 목록을 읽음
+- **한 일**
+  - `Reminders.collect`: 떠 있는 알림 정리를 새 알림 앞으로 옮김. 옛 알림을 지우는 요청이 새 알림보다 먼저 가므로 새 알림이 지워지지 않음
+  - 새 알림을 띄운 뒤 시스템 목록에 모두 오를 때까지 잠금을 쥐고 기다림(`awaitListed`, 25ms마다 보고 최대 2초). 그동안 둘째 알람이나 쓰기 뒤의 정리는 잠금을 기다리므로 새 알림이 든 목록을 읽음. 2초 안에 오르지 않으면 로그만 남기고 넘어감
+  - 앱 시험 `ReminderListLagTest`(새로, Robolectric): `LaggingNotificationManager`는 알림을 정한 시간 뒤에야 목록에 올리고, 그 전에 같은 태그·번호를 지우면 기다리던 알림도 지움. 이것으로 두 경우를 봄
+    - 12일 알림 넷이 떠 있는 채 13일 08:00 알람이 08:40에 옴. 시스템은 모으기가 끝날 때까지 아무것도 올리지 않음 → 넷 모두 13일 알림이고 "복용 시간이에요"가 있음(RR-93)
+    - 같은 시각 두 알람이 잇달아 울림, 목록에 오르는 데 0.4초 → 알림 둘과 "복용 시간이에요"가 남음(RR-94)
+  - 커밋을 둘로 나눔: 시험만 넣은 `ab62b8d`의 CI([실행 43804868377](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43804868377))에서 두 시험 모두 고치기 전 코드로 실패함. 13일 알림 넷이 남지 않았고(`ReminderListLagTest.kt:81`), 둘째 알람 뒤 "복용 시간이에요"가 없었음(`:97`, 그 앞의 알림 둘은 통과). 나머지 앱 시험 125개는 통과. 시험이 이 버그를 잡는 것을 확인한 뒤 고침을 넣음
+  - 문서: 보충 N-13 '구현'에 모으기의 순서, 반례 RR-93·94, 요구 REQ-041 합격 기준과 상태, 시험 계획 BUG-007·TC-010, wbs 진행 메모
+- **Claude가 정한 것 (바꾸실 수 있음)**: 기다림 최대 2초. Android가 알림 도우미를 기다리는 시간(약 0.2초)보다 넉넉히 잡음. 넘으면 기다리지 않고 넘어감
+- **확인한 것**: `check_docs.py` no problems, `check_wording.py` 문제 없음. 고친 코드의 앱 시험과 에뮬레이터 알림 확인(API 26·30·34·36)은 CI 실행으로 적음(머지 줄). 로컬 Gradle은 Maven Central 429로 쓰지 못함
+- **확인하지 못한 것**: 실제 폰에서 두 알람이 정말 함께 울리는지와 목록에 오르기까지 걸리는 시간. 에뮬레이터 알림 확인은 1단계 뒤로 정확 알람을 허용해서 이 길을 울리지 않음. 갤럭시 확인(TASK-032)의 비정확 알람 단계에서 봄
+- **다음 행동**: TASK-037 스토어 스크린샷 6장과 그래픽 이미지
+
 ### BUG-006 Android 15 이상에서 상태 표시줄 아이콘이 흰 화면에 묻힘 ([PR #44](https://github.com/judangbang-ops/pillbadeum_release/pull/44))
 
 - **목표**: Android 15 이상에서 앱 화면과 위젯 대상자 고르기(SCR-002) 위의 시계·배터리 아이콘이 보이게 함(REQ-069 명암)
@@ -23,6 +42,11 @@
 - **Claude가 정한 것 (바꾸실 수 있음)**: Android 14 이하도 회색 띠 대신 흰 띠로 함. 화면이 모두 흰색이라 띠가 화면과 이어져 보이게 함. 아래 내비게이션 바도 같은 이유로 흰색
 - **확인한 것**: `check_docs.py` no problems, `check_wording.py` 문제 없음. 앱 빌드·시험과 에뮬레이터 캡처는 CI 실행으로 적음(아래 머지 줄). 로컬 Gradle은 Maven Central 429로 쓰지 못함
 - **다음 행동**: TASK-037 스토어 스크린샷 6장과 그래픽 이미지
+- **머지**: 2026-11-16 13:32 KST에 main에 머지함(`d0217f9`).
+  - `b926597`의 검사 5개 통과(바꾼 파일이 경로 조건에 걸린 것만 돎): CI [43798196332](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43798196332)(JVM 시험과 앱 화면 시험, `SystemBarsTest` 포함), 에뮬레이터 확인 [43798196345](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43798196345), 업데이트 확인 [43798196341](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43798196341), 회귀 [43798196336](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43798196336), 알림 [43798196358](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43798196358)(API 26·30·34는 1차 시도, API 36은 2차 시도)
+  - 알림 확인 API 36의 1차 시도는 RR-91 하나가 실패함(작업 133072458077): 늦게 온 08:00 알람의 새 알림 넷 중 PillE가 뜨지 않음. 테마와 상관없는 앱의 알림 순서 문제여서 BUG-007로 따로 고침(위 항목). 실패한 작업만 다시 돌려 통과함(작업 133083626723, 보고서 41줄 통과·실패 0, RR-91도 넷)
+  - BUG-006 확인: 2차 시도 아티팩트 `reminders-api36`의 `api36-10-app-taken.png`(앱 첫 화면, Android 16)에서 맨 위 130줄에 #666666 아이콘 화소 2,448개, 모두 흰 줄은 맨 위 52줄(고치기 전 188줄). 1차 시도의 같은 캡처도 52줄이었음
+  - 확인하지 못한 것: 고르기 화면(SCR-002)의 Android 15 이상 캡처는 없음(대상자 둘인 고르기 캡처는 API 34 화면 확인에만 있음). 앱 시험 `SystemBarsTest`가 그 테마 값을 보고, 실기기(TASK-052)에서 봄
 
 ### TASK-045 앱 이름 필받음과 아이콘 ([PR #43](https://github.com/judangbang-ops/pillbadeum_release/pull/43))
 

@@ -128,7 +128,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\device\device-check.
 
 1. `exact -Mode deny` (앱을 멈췄다가 한 번 열어 알람을 다시 걸게 함), `alarms` → 비정확 알람과 10분 창 알람(보충 N-12)
 2. `night -Phase start` → USB를 뽑고 3.1의 6처럼 둠
-3. 셋째 날 08:30 뒤 `night -Phase end -Slots 06:00,06:15,06:30,06:45,07:00,07:15,07:30,07:45,08:00,08:15` → **REQ-048 정확 알람 거부**. Doze 정비 창에 밀린 칸이 한꺼번에 오면 표에 '묶임'으로 적힘
+3. 셋째 날 08:30 뒤 `night -Phase end -Slots 06:00,06:15,06:30,06:45,07:00,07:15,07:30,07:45,08:00,08:15` → **REQ-048 정확 알람 거부**. Doze 정비 창에 밀린 칸이 한꺼번에 오면 표에 '묶임'으로 적힘. `night -Phase end` 전에 화면만 켜서 잠금 화면에 "복용 시간이에요"가 있는지 봄(BUG-007, RR-94: 정확 알람이 거부면 같은 시각의 두 알람이 함께 울려도 이 안내가 남아야 함)
 4. `exact -Mode allow`로 되돌림
 
 REQ-048의 목표 숫자는 두 밤의 결과를 보고 정해 요구 문서에 적음(4장 8번). 그 숫자는 Claude가 제안하고 동희님이 정함.

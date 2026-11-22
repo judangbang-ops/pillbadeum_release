@@ -16,8 +16,9 @@ it. This script makes that phone on an emulator and lets the real Obtainium do t
      Obtainium, the item added before is still there.
   B. The next updates, with no hands (REQ-096: "손을 대지 않고"). The app is put back to --old the way phase A leaves
      it, with Obtainium as the installer of record (`pm install -i`), without opening the app. Obtainium is not
-     opened either: its scheduled background work is run now (`cmd jobscheduler run -f` for each of its jobs), as
-     Android would every six hours. Checks: versionCode is the latest release's and no confirmation window of the
+     opened either (it is sent to the background and its process ended with `am kill`, never force-stopped, which
+     would cancel its jobs): its scheduled background work is run now (`cmd jobscheduler run -f` for each of its
+     jobs), as Android would every six hours. Checks: versionCode is the latest release's and no confirmation window of the
      package installer was on screen meanwhile.
      If the background work does not update within the wait, the update is started in Obtainium's screen once, to
      tell an update that needs a confirmation from one whose background run did not come: both are failures.
@@ -145,16 +146,43 @@ def allow_obtainium() -> None:
     sh(f"appops set {OBTAINIUM} REQUEST_INSTALL_PACKAGES allow")
 
 
-def open_add_screen(steps: Steps, repo_url: str) -> str:
+def start_obtainium(steps: Steps, r: Report) -> None:
+    """Obtainium on screen past its splash, started from the launcher as a tester does.
+
+    On the CI emulator the first start stayed on the splash for good (run 45018288077, 2026-11-22): Android
+    re-created the activity two seconds in, while the input devices were reconfigured after boot, two replies on
+    Flutter's platform channel were lost ('FlutterJNI was detached from native C++'), and the first Flutter frame never
+    came. A tester's phone is not just booted. Here Obtainium is stopped and started again, up to three times, and each
+    try that stays on the splash is kept as a screen and noted."""
+    for attempt in range(1, 4):
+        sh(f"monkey -p {OBTAINIUM} -c android.intent.category.LAUNCHER 1", check=False)
+        end = time.time() + 45
+        while time.time() < end:
+            time.sleep(3)
+            if focused_package() == OBTAINIUM and words(dump_ui(tries=6)):
+                if attempt > 1:
+                    r.note(f"Obtainium이 {attempt}번째 시작에서 첫 화면을 그림(앞의 시작은 시작 화면에 멈춤)")
+                return
+        steps.save(f"obtainium-splash-{attempt}")
+        sh(f"am force-stop {OBTAINIUM}", check=False)
+        time.sleep(2)
+    raise RuntimeError("Obtainium stayed on its splash screen in 3 starts")
+
+
+def open_add_screen(steps: Steps, r: Report, repo_url: str) -> str:
     """Obtainium's add screen with repo_url in its URL field. Returns how it was opened."""
+    start_obtainium(steps, r)
+    steps.save("obtainium-first")
     sh(f"am start -a android.intent.action.VIEW -d 'obtainium://add/{repo_url}' {OBTAINIUM}", check=False)
     time.sleep(6)
     nodes = steps.save("obtainium-link")
     if any(repo_url in n.text or repo_url in n.desc for n in nodes) and node_with(nodes, ADD_WORDS):
         return "링크 obtainium://add/"
-    # Not by the link: start Obtainium, [Add App] at the bottom, type the URL
-    sh(f"monkey -p {OBTAINIUM} -c android.intent.category.LAUNCHER 1", check=False)
-    time.sleep(5)
+    # Not by the link: [Add App] at the bottom of Obtainium's first screen, type the URL
+    sh("input keyevent KEYCODE_BACK", check=False)
+    time.sleep(2)
+    if focused_package() != OBTAINIUM:
+        start_obtainium(steps, r)
     nav = wait_for(ADD_APP_WORDS, 20)
     if nav is None:
         steps.save("no-add-app")
@@ -172,8 +200,8 @@ def open_add_screen(steps: Steps, repo_url: str) -> str:
     return "[Add App]에 URL 입력"
 
 
-def add_repo(steps: Steps, repo_url: str) -> str:
-    how = open_add_screen(steps, repo_url)
+def add_repo(steps: Steps, r: Report, repo_url: str) -> str:
+    how = open_add_screen(steps, r, repo_url)
     add = wait_for(ADD_WORDS, 15)
     if add is None:
         steps.save("no-add")
@@ -270,7 +298,7 @@ def phase_a(r: Report, steps: Steps, old: Path, obtainium: Path, repo_url: str, 
     stop_app()
     adb("install", str(obtainium), timeout=300)
     allow_obtainium()
-    how = add_repo(steps, repo_url)
+    how = add_repo(steps, r, repo_url)
     r.note(f"Obtainium에 저장소를 더한 방법: {how}")
     start_update_in_obtainium(steps)
     asked = confirm_if_asked(steps)
@@ -296,8 +324,12 @@ def phase_b(r: Report, steps: Steps, old: Path, code: str) -> None:
     old_code = info["versionCode"]
     r.check("B-1 A가 끝난 상태와 같게", f"옛 APK, 설치한 앱 {OBTAINIUM}",
             f"versionCode {old_code}, 설치한 앱 '{info['installer']}'", info["installer"] == OBTAINIUM and old_code != code)
-    sh(f"am force-stop {OBTAINIUM}", check=False)
+    # Obtainium goes to the background as on a phone left alone: HOME, then its process is ended the way Android ends
+    # a background app (`am kill`). Not `am force-stop`: that cancels every scheduled job of the package
+    # (JobSchedulerService on ACTION_PACKAGE_RESTARTED), which no tester does.
     sh("input keyevent KEYCODE_HOME", check=False)
+    time.sleep(2)
+    sh(f"am kill {OBTAINIUM}", check=False)
     time.sleep(2)
     jobs = obtainium_jobs()
     r.note(f"Obtainium 예약 작업(JobScheduler): {', '.join(jobs) or '없음'}")
@@ -309,9 +341,8 @@ def phase_b(r: Report, steps: Steps, old: Path, code: str) -> None:
     if not background:
         steps.save("b-no-background")
         r.note("예약 작업으로 업데이트되지 않아 Obtainium 화면에서 한 번 업데이트를 누름(원인을 가리려고)")
-        sh(f"monkey -p {OBTAINIUM} -c android.intent.category.LAUNCHER 1", check=False)
-        time.sleep(6)
         try:
+            start_obtainium(steps, r)
             start_update_in_obtainium(steps)
             if confirm_if_asked(steps, 60):
                 shown.append("[Update]를 누른 뒤 확인 창")

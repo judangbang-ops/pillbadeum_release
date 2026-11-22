@@ -202,18 +202,27 @@ def close_first_dialogs(steps: Steps, r: Report) -> None:
     'Note' (Google's developer verification, keepandroidopen.org), seen in run 45019114890. Each is kept as a screen
     and its title noted, for the testers' guide. Both had [Okay] and the 'Dismiss' barrier behind them; the barrier
     keeps an [OK] elsewhere on Obtainium's screens from being taken for a dialog."""
-    for tapped in range(6):
+    looked_again = False
+    tapped = 0
+    while True:
         nodes = dump_ui(tries=6)
         okay = node_with(nodes, OKAY_WORDS)
         if okay is None or node_with(nodes, ("Dismiss",)) is None:
-            return
+            # A dialog can come a moment after the first frame: look once more before going on
+            if looked_again:
+                return
+            looked_again = True
+            time.sleep(4)
+            continue
         if tapped == 5:
             break
+        tapped += 1
         title = next((n.desc.split("\n")[0].strip() for n in nodes if n.desc.strip()), "")
-        steps.save(f"obtainium-dialog-{title.lower() or 'untitled'}")
+        steps.save("obtainium-dialog-" + (re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:30] or "untitled"))
         r.note(f"Obtainium 첫 시작 대화상자 '{title}'를 [Okay]로 닫음")
         tap(okay)
         time.sleep(2)
+        looked_again = False
     raise RuntimeError(f"Obtainium dialogs did not close: {words(dump_ui())}")
 
 
@@ -432,7 +441,8 @@ def phase_b(r: Report, steps: Steps, b_old: Path, code: str) -> None:
             r.note(f"Obtainium 예약 작업(JobScheduler) 시작 때: {', '.join(jobs) or '없음'}")
             shown: list[str] = []
             started = time.time()
-            info = wait_version(code, B_WAIT, shown, every=5)
+            # Looking every 15 seconds: a confirmation window stays until someone taps it, so none is missed
+            info = wait_version(code, B_WAIT, shown, every=15)
             waited = int(time.time() - started)
             background = info["versionCode"] == code
             if background:
@@ -445,6 +455,12 @@ def phase_b(r: Report, steps: Steps, b_old: Path, code: str) -> None:
             except subprocess.TimeoutExpired:
                 log.kill()
     r.note(f"Obtainium 예약 작업(JobScheduler) {waited // 60}분 {waited % 60}초 뒤: {', '.join(jobs) or '없음'}")
+    try:
+        after = json.loads(sh(f"cat {record_path()}"))
+        r.note("Obtainium 기록 기다린 뒤: " + ", ".join(f"{k} {after.get(k)}" for k in
+                                                   ("installedVersion", "latestVersion", "lastUpdateCheck")))
+    except (RuntimeError, ValueError) as exc:
+        r.note(f"Obtainium 기록을 다시 읽지 못함: {exc}")
     for line in obtainium_log(log_path)[:25]:
         r.note(f"Obtainium 기록: `{line}`")
     if background:
@@ -475,11 +491,11 @@ def main() -> int:
     parser.add_argument("--obtainium", type=Path, required=True, help="Obtainium APK")
     parser.add_argument("--repo-url", required=True, help="https://github.com/<owner>/<repo> with the releases")
     parser.add_argument("--code", required=True, help="versionCode of the latest release")
-    parser.add_argument("--phases", default="AB", help="A, B or AB (default)")
+    parser.add_argument("--phases", default="AB", choices=("A", "AB"), help="A, or AB (default): B needs A first")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
-    if "B" in args.phases and ("A" not in args.phases or args.b_old is None):
-        parser.error("phase B needs phase A before it (Obtainium and the repository added) and --b-old")
+    if "B" in args.phases and args.b_old is None:
+        parser.error("phase B needs --b-old")
     args.out.mkdir(parents=True, exist_ok=True)
 
     adb("wait-for-device")

@@ -180,6 +180,7 @@ jobs:
         shell: bash
         env:
           OBTAINIUM_TAG: ${{ inputs.obtainium_tag }}
+          PHASES: ${{ inputs.phases || 'AB' }}
         run: |
           set -euo pipefail
           bt="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)"
@@ -215,7 +216,7 @@ jobs:
           echo "obtainium=$pick" >> "$GITHUB_OUTPUT"
           old="$(ls "$RUNNER_TEMP"/old/pillbadeum-old-*.apk)"
           bold="$RUNNER_TEMP/old/pillbadeum-b-$((code - 1)).apk"
-          if [ ! -f "$bold" ]; then echo "::error::B 시작 APK가 최신 릴리즈 $tag보다 하나 작은 versionCode가 아님: $(ls "$RUNNER_TEMP"/old/)"; exit 1; fi
+          if [ ! -f "$bold" ] && [[ "$PHASES" == *B* ]]; then echo "::error::B 시작 APK가 최신 릴리즈 $tag보다 하나 작은 versionCode가 아님: $(ls "$RUNNER_TEMP"/old/)"; exit 1; fi
           echo "old=$old" >> "$GITHUB_OUTPUT"
           echo "bold=$bold" >> "$GITHUB_OUTPUT"
           echo "$bt" >> "$GITHUB_PATH"

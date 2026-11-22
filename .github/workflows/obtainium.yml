@@ -50,7 +50,8 @@ jobs:
     name: 테스터 폰과 같은 옛 APK (앱 서명 키)
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 릴리즈 빌드 두 번(옛 APK, B 시작 APK)
+    timeout-minutes: 45
     environment: personal-apk
     permissions:
       contents: read
@@ -228,6 +229,7 @@ jobs:
         env:
           PHASES: ${{ inputs.phases }}
         run: |
+          case "${PHASES:-AB}" in A|AB) ;; *) echo "::error::phases는 A 또는 AB만 됨(B는 A 뒤에만 됨): $PHASES"; exit 1 ;; esac
           python3 scripts/emulator/obtainium_check.py \
             --old "${{ steps.apks.outputs.old }}" \
             --b-old "${{ steps.apks.outputs.bold }}" \

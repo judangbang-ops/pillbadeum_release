@@ -93,12 +93,22 @@ class Steps:
 
     def save(self, name: str) -> list[Node]:
         self.n += 1
-        nodes = dump_ui(tries=6)
+        nodes = screen_nodes()
         tag = f"{self.n:02d}-{name}"
         xml = adb("exec-out", "cat", UI_XML, check=False)
         (self.r.out / f"ui-{tag}.xml").write_text(xml, encoding="utf-8")
         self.r.shot(name)
         return nodes
+
+
+def screen_nodes() -> list[Node]:
+    """The screen's nodes, or none when uiautomator cannot dump it (a window that never drew its first frame)."""
+    try:
+        return dump_ui(tries=6)
+    except RuntimeError as exc:
+        if "not responding" in str(exc):
+            raise
+        return []
 
 
 def words(nodes: list[Node]) -> str:
@@ -177,7 +187,7 @@ def start_obtainium(steps: Steps, r: Report) -> None:
         end = time.time() + 45
         while time.time() < end:
             time.sleep(3)
-            if focused_package() == OBTAINIUM and words(dump_ui(tries=6)):
+            if focused_package() == OBTAINIUM and words(screen_nodes()):
                 if attempt > 1:
                     r.note(f"Obtainium이 {attempt}번째 시작에서 첫 화면을 그림(앞의 시작은 시작 화면에 멈춤)")
                 return
@@ -190,12 +200,15 @@ def start_obtainium(steps: Steps, r: Report) -> None:
 def close_first_dialogs(steps: Steps, r: Report) -> None:
     """Obtainium 1.7.4 opens with dialogs that a tester closes with [Okay]: 'Welcome' (a link to its README), then
     'Note' (Google's developer verification, keepandroidopen.org), seen in run 45019114890. Each is kept as a screen
-    and its title noted, for the testers' guide."""
-    for _ in range(5):
+    and its title noted, for the testers' guide. Both had [Okay] and the 'Dismiss' barrier behind them; the barrier
+    keeps an [OK] elsewhere on Obtainium's screens from being taken for a dialog."""
+    for tapped in range(6):
         nodes = dump_ui(tries=6)
         okay = node_with(nodes, OKAY_WORDS)
         if okay is None or node_with(nodes, ("Dismiss",)) is None:
             return
+        if tapped == 5:
+            break
         title = next((n.desc.split("\n")[0].strip() for n in nodes if n.desc.strip()), "")
         steps.save(f"obtainium-dialog-{title.lower() or 'untitled'}")
         r.note(f"Obtainium 첫 시작 대화상자 '{title}'를 [Okay]로 닫음")
@@ -427,7 +440,10 @@ def phase_b(r: Report, steps: Steps, b_old: Path, code: str) -> None:
             jobs = obtainium_jobs(r, "b-end")
         finally:
             log.terminate()
-            log.wait(timeout=30)
+            try:
+                log.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                log.kill()
     r.note(f"Obtainium 예약 작업(JobScheduler) {waited // 60}분 {waited % 60}초 뒤: {', '.join(jobs) or '없음'}")
     for line in obtainium_log(log_path)[:25]:
         r.note(f"Obtainium 기록: `{line}`")

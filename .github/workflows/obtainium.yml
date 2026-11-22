@@ -1,0 +1,217 @@
+# 테스터 폰 자동 업데이트 확인 (TASK-055, REQ-096, TC-089). 에뮬레이터(API 34)에 테스터 폰과 같은 상태를 만들고,
+# 진짜 Obtainium이 이 저장소 GitHub 릴리즈의 최신 APK로 업데이트하는지 봄. 흐름과 이유는
+# scripts/emulator/obtainium_check.py 첫 주석.
+#
+# - 옛 APK: 테스터 폰의 개인 APK와 같은 커밋(기본 92c5cb6, versionCode 274, versionName 0.1.0)을 이 실행에서 빌드해
+#   앱 서명 키로 서명함. 그래서 그 작업은 환경 personal-apk(main만)에서 돌고, 서명한 APK는 하루만 아티팩트로 둠
+# - 새 APK: GitHub 릴리즈의 최신 것. Obtainium이 직접 받음. 이 워크플로는 그 태그의 버전 번호와 인증서만 확인함
+# - Obtainium: ImranR98/Obtainium GitHub 릴리즈의 APK. 패키지 이름과 서명 인증서 SHA-256을 README 값과 대조함
+# - 수동 실행만, main에서만. 스크립트를 고치는 동안은 입력 script_ref로 브랜치의 확인 스크립트를 씀
+# - 이 파일과 스크립트를 main에 합쳐도 아무것도 배포되지 않음(release.yml이 돌지 않는 경로라 publish-apk.yml도 건너뜀)
+name: 에뮬레이터 Obtainium 업데이트 확인
+
+on:
+  workflow_dispatch:
+    inputs:
+      old_commit:
+        description: "테스터 폰에 깔린 개인 APK의 커밋 (기본 92c5cb6, versionCode 274)"
+        required: false
+        default: 92c5cb6579c19151ac1989576a36667f752b75a9
+      obtainium_tag:
+        description: "Obtainium 릴리즈 태그 (비우면 최신)"
+        required: false
+        default: ""
+      phases:
+        description: "A(첫 업데이트), B(손대지 않는 업데이트) 또는 AB"
+        required: false
+        default: AB
+      script_ref:
+        description: "확인 스크립트를 가져올 브랜치·커밋 (비우면 이 실행의 main). 비밀값이 없는 check 작업에서만 씀"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: obtainium
+  cancel-in-progress: false
+
+env:
+  # 앱 서명 키 인증서 SHA-256 (공개값, publish-apk.yml과 같음)
+  APP_SIGNING_CERT_SHA256: "35:64:B6:82:4B:1E:3D:A0:74:7A:2E:97:96:6E:F5:5D:B9:CC:93:C5:E8:8A:7D:45:24:64:2F:E6:2A:32:95:36"
+  # Obtainium 서명 인증서 SHA-256 (Obtainium README, 2026-11-22 읽음. docs/07-qa/obtainium-testers.md 1단계와 같음)
+  OBTAINIUM_CERT_SHA256: "B3:53:60:1F:6A:1D:5F:D6:60:3A:E2:F5:0B:E8:0C:F3:01:36:7B:86:B6:AB:8B:1F:66:24:3D:A9:6C:D5:73:62"
+
+jobs:
+  old-apk:
+    name: 테스터 폰과 같은 옛 APK (앱 서명 키)
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: personal-apk
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: 옛 커밋 펼치기와 버전 번호
+        shell: bash
+        env:
+          OLD: ${{ inputs.old_commit }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$OLD" =~ ^[0-9a-f]{40}$ ]]; then echo "::error::커밋은 전체 SHA 40자여야 함: $OLD"; exit 1; fi
+          if ! git merge-base --is-ancestor "$OLD" HEAD; then echo "::error::커밋 ${OLD:0:7}이 main 이력 안에 없음"; exit 1; fi
+          code="$(git rev-list --count "$OLD")"
+          git worktree add --detach old-build "$OLD"
+          echo "OLD_CODE=$code" >> "$GITHUB_ENV"
+          echo "옛 커밋 ${OLD:0:7}, versionCode $code" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: gradle/actions/wrapper-validation@0723195856401067f7a2779048b490ace7a47d7c # v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: 서명하지 않은 옛 릴리즈 APK
+        working-directory: old-build
+        run: PILLBADEUM_VERSION_CODE="$OLD_CODE" ./gradlew --no-daemon :androidApp:assembleRelease
+
+      # publish-apk.yml의 서명 단계와 같음. 키 파일은 이 단계 안에서만 있고 끝나면 지움
+      - name: 앱 서명 키로 서명
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.APP_SIGNING_KEYSTORE_BASE64 }}
+          APP_SIGNING_PASSWORD: ${{ secrets.APP_SIGNING_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$APP_SIGNING_PASSWORD" ]; then
+            echo "::error::환경 personal-apk에 앱 서명 키 비밀값이 없음"; exit 1
+          fi
+          bt="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)"
+          unsigned=old-build/androidApp/build/outputs/apk/release/androidApp-release-unsigned.apk
+          mkdir -p "$RUNNER_TEMP/old"
+          aligned="$RUNNER_TEMP/aligned.apk"
+          if "$bt/zipalign" -c -P 16 4 "$unsigned"; then cp "$unsigned" "$aligned"; else "$bt/zipalign" -f -P 16 4 "$unsigned" "$aligned"; fi
+          umask 077
+          ks="$RUNNER_TEMP/app-signing.p12"
+          trap 'rm -f "$ks"' EXIT
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$ks"
+          "$bt/apksigner" sign --ks "$ks" --ks-type PKCS12 --ks-key-alias app-signing \
+            --ks-pass env:APP_SIGNING_PASSWORD --key-pass env:APP_SIGNING_PASSWORD \
+            --v4-signing-enabled false --out "$RUNNER_TEMP/old/pillbadeum-old-$OLD_CODE.apk" "$aligned"
+
+      - name: 옛 APK 확인 (인증서, 버전)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bt="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)"
+          apk="$RUNNER_TEMP/old/pillbadeum-old-$OLD_CODE.apk"
+          certs="$("$bt/apksigner" verify --print-certs "$apk")"
+          actual="$(printf '%s\n' "$certs" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')"
+          if [ "$actual" != "$APP_SIGNING_CERT_SHA256" ]; then echo "::error::옛 APK 인증서가 앱 서명 키와 다름: $actual"; exit 1; fi
+          "$bt/aapt2" dump badging "$apk" | head -n 1 | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: obtainium-old-apk
+          path: ${{ runner.temp }}/old/
+          retention-days: 1
+          if-no-files-found: error
+
+  check:
+    name: Obtainium 업데이트 (API 34)
+    needs: old-apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # 스크립트를 고치며 다시 돌릴 때 main에 매번 합치지 않으려고 script_ref를 받음. 이 작업엔 비밀값이 없고
+      # 토큰은 읽기만 됨. 앱 서명 키를 쓰는 old-apk 작업은 언제나 main의 파일로 돎
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.script_ref || github.sha }}
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: obtainium-old-apk
+          path: ${{ runner.temp }}/old
+
+      - name: 최신 릴리즈와 Obtainium 받기
+        id: apks
+        shell: bash
+        env:
+          OBTAINIUM_TAG: ${{ inputs.obtainium_tag }}
+        run: |
+          set -euo pipefail
+          bt="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)"
+          cert() { "$bt/apksigner" verify --print-certs "$1" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//'; }
+          tag="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"
+          code="${tag##*.}"
+          mkdir -p "$RUNNER_TEMP/release" "$RUNNER_TEMP/obtainium"
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern '*.apk' --dir "$RUNNER_TEMP/release"
+          rel="$(ls "$RUNNER_TEMP"/release/*.apk | head -n 1)"
+          if [ "$(cert "$rel")" != "$APP_SIGNING_CERT_SHA256" ]; then echo "::error::릴리즈 $tag의 인증서가 앱 서명 키와 다름"; exit 1; fi
+          "$bt/aapt2" dump badging "$rel" | head -n 1
+          echo "최신 릴리즈 $tag (versionCode $code)" | tee -a "$GITHUB_STEP_SUMMARY"
+          otag="${OBTAINIUM_TAG:-$(gh release view --repo ImranR98/Obtainium --json tagName --jq .tagName)}"
+          gh release download "$otag" --repo ImranR98/Obtainium --pattern '*.apk' --dir "$RUNNER_TEMP/obtainium"
+          ls -l "$RUNNER_TEMP/obtainium"
+          # x86_64 에뮬레이터: x86_64용 → 여러 ABI가 든 것 → arm64 순. F-Droid 빌드(패키지 이름이 다름)는 뺌
+          pick=""
+          for pat in '*x86_64*' '*universal*' 'app-release.apk' '*arm64*'; do
+            pick="$(find "$RUNNER_TEMP/obtainium" -name "$pat" ! -iname '*fdroid*' | head -n 1)"
+            [ -n "$pick" ] && break
+          done
+          if [ -z "$pick" ]; then echo "::error::Obtainium $otag에서 쓸 APK를 못 고름"; exit 1; fi
+          badging="$("$bt/aapt2" dump badging "$pick" | head -n 1)"
+          echo "$badging"
+          if ! grep -q "name='dev.imranr.obtainium'" <<< "$badging"; then echo "::error::Obtainium 패키지 이름이 다름"; exit 1; fi
+          if [ "$(cert "$pick")" != "$OBTAINIUM_CERT_SHA256" ]; then echo "::error::Obtainium 인증서가 README 값과 다름"; exit 1; fi
+          echo "Obtainium $otag: $(basename "$pick"), SHA-256 $(sha256sum "$pick" | cut -d' ' -f1)" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "obtainium=$pick" >> "$GITHUB_OUTPUT"
+          echo "old=$(ls "$RUNNER_TEMP"/old/*.apk | head -n 1)" >> "$GITHUB_OUTPUT"
+          echo "$bt" >> "$GITHUB_PATH"
+
+      - uses: ./.github/actions/android-emulator
+        with:
+          api: "34"
+          cores: "4"
+
+      - name: Obtainium 업데이트 확인 (scripts/emulator/obtainium_check.py)
+        env:
+          PHASES: ${{ inputs.phases }}
+        run: |
+          python3 scripts/emulator/obtainium_check.py \
+            --old "${{ steps.apks.outputs.old }}" \
+            --obtainium "${{ steps.apks.outputs.obtainium }}" \
+            --repo-url "https://github.com/$GITHUB_REPOSITORY" \
+            --code "${{ steps.apks.outputs.code }}" \
+            --phases "${PHASES:-AB}" \
+            --out "$RUNNER_TEMP/obtainium-check"
+
+      - name: 결과 표
+        if: ${{ !cancelled() }}
+        run: |
+          report="$RUNNER_TEMP/obtainium-check/report.md"
+          if [ -f "$report" ]; then cat "$report" >> "$GITHUB_STEP_SUMMARY"; else echo "보고서 없음" >> "$GITHUB_STEP_SUMMARY"; fi
+          cp "$RUNNER_TEMP/emulator.log" "$RUNNER_TEMP/obtainium-check/" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() }}
+        with:
+          name: obtainium-check
+          path: ${{ runner.temp }}/obtainium-check/
+          retention-days: 7
+          if-no-files-found: ignore

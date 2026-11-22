@@ -73,8 +73,11 @@ def adb(*args: str, check: bool = True, timeout: int = 120) -> str:
 # (run 43434875342, attempt 1). Once it printed first: on API 26 `getprop persist.sys.timezone` printed the zone, then
 # 255 (run 43560980439). A command that leaves the phone the same when it runs twice (a read, or setting a value) is
 # then sent again once adb sees the phone. A tap, a key, a broadcast or a clock change is not: it may have run.
+# A marker line in the phone log (`log -t`) is sent again too: reminder_check.py reads the last copy of a marker, and
+# a second copy is still before what follows it (API 26 run 45012384670 lost the phone on `log -t` before RR-92).
 AGAIN = re.compile(r"""
     (getprop|setprop|id|cat|ls|find|pidof|rm\ -f|wm\ size|bmgr\ list|settings\ (get|put)|am\ force-stop|appops\ set
+    |log\ -t
     |pm\ grant|svc\ power\ stayon|cmd\ uimode\ night|dumpsys\ (alarm|notification|window|activity|package))(\s|$)
     |date\ '?\+""", re.X)
 # Where it happened, for the report: the command by its first two words only (a whole command can hold the throwaway

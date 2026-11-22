@@ -36,7 +36,7 @@ internal fun accessNotice(remindersOn: Boolean, access: ReminderAccess?): Access
  * what keeps reminders from coming, TASK-026). Android gives its own; a test can give one that records the calls.
  */
 interface Phone {
-    /** The installed version (`versionName`, `0.1.0`), shown under `앱 정보`. */
+    /** The installed version (`versionName`, `0.1.0.<versionCode>` since TASK-055), shown under `앱 정보`. */
     val appVersion: String
 
     /** Android 8.x (API 26, 27): the app's backup rules skip the backup there on purpose (REQ-054, supplement B-3). */

@@ -10,6 +10,29 @@
 
 ## 2026-11-22
 
+### 테스터 폰 자동 업데이트 준비 (REQ-096, TASK-055)
+
+- **목표**: 2026-11-22 16:07 KST 동희님 "다음 apk부터는 우리쪽에서 업데이트하면 자동으로 그쪽에서도 업데이트 되게끔 만들어줘". 방식 카드(16:12 KST)의 답을 기다리는 동안, Claude 추천 (0)과 (1)에 함께 쓰는 것을 만듦. 키를 넣기 전에는 아무것도 올리지 않음
+- **기능 변경 단계 대조** (CORTHEX 5장, 승인된 01~12를 차례로 봄)
+  - 01 도메인: 바뀜 없음. 앱 안의 규칙·용어가 그대로이고, 사건 '새 버전이 설치됨'은 CTX-005(설치·백업)에 이미 있음([도메인](../01-domain/domain.md) 3장)
+  - 02 요구: REQ-096을 더함(비기능, Must). REQ-057(인터넷 권한 없음)은 그대로 지킴
+  - 03 흐름: 바뀜 없음. REQ-096을 [흐름 밖](../03-user-flow/README.md) '출시'에 넣음(업데이트는 앱 밖의 Obtainium이 함)
+  - 04 명세: 바뀜 없음. 앱 동작이 같음. 설정 '앱 정보'의 버전은 "앱 패키지의 버전 이름"이라 글자만 `0.1.0` → `0.1.0.<번호>`로 바뀜
+  - 05 ERD, 07 사이트맵, 08 화면 상태, 09 목업: 바뀜 없음(화면·데이터 그대로)
+  - 10 WBS: TASK-055를 더함
+  - 11 개발: 버전 이름, 배포 워크플로, 테스터 안내
+  - 12 QA: TC-089를 더함
+  - 승인된 것 중 바꾸는 것: 2026-11-12에 정한 '앱 서명 키는 GitHub에 올리지 않음'. 카드 (0)을 고르시면 바뀌고, (1)이면 그대로임. 따로 여쭌 카드가 이것임
+- **한 일**
+  - `androidApp/build.gradle.kts`: `versionName`을 `0.1.0.<versionCode>`로. Obtainium은 깔린 앱의 버전 이름과 릴리즈 태그를 비교함. 버전 이름이 늘 `0.1.0`이면 새 빌드를 구별하지 못함(Obtainium `version_service.dart`·`version_normalization.dart`를 읽고 정함)
+  - `.github/workflows/publish-apk.yml`: release-emulator.yml이 main 푸시에서 성공하면 같은 커밋의 release.yml 아티팩트(서명 안 한 APK)를 받아 앱 서명 키로 서명하고 GitHub 릴리즈 `v0.1.0.<versionCode>`에 올림. 올리기 전 확인: 서명자 하나, 인증서 SHA-256 = 앱 서명 키 지문, 패키지 이름, versionCode = 커밋 수, versionName, debuggable 아님, 정렬, 권한 목록(INTERNET 없음). 이미 올린 것보다 versionCode가 크지 않으면 건너뜀. 환경 `personal-apk`에 키가 없으면 건너뜀. 두 워크플로의 paths가 달라 release.yml이 그 커밋에 돌지 않았으면 건너뛰고, 아직 도는 중이면 최대 20분 기다림
+  - [Obtainium 안내](../07-qa/obtainium-testers.md): 테스터가 한 번 하는 설정 5단계와 안 될 때
+- **확인** (이 컨테이너, 2026-11-22): `PILLBADEUM_VERSION_CODE=299`로 `:androidApp:assembleRelease`를 빌드하고, 워크플로의 서명·확인 단계 본문을 YAML에서 그대로 꺼내 돌림. 앱 서명 키 대신 keytool로 만든 시험용 PKCS12 키(별칭 app-signing)를 쓰고, 기대 지문도 그 키 값으로 바꿈
+  - 통과: 서명자 1, v2·v3 서명, v4 없음, 정렬, 패키지 `com.judangbang.pillbadeum`, versionCode 299, versionName `0.1.0.299`, 권한 목록이 기준과 같음(8줄, INTERNET 없음). 서명 뒤 키 파일이 지워진 것도 봄
+  - 막는지: 기대 지문을 진짜 앱 서명 키 값으로 두면 "서명 인증서 SHA-256이 앱 서명 키 지문과 다름"으로 실패, CODE를 300으로 두면 "versionCode 299가 커밋 수 300와 다름"으로 실패
+  - 안 한 것: 진짜 앱 서명 키 서명, `gh release`·`gh run` 단계(Actions에서만 됨), Obtainium 실제 덮어 깔기(TC-089)
+- **다음 행동**: 카드 답에 따라 (0)이면 동희님 PC에서 환경 `personal-apk`(main만)를 만들고 키를 넣음, (1)이면 PC 예약 작업으로 서명해 올리는 스크립트를 씀. 그 뒤 에뮬레이터에서 Obtainium 덮어 깔기를 확인(TC-089)
+
 ### 결정 Q11: Play 출시 보류, APK만 (TASK-048)
 
 - **목표**: Q11 답장(아래)을 받아 개발자 계정 종류를 정함

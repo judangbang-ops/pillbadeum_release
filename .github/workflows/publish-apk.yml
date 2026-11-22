@@ -1,0 +1,236 @@
+# 개인 APK 자동 배포 (TASK-055, REQ-096). 테스터 폰의 Obtainium이 이 저장소의 GitHub 릴리즈를 보고 업데이트함.
+#
+# 흐름: main 푸시 → release.yml(서명 안 한 릴리즈 APK)과 release-emulator.yml(같은 커밋의 덮어 깔기·알림 확인)이 돎
+#       → release-emulator.yml이 성공하면 이 워크플로가 release.yml의 같은 커밋 아티팩트를 받아 앱 서명 키로 서명하고
+#       GitHub 릴리즈 v<versionName>에 APK를 올림.
+#
+# 지키는 것
+# - 앱 서명 키는 환경 personal-apk의 비밀값(APP_SIGNING_KEYSTORE_BASE64·APP_SIGNING_KEYSTORE_PASSWORD)에만 둠.
+#   환경의 배포 브랜치는 main만 허용하도록 설정함(저장소 설정 > Environments). 비밀값이 없으면 서명·배포를 건너뛰고 초록으로 끝남
+# - 서명한 APK의 인증서 SHA-256이 APP_SIGNING_CERT_SHA256(테스터 폰에 깔린 APK와 같은 키)과 다르면 올리지 않음
+# - REQ-057: INTERNET 권한이 없고 권한 목록이 androidApp/expected-permissions.txt와 같아야 올림
+# - 이미 올린 것보다 versionCode가 크지 않으면 올리지 않음(옛 실행을 다시 돌려도 테스터 폰이 내려가지 않음)
+# - pull_request를 받지 않음. workflow_run은 기본 브랜치(main)의 이 파일로 돎
+# - 키는 서명 단계 안에서만 파일로 꺼내고 끝나면 지움. 비밀번호는 apksigner에 환경 변수로만 넘김
+name: 개인 APK 배포
+
+on:
+  workflow_run:
+    workflows: ["릴리즈 변형 에뮬레이터 확인"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: "배포할 main 커밋(전체 SHA). 비우면 main 맨 끝"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-apk
+  cancel-in-progress: false
+
+env:
+  # 앱 서명 키 인증서 SHA-256 (공개값, 2026-11-12 만듦). scripts/sign-personal-apk.ps1의 $ExpectedCertSha256과 같음
+  APP_SIGNING_CERT_SHA256: "35:64:B6:82:4B:1E:3D:A0:74:7A:2E:97:96:6E:F5:5D:B9:CC:93:C5:E8:8A:7D:45:24:64:2F:E6:2A:32:95:36"
+  PACKAGE: com.judangbang.pillbadeum
+
+jobs:
+  publish:
+    name: 앱 서명 키로 서명하고 GitHub 릴리즈에 올리기
+    # main 푸시로 돈 에뮬레이터 확인이 성공했을 때만. 수동 실행은 main에서만(환경 규칙도 main만 허용)
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+      || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: personal-apk
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: main
+          # 버전 번호(커밋 수)와 main 이력 확인에 전체 이력이 필요함
+          fetch-depth: 0
+
+      - name: 배포할 커밋과 버전
+        id: target
+        shell: bash
+        env:
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          INPUT_SHA: ${{ inputs.commit }}
+        run: |
+          sha="${RUN_SHA:-$INPUT_SHA}"
+          sha="${sha:-$(git rev-parse HEAD)}"
+          if ! [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::커밋은 전체 SHA 40자여야 함: $sha"; exit 1
+          fi
+          if ! git merge-base --is-ancestor "$sha" HEAD; then
+            echo "::error::커밋 ${sha:0:7}이 main 이력 안에 없음"; exit 1
+          fi
+          code="$(git rev-list --count "$sha")"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "커밋 ${sha:0:7}, versionCode $code" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: 키가 있는지, 이미 올렸는지
+        id: gate
+        shell: bash
+        env:
+          HAS_KEY: ${{ secrets.APP_SIGNING_KEYSTORE_BASE64 != '' && secrets.APP_SIGNING_KEYSTORE_PASSWORD != '' }}
+          CODE: ${{ steps.target.outputs.code }}
+        run: |
+          if [ "$HAS_KEY" != "true" ]; then
+            echo "::notice::환경 personal-apk에 앱 서명 키 비밀값이 없어 배포를 건너뜀"
+            echo "앱 서명 키 비밀값이 없어 건너뜀" >> "$GITHUB_STEP_SUMMARY"
+            echo "go=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          # 올린 릴리즈 태그 v0.1.0.<versionCode> 중 가장 큰 versionCode
+          latest="$(gh release list --limit 100 --json tagName --jq '.[].tagName' | sed -n 's/^v[0-9]*\.[0-9]*\.[0-9]*\.\([0-9]*\)$/\1/p' | sort -n | tail -n 1)"
+          echo "올린 것 중 가장 큰 versionCode: ${latest:-없음}" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ -n "$latest" ] && [ "$CODE" -le "$latest" ]; then
+            echo "::notice::versionCode $CODE은 이미 올린 $latest보다 크지 않아 건너뜀"
+            echo "go=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "go=true" >> "$GITHUB_OUTPUT"
+
+      - name: release.yml의 같은 커밋 실행에서 서명 안 한 APK 받기
+        id: unsigned
+        if: steps.gate.outputs.go == 'true'
+        shell: bash
+        env:
+          SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          set -euo pipefail
+          # 두 워크플로의 paths가 달라 release.yml이 이 커밋에 돌지 않았을 수 있음(예: scripts/emulator만 바뀜).
+          # 그때는 앱 빌드가 바뀌지 않은 것이라 건너뜀. 아직 도는 중이면 최대 20분 기다림
+          run_id=""
+          for i in $(seq 1 40); do
+            row="$(gh run list --workflow release.yml --branch main --commit "$SHA" --event push --limit 1 \
+              --json databaseId,status,conclusion --jq '.[0] | select(.) | "\(.databaseId) \(.status) \(.conclusion)"')"
+            if [ -z "$row" ]; then
+              echo "::notice::커밋 ${SHA:0:7}에 release.yml 실행이 없어(앱 빌드 파일이 안 바뀜) 건너뜀"
+              echo "go=false" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+            read -r id status conclusion <<< "$row"
+            if [ "$status" = "completed" ]; then
+              if [ "$conclusion" != "success" ]; then
+                echo "::error::커밋 ${SHA:0:7}의 release.yml 실행 $id가 $conclusion으로 끝남"; exit 1
+              fi
+              run_id="$id"; break
+            fi
+            echo "release.yml 실행 $id가 아직 $status. 30초 뒤 다시 봄 ($i/40)"; sleep 30
+          done
+          if [ -z "$run_id" ]; then echo "::error::release.yml 실행이 20분 안에 끝나지 않음"; exit 1; fi
+          echo "release.yml 실행 $run_id" | tee -a "$GITHUB_STEP_SUMMARY"
+          mkdir -p "$RUNNER_TEMP/unsigned"
+          gh run download "$run_id" --name release-apk-unsigned --dir "$RUNNER_TEMP/unsigned"
+          ls -l "$RUNNER_TEMP/unsigned"
+          echo "go=true" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v5
+        if: steps.unsigned.outputs.go == 'true'
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: 앱 서명 키로 서명 (zipalign 확인 → apksigner, v4 서명 끔)
+        if: steps.unsigned.outputs.go == 'true'
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.APP_SIGNING_KEYSTORE_BASE64 }}
+          APP_SIGNING_PASSWORD: ${{ secrets.APP_SIGNING_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          bt="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)"
+          unsigned="$(ls "$RUNNER_TEMP"/unsigned/*.apk | head -n 1)"
+          work="$RUNNER_TEMP/sign"; mkdir -p "$work"
+          if "$bt/zipalign" -c -P 16 4 "$unsigned"; then
+            cp "$unsigned" "$work/aligned.apk"
+          else
+            echo "정렬이 맞지 않아 zipalign으로 맞춘 사본에 서명함"
+            "$bt/zipalign" -f -P 16 4 "$unsigned" "$work/aligned.apk"
+          fi
+          umask 077
+          ks="$RUNNER_TEMP/app-signing.p12"
+          trap 'rm -f "$ks"' EXIT
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$ks"
+          # 별칭 app-signing은 공개값(scripts/sign-personal-apk.ps1과 같음). PKCS12는 키 비밀번호가 저장소 비밀번호와 같음
+          "$bt/apksigner" sign --ks "$ks" --ks-type PKCS12 --ks-key-alias app-signing \
+            --ks-pass env:APP_SIGNING_PASSWORD --key-pass env:APP_SIGNING_PASSWORD \
+            --v4-signing-enabled false --out "$work/signed.apk" "$work/aligned.apk"
+          echo "SIGNED_APK=$work/signed.apk" >> "$GITHUB_ENV"
+
+      - name: 서명한 APK 확인 (인증서·서명자·패키지·버전·debuggable·정렬·권한)
+        if: steps.unsigned.outputs.go == 'true'
+        shell: bash
+        env:
+          CODE: ${{ steps.target.outputs.code }}
+        run: |
+          set -euo pipefail
+          bt="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)"
+          verify="$("$bt/apksigner" verify --print-certs --verbose "$SIGNED_APK")"
+          # apksigner 0.9(build-tools 37)는 'V3.0 Signer: certificate SHA-256 digest: …', 그 전 버전은
+          # 'Signer #1 certificate SHA-256 digest: …'로 씀. 어느 형식이든 서명자는 하나, 서명 인증서도 하나여야 함
+          signers="$(grep -E '^Number of signers: [0-9]+$' <<< "$verify" | sed 's/.*: //' | tr '\n' ' ' | sed 's/ $//')"
+          if [ "$signers" != "1" ]; then echo "::error::서명자가 1명이 아님 (Number of signers: $signers)"; exit 1; fi
+          digests="$(grep -oE 'Signer\b.*\bcertificate SHA-256 digest: [0-9a-fA-F]{64}' <<< "$verify" | sed 's/.*digest: //' | tr 'a-f' 'A-F' | sort -u)"
+          if [ "$(grep -c . <<< "$digests")" != "1" ]; then echo "::error::서명 인증서가 1개가 아님"; exit 1; fi
+          actual="$(sed 's/../&:/g; s/:$//' <<< "$digests")"
+          if [ "$actual" != "$APP_SIGNING_CERT_SHA256" ]; then
+            echo "::error::서명 인증서 SHA-256이 앱 서명 키 지문과 다름: $actual"; exit 1
+          fi
+          "$bt/zipalign" -c -P 16 4 "$SIGNED_APK"
+          badging="$("$bt/aapt2" dump badging "$SIGNED_APK")"
+          line="$(grep -m1 '^package: ' <<< "$badging")"
+          name="$(sed -n "s/^package: name='\([^']*\)'.*/\1/p" <<< "$line")"
+          code="$(sed -n "s/.* versionCode='\([^']*\)'.*/\1/p" <<< "$line")"
+          vname="$(sed -n "s/.* versionName='\([^']*\)'.*/\1/p" <<< "$line")"
+          if [ "$name" != "$PACKAGE" ]; then echo "::error::패키지 이름이 다름: $name"; exit 1; fi
+          if [ "$code" != "$CODE" ]; then echo "::error::versionCode $code가 커밋 수 $CODE와 다름"; exit 1; fi
+          if [ "$vname" != "0.1.0.$CODE" ]; then echo "::error::versionName $vname이 0.1.0.$CODE가 아님"; exit 1; fi
+          if grep -q '^application-debuggable' <<< "$badging"; then echo "::error::debuggable APK"; exit 1; fi
+          "$bt/aapt2" dump permissions "$SIGNED_APK" > "$RUNNER_TEMP/permissions.txt"
+          python3 .github/scripts/check_permissions.py "$RUNNER_TEMP/permissions.txt" androidApp/expected-permissions.txt "배포할 APK" | tee -a "$GITHUB_STEP_SUMMARY"
+          {
+            echo "| 확인 | 값 |"
+            echo "| --- | --- |"
+            echo "| 서명 인증서 SHA-256 | \`$actual\` (앱 서명 키) |"
+            echo "| 패키지 | \`$name\` |"
+            echo "| versionCode / versionName | $code / $vname |"
+            echo "| 파일 SHA-256 | \`$(sha256sum "$SIGNED_APK" | cut -d' ' -f1)\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "VERSION_NAME=$vname" >> "$GITHUB_ENV"
+
+      - name: GitHub 릴리즈 만들기 (Obtainium이 보는 곳)
+        if: steps.unsigned.outputs.go == 'true'
+        shell: bash
+        env:
+          SHA: ${{ steps.target.outputs.sha }}
+          CODE: ${{ steps.target.outputs.code }}
+        run: |
+          set -euo pipefail
+          tag="v$VERSION_NAME"
+          asset="$RUNNER_TEMP/pillbadeum-$VERSION_NAME.apk"
+          cp "$SIGNED_APK" "$asset"
+          file_sha="$(sha256sum "$asset" | cut -d' ' -f1)"
+          notes="$RUNNER_TEMP/notes.md"
+          {
+            echo "필받음 개인 APK $VERSION_NAME (versionCode $CODE, 커밋 ${SHA:0:7})."
+            echo
+            echo "- 앱 서명 키로 서명함. 인증서 SHA-256 \`$APP_SIGNING_CERT_SHA256\`"
+            echo "- APK 파일 SHA-256 \`$file_sha\`"
+            echo "- 같은 키로 서명한 앞 버전 위에 덮어 깔면 기록이 남음. 다른 키로 서명한 APK가 깔린 폰에는 깔리지 않음"
+            echo "- 테스터 폰은 Obtainium이 이 릴리즈를 보고 업데이트함([안내](https://github.com/$GH_REPO/blob/main/docs/07-qa/obtainium-testers.md))"
+          } > "$notes"
+          gh release create "$tag" "$asset" --target "$SHA" --title "필받음 $VERSION_NAME" --notes-file "$notes" --latest
+          echo "릴리즈 $tag를 만듦" | tee -a "$GITHUB_STEP_SUMMARY"

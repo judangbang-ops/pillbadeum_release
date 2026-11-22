@@ -7,7 +7,7 @@
 
 ## 0. 읽는 법
 
-- **TC**: `TC-001`부터. TC-001~043은 같은 번호의 SPEC 한 줄씩, TC-044~053은 흐름 FL-001~010, TC-054~077은 비기능 요구, TC-078~087은 화면 하나의 모든 상태. TC-088은 04 고정(2026-11-13) 때 더한 SPEC-044(번호를 다시 쓰지 않으려고 끝에 붙임)
+- **TC**: `TC-001`부터. TC-001~043은 같은 번호의 SPEC 한 줄씩, TC-044~053은 흐름 FL-001~010, TC-054~077은 비기능 요구, TC-078~087은 화면 하나의 모든 상태. TC-088은 04 고정(2026-11-13) 때 더한 SPEC-044(번호를 다시 쓰지 않으려고 끝에 붙임). TC-089는 2026-11-22에 더한 비기능 요구 REQ-096(테스터 폰 자동 업데이트)이고 3장 끝에 둠
 - **방법**
   - `jvm`: `./gradlew :shared:jvmTest`의 시험. CI가 PR마다 돌림
   - 앱 시험: `./gradlew :androidApp:testDebugUnitTest`의 Robolectric 시험(`WidgetRenderTest`, `AppScreenTest`, `WidgetPickTest`, 알림 흐름 `ReminderFlowTest` 등). Android 15의 뷰·Compose·글꼴로 위젯과 앱 화면을 그리고 PNG를 남김. 2026-11-13 `3de3b16`(PR #19)부터 CI가 PR마다 돌림. 그 전에 '로컬'이라 적은 결과는 그때 컨테이너에서 돌린 것. 런처·실기기·TalkBack 자체는 아님
@@ -112,6 +112,7 @@
 | TC-075 | Play Console 앱 콘텐츠 완료, 앱 안 개인정보처리방침 | REQ-063 | Play Console, SCR-009 | 안 함. 답 초안 있음([앱 콘텐츠 답](../release/play-app-content.md), 2026-11-15). [방침](../release/privacy-policy.md)은 2026-11-16 저장소 파일 주소로 공개함. 앱 안 링크는 TASK-035의 다음 PR(TC-036). **보류** (2026-11-22 결정 Q11 D: Play 출시 보류, APK만) |
 | TC-076 | 스토어 설명에 의료기기 아님·의료인 상의 문구 | REQ-064 | 스토어 설명 문안 (TASK-037) | 초안 통과 (CI `check_wording.py`, 2026-11-15): [자세한 설명](../release/listing/ko-KR/full_description.txt)에 '의료기기가 아니며 … 진단·처치·치료·예방하지 않아요'와 '의학적인 조언 … 의료 전문가와 상의'가 있음. Play 입력은 TASK-038 |
 | TC-077 | 새 개인 계정이면 테스터 12명 14일 | REQ-065 | 비공개 테스트 참여 기록 | 안 함. **보류** (2026-11-22 결정 Q11 D: Play 출시 보류, APK만) |
+| TC-089 | 테스터 폰 자동 업데이트: main 앱 빌드가 앱 서명 키로 서명돼 GitHub 릴리즈에 올라가고, Obtainium이 첫 업데이트 뒤 다음 릴리즈를 확인 창 없이 깖 | REQ-096 | `publish-apk.yml` 요약(인증서 SHA-256, 권한, 버전), 에뮬레이터에 Obtainium을 깔고 릴리즈 두 개로 덮어 깔기 (TASK-055) | 안 함. 워크플로 초안(2026-11-22) |
 
 ## 4. 화면 상태
 

@@ -64,6 +64,7 @@ ADD_APP_WORDS = ("Add App", "Add app")
 UPDATE_WORDS = ("Update", "Install", "Update all", "Install update", "Install updates")
 CONFIRM_WORDS = ("Update", "Install", "UPDATE", "INSTALL")
 URL_HINTS = ("App source URL", "App Source URL", "URL")
+OKAY_WORDS = ("Okay", "OK")
 
 
 class Steps:
@@ -169,9 +170,27 @@ def start_obtainium(steps: Steps, r: Report) -> None:
     raise RuntimeError("Obtainium stayed on its splash screen in 3 starts")
 
 
+def close_first_dialogs(steps: Steps, r: Report) -> None:
+    """Obtainium 1.7.4 opens with dialogs that a tester closes with [Okay]: 'Welcome' (a link to its README), then
+    'Note' (Google's developer verification, keepandroidopen.org), seen in run 45019114890. Each is kept as a screen
+    and its title noted, for the testers' guide."""
+    for _ in range(5):
+        nodes = dump_ui(tries=6)
+        okay = node_with(nodes, OKAY_WORDS)
+        if okay is None or node_with(nodes, ("Dismiss",)) is None:
+            return
+        title = next((n.desc.split("\n")[0].strip() for n in nodes if n.desc.strip()), "")
+        steps.save(f"obtainium-dialog-{title.lower() or 'untitled'}")
+        r.note(f"Obtainium 첫 시작 대화상자 '{title}'를 [Okay]로 닫음")
+        tap(okay)
+        time.sleep(2)
+    raise RuntimeError(f"Obtainium dialogs did not close: {words(dump_ui())}")
+
+
 def open_add_screen(steps: Steps, r: Report, repo_url: str) -> str:
     """Obtainium's add screen with repo_url in its URL field. Returns how it was opened."""
     start_obtainium(steps, r)
+    close_first_dialogs(steps, r)
     steps.save("obtainium-first")
     sh(f"am start -a android.intent.action.VIEW -d 'obtainium://add/{repo_url}' {OBTAINIUM}", check=False)
     time.sleep(6)
@@ -183,6 +202,7 @@ def open_add_screen(steps: Steps, r: Report, repo_url: str) -> str:
     time.sleep(2)
     if focused_package() != OBTAINIUM:
         start_obtainium(steps, r)
+    close_first_dialogs(steps, r)
     nav = wait_for(ADD_APP_WORDS, 20)
     if nav is None:
         steps.save("no-add-app")
@@ -215,7 +235,7 @@ def add_repo(steps: Steps, r: Report, repo_url: str) -> str:
         nodes = dump_ui(tries=6)
         if node_with(nodes, UPDATE_WORDS) or any("pillbadeum" in (n.text + n.desc).lower() for n in nodes):
             break
-        ok = node_with(nodes, ("OK", "Continue", "Yes"))
+        ok = node_with(nodes, ("OK", "Okay", "Continue", "Yes"))
         if ok is not None:
             steps.save("add-dialog")
             tap(ok)

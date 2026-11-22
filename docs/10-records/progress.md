@@ -10,6 +10,62 @@
 
 ## 2026-11-22
 
+### 결정: 테스터 폰 자동 업데이트는 Obtainium + CI 자동 서명 (TASK-055)
+
+- **받은 말**: 2026-11-22 19:06 KST 동희님이 이 작업 스레드의 카드 "테스터 폰 자동 업데이트를 어떤 방식으로 할까요?"에서 'Obtainium, CI 자동 서명'을 고름(16:12 KST에 낸 카드의 첫째 선택지, Claude 추천)
+- **바뀐 것**: 2026-11-12에 정한 '앱 서명 키는 GitHub에 올리지 않음'. 앱 서명 키를 main에서 도는 작업만 읽는 GitHub 환경 `personal-apk`의 비밀값으로 둠. 원본은 그대로 동희님 PC와 Drive 사본
+- **한 일**
+  - 19:08 KST 동희님 PC(gh, kodonghui)에서 환경 `personal-apk`를 만듦. 배포 브랜치 정책은 직접 지정이고 `main` 하나뿐(GET으로 1개 확인). 저장소가 공개라 무료 요금제에서도 환경 비밀값을 쓸 수 있음
+  - PC의 `pillbadeum-app-signing.p12`(별칭 app-signing)의 인증서 SHA-256이 `35:64:B6:…:95:36`(테스터 폰의 APK와 같은 키)인 것을 keytool로 확인. 키 폴더의 파일은 읽기만 함(수정 시각 그대로), 임시 파일 없음
+  - 문서: [Obtainium 안내](../07-qa/obtainium-testers.md) '정함' 줄, [작업 표](../08-wbs/wbs.md) TASK-055와 저장소 설정의 한계 줄, `release.yml` 머리 주석, `scripts/sign-personal-apk.ps1` 설명
+- **막힌 것**: 비밀값 2개(`APP_SIGNING_KEYSTORE_BASE64`·`APP_SIGNING_KEYSTORE_PASSWORD`)를 올리려는 순간 PC의 Claude Code 자동 모드가 [Sensitive Information Leakage]로 막음. 카드 선택은 PC 쪽에 동희님의 글로 보이지 않았음. 다시 시도하지 않음. 19:13 KST 동희님께 스레드에 한 줄을 직접 써 주시길 부탁함. 지금 환경 비밀값 0개, 저장소 범위에는 `ANDROID_UPLOAD_*` 3개뿐
+- **알아 둘 것**: 그 PC의 PowerShell은 gh로 파이프할 때 앞에 BOM 3바이트를 붙임. 그대로 올리면 비밀값이 깨지므로 정확한 바이트만 보냄
+- **다음 행동**: 동희님 글을 받으면 비밀값을 올리고 목록을 확인함. 비밀값이 없으면 `publish-apk.yml`은 건너뛰고 초록으로 끝나므로 PR #55는 먼저 합침. 키가 들어가면 main에서 `publish-apk.yml`을 수동 실행해 첫 릴리즈의 인증서를 확인하고, 에뮬레이터에서 TC-089를 함
+
+### 에뮬레이터 QA: 실행 11개 모두 통과, TASK-032·052·054 끝남 (PR #55)
+
+- **목표**: 16:07 KST 동희님 "전체적으로 QA는 너가 직접 해". 시험 계획의 에뮬레이터 확인 전부를 같은 빌드로 다시 돌리고, TASK-032·052·054를 2026-11-22에 바꾼 끝난 조건으로 닫을 수 있는지 봄
+- **한 일**
+  - 16:32~16:33 KST에 실행 11개를 시작함: main `d0818b9` 수동 실행 7개(둘러보기, 화면 확인 1·2부, 접근성, 알림, 백업·복원, 위젯 크기)와 PR #55 병합 커밋 `8dcd9a4`의 PR 실행 4개(기기 스크립트, 회귀, 업데이트, 릴리즈 변형). 아티팩트 24개의 보고서를 모두 읽고 캡처를 봄
+  - [에뮬레이터 QA 보고서](../07-qa/2026-11-22-emulator-qa/report.md)와 그림 7장(잠금 화면 여덟 칸 × API 4개, 위젯, 둘러보기, 릴리즈 변형)
+  - [시험 계획](../12-qa/test-plan.md): 머리 상태를 '에뮬레이터 QA 반영'으로, '지금' 열 TC-013·044·045·046·052·053·054·055·057·059·060·078·080·081, BUG-001·003·004, 7장 셈
+  - [요구](../01-planning/requirements.md) REQ-048·070의 '지금', [작업 표](../08-wbs/wbs.md) TASK-032·052·054 끝남과 4장 셈
+  - 같은 PR의 앞 커밋 `526ccf6`: 설정 화면 버전 줄 시험을 `0.1.0.<번호>`에 맞춤
+- **결과**
+  - 판정 512줄 모두 '통과'(보고서 판정 열을 스크립트로 셈), 새 결함 없음
+  - TASK-032·052·054 **끝남**, BUG-001·004 **닫힘**. BUG-003은 화면 회전 단계가 없어 그대로 둠
+  - 위젯 반영 시간: API 34에서 앱이 살아 있을 때 기록 두 번의 하한이 1.30·1.04초라 잠정 목표 1초를 넘음. API 36은 상한 1.00~1.04초. 내려가 있을 때 상한 2.41초(34)·2.02초(36). 표본이 상태마다 3번·2번이고 CI 에뮬레이터 값이라 결함으로 올리지 않음
+  - 아침 알림: API 34·36에서 08:00 칸 1/1, 늦음 0초. 하룻밤 Doze 측정은 아님
+- **확인한 것**: 실행 11개의 결론(통과), 판정 줄 수, 잠금 화면 캡처 32장(4개 API × 여덟 칸), BUG-004 첫 위젯 3초 캡처(API 34·36)와 릴리즈 변형의 첫 위젯 캡처, logcat의 `onPackageModified` 시각(위젯을 묶은 16:38:54 뒤 우리 패키지 없음), 둘러보기 캡처 29~45. CI [45002503236](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45002503236)에서 jvm 335개·앱 시험 127개 통과. 문서 검사(`check_docs.py`) 문제 없음, 용어 검사
+- **확인하지 못한 것**
+  - 실기기 전부. 남는 차이 7가지는 보고서 5장(아래 'QA는 Claude가 직접'의 목록과 같음)
+  - REQ-070의 P95와 REQ-048의 하룻밤 P50·최댓값(실기기 측정이라 하지 않음)
+  - 앱 시험 `AccessScreenTest.the_first_screen_says_nothing_while_no_item_has_reminders_on`이 PR #55의 첫 CI([44998677714](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/44998677714))에서 `performMeasureAndLayout called during measure layout`으로 한 번 실패하고 다음 CI에서 통과함. 원인은 아직 보지 않음. 다시 실패하면 원인을 찾음
+- **다음 행동**: 자동 업데이트 방식 카드의 답을 받으면 앱 서명 키를 넣고 PR #55를 합친 뒤 첫 릴리즈의 인증서와 TC-089(에뮬레이터에서 Obtainium 덮어 설치)를 확인함. 출시 판단은 동희님
+
+### 테스터 폰 자동 업데이트 준비 (REQ-096, TASK-055)
+
+- **목표**: 2026-11-22 16:07 KST 동희님 "다음 apk부터는 우리쪽에서 업데이트하면 자동으로 그쪽에서도 업데이트 되게끔 만들어줘". 방식 카드(16:12 KST)의 답을 기다리는 동안, Claude 추천 (0)과 (1)에 함께 쓰는 것을 만듦. 키를 넣기 전에는 아무것도 올리지 않음
+- **기능 변경 단계 대조** (CORTHEX 5장, 승인된 01~12를 차례로 봄)
+  - 01 도메인: 바뀜 없음. 앱 안의 규칙·용어가 그대로이고, 사건 '새 버전이 설치됨'은 CTX-005(설치·백업)에 이미 있음([도메인](../01-domain/domain.md) 3장)
+  - 02 요구: REQ-096을 더함(비기능, Must). REQ-057(인터넷 권한 없음)은 그대로 지킴
+  - 03 흐름: 바뀜 없음. REQ-096을 [흐름 밖](../03-user-flow/README.md) '출시'에 넣음(업데이트는 앱 밖의 Obtainium이 함)
+  - 04 명세: 바뀜 없음. 앱 동작이 같음. 설정 '앱 정보'의 버전은 "앱 패키지의 버전 이름"이라 글자만 `0.1.0` → `0.1.0.<번호>`로 바뀜
+  - 05 ERD, 07 사이트맵, 08 화면 상태, 09 목업: 바뀜 없음(화면·데이터 그대로)
+  - 10 WBS: TASK-055를 더함
+  - 11 개발: 버전 이름, 배포 워크플로, 테스터 안내
+  - 12 QA: TC-089를 더함
+  - 승인된 것 중 바꾸는 것: 2026-11-12에 정한 '앱 서명 키는 GitHub에 올리지 않음'. 카드 (0)을 고르시면 바뀌고, (1)이면 그대로임. 따로 여쭌 카드가 이것임
+- **한 일**
+  - `androidApp/build.gradle.kts`: `versionName`을 `0.1.0.<versionCode>`로. Obtainium은 깔린 앱의 버전 이름과 릴리즈 태그를 비교함. 버전 이름이 늘 `0.1.0`이면 새 빌드를 구별하지 못함(Obtainium `version_service.dart`·`version_normalization.dart`를 읽고 정함)
+  - `.github/workflows/publish-apk.yml`: release-emulator.yml이 main 푸시에서 성공하면 같은 커밋의 release.yml 아티팩트(서명 안 한 APK)를 받아 앱 서명 키로 서명하고 GitHub 릴리즈 `v0.1.0.<versionCode>`에 올림. 올리기 전 확인: 서명자 하나, 인증서 SHA-256 = 앱 서명 키 지문, 패키지 이름, versionCode = 커밋 수, versionName, debuggable 아님, 정렬, 권한 목록(INTERNET 없음). 이미 올린 것보다 versionCode가 크지 않으면 건너뜀. 환경 `personal-apk`에 키가 없으면 건너뜀. 두 워크플로의 paths가 달라 release.yml이 그 커밋에 돌지 않았으면 건너뛰고, 아직 도는 중이면 최대 20분 기다림
+  - [Obtainium 안내](../07-qa/obtainium-testers.md): 테스터가 한 번 하는 설정 5단계와 안 될 때
+- **확인** (이 컨테이너, 2026-11-22): `PILLBADEUM_VERSION_CODE=299`로 `:androidApp:assembleRelease`를 빌드하고, 워크플로의 서명·확인 단계 본문을 YAML에서 그대로 꺼내 돌림. 앱 서명 키 대신 keytool로 만든 시험용 PKCS12 키(별칭 app-signing)를 쓰고, 기대 지문도 그 키 값으로 바꿈
+  - 통과: 서명자 1, v2·v3 서명, v4 없음, 정렬, 패키지 `com.judangbang.pillbadeum`, versionCode 299, versionName `0.1.0.299`, 권한 목록이 기준과 같음(8줄, INTERNET 없음). 서명 뒤 키 파일이 지워진 것도 봄
+  - 막는지: 기대 지문을 진짜 앱 서명 키 값으로 두면 "서명 인증서 SHA-256이 앱 서명 키 지문과 다름"으로 실패, CODE를 300으로 두면 "versionCode 299가 커밋 수 300와 다름"으로 실패
+  - 안 한 것: 진짜 앱 서명 키 서명, `gh release`·`gh run` 단계(Actions에서만 됨), Obtainium 실제 덮어 깔기(TC-089)
+- **다음 행동**: 카드 답에 따라 (0)이면 동희님 PC에서 환경 `personal-apk`(main만)를 만들고 키를 넣음, (1)이면 PC 예약 작업으로 서명해 올리는 스크립트를 씀. 그 뒤 에뮬레이터에서 Obtainium 덮어 깔기를 확인(TC-089)
+
 ### 결정 Q11: Play 출시 보류, APK만 (TASK-048)
 
 - **목표**: Q11 답장(아래)을 받아 개발자 계정 종류를 정함

@@ -94,9 +94,10 @@ class Steps:
         self.r = r
         self.n = 0
 
-    def save(self, name: str) -> list[Node]:
+    def save(self, name: str, nodes: list[Node] | None = None) -> list[Node]:
         self.n += 1
-        nodes = screen_nodes()
+        if nodes is None:
+            nodes = screen_nodes()
         tag = f"{self.n:02d}-{name}"
         xml = adb("exec-out", "cat", UI_XML, check=False)
         (self.r.out / f"ui-{tag}.xml").write_text(xml, encoding="utf-8")
@@ -210,14 +211,16 @@ def close_first_dialogs(steps: Steps, r: Report, ready: Callable[[list[Node]], b
         okay = node_with(nodes, OKAY_WORDS)
         now = time.monotonic()
         if okay is not None and (title or node_with(nodes, ("Dismiss",))):
-            if tapped == 5 or now >= end:
+            if tapped == 5:
                 raise RuntimeError(f"Obtainium dialogs did not close: {words(nodes)}")
-            steps.save(f"obtainium-dialog-{(title or 'untitled').lower()}")
+            steps.save(f"obtainium-dialog-{(title or 'untitled').lower()}", nodes)
             tap(okay)
             r.note(f"Obtainium 첫 시작 대화상자 '{title or '제목 없음'}'를 [Okay]로 닫음")
             tapped += 1
             ready_since = None
             time.sleep(2)
+            # Give the next screen its own wait time after capturing and closing this dialog.
+            end = time.monotonic() + timeout
             continue
         if ready(nodes):
             if ready_since is None:
@@ -240,13 +243,14 @@ def add_screen_ready(nodes: list[Node], repo_url: str) -> bool:
 def open_add_screen(steps: Steps, r: Report, repo_url: str) -> str:
     """Obtainium's add screen with repo_url in its URL field. Returns how it was opened."""
     start_obtainium(steps, r)
-    if not close_first_dialogs(steps, r):
+    nodes = close_first_dialogs(steps, r)
+    if not nodes:
         raise RuntimeError("Obtainium first screen did not become ready")
-    steps.save("obtainium-first")
+    steps.save("obtainium-first", nodes)
     sh(f"am start -a android.intent.action.VIEW -d 'obtainium://add/{repo_url}' {OBTAINIUM}", check=False)
 
     nodes = close_first_dialogs(steps, r, lambda screen: add_screen_ready(screen, repo_url), timeout=15)
-    steps.save("obtainium-link")
+    steps.save("obtainium-link", nodes or None)
     if nodes:
         return "링크 obtainium://add/"
     # Not by the link: [Add App] at the bottom of Obtainium's first screen, type the URL

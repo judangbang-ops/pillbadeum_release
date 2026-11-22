@@ -71,4 +71,5 @@ adb install -r androidApp/build/outputs/apk/debug/androidApp-debug.apk
 ## 작업 규칙
 
 - 작업 브랜치와 초안 PR로 올리고, CI가 통과하면 Claude가 순서를 확인해 `main`에 합침. 충돌이나 실패가 있으면 멈추고 동희님께 알림 (결정 Q14, 2026-11-12)
+- PR을 합치기 전 리뷰는 [에이전트 작업 규칙](AGENTS.md#pr-리뷰)을 따름 (2026-11-22 결정)
 - 건강정보·실사용 기록·인증정보·서명 키를 커밋하지 않음. 문서의 약 이름과 사람 이름은 가상의 예시임

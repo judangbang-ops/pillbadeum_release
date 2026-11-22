@@ -14,12 +14,18 @@ it. This script makes that phone on an emulator and lets the real Obtainium do t
      and Android asks to confirm, since Obtainium did not install the app: [Update] is tapped there.
      Checks: versionCode is the latest release's, versionName 0.1.0.<versionCode>, the installer of record is now
      Obtainium, the item added before is still there.
-  B. The next updates, with no hands (REQ-096: "손을 대지 않고"). The app is put back to --old the way phase A leaves
-     it, with Obtainium as the installer of record (`pm install -i`), without opening the app. Obtainium is not
-     opened either (it is sent to the background and its process ended with `am kill`, never force-stopped, which
-     would cancel its jobs): its scheduled background work is run now (`cmd jobscheduler run -f` for each of its
-     jobs), as Android would every six hours. Checks: versionCode is the latest release's and no confirmation window of the
-     package installer was on screen meanwhile.
+  B. The next updates, with no hands (REQ-096: "손을 대지 않고"). The phone is put in the state a tester's phone is in
+     after Obtainium installed one release and before the next one: --b-old (the latest release's commit built with
+     versionCode one less, so versionName 0.1.0.<versionCode - 1>) is installed with Obtainium as the installer of
+     record (`pm install -i`), and Obtainium's own record of the app (its app_data JSON file) says that version is
+     installed and the latest, and that it last looked for updates seven hours ago (it looks again after six, its
+     default). Then nobody touches anything: HOME, and Android runs Obtainium's background work when it is due (a
+     WorkManager job every 15 minutes, whose run checks the apps due). Nothing is forced: `cmd jobscheduler run -f`
+     does not help, since WorkManager does not run periodic work before its time, and `am kill` or `am force-stop`
+     would make WorkManager cancel and schedule the job again.
+     Checks: within 20 minutes versionCode is the latest release's, no confirmation window of the package installer
+     was on screen meanwhile, and Obtainium is still the installer of record. Obtainium's log lines about the run and
+     the job list (`dumpsys jobscheduler`) are kept.
      If the background work does not update within the wait, the update is started in Obtainium's screen once, to
      tell an update that needs a confirmation from one whose background run did not come: both are failures.
 
@@ -30,6 +36,7 @@ Standard library only. Not product code. adb and screen helpers are in backup_re
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -46,6 +53,7 @@ from backup_restore_check import (
     adb,
     add_item,
     api_level,
+    become_root,
     dump_ui,
     find,
     launch_app,
@@ -65,6 +73,15 @@ UPDATE_WORDS = ("Update", "Install", "Update all", "Install update", "Install up
 CONFIRM_WORDS = ("Update", "Install", "UPDATE", "INSTALL")
 URL_HINTS = ("App source URL", "App Source URL", "URL")
 OKAY_WORDS = ("Okay", "OK")
+# Obtainium's background work: a WorkManager job every 15 minutes (main.dart). Phase B waits for it with a margin
+B_WAIT = 20 * 60
+# Phase B's log, kept from its start: the emulator's log buffers (2 MB, `logcat -G 2M` after boot) would drop it in 20
+# minutes. Obtainium's own lines, WorkManager's, and Android's about jobs and installs
+B_LOG_TAGS = ("flutter:I", "WM-WorkerWrapper:D", "WM-SystemJobScheduler:D", "WM-ForceStopRunnable:D", "JobScheduler:V",
+              "PackageInstaller:V", "PackageInstallerSession:V", "*:S")
+# Obtainium's own log lines about a background run (lib/providers/apps_provider.dart, apps_provider_install.dart)
+OBTAINIUM_LOG = re.compile(r"I/flutter.*(BG (update|install) task|BG task|App will not be installed|Installing \"|"
+                           r"WorkManager callback)|WM-WorkerWrapper.*Delaying execution")
 
 
 class Steps:
@@ -280,7 +297,8 @@ def confirm_if_asked(steps: Steps, timeout: float = 90) -> bool:
     return False
 
 
-def wait_version(code: str, timeout: float = 120, watch_installer: list[str] | None = None) -> dict[str, str]:
+def wait_version(code: str, timeout: float = 120, watch_installer: list[str] | None = None,
+                 every: float = 2) -> dict[str, str]:
     """Waits until the app's versionCode is code. With watch_installer, records whenever the package installer's
     window has the focus meanwhile."""
     end = time.time() + timeout
@@ -293,17 +311,58 @@ def wait_version(code: str, timeout: float = 120, watch_installer: list[str] | N
             focus = focused_package()
             if focus in INSTALLER_UI and focus not in watch_installer:
                 watch_installer.append(focus)
-        time.sleep(2)
+        time.sleep(every)
     return info
 
 
-def obtainium_jobs() -> list[str]:
+def obtainium_jobs(r: Report, name: str) -> list[str]:
+    """Obtainium's jobs in `dumpsys jobscheduler` ('JOB #u0a193/0: 4efec10 dev.imranr.obtainium/…'); the whole
+    dump is kept as jobs-<name>.txt."""
     out = sh("dumpsys jobscheduler", check=False)
+    (r.out / f"jobs-{name}.txt").write_text(out, encoding="utf-8")
     ids = []
-    for m in re.finditer(r"JOB #u\d+a?\d*/(-?\d+): \S+ " + re.escape(OBTAINIUM) + r"/", out):
+    for m in re.finditer(r"JOB\s+\S*?/(-?\d+): \S+ " + re.escape(OBTAINIUM) + r"/", out):
         if m.group(1) not in ids:
             ids.append(m.group(1))
     return ids
+
+
+def record_path() -> str:
+    """Obtainium's record of the app: app_data/<package>.json in its external files folder (or its own data folder
+    when that is missing; lib/providers/apps_provider_lifecycle.dart getAppsDir). Needs root."""
+    out = sh(f"find /sdcard/Android/data/{OBTAINIUM}/files /data/data/{OBTAINIUM} -name {PKG}.json", check=False)
+    paths = [p.strip() for p in out.splitlines() if p.strip().endswith(f"/app_data/{PKG}.json")]
+    if not paths:
+        raise RuntimeError(f"Obtainium's record of {PKG} not found: {out.strip()[:300]}")
+    return paths[0]
+
+
+def set_obtainium_record(r: Report, version: str, hours_ago: int = 7) -> str:
+    """Obtainium's record of the app as on a phone where Obtainium installed `version` itself (it then keeps the
+    release tag as both the installed and the latest version) and last looked for updates `hours_ago` hours back.
+    Only these three fields change (lib/models/app.dart: lastUpdateCheck is in microseconds). Returns what they
+    were."""
+    path = record_path()
+    rec = json.loads(sh(f"cat {path}"))
+    was = ", ".join(f"{k} {rec.get(k)}" for k in ("installedVersion", "latestVersion", "lastUpdateCheck"))
+    now = int(sh("date +%s").strip())
+    rec["installedVersion"] = version
+    rec["latestVersion"] = version
+    rec["lastUpdateCheck"] = (now - hours_ago * 3600) * 1_000_000
+    local = r.out / "obtainium-record-b.json"
+    local.write_text(json.dumps(rec, ensure_ascii=False), encoding="utf-8")
+    adb("push", str(local), "/data/local/tmp/obtainium-record.json")
+    sh(f"cat /data/local/tmp/obtainium-record.json > {path}")
+    back = json.loads(sh(f"cat {path}"))
+    if (back.get("installedVersion"), back.get("latestVersion")) != (version, version):
+        raise RuntimeError(f"Obtainium's record did not change: {back.get('installedVersion')}")
+    return was
+
+
+def obtainium_log(path: Path) -> list[str]:
+    """Obtainium's log lines about its background runs, from the log kept in path."""
+    text = path.read_text(encoding="utf-8", errors="replace") if path.exists() else ""
+    return [line.strip()[:220] for line in text.splitlines() if OBTAINIUM_LOG.search(line)]
 
 
 def phase_a(r: Report, steps: Steps, old: Path, obtainium: Path, repo_url: str, code: str) -> None:
@@ -336,29 +395,45 @@ def phase_a(r: Report, steps: Steps, old: Path, obtainium: Path, repo_url: str, 
     stop_app()
 
 
-def phase_b(r: Report, steps: Steps, old: Path, code: str) -> None:
+def phase_b(r: Report, steps: Steps, b_old: Path, code: str) -> None:
     r.note("B. 그 뒤의 업데이트(손대지 않음)")
+    b_code = str(int(code) - 1)
+    become_root()
     adb("uninstall", PKG, check=False)
-    adb("install", "-i", OBTAINIUM, str(old), timeout=300)
+    adb("install", "-i", OBTAINIUM, str(b_old), timeout=300)
     info = package(PKG)
-    old_code = info["versionCode"]
-    r.check("B-1 A가 끝난 상태와 같게", f"옛 APK, 설치한 앱 {OBTAINIUM}",
-            f"versionCode {old_code}, 설치한 앱 '{info['installer']}'", info["installer"] == OBTAINIUM and old_code != code)
-    # Obtainium goes to the background as on a phone left alone: HOME, then its process is ended the way Android ends
-    # a background app (`am kill`). Not `am force-stop`: that cancels every scheduled job of the package
-    # (JobSchedulerService on ACTION_PACKAGE_RESTARTED), which no tester does.
-    sh("input keyevent KEYCODE_HOME", check=False)
-    time.sleep(2)
-    sh(f"am kill {OBTAINIUM}", check=False)
-    time.sleep(2)
-    jobs = obtainium_jobs()
-    r.note(f"Obtainium 예약 작업(JobScheduler): {', '.join(jobs) or '없음'}")
-    shown: list[str] = []
-    for job in jobs:
-        sh(f"cmd jobscheduler run -f {OBTAINIUM} {job}", check=False)
-    info = wait_version(code, 240, shown)
-    background = info["versionCode"] == code
-    if not background:
+    r.check("B-1 Obtainium이 한 번 업데이트한 뒤와 같게", f"versionCode {b_code}, versionName 0.1.0.{b_code}, 설치한 앱 "
+            f"{OBTAINIUM}", f"versionCode {info['versionCode']}, versionName {info['versionName']}, 설치한 앱 "
+            f"'{info['installer']}'", info["versionCode"] == b_code and info["versionName"] == f"0.1.0.{b_code}"
+            and info["installer"] == OBTAINIUM)
+    was = set_obtainium_record(r, f"v0.1.0.{b_code}")
+    r.note(f"Obtainium 기록을 설치·최신 v0.1.0.{b_code}, 마지막 확인 7시간 전으로 둠(바꾸기 전: {was})")
+    # From here nobody touches the phone. Obtainium stays in the background as phase A left it
+    log_path = r.out / f"api{api_level()}-logcat-b.txt"
+    with log_path.open("w", encoding="utf-8") as log_file:
+        log = subprocess.Popen(["adb", "logcat", "-v", "time", "-T", "1", *B_LOG_TAGS], stdout=log_file,
+                               stderr=subprocess.STDOUT, text=True)
+        try:
+            sh("input keyevent KEYCODE_HOME", check=False)
+            jobs = obtainium_jobs(r, "b-start")
+            r.note(f"Obtainium 예약 작업(JobScheduler) 시작 때: {', '.join(jobs) or '없음'}")
+            shown: list[str] = []
+            started = time.time()
+            info = wait_version(code, B_WAIT, shown, every=5)
+            waited = int(time.time() - started)
+            background = info["versionCode"] == code
+            if background:
+                time.sleep(10)  # Obtainium's lines after the install
+            jobs = obtainium_jobs(r, "b-end")
+        finally:
+            log.terminate()
+            log.wait(timeout=30)
+    r.note(f"Obtainium 예약 작업(JobScheduler) {waited // 60}분 {waited % 60}초 뒤: {', '.join(jobs) or '없음'}")
+    for line in obtainium_log(log_path)[:25]:
+        r.note(f"Obtainium 기록: `{line}`")
+    if background:
+        steps.save("after-b")
+    else:
         steps.save("b-no-background")
         r.note("예약 작업으로 업데이트되지 않아 Obtainium 화면에서 한 번 업데이트를 누름(원인을 가리려고)")
         try:
@@ -369,21 +444,26 @@ def phase_b(r: Report, steps: Steps, old: Path, code: str) -> None:
             info = wait_version(code, 180, shown)
         except RuntimeError as exc:
             r.note(f"화면에서 업데이트 못 함: {exc}")
-    steps.save("after-b")
-    r.check("B-2 예약 작업만으로 업데이트", f"versionCode {code}", f"versionCode {info['versionCode']}"
-            + ("" if background else " (예약 작업으로는 안 됨)"), background)
+        steps.save("after-b")
+    r.check(f"B-2 예약 작업만으로 업데이트({B_WAIT // 60}분 안)", f"versionCode {code}", f"versionCode "
+            f"{info['versionCode']}" + (f", {waited // 60}분 {waited % 60}초 뒤" if background else " (예약 작업으로는 안 됨)"),
+            background)
     r.check("B-3 Android 확인 창", "안 뜸", ", ".join(shown) or "안 뜸", not shown)
+    r.check("B-4 업데이트 뒤 설치한 앱", OBTAINIUM, info["installer"] or "(없음)", info["installer"] == OBTAINIUM)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--old", type=Path, required=True, help="the testers' APK: older main build, app-signing key")
+    parser.add_argument("--b-old", type=Path, help="phase B's start: the latest release's commit, versionCode one less")
     parser.add_argument("--obtainium", type=Path, required=True, help="Obtainium APK")
     parser.add_argument("--repo-url", required=True, help="https://github.com/<owner>/<repo> with the releases")
     parser.add_argument("--code", required=True, help="versionCode of the latest release")
     parser.add_argument("--phases", default="AB", help="A, B or AB (default)")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
+    if "B" in args.phases and ("A" not in args.phases or args.b_old is None):
+        parser.error("phase B needs phase A before it (Obtainium and the repository added) and --b-old")
     args.out.mkdir(parents=True, exist_ok=True)
 
     adb("wait-for-device")
@@ -397,7 +477,7 @@ def main() -> int:
         if "A" in args.phases:
             phase_a(r, steps, args.old, args.obtainium, args.repo_url, args.code)
         if "B" in args.phases:
-            phase_b(r, steps, args.old, args.code)
+            phase_b(r, steps, args.b_old, args.code)
     except Exception as exc:
         traceback.print_exc()
         try:
@@ -409,7 +489,8 @@ def main() -> int:
         ob = package(OBTAINIUM)
         model = sh("getprop ro.product.model", check=False).strip()
         r.note(f"기기: API {api}, {model}. 옛 APK {args.old.name} (versionCode {old_code or '?'}, versionName "
-               f"{old_name or '?'}), 최신 릴리즈 versionCode {args.code}, Obtainium {ob['versionName'] or '?'}")
+               f"{old_name or '?'}), B 시작 APK {args.b_old.name if args.b_old else '-'}, 최신 릴리즈 versionCode "
+               f"{args.code}, Obtainium {ob['versionName'] or '?'}")
         r.write()
         (args.out / f"api{api}-logcat.txt").write_text(adb("logcat", "-d", "-v", "time", check=False), encoding="utf-8")
     return 1 if r.failed else 0

@@ -10,6 +10,32 @@
 
 ## 2026-11-23
 
+### 테스터 폰 자동 업데이트 끝남: 에뮬레이터에서 Obtainium A·B 통과 (TASK-055, TC-089)
+
+- **목표**: 2026-11-22 16:07 KST 동희님 "다음 apk부터는 우리쪽에서 업데이트하면 자동으로 그쪽에서도 업데이트 되게끔 만들어줘"와 "전체적으로 QA는 너가 직접 해". 테스터 폰과 같은 상태의 에뮬레이터에서 Obtainium이 실제로 업데이트하는지 봄
+- **한 일**
+  - 2026-11-22 19:26 KST 동희님이 이 작업 스레드에서 "앱 서명 키 비밀값 2개를 personal-apk 환경에 올려". `APP_SIGNING_KEYSTORE_BASE64`·`APP_SIGNING_KEYSTORE_PASSWORD`를 환경 `personal-apk`에 올림(값은 어디에도 적지 않음)
+  - 첫 자동 릴리즈 `v0.1.0.297`: 19:31 KST, 커밋 `406419c`, [실행 45012853707](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45012853707), APK `pillbadeum-0.1.0.297.apk` 14,248,887바이트, 인증서 SHA-256 `35:64:B6:…:95:36`(앱 서명 키와 같음)
+  - 에뮬레이터 확인 워크플로 `obtainium.yml`과 `scripts/emulator/obtainium_check.py`를 [PR #56](https://github.com/judangbang-ops/pillbadeum_release/pull/56)(adb가 놓친 표지 다시 보내기), [PR #58](https://github.com/judangbang-ops/pillbadeum_release/pull/58)(apksigner 0.9의 인증서 줄 읽기), [PR #59](https://github.com/judangbang-ops/pillbadeum_release/pull/59)(시작 화면에 멈추면 다시 시작, 첫 시작 대화상자, B를 '다음 버전 직전 상태'에서 손대지 않고 기다리게 다시 짬)로 합침. PR #59에는 다른 세션이 로컬 Windows 에뮬레이터에서 A를 돌리며 올린 `a39960c`~`8071db6`(대화상자 대기, B 준비 전 Obtainium 멈춤, 저장소 추가 대기)도 들어 있음
+  - 리뷰: Claude 리뷰 두 차례와 처리([처리 1](https://github.com/judangbang-ops/pillbadeum_release/pull/59#issuecomment-7081586168), [처리 2](https://github.com/judangbang-ops/pillbadeum_release/pull/59#issuecomment-7081600000), [최종 처리](https://github.com/judangbang-ops/pillbadeum_release/pull/59#issuecomment-7082605175)). 병합 직전 Codex 리뷰를 한 번 요청했으나 26분 동안 답도 반응도 없어, PR #60과 같이 Claude 리뷰와 검사 16개 통과로 판단해 합침([기록](https://github.com/judangbang-ops/pillbadeum_release/pull/59#issuecomment-7082953529))
+  - main `6254533`에서 `obtainium.yml`(A·B)을 실행함: [실행 45050351093](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45050351093)
+- **결과** (API 34, Obtainium 1.7.4, 판정 9줄 모두 통과)
+  - A(테스터가 한 번 하는 첫 업데이트): 손으로 깐 `0.1.0`(versionCode 274) 위에 Obtainium이 릴리즈 `0.1.0.297`을 깖. Android 확인 창이 한 번 뜨고 [Update]로 넘어감. 설치한 앱이 Obtainium으로 바뀌고 기록 `TestA`가 남음
+  - B(그 뒤 손대지 않는 업데이트): Obtainium이 깐 `0.1.0.296`과 '마지막 확인 7시간 전' 기록에서 HOME만 누르고 기다림. 15분 32초 뒤 Obtainium 예약 작업이 297을 확인 창 없이 깖(logcat "BG install task: Installing 1 apps silently"). 설치한 앱은 그대로 Obtainium
+- **알게 된 것** (테스터 안내와 다음 확인에 씀)
+  - Obtainium 1.7.4는 처음 열 때 'Welcome'과 'Note' 창을 띄움. 둘 다 [Okay]
+  - Obtainium은 깔린 버전 `0.1.0`과 태그 `v0.1.0.297`을 비교함. 한 번 Obtainium으로 깔면 태그를 깔린 버전으로 적고 '최신'으로 봄. 그래서 B는 297 직전 버전(296)을 Obtainium이 깐 상태로 만들어 시험함
+  - 손대지 않는 업데이트는 WorkManager 예약 작업(15분마다)이 마지막 확인에서 6시간(기본값)이 지난 앱을 볼 때 일어남. 실기기에서는 새 릴리즈 뒤 길게는 6시간쯤 걸림. 확인 창 없이 깔리려면 Android 12 이상, 설치한 앱이 Obtainium이어야 함
+  - CI 에뮬레이터의 Obtainium 첫 시작이 시작 화면에 멈춘 적이 있음([실행 45018288077](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45018288077)). 다시 시작하면 그림
+- **확인한 것**: 실행 45050351093의 보고서 판정 9줄, B 뒤 HOME 화면 캡처(확인 창 없음), B logcat의 설치 줄, 첫 릴리즈의 인증서. PR #59 head `8071db6`의 GitHub 검사 16개 통과. 문서 검사(`check_docs.py`), 문구 검사, 용어 검사
+- **확인하지 못한 것**
+  - 테스터 실기기. 폰의 Android 버전, 갤럭시 절전이 Obtainium 예약 작업을 늦추는지, Android 11 이하의 알림 경로는 보지 않음
+  - Obtainium 'Note' 창이 말하는 Google 개발자 인증(2027년부터 나라별)의 한국 적용
+  - PR #59 중간 커밋 `a39960c`의 릴리즈 변형 확인(API 34)이 한 번 실패함: 항목 추가 화면에서 `input text TestA`가 칸에 들어가지 않음. 같은 작업을 다시 돌려 통과함. 이 PR과 관계없는 공용 함수 `add_item`의 입력 흔들림이라 이번에는 고치지 않음. 다시 나오면 입력 뒤 칸의 글자를 확인하고 다시 입력하게 고침
+- **다음 행동**
+  - 테스터 두 분이 [Obtainium 안내](../07-qa/obtainium-testers.md) 1~5번을 한 번 해야 함(사람 손이 필요함). 그 뒤로는 main에 앱 변경이 합쳐질 때마다 릴리즈가 올라가고 폰이 알아서 받음
+  - 공개한 [개인정보처리방침](../release/privacy-policy.md)의 "Google Play로 배포합니다"를 바꿀지 동희님께 여쭘
+
 ### Obtainium 에뮬레이터 확인 리뷰 반영 (TC-089, PR #59)
 
 - **목표**: 첫 실행 대화상자가 A를 가리는 문제와 B 시험 상태가 덮이는 문제를 줄임. [Claude 리뷰 9건](https://github.com/judangbang-ops/pillbadeum_release/pull/59#issuecomment-7081579145)

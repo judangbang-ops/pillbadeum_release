@@ -106,12 +106,12 @@
 | TC-069 | 공통 코드에 Android API 없음 | REQ-071 | 코드 검사: `shared/src/commonMain`에 `import android.` 없음 | 통과 (2026-11-12, 0곳) |
 | TC-070 | 기록 규칙을 JVM 테스트로 검증 | REQ-091 | CI `./gradlew :shared:jvmTest` | 통과 (CI, `45faa8f`) |
 | TC-071 | 스키마를 바꿀 때마다 이주와 그 시험 | REQ-072 | jvm `MigrationTest`, `check_docs.py`의 스키마 대조 | 통과 (CI, `45faa8f`) |
-| TC-072 | Play 비공개 테스트로 배포 | REQ-060 | Play Console (TASK-048~050) | 안 함 |
+| TC-072 | Play 비공개 테스트로 배포 | REQ-060 | Play Console (TASK-048~050) | 안 함. **보류** (2026-11-22 결정 Q11 D: Play 출시 보류, APK만) |
 | TC-073 | 패키지 이름을 첫 업로드 전에 정하고 바꾸지 않음 | REQ-061 | 빌드 설정, 첫 업로드 | 정함 (TASK-001, `com.judangbang.pillbadeum`). 업로드는 안 함 |
-| TC-074 | 개인 APK 기록이 Play 버전으로 넘어갈 때 남음 | REQ-062 | 실기기: 개인 APK 위에 Play 버전 설치 (TASK-047·050) | 안 함 |
-| TC-075 | Play Console 앱 콘텐츠 완료, 앱 안 개인정보처리방침 | REQ-063 | Play Console, SCR-009 | 안 함. 답 초안 있음([앱 콘텐츠 답](../release/play-app-content.md), 2026-11-15). [방침](../release/privacy-policy.md)은 2026-11-16 저장소 파일 주소로 공개함. 앱 안 링크는 TASK-035의 다음 PR(TC-036) |
+| TC-074 | 개인 APK 기록이 Play 버전으로 넘어갈 때 남음 | REQ-062 | 실기기: 개인 APK 위에 Play 버전 설치 (TASK-047·050) | 안 함. **보류** (2026-11-22 결정 Q11 D: Play 출시 보류, APK만) |
+| TC-075 | Play Console 앱 콘텐츠 완료, 앱 안 개인정보처리방침 | REQ-063 | Play Console, SCR-009 | 안 함. 답 초안 있음([앱 콘텐츠 답](../release/play-app-content.md), 2026-11-15). [방침](../release/privacy-policy.md)은 2026-11-16 저장소 파일 주소로 공개함. 앱 안 링크는 TASK-035의 다음 PR(TC-036). **보류** (2026-11-22 결정 Q11 D: Play 출시 보류, APK만) |
 | TC-076 | 스토어 설명에 의료기기 아님·의료인 상의 문구 | REQ-064 | 스토어 설명 문안 (TASK-037) | 초안 통과 (CI `check_wording.py`, 2026-11-15): [자세한 설명](../release/listing/ko-KR/full_description.txt)에 '의료기기가 아니며 … 진단·처치·치료·예방하지 않아요'와 '의학적인 조언 … 의료 전문가와 상의'가 있음. Play 입력은 TASK-038 |
-| TC-077 | 새 개인 계정이면 테스터 12명 14일 | REQ-065 | 비공개 테스트 참여 기록 | 안 함 |
+| TC-077 | 새 개인 계정이면 테스터 12명 14일 | REQ-065 | 비공개 테스트 참여 기록 | 안 함. **보류** (2026-11-22 결정 Q11 D: Play 출시 보류, APK만) |
 
 ## 4. 화면 상태
 

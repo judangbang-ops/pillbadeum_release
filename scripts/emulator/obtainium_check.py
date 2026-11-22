@@ -76,6 +76,7 @@ CONFIRM_WORDS = ("Update", "Install", "UPDATE", "INSTALL")
 URL_HINTS = ("App source URL", "App Source URL", "URL")
 OKAY_WORDS = ("Okay", "OK")
 FIRST_DIALOG_TITLES = ("Welcome", "Note")
+PILLBADEUM_WORDS = ("필받음", "Pillbadeum")
 # Obtainium's background work: a WorkManager job every 15 minutes (main.dart). Phase B waits for it with a margin
 B_WAIT = 20 * 60
 # Phase B's log, kept from its start: the emulator's log buffers (2 MB, `logcat -G 2M` after boot) would drop it in 20
@@ -293,18 +294,19 @@ def add_repo(steps: Steps, r: Report, repo_url: str) -> str:
     tap(add)
     # Adding reads the release list from GitHub. A dialog may follow (e.g. options for the source): its OK-like
     # button is tapped, and what it said is kept in the screen dump.
-    end = time.time() + 60
-    while time.time() < end:
+    end = time.monotonic() + 60
+    while time.monotonic() < end:
         time.sleep(3)
         nodes = dump_ui(tries=6)
-        if node_with(nodes, UPDATE_WORDS) or any("pillbadeum" in (n.text + n.desc).lower() for n in nodes):
-            break
+        if node_with(nodes, UPDATE_WORDS) or node_with(nodes, PILLBADEUM_WORDS + (PKG,)):
+            steps.save("added", nodes)
+            return how
         ok = node_with(nodes, ("OK", "Okay", "Continue", "Yes"))
         if ok is not None:
-            steps.save("add-dialog")
+            steps.save("add-dialog", nodes)
             tap(ok)
-    steps.save("added")
-    return how
+    steps.save("add-not-complete", nodes)
+    raise RuntimeError(f"Obtainium did not finish adding the repository: {words(nodes)}")
 
 
 def start_update_in_obtainium(steps: Steps) -> None:
@@ -462,7 +464,7 @@ def phase_b(r: Report, steps: Steps, b_old: Path, code: str) -> None:
         return
     path = record_path()
     expected = set_obtainium_record(r, path, f"v0.1.0.{b_code}")
-    start_obtainium(steps, r, lambda nodes: node_with(nodes, ("필받음", "Pillbadeum")) is not None)
+    start_obtainium(steps, r, lambda nodes: node_with(nodes, PILLBADEUM_WORDS) is not None)
     verify_obtainium_record(path, expected)
     # From HOME onward nobody touches the phone or forces any scheduled work.
     log_path = r.out / f"api{api_level()}-logcat-b.txt"

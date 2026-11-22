@@ -10,6 +10,18 @@
 
 ## 2026-11-22
 
+### 결정: 테스터 폰 자동 업데이트는 Obtainium + CI 자동 서명 (TASK-055)
+
+- **받은 말**: 2026-11-22 19:06 KST 동희님이 이 작업 스레드의 카드 "테스터 폰 자동 업데이트를 어떤 방식으로 할까요?"에서 'Obtainium, CI 자동 서명'을 고름(16:12 KST에 낸 카드의 첫째 선택지, Claude 추천)
+- **바뀐 것**: 2026-11-12에 정한 '앱 서명 키는 GitHub에 올리지 않음'. 앱 서명 키를 main에서 도는 작업만 읽는 GitHub 환경 `personal-apk`의 비밀값으로 둠. 원본은 그대로 동희님 PC와 Drive 사본
+- **한 일**
+  - 19:08 KST 동희님 PC(gh, kodonghui)에서 환경 `personal-apk`를 만듦. 배포 브랜치 정책은 직접 지정이고 `main` 하나뿐(GET으로 1개 확인). 저장소가 공개라 무료 요금제에서도 환경 비밀값을 쓸 수 있음
+  - PC의 `pillbadeum-app-signing.p12`(별칭 app-signing)의 인증서 SHA-256이 `35:64:B6:…:95:36`(테스터 폰의 APK와 같은 키)인 것을 keytool로 확인. 키 폴더의 파일은 읽기만 함(수정 시각 그대로), 임시 파일 없음
+  - 문서: [Obtainium 안내](../07-qa/obtainium-testers.md) '정함' 줄, [작업 표](../08-wbs/wbs.md) TASK-055와 저장소 설정의 한계 줄, `release.yml` 머리 주석, `scripts/sign-personal-apk.ps1` 설명
+- **막힌 것**: 비밀값 2개(`APP_SIGNING_KEYSTORE_BASE64`·`APP_SIGNING_KEYSTORE_PASSWORD`)를 올리려는 순간 PC의 Claude Code 자동 모드가 [Sensitive Information Leakage]로 막음. 카드 선택은 PC 쪽에 동희님의 글로 보이지 않았음. 다시 시도하지 않음. 19:13 KST 동희님께 스레드에 한 줄을 직접 써 주시길 부탁함. 지금 환경 비밀값 0개, 저장소 범위에는 `ANDROID_UPLOAD_*` 3개뿐
+- **알아 둘 것**: 그 PC의 PowerShell은 gh로 파이프할 때 앞에 BOM 3바이트를 붙임. 그대로 올리면 비밀값이 깨지므로 정확한 바이트만 보냄
+- **다음 행동**: 동희님 글을 받으면 비밀값을 올리고 목록을 확인함. 비밀값이 없으면 `publish-apk.yml`은 건너뛰고 초록으로 끝나므로 PR #55는 먼저 합침. 키가 들어가면 main에서 `publish-apk.yml`을 수동 실행해 첫 릴리즈의 인증서를 확인하고, 에뮬레이터에서 TC-089를 함
+
 ### 에뮬레이터 QA: 실행 11개 모두 통과, TASK-032·052·054 끝남 (PR #55)
 
 - **목표**: 16:07 KST 동희님 "전체적으로 QA는 너가 직접 해". 시험 계획의 에뮬레이터 확인 전부를 같은 빌드로 다시 돌리고, TASK-032·052·054를 2026-11-22에 바꾼 끝난 조건으로 닫을 수 있는지 봄

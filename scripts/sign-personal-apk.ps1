@@ -3,7 +3,8 @@
 CI가 만든 서명하지 않은 릴리즈 APK를 앱 서명 키로 서명해 개인 설치용 APK를 만듭니다 (TASK-002, REQ-062).
 
 .DESCRIPTION
-동희님 PC에서 돌립니다. 앱 서명 키는 이 PC와 Google Drive 사본에만 있고 GitHub에는 없습니다.
+동희님 PC에서 돌립니다. 앱 서명 키의 원본은 이 PC와 Google Drive 사본입니다. 2026-11-22부터 GitHub 환경 personal-apk(main만)에도
+있어 테스터용 릴리즈는 publish-apk.yml이 서명합니다(TASK-055). 이 스크립트는 손으로 서명할 때 씁니다.
 
 1. GitHub Actions '릴리즈 빌드'(release.yml)의 main 최근 성공 실행에서 아티팩트 release-apk-unsigned를 받습니다.
    -RunId로 실행을 고를 수 있습니다. 개인 APK로 서명하는 것은 main에 들어간 커밋의 release.yml 성공 실행뿐입니다.

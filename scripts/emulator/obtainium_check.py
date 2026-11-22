@@ -294,7 +294,8 @@ def add_repo(steps: Steps, r: Report, repo_url: str) -> str:
     tap(add)
     # Adding reads the release list from GitHub. A dialog may follow (e.g. options for the source): its OK-like
     # button is tapped, and what it said is kept in the screen dump.
-    end = time.monotonic() + 60
+    # On a cold emulator the repository fetch and its detail screen can take more than a minute.
+    end = time.monotonic() + 180
     while time.monotonic() < end:
         time.sleep(3)
         nodes = dump_ui(tries=6)

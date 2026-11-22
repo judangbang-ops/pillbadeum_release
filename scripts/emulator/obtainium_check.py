@@ -19,7 +19,8 @@ it. This script makes that phone on an emulator and lets the real Obtainium do t
      versionCode one less, so versionName 0.1.0.<versionCode - 1>) is installed with Obtainium as the installer of
      record (`pm install -i`), and Obtainium's own record of the app (its app_data JSON file) says that version is
      installed and the latest, and that it last looked for updates seven hours ago (it looks again after six, its
-     default). Then nobody touches anything: HOME, and Android runs Obtainium's background work when it is due (a
+     default). Obtainium is stopped before setting up the APK and record, then started normally to load that record.
+     Then nobody touches anything: HOME, and Android runs Obtainium's background work when it is due (a
      WorkManager job every 15 minutes, whose run checks the apps due). Nothing is forced: `cmd jobscheduler run -f`
      does not help, since WorkManager does not run periodic work before its time, and `am kill` or `am force-stop`
      would make WorkManager cancel and schedule the job again.
@@ -42,6 +43,7 @@ import subprocess
 import sys
 import time
 import traceback
+from collections.abc import Callable
 from pathlib import Path
 
 from backup_restore_check import (
@@ -73,6 +75,7 @@ UPDATE_WORDS = ("Update", "Install", "Update all", "Install update", "Install up
 CONFIRM_WORDS = ("Update", "Install", "UPDATE", "INSTALL")
 URL_HINTS = ("App source URL", "App Source URL", "URL")
 OKAY_WORDS = ("Okay", "OK")
+FIRST_DIALOG_TITLES = ("Welcome", "Note")
 # Obtainium's background work: a WorkManager job every 15 minutes (main.dart). Phase B waits for it with a margin
 B_WAIT = 20 * 60
 # Phase B's log, kept from its start: the emulator's log buffers (2 MB, `logcat -G 2M` after boot) would drop it in 20
@@ -101,10 +104,10 @@ class Steps:
         return nodes
 
 
-def screen_nodes() -> list[Node]:
+def screen_nodes(tries: int = 6) -> list[Node]:
     """The screen's nodes, or none when uiautomator cannot dump it (a window that never drew its first frame)."""
     try:
-        return dump_ui(tries=6)
+        return dump_ui(tries=tries)
     except RuntimeError as exc:
         if "not responding" in str(exc):
             raise
@@ -131,15 +134,6 @@ def node_with(nodes: list[Node], labels: tuple[str, ...], pkg_hint: str = "") ->
     return None
 
 
-def wait_for(labels: tuple[str, ...], timeout: float = 30) -> Node | None:
-    end = time.time() + timeout
-    while True:
-        node = node_with(dump_ui(tries=6), labels)
-        if node is not None or time.time() >= end:
-            return node
-        time.sleep(1)
-
-
 def package(pkg: str) -> dict[str, str]:
     out = sh(f"dumpsys package {pkg}", check=False)
     get = lambda key: (m.group(1) if (m := re.search(rf"\b{key}=(\S+)", out)) else "")
@@ -148,9 +142,11 @@ def package(pkg: str) -> dict[str, str]:
 
 
 def focused_package() -> str:
-    out = sh("dumpsys window displays", check=False) + sh("dumpsys window windows", check=False)
-    m = re.search(r"mCurrentFocus=Window\{\S+ \S+ ([^/\s}]+)", out)
-    return m.group(1) if m else ""
+    for section in ("displays", "windows"):
+        out = sh(f"dumpsys window {section}", check=False)
+        if m := re.search(r"mCurrentFocus=Window\{\S+ \S+ ([^/\s}]+)", out):
+            return m.group(1)
+    return ""
 
 
 def apk_badging(apk: Path) -> tuple[str, str]:
@@ -174,7 +170,7 @@ def allow_obtainium() -> None:
     sh(f"appops set {OBTAINIUM} REQUEST_INSTALL_PACKAGES allow")
 
 
-def start_obtainium(steps: Steps, r: Report) -> None:
+def start_obtainium(steps: Steps, r: Report, ready: Callable[[list[Node]], bool] | None = None) -> None:
     """Obtainium on screen past its splash, started from the launcher as a tester does.
 
     On the CI emulator the first start stayed on the splash for good (run 45018288077, 2026-11-22): Android
@@ -184,10 +180,14 @@ def start_obtainium(steps: Steps, r: Report) -> None:
     try that stays on the splash is kept as a screen and noted."""
     for attempt in range(1, 4):
         sh(f"monkey -p {OBTAINIUM} -c android.intent.category.LAUNCHER 1", check=False)
-        end = time.time() + 45
-        while time.time() < end:
+        end = time.monotonic() + 45
+        while time.monotonic() < end:
             time.sleep(3)
-            if focused_package() == OBTAINIUM and words(screen_nodes()):
+            if focused_package() != OBTAINIUM:
+                continue
+            nodes = screen_nodes(tries=1)
+            rendered = ready(nodes) if ready is not None else bool(words(nodes))
+            if rendered:
                 if attempt > 1:
                     r.note(f"Obtainium이 {attempt}번째 시작에서 첫 화면을 그림(앞의 시작은 시작 화면에 멈춤)")
                 return
@@ -197,52 +197,72 @@ def start_obtainium(steps: Steps, r: Report) -> None:
     raise RuntimeError("Obtainium stayed on its splash screen in 3 starts")
 
 
-def close_first_dialogs(steps: Steps, r: Report) -> None:
-    """Obtainium 1.7.4 opens with dialogs that a tester closes with [Okay]: 'Welcome' (a link to its README), then
-    'Note' (Google's developer verification, keepandroidopen.org), seen in run 45019114890. Each is kept as a screen
-    and its title noted, for the testers' guide. Both had [Okay] and the 'Dismiss' barrier behind them; the barrier
-    keeps an [OK] elsewhere on Obtainium's screens from being taken for a dialog."""
-    looked_again = False
+def close_first_dialogs(steps: Steps, r: Report, ready: Callable[[list[Node]], bool] = bool,
+                        timeout: float = 20) -> list[Node]:
+    """Wait for a usable screen and dismiss first-run dialogs that arrive after it first renders."""
+    end = time.monotonic() + timeout
+    ready_since = None
     tapped = 0
     while True:
-        nodes = dump_ui(tries=6)
+        nodes = screen_nodes(tries=1)
+        # The known titles identify Welcome and Note even when the Flutter barrier is absent in the dump.
+        title = next((label for label in FIRST_DIALOG_TITLES if node_with(nodes, (label,))), None)
         okay = node_with(nodes, OKAY_WORDS)
-        if okay is None or node_with(nodes, ("Dismiss",)) is None:
-            # A dialog can come a moment after the first frame: look once more before going on
-            if looked_again:
-                return
-            looked_again = True
-            time.sleep(4)
+        now = time.monotonic()
+        if okay is not None and (title or node_with(nodes, ("Dismiss",))):
+            if tapped == 5 or now >= end:
+                raise RuntimeError(f"Obtainium dialogs did not close: {words(nodes)}")
+            steps.save(f"obtainium-dialog-{(title or 'untitled').lower()}")
+            tap(okay)
+            r.note(f"Obtainium 첫 시작 대화상자 '{title or '제목 없음'}'를 [Okay]로 닫음")
+            tapped += 1
+            ready_since = None
+            time.sleep(2)
             continue
-        if tapped == 5:
-            break
-        tapped += 1
-        title = next((n.desc.split("\n")[0].strip() for n in nodes if n.desc.strip()), "")
-        steps.save("obtainium-dialog-" + (re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:30] or "untitled"))
-        r.note(f"Obtainium 첫 시작 대화상자 '{title}'를 [Okay]로 닫음")
-        tap(okay)
-        time.sleep(2)
-        looked_again = False
-    raise RuntimeError(f"Obtainium dialogs did not close: {words(dump_ui())}")
+        if ready(nodes):
+            if ready_since is None:
+                ready_since = now
+            if now - ready_since >= 4:
+                return nodes
+        else:
+            ready_since = None
+        if now >= end:
+            return []
+        time.sleep(1)
+
+
+def add_screen_ready(nodes: list[Node], repo_url: str) -> bool:
+    return node_with(nodes, ADD_WORDS) is not None and any(
+        n.cls.endswith("EditText") and repo_url in n.text for n in nodes
+    )
 
 
 def open_add_screen(steps: Steps, r: Report, repo_url: str) -> str:
     """Obtainium's add screen with repo_url in its URL field. Returns how it was opened."""
     start_obtainium(steps, r)
-    close_first_dialogs(steps, r)
+    if not close_first_dialogs(steps, r):
+        raise RuntimeError("Obtainium first screen did not become ready")
     steps.save("obtainium-first")
     sh(f"am start -a android.intent.action.VIEW -d 'obtainium://add/{repo_url}' {OBTAINIUM}", check=False)
-    time.sleep(6)
-    nodes = steps.save("obtainium-link")
-    if any(repo_url in n.text or repo_url in n.desc for n in nodes) and node_with(nodes, ADD_WORDS):
+
+    nodes = close_first_dialogs(steps, r, lambda screen: add_screen_ready(screen, repo_url), timeout=15)
+    steps.save("obtainium-link")
+    if nodes:
         return "링크 obtainium://add/"
     # Not by the link: [Add App] at the bottom of Obtainium's first screen, type the URL
     sh("input keyevent KEYCODE_BACK", check=False)
     time.sleep(2)
     if focused_package() != OBTAINIUM:
         start_obtainium(steps, r)
-    close_first_dialogs(steps, r)
-    nav = wait_for(ADD_APP_WORDS, 20)
+
+    def add_nav(nodes: list[Node]) -> Node | None:
+        button = node_with(nodes, ADD_APP_WORDS)
+        if button is not None and button.cls.endswith("Button"):
+            return button
+        return node_with(nodes, ADD_WORDS) if node_with(nodes, ("Apps",)) else None
+
+    nodes = close_first_dialogs(steps, r, lambda screen: add_nav(screen) is not None)
+    nav = add_nav(nodes)
     if nav is None:
         steps.save("no-add-app")
         raise RuntimeError(f"Obtainium [Add App] not on screen: {words(dump_ui())}")
@@ -261,7 +281,8 @@ def open_add_screen(steps: Steps, r: Report, repo_url: str) -> str:
 
 def add_repo(steps: Steps, r: Report, repo_url: str) -> str:
     how = open_add_screen(steps, r, repo_url)
-    add = wait_for(ADD_WORDS, 15)
+    nodes = close_first_dialogs(steps, r, lambda screen: add_screen_ready(screen, repo_url), timeout=15)
+    add = node_with(nodes, ADD_WORDS)
     if add is None:
         steps.save("no-add")
         raise RuntimeError(f"Obtainium [Add] not on screen: {words(dump_ui())}")
@@ -323,18 +344,17 @@ def wait_version(code: str, timeout: float = 120, watch_installer: list[str] | N
                  every: float = 2) -> dict[str, str]:
     """Waits until the app's versionCode is code. With watch_installer, records whenever the package installer's
     window has the focus meanwhile."""
-    end = time.time() + timeout
-    info = package(PKG)
-    while time.time() < end:
+    end = time.monotonic() + timeout
+    while True:
         info = package(PKG)
-        if info["versionCode"] == code:
-            return info
         if watch_installer is not None:
             focus = focused_package()
             if focus in INSTALLER_UI and focus not in watch_installer:
                 watch_installer.append(focus)
-        time.sleep(every)
-    return info
+        remaining = end - time.monotonic()
+        if info["versionCode"] == code or remaining <= 0:
+            return info
+        time.sleep(min(every, remaining))
 
 
 def obtainium_jobs(r: Report, name: str) -> list[str]:
@@ -359,26 +379,30 @@ def record_path() -> str:
     return paths[0]
 
 
-def set_obtainium_record(r: Report, version: str, hours_ago: int = 7) -> str:
+def verify_obtainium_record(path: str, expected: dict[str, str | int]) -> None:
+    saved = json.loads(sh(f"cat {path}"))
+    actual = {key: saved.get(key) for key in expected}
+    if actual != expected:
+        raise RuntimeError(f"Obtainium's B setup record changed: expected {expected}, found {actual}")
+
+
+def set_obtainium_record(r: Report, path: str, version: str, hours_ago: int = 7) -> dict[str, str | int]:
     """Obtainium's record of the app as on a phone where Obtainium installed `version` itself (it then keeps the
     release tag as both the installed and the latest version) and last looked for updates `hours_ago` hours back.
-    Only these three fields change (lib/models/app.dart: lastUpdateCheck is in microseconds). Returns what they
-    were."""
-    path = record_path()
+    Only these three fields change (lib/models/app.dart: lastUpdateCheck is in microseconds)."""
     rec = json.loads(sh(f"cat {path}"))
-    was = ", ".join(f"{k} {rec.get(k)}" for k in ("installedVersion", "latestVersion", "lastUpdateCheck"))
     now = int(sh("date +%s").strip())
-    rec["installedVersion"] = version
-    rec["latestVersion"] = version
-    rec["lastUpdateCheck"] = (now - hours_ago * 3600) * 1_000_000
+    expected = {"installedVersion": version, "latestVersion": version,
+                "lastUpdateCheck": (now - hours_ago * 3600) * 1_000_000}
+    was = ", ".join(f"{key} {rec.get(key)}" for key in expected)
+    rec.update(expected)
     local = r.out / "obtainium-record-b.json"
     local.write_text(json.dumps(rec, ensure_ascii=False), encoding="utf-8")
     adb("push", str(local), "/data/local/tmp/obtainium-record.json")
     sh(f"cat /data/local/tmp/obtainium-record.json > {path}")
-    back = json.loads(sh(f"cat {path}"))
-    if (back.get("installedVersion"), back.get("latestVersion")) != (version, version):
-        raise RuntimeError(f"Obtainium's record did not change: {back.get('installedVersion')}")
-    return was
+    verify_obtainium_record(path, expected)
+    r.note(f"Obtainium 기록을 설치·최신 {version}, 마지막 확인 {hours_ago}시간 전으로 둠(바꾸기 전: {was})")
+    return expected
 
 
 def obtainium_log(path: Path) -> list[str]:
@@ -421,29 +445,35 @@ def phase_b(r: Report, steps: Steps, b_old: Path, code: str) -> None:
     r.note("B. 그 뒤의 업데이트(손대지 않음)")
     b_code = str(int(code) - 1)
     become_root()
+    # Stop Obtainium before changing the installed APK or its record, so its old in-memory state cannot overwrite it.
+    sh(f"am force-stop {OBTAINIUM}")
     adb("uninstall", PKG, check=False)
     adb("install", "-i", OBTAINIUM, str(b_old), timeout=300)
     info = package(PKG)
-    r.check("B-1 Obtainium이 한 번 업데이트한 뒤와 같게", f"versionCode {b_code}, versionName 0.1.0.{b_code}, 설치한 앱 "
-            f"{OBTAINIUM}", f"versionCode {info['versionCode']}, versionName {info['versionName']}, 설치한 앱 "
-            f"'{info['installer']}'", info["versionCode"] == b_code and info["versionName"] == f"0.1.0.{b_code}"
-            and info["installer"] == OBTAINIUM)
-    was = set_obtainium_record(r, f"v0.1.0.{b_code}")
-    r.note(f"Obtainium 기록을 설치·최신 v0.1.0.{b_code}, 마지막 확인 7시간 전으로 둠(바꾸기 전: {was})")
-    # From here nobody touches the phone. Obtainium stays in the background as phase A left it
+    if not r.check("B-1 Obtainium이 한 번 업데이트한 뒤와 같게",
+                   f"versionCode {b_code}, versionName 0.1.0.{b_code}, 설치한 앱 {OBTAINIUM}",
+                   f"versionCode {info['versionCode']}, versionName {info['versionName']}, 설치한 앱 '{info['installer']}'",
+                   info["versionCode"] == b_code and info["versionName"] == f"0.1.0.{b_code}"
+                   and info["installer"] == OBTAINIUM):
+        return
+    path = record_path()
+    expected = set_obtainium_record(r, path, f"v0.1.0.{b_code}")
+    start_obtainium(steps, r, lambda nodes: node_with(nodes, ("필받음", "Pillbadeum")) is not None)
+    verify_obtainium_record(path, expected)
+    # From HOME onward nobody touches the phone or forces any scheduled work.
     log_path = r.out / f"api{api_level()}-logcat-b.txt"
     with log_path.open("w", encoding="utf-8") as log_file:
         log = subprocess.Popen(["adb", "logcat", "-v", "time", "-T", "1", *B_LOG_TAGS], stdout=log_file,
                                stderr=subprocess.STDOUT, text=True)
         try:
-            sh("input keyevent KEYCODE_HOME", check=False)
+            sh("input keyevent KEYCODE_HOME")
             jobs = obtainium_jobs(r, "b-start")
             r.note(f"Obtainium 예약 작업(JobScheduler) 시작 때: {', '.join(jobs) or '없음'}")
             shown: list[str] = []
-            started = time.time()
-            # Looking every 15 seconds: a confirmation window stays until someone taps it, so none is missed
-            info = wait_version(code, B_WAIT, shown, every=15)
-            waited = int(time.time() - started)
+            started = time.monotonic()
+            # An installer confirmation stays open without a tap, so frequent dumps are unnecessary here.
+            info = wait_version(code, B_WAIT, shown, every=30)
+            waited = int(time.monotonic() - started)
             background = info["versionCode"] == code
             if background:
                 time.sleep(10)  # Obtainium's lines after the install
@@ -454,11 +484,11 @@ def phase_b(r: Report, steps: Steps, b_old: Path, code: str) -> None:
                 log.wait(timeout=30)
             except subprocess.TimeoutExpired:
                 log.kill()
+                log.wait()
     r.note(f"Obtainium 예약 작업(JobScheduler) {waited // 60}분 {waited % 60}초 뒤: {', '.join(jobs) or '없음'}")
     try:
-        after = json.loads(sh(f"cat {record_path()}"))
-        r.note("Obtainium 기록 기다린 뒤: " + ", ".join(f"{k} {after.get(k)}" for k in
-                                                   ("installedVersion", "latestVersion", "lastUpdateCheck")))
+        after = json.loads(sh(f"cat {path}"))
+        r.note("Obtainium 기록 기다린 뒤: " + ", ".join(f"{key} {after.get(key)}" for key in expected))
     except (RuntimeError, ValueError) as exc:
         r.note(f"Obtainium 기록을 다시 읽지 못함: {exc}")
     for line in obtainium_log(log_path)[:25]:
@@ -491,11 +521,11 @@ def main() -> int:
     parser.add_argument("--obtainium", type=Path, required=True, help="Obtainium APK")
     parser.add_argument("--repo-url", required=True, help="https://github.com/<owner>/<repo> with the releases")
     parser.add_argument("--code", required=True, help="versionCode of the latest release")
-    parser.add_argument("--phases", default="AB", choices=("A", "AB"), help="A, or AB (default): B needs A first")
+    parser.add_argument("--phases", choices=("A", "AB"), default="AB", help="A only or A followed by B (default)")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
-    if "B" in args.phases and args.b_old is None:
-        parser.error("phase B needs --b-old")
+    if args.phases == "AB" and args.b_old is None:
+        parser.error("--phases AB requires --b-old")
     args.out.mkdir(parents=True, exist_ok=True)
 
     adb("wait-for-device")
@@ -506,9 +536,8 @@ def main() -> int:
     old_code, old_name = apk_badging(args.old)
     try:
         sh("settings put global package_verifier_enable 0", check=False)
-        if "A" in args.phases:
-            phase_a(r, steps, args.old, args.obtainium, args.repo_url, args.code)
-        if "B" in args.phases:
+        phase_a(r, steps, args.old, args.obtainium, args.repo_url, args.code)
+        if args.phases == "AB":
             phase_b(r, steps, args.b_old, args.code)
     except Exception as exc:
         traceback.print_exc()

@@ -23,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -133,8 +134,10 @@ private fun CardPickerSheet(options: List<CardOption>, onDismiss: () -> Unit, on
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         val slide = remember { Animatable(1f) }
         LaunchedEffect(Unit) { slide.animateTo(0f) }
+        // Keyed on Unit so that a recomposition does not restart the detector in the middle of a tap.
+        val dismiss by rememberUpdatedState(onDismiss)
         Column(Modifier.fillMaxSize()) {
-            Spacer(Modifier.weight(1f).fillMaxWidth().pointerInput(onDismiss) { detectTapGestures { onDismiss() } })
+            Spacer(Modifier.weight(1f).fillMaxWidth().pointerInput(Unit) { detectTapGestures { dismiss() } })
             Column(
                 Modifier.fillMaxWidth()
                     .graphicsLayer { translationY = slide.value * size.height }

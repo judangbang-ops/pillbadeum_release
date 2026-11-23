@@ -62,7 +62,8 @@ import kotlinx.datetime.TimeZone
 /**
  * The app's screens, one at a time (07 sitemap). [key] is what is saved when the screen is recreated (BUG-003).
  * [back] is where system back goes (REQ-094, SPEC-021): every screen to the first, the people screen to settings and its
- * person form to the people screen (TASK-021), SCR-007 opened from SCR-008 back to that month (TASK-019), the intro's
+ * person form to the people screen (TASK-021), SCR-007 opened from SCR-008 back to that month (TASK-019), SCR-011 back to
+ * the screen that opened it: the first screen, the people screen or the person form (SPEC-054, TASK-061), the intro's
  * second page to its first (TASK-022), and null on the first screen and on the intro's first page, where back closes the
  * app.
  */
@@ -192,7 +193,8 @@ internal sealed interface Route {
  * @param homeRequests bump to show the first screen (a notification or the widget opened the app, R3 memo); the intro
  *   stays until it is finished.
  * @param backHandler the platform's system back: called with whether back stays in the app, and what it does.
- * @param initialHealthCardPersonId starts directly at SCR-011 for app tests; app entry points are added in TASK-061.
+ * @param initialHealthCardPersonId starts directly at SCR-011 for app tests. The app itself opens the card from SCR-004's
+ *   `[건강 카드]` and from SCR-010 (TASK-061).
  * @param protectCardRecents applies the platform's recents privacy setting while a health card screen is shown.
  */
 @Composable

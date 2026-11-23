@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -245,8 +246,10 @@ private fun ArchivedLine(row: PersonRow, line: Boolean, onOpenCard: () -> Unit, 
     val detail = Labels.personItems(row.items, archived = true)
     val openLabel = "건강 카드 보기"
     // The card and restore actions have separate accessibility targets. Taps on the lid or in the gaps also open the card.
+    // Keyed on Unit: a new lambda on each recomposition would restart the detector and drop a tap in progress.
+    val openCard by rememberUpdatedState(onOpenCard)
     Box(
-        Modifier.listLine(line).pointerInput(onOpenCard) { detectTapGestures { onOpenCard() } }
+        Modifier.listLine(line).pointerInput(Unit) { detectTapGestures { openCard() } }
             .padding(horizontal = 4.dp, vertical = 8.dp),
         contentAlignment = Alignment.CenterStart,
     ) {

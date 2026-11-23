@@ -219,6 +219,22 @@ class CardPickerScreenTest {
     }
 
     @Test
+    fun tc118_picker_stays_open_after_recreation_and_closes_after_the_card(): Unit = runBlocking {
+        seedHome()
+        open()
+        tap(Labels.HEALTH_CARD)
+        waitForText(pickerTitle)
+        controller.recreate()
+        waitForDesc(Labels.healthCardTitle(mother))
+        text(pickerTitle).assertIsDisplayed()
+        cardOption(mother).performClick()
+        waitForText(Labels.CARD_MEDICATIONS)
+        back()
+        waitForText("지난 기록")
+        text(pickerTitle).assertDoesNotExist()
+    }
+
+    @Test
     fun people_card_and_restore_are_separate_targets_at_normal_size(): Unit = runBlocking {
         seedPeople()
         open()

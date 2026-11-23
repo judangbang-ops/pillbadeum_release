@@ -9,6 +9,7 @@ import android.content.Intent
 import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.SemanticsMatcher
@@ -28,8 +29,10 @@ import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performScrollToNode
 import androidx.room3.immediateTransaction
 import androidx.room3.useWriterConnection
@@ -451,6 +454,14 @@ class SettingsScreenTest {
             ReflectionHelpers.setStaticField(Build.VERSION::class.java, "SDK_INT", currentSdk)
         }
         close.performClick()
+        compose.onNode(isDialog()).assertDoesNotExist()
+        feedback.assertExists()
+
+        // A tap on the sheet keeps it; a tap on the dimmed settings above it closes it (as outside a dialog box).
+        feedback.performClick()
+        inDialog("메일 앱을 열 수 없어요. 이 주소로 보내 주세요").performClick()
+        compose.onNode(isDialog()).assertExists()
+        compose.onNode(isDialog()).performTouchInput { click(Offset(centerX, 8f)) }
         compose.onNode(isDialog()).assertDoesNotExist()
         feedback.assertExists()
     }

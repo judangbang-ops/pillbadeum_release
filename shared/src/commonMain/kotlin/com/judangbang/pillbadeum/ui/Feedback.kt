@@ -4,10 +4,12 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -17,12 +19,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -52,11 +57,17 @@ internal fun FeedbackRow(onClick: () -> Unit) {
     }
 }
 
-/** SCR-009#nomail, below the settings over the dialog window's scrim. */
+/**
+ * SCR-009#nomail, below the settings over the dialog window's scrim. A tap on the dimmed settings above the sheet closes
+ * it, as outside a `SettingsDialog` box: the window's own outside-tap check never fires here, since the sheet's column
+ * fills the window.
+ */
 @Composable
 internal fun NoMailSheet(onCopy: () -> Unit, onClose: () -> Unit) {
+    val close by rememberUpdatedState(onClose)
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+        Column(Modifier.fillMaxSize()) {
+            Spacer(Modifier.weight(1f).fillMaxWidth().pointerInput(Unit) { detectTapGestures { close() } })
             Column(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                     .background(Ui.Surface).verticalScroll(rememberScrollState())
@@ -67,6 +78,7 @@ internal fun NoMailSheet(onCopy: () -> Unit, onClose: () -> Unit) {
                     "메일 앱을 열 수 없어요. 이 주소로 보내 주세요",
                     Ui.type(18, Ui.ExtraBold, lineHeight = 1.25f),
                     Modifier.padding(start = 4.dp, end = 4.dp, bottom = 4.dp),
+                    heading = true,
                 )
                 Box(
                     Modifier.fillMaxWidth().heightIn(min = 56.dp).border(1.dp, Ui.LineStrong, Ui.ButtonShape)

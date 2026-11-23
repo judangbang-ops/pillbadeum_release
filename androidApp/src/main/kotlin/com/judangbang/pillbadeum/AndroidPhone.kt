@@ -92,8 +92,9 @@ class AndroidPhone(
         val now = SystemClock.elapsedRealtime()
         // A second tap can reach this activity before the mail window takes focus (SPEC-053).
         if (lastMailLaunch?.let { now - it < MAIL_REPEAT_WINDOW_MS } == true) return true
-        val buildNumber = packageInfo?.let(PackageInfoCompat::getLongVersionCode)
-        val body = "앱 버전: $appVersion ($buildNumber)\n" +
+        // "-" as the version row of the settings shows, should the own package not be read.
+        val buildNumber = packageInfo?.let(PackageInfoCompat::getLongVersionCode)?.toString() ?: "-"
+        val body = "앱 버전: ${appVersion.ifBlank { "-" }} ($buildNumber)\n" +
             "Android 버전: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})\n" +
             "기기 모델: ${Build.MANUFACTURER} ${Build.MODEL}"
         val draft = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$FEEDBACK_ADDRESS"))

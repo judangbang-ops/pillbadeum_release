@@ -65,7 +65,7 @@ def check_feedback(report, steps):
             steps("13a. TC-098 메일 앱 없음과 주소 복사", "하단 창과 주소, 복사한 주소가 클립보드에 있음",
                   lambda: no_mail_and_copy(report, apk))
             steps("13b. TC-098 메일 앱에 초안 열기", "받는 사람·제목·본문 세 값만, 두 번 눌러도 초안 하나",
-                  lambda: single_draft(report))
+                  lambda: single_draft(report, apk))
         finally:
             adb("uninstall", FIXTURE, check=False)
             for component in disabled:
@@ -91,7 +91,10 @@ def no_mail_and_copy(report, apk: Path) -> str:
     return "하단 창에서 주소를 복사했고, 별도 시험 앱이 클립보드에서 같은 주소를 읽음"
 
 
-def single_draft(report) -> str:
+def single_draft(report, apk: Path) -> str:
+    # 13a installs the fixture after the no-mail sheet; install it here too, so a 13a that failed before that
+    # does not show up as a missing draft.
+    adb("install", "-r", str(apk))
     info = sh(f"dumpsys package {PKG}")
     name = re.search(r"\bversionName=(\S+)", info).group(1)
     code = re.search(r"\bversionCode=(\d+)", info).group(1)

@@ -200,6 +200,10 @@ class ItemMedicationScreenTest {
         text("약 더하기").performScrollTo().performClick()
         val name = "가".repeat(49) + "🌕"
         val quantity = "가".repeat(29) + "🌕"
+        // Outer spaces, which saving drops, do not use up the limit (approved review 12).
+        name(1).performTextReplacement(" $name")
+        name(1).assert(hasText(" $name"))
+        text("50자까지 적을 수 있어요").assertDoesNotExist()
         name(1).performTextReplacement(name)
         text("50자까지 적을 수 있어요").assertDoesNotExist()
         quantity(0).performTextReplacement(quantity)
@@ -214,6 +218,18 @@ class ItemMedicationScreenTest {
         text("저장").performClick()
         waitForToday()
         assertEquals(IntakeMedicationDraft(name, quantity), stored(id).single().copy(id = null))
+    }
+
+    @Test
+    fun the_schedule_note_shows_only_while_the_schedule_differs_from_the_saved_one() {
+        openWithItem(examples)
+        edit()
+        val note = "주기를 바꾸면 지금부터 새 일정이 적용돼요. 이번 창의 기록은 그대로 인정돼요."
+        text(note).assertDoesNotExist()
+        text("주 1회").performScrollTo().performClick()
+        text(note).performScrollTo().assertIsDisplayed()
+        text("매일").performScrollTo().performClick()
+        text(note).assertDoesNotExist()
     }
 
     @Test

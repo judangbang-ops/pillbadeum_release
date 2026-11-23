@@ -32,7 +32,7 @@ import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.judangbang.pillbadeum.usecase.IntakeMedicationDraft
-import com.judangbang.pillbadeum.usecase.takeMedicationCodePoints
+import com.judangbang.pillbadeum.usecase.limitMedicationInput
 
 internal data class MedicationFormRow(val key: Int, val draft: IntakeMedicationDraft)
 
@@ -117,8 +117,8 @@ private fun MedicationRow(
             label = "약 이름",
             value = draft.name,
             onChange = { input ->
-                val limited = input.takeMedicationCodePoints(nameLimit)
-                nameLimited = limited.length < input.length
+                val limited = input.limitMedicationInput(nameLimit)
+                nameLimited = limited.trim() != input.trim()
                 onChange(draft.copy(name = limited))
             },
             placeholder = "",
@@ -136,8 +136,8 @@ private fun MedicationRow(
             label = "1회 투약량",
             value = draft.quantity,
             onChange = { input ->
-                val limited = input.takeMedicationCodePoints(quantityLimit)
-                quantityLimited = limited.length < input.length
+                val limited = input.limitMedicationInput(quantityLimit)
+                quantityLimited = limited.trim() != input.trim()
                 onChange(draft.copy(quantity = limited))
             },
             placeholder = "예: 1정, 반 알",

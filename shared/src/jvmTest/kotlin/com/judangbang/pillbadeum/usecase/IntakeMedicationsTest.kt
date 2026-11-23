@@ -111,6 +111,19 @@ class IntakeMedicationsTest {
     }
 
     @Test
+    fun the_typing_limit_leaves_outer_spaces_out_of_the_count() = runTest {
+        val name = "가".repeat(49) + "🌕"
+        val limit = IntakeMedicationDraft.MAX_NAME
+        // A pasted name with spaces around it keeps every character that saving keeps.
+        assertEquals(" $name", " $name ".limitMedicationInput(limit))
+        assertEquals("  $name", "  ${name}다".limitMedicationInput(limit))
+        assertEquals(name, "${name}다".limitMedicationInput(limit))
+        assertEquals(" 가 나 ", " 가 나 ".limitMedicationInput(limit))
+        val id = create(draft().copy(medications = listOf(IntakeMedicationDraft(" $name ".limitMedicationInput(limit)))))
+        assertEquals(name, save.loadMedications(id).single().name)
+    }
+
+    @Test
     fun tc093_removing_one_row_keeps_the_other_and_deletes_its_medication() = runTest {
         val draft = draft()
         val id = create(draft.copy(medications = examples))

@@ -25,6 +25,16 @@ internal fun String.takeMedicationCodePoints(limit: Int): String {
     return substring(0, end)
 }
 
+/**
+ * SCR-006 typing limit. Saving drops the outer spaces before counting (approved review 12), so they do not use up
+ * [limit] here either: leading spaces stay, then at most [limit] code points follow. Spaces cut at the end were going
+ * to be dropped anyway.
+ */
+internal fun String.limitMedicationInput(limit: Int): String {
+    val lead = length - trimStart().length
+    return substring(0, lead) + substring(lead).takeMedicationCodePoints(limit)
+}
+
 /** Called inside SaveIntake's writer transaction after validating that draft IDs belong to this item. */
 internal suspend fun DidITakeDatabase.writeIntakeMedications(
     intakeId: String,

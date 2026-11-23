@@ -842,6 +842,8 @@ fun App(
                             }
                         },
                         openPrivacy = { url -> message = if (phone.openUrl(url)) null else Labels.noBrowser(url) },
+                        openFeedbackMail = phone::openFeedbackMail,
+                        copyFeedbackAddress = phone::copyFeedbackAddress,
                         openAccess = ::openAccess,
                     ),
                 )

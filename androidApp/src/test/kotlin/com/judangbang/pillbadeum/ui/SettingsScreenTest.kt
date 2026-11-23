@@ -3,6 +3,7 @@ package com.judangbang.pillbadeum.ui
 import android.app.AlarmManager
 import android.app.KeyguardManager
 import android.app.TimePickerDialog
+import android.content.ClipboardManager
 import android.content.DialogInterface
 import android.content.Intent
 import android.os.Build
@@ -18,6 +19,7 @@ import androidx.compose.ui.test.assertIsOn
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasScrollToIndexAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
@@ -67,6 +69,7 @@ import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
+import org.robolectric.shadows.ShadowToast
 import org.robolectric.util.ReflectionHelpers
 import java.util.TimeZone as JavaTimeZone
 
@@ -373,6 +376,83 @@ class SettingsScreenTest {
         policy.performClick()
         waitForText(Labels.noBrowser(url))
         compose.saveScreen("settings-no-browser", activity)
+    }
+
+    @Test
+    fun tc098_the_mail_draft_contains_only_the_approved_fields_and_opens_once() {
+        app.seedWeek(family = true)
+        val activity = openSettings()
+        val feedback = compose.onNode(hasText("의견 보내기") and hasClickAction()).performScrollTo()
+        feedback.performClick()
+        feedback.performClick()
+
+        val draft = shadowOf(activity).nextStartedActivity
+        val info = app.packageManager.getPackageInfo(app.packageName, 0)
+        assertEquals(Intent.ACTION_SENDTO, draft.action)
+        assertEquals("mailto:elddlwkd@gmail.com", draft.dataString)
+        assertEquals(setOf(Intent.EXTRA_SUBJECT, Intent.EXTRA_TEXT), draft.extras!!.keySet())
+        assertEquals("[필받음] 의견", draft.getStringExtra(Intent.EXTRA_SUBJECT))
+        assertEquals(
+            "앱 버전: ${info.versionName} (${info.longVersionCode})\n" +
+                "Android 버전: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})\n" +
+                "기기 모델: ${Build.MANUFACTURER} ${Build.MODEL}",
+            draft.getStringExtra(Intent.EXTRA_TEXT),
+        )
+        assertNull(draft.clipData)
+        assertNull(shadowOf(activity).nextStartedActivity)
+        assertTrue(compose.onAllNodes(isDialog()).fetchSemanticsNodes().isEmpty())
+    }
+
+    @Test
+    fun tc098_feedback_and_no_mail_boards_at_100_percent() = feedbackAndNoMail(1f, "100")
+
+    @Test
+    fun tc098_feedback_and_no_mail_boards_at_200_percent() = feedbackAndNoMail(2f, "200")
+
+    private fun feedbackAndNoMail(scale: Float, percent: String) {
+        val seed = app.seedWeek(family = true)
+        runBlocking { assertTrue(core.archiveIntake(seed.morning)) }
+        RuntimeEnvironment.setFontScale(scale)
+        val activity = openSettings()
+        shadowOf(app).checkActivities(true)
+        val medical = compose.onNodeWithText(Labels.SETTINGS_MEDICAL).performScrollTo()
+        val feedback = compose.onNode(hasText("의견 보내기") and hasClickAction())
+        feedback.assert(hasText("메일 앱이 열려요. 앱 버전·Android 버전·기기 모델만 채워요."))
+        val feedbackBounds = feedback.fetchSemanticsNode().boundsInRoot
+        val policyBounds = row("개인정보처리방침, 브라우저에서 열기").fetchSemanticsNode().boundsInRoot
+        assertTrue(policyBounds.bottom <= feedbackBounds.top)
+        assertTrue(feedbackBounds.bottom <= medical.fetchSemanticsNode().boundsInRoot.top)
+        assertTrue(feedbackBounds.height / compose.density.density >= 56f)
+        compose.assertTargetsAtLeast48dp()
+        save("settings-feedback-$percent")
+
+        feedback.performClick()
+        val title = inDialog("메일 앱을 열 수 없어요. 이 주소로 보내 주세요")
+        val address = inDialog("elddlwkd@gmail.com")
+        val copy = inDialog("복사")
+        val close = inDialog("닫기")
+        val rows = listOf(title, address, copy, close).map { it.fetchSemanticsNode().boundsInRoot }
+        assertTrue(rows.zipWithNext().all { (above, below) -> above.bottom <= below.top })
+        val dialog = compose.onNode(isDialog()).fetchSemanticsNode().boundsInRoot
+        assertTrue("bottom sheet", dialog.bottom - rows.last().bottom <= 24 * compose.density.density)
+        compose.assertTargetsAtLeast48dp()
+        save("settings-no-mail-$percent")
+
+        copy.performClick()
+        val clipboard = activity.getSystemService(ClipboardManager::class.java)
+        assertEquals("elddlwkd@gmail.com", clipboard.primaryClip!!.getItemAt(0).text.toString())
+        assertNull(ShadowToast.getTextOfLatestToast())
+        val currentSdk = Build.VERSION.SDK_INT
+        ReflectionHelpers.setStaticField(Build.VERSION::class.java, "SDK_INT", Build.VERSION_CODES.S_V2)
+        try {
+            copy.performClick()
+            assertEquals("주소를 복사했어요", ShadowToast.getTextOfLatestToast())
+        } finally {
+            ReflectionHelpers.setStaticField(Build.VERSION::class.java, "SDK_INT", currentSdk)
+        }
+        close.performClick()
+        compose.onNode(isDialog()).assertDoesNotExist()
+        feedback.assertExists()
     }
 
     /** SCR-009#loading while the settings are read (grey cells), and the read error with [다시 시도]. */

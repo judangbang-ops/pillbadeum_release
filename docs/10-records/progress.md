@@ -18,6 +18,17 @@
 - **다음 행동**: 공개 승인 뒤 합치기 직전에 방침 상단의 시행일을 `main`에 합치는 날(KST)로 맞춤. 합치는 순간 공개 방침이 바뀜
 - **다음 앱 코드 변경 때**: `SettingsScreen.kt` KDoc의 `published 2026-11-16` 문구를 정리함. PR #62는 방침 문서만 다뤄 테스터 APK 배포를 시작하지 않음
 
+### CI 앱 화면 시험의 Maven Central 429 줄이기
+
+- **목표**: 앱 화면 시험의 의존성 다운로드 실패를 줄이고 시험 범위와 판정 기준을 유지함.
+- **확인한 것**: [PR 실행 45021627405 2차](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45021627405/attempts/2)와 [main 실행 45055509494 1차](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45055509494/attempts/1)에서 Gradle이 앱 시험의 클래스패스를 구성하며 `nativeruntime-dist-compat:1.0.19` JAR를 받다가 429를 만남. 앞 단계인 `:shared:jvmTest`는 이 의존성을 쓰지 않음. 두 실행의 Gradle 캐시는 [릴리즈 빌드 45011811099](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45011811099)가 먼저 저장했고, [같은 커밋의 CI 45011811086](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45011811086)는 같은 키의 저장 예약에 실패함. 나중에 앱 시험을 통과한 실행도 일치하는 캐시 키를 갱신하지 못함.
+- **한 일**: CI의 Gradle 캐시와 wrapper 검증을 `gradle/actions/setup-gradle`에서 하고, Gradle 작업 요약은 실패할 때 표시함. 시험 중에 Robolectric이 `~/.m2`로 받는 `android-all-instrumented`는 Robolectric 버전과 시험의 SDK 번호가 일치하는 캐시만 복원함. SDK 번호가 명시된 시험은 필요한 수만큼 검증된 JAR가 내려왔으면 시험 실패 뒤에도 저장할 수 있음. 두 캐시는 `main`에서 저장하고 다른 브랜치에서는 복원만 함. `--rerun`과 시험 판정은 유지함.
+- **로컬 검사**: `actionlint 1.7.12`, YAML 구조 대조, `check_docs.py`, `check_writes.py`, `check_wording.py` 통과.
+- **CI에서 확인한 것**: [PR 검증 실행 45097246334](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45097246334)에서 공통 JVM 시험 335개, 앱 화면 시험 127개와 APK 빌드가 통과함. 이 실행에는 PR 캐시 저장을 열어 Gradle 의존성 캐시와 Robolectric SDK 캐시의 저장 로그를 확인함.
+- **재리뷰 뒤 확인한 것**: [새 캐시 키 검증 실행 45099052612](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45099052612/job/137445396671)의 앱 시험 XML에서 `repo1.maven.org`가 Robolectric SDK 다운로드에 429를 보낸 것을 확인함. 같은 실행에서 SDK JAR와 체크섬이 들어온 뒤 `Linux-ci-robolectric-sdk-v2-4.17-sdk-35`가 저장됨. 최종 설정은 `main`에서만 저장함.
+- **확인하지 못한 것**: PR에서 만든 검증용 캐시는 해당 PR에만 보임. `main`의 첫 CI와 새 의존성이 들어간 실행은 Maven Central 상태의 영향을 받음. 다른 APK·에뮬레이터 워크플로에서 앱 시험을 실행하는 경로는 찾지 못해 공용 Gradle 캐시 설정은 후속 검토로 남김.
+- **다음 행동**: [PR #63](https://github.com/judangbang-ops/pillbadeum_release/pull/63)에 최종 커밋의 복원 로그와 시험 결과를 남김.
+
 ### 노션 '최근 업데이트'에 11/22~23 작업의 최종본 한 행 (PR #53~#61)
 
 - **목표**: 2026-11-15 15:31 KST 동희님 지시("노션에는 한번에 최종본만 올리고")대로, 11/22~23 작업(Q11 답과 결정, 에뮬레이터 QA, 테스터 폰 자동 업데이트)을 노션에 한 번만 올림

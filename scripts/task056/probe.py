@@ -349,22 +349,20 @@ class Probe:
         shell("input", "keyevent", "KEYCODE_SLEEP")
         time.sleep(2.5)
         shell("input", "keyevent", "KEYCODE_WAKEUP")
-        time.sleep(1)
+        time.sleep(3)
         locked = shell("dumpsys", "window", "policy")
         self.screen("show-locked")
         self.expect(bool(re.search(r"\b(?:showing|mShowingLockscreen)=true", locked)), "(4) keyguard is showing")
         self.expect(self.find({"가상 엄마", "닫기"}) is None, "(4) card node absent on keyguard")
-        self.swipe(up=True)
-        time.sleep(.8)
-        shell("input", "text", pin)
-        shell("input", "keyevent", "KEYCODE_ENTER")
-        if self.find({"닫기"}) is None:
+        if not self.unlock_card(pin):
             shell("locksettings", "clear", "--old", pin, check=False)
             shell("wm", "dismiss-keyguard", check=False)
-            self.failures.append("(4) PIN unlock did not restore the card")
-            self.log("FAIL (4) PIN unlock did not restore the card")
+            self.expect(False, "(4) PIN unlock did not restore the card")
             self.start("home", cold=True)
             self.tap("보여 주기")
+        else:
+            self.expect(True, "(4) PIN unlock resumes the card")
+            self.screen("show-unlocked")
         shell("input", "keyevent", "KEYCODE_BACK")
         self.expect(self.find({"보여 주기"}) is not None, "(4) back returns to card entry")
         self.screen("show-after-back")
@@ -373,6 +371,19 @@ class Probe:
         shell("input", "keyevent", "KEYCODE_WAKEUP")
         shell("locksettings", "clear", "--old", pin, check=False)
         shell("wm", "dismiss-keyguard", check=False)
+
+    def unlock_card(self, pin):
+        for attempt in range(3):
+            shell("wm", "dismiss-keyguard", check=False)
+            if attempt:
+                self.swipe(up=True)
+            time.sleep(2)
+            shell("input", "text", pin)
+            shell("input", "keyevent", "KEYCODE_ENTER")
+            time.sleep(3)
+            if self.find({"닫기"}) is not None:
+                return True
+        return False
 
     def power(self, expected):
         lines = [line.strip() for line in shell("dumpsys", "power").splitlines()

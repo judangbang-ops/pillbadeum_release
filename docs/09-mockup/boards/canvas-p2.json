@@ -80,25 +80,32 @@
       "x": 2200,
       "y": 3310,
       "w": 360,
-      "h": 800,
+      "h": 1000,
       "title": "SCR-014 응급 대비 문장"
     },
     "EmergencyCopied.dc.html": {
       "x": 2640,
       "y": 3310,
       "w": 360,
-      "h": 800,
-      "title": "SCR-014 응급 대비 문장 · 복사한 뒤 (Android 13 이상)"
+      "h": 1030,
+      "title": "SCR-014 응급 대비 문장 · 칸별 복사한 뒤 (Android 13 이상)"
+    },
+    "Emergency200.dc.html": {
+      "x": 3080,
+      "y": 3310,
+      "w": 360,
+      "h": 2190,
+      "title": "SCR-014 응급 대비 문장 · 글자 200%"
     },
     "Export.dc.html": {
-      "x": 3080,
+      "x": 3520,
       "y": 3310,
       "w": 360,
       "h": 800,
       "title": "SCR-015 내보내기"
     },
     "ExportPages.dc.html": {
-      "x": 3520,
+      "x": 3960,
       "y": 3310,
       "w": 360,
       "h": 1030,
@@ -106,77 +113,77 @@
     },
     "HomeCard.dc.html": {
       "x": 0,
-      "y": 5120,
+      "y": 5660,
       "w": 360,
       "h": 800,
       "title": "SCR-004 기록 · 헤더에 건강 카드"
     },
     "HomeCard200.dc.html": {
       "x": 440,
-      "y": 5120,
+      "y": 5660,
       "w": 360,
       "h": 1580,
       "title": "SCR-004 기록 · 헤더에 건강 카드 · 글자 200%"
     },
     "HomeCardPick.dc.html": {
       "x": 880,
-      "y": 5120,
+      "y": 5660,
       "w": 360,
       "h": 800,
       "title": "SCR-004 기록 · 건강 카드 대상자 고르기"
     },
     "ItemFormMeds.dc.html": {
       "x": 1320,
-      "y": 5120,
+      "y": 5660,
       "w": 360,
       "h": 1260,
       "title": "SCR-006 항목 수정 · 약 두 줄"
     },
     "ItemFormMedsError.dc.html": {
       "x": 1760,
-      "y": 5120,
+      "y": 5660,
       "w": 360,
       "h": 1280,
       "title": "SCR-006 항목 수정 · 약 이름 없이 저장"
     },
     "ItemFormMeds200.dc.html": {
       "x": 2200,
-      "y": 5120,
+      "y": 5660,
       "w": 360,
       "h": 2120,
       "title": "SCR-006 항목 수정 · 약 두 줄 · 글자 200%"
     },
     "SettingsFeedback.dc.html": {
       "x": 2640,
-      "y": 5120,
+      "y": 5660,
       "w": 360,
       "h": 800,
       "title": "SCR-009 설정 · 아래쪽 (의견 보내기)"
     },
     "SettingsNoMail.dc.html": {
       "x": 3080,
-      "y": 5120,
+      "y": 5660,
       "w": 360,
       "h": 800,
       "title": "SCR-009 설정 · 메일 앱이 없을 때"
     },
     "PeopleCard.dc.html": {
       "x": 3520,
-      "y": 5120,
+      "y": 5660,
       "w": 360,
       "h": 800,
       "title": "SCR-010 대상자 관리 · 보관한 대상자의 건강 카드"
     },
     "PeopleCard200.dc.html": {
       "x": 3960,
-      "y": 5120,
+      "y": 5660,
       "w": 360,
       "h": 800,
       "title": "SCR-010 대상자 관리 · 보관한 대상자의 건강 카드 · 글자 200%"
     },
     "PersonEditCard.dc.html": {
       "x": 4400,
-      "y": 5120,
+      "y": 5660,
       "w": 360,
       "h": 800,
       "title": "SCR-010 대상자 수정 · 건강 카드"
@@ -195,6 +202,7 @@
     "CardShow200.dc.html",
     "Emergency.dc.html",
     "EmergencyCopied.dc.html",
+    "Emergency200.dc.html",
     "Export.dc.html",
     "ExportPages.dc.html",
     "HomeCard.dc.html",

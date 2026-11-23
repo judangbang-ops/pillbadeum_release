@@ -322,6 +322,27 @@ class HealthCardTest {
     }
 
     @Test
+    fun spec049_sharedWriterUpdatesBothAffectedPeopleAndReopensTheirNotices() = runTest {
+        val peopleToUpdate = setOf(person(), person("가상 대상자"))
+        val untouched = person("가상 다른 대상자")
+        for (id in peopleToUpdate + untouched) {
+            add(id, CardEntryFields.Allergy("가상 원인"))
+            assertEquals(EmergencyCopyRecord.RECORDED, notice.recordCopy(id))
+        }
+        val before = times(untouched)
+        fx.at("2026-11-23T08:00")
+        db.useWriterConnection { writer ->
+            writer.immediateTransaction { db.markHealthCardEdited(peopleToUpdate, now(), TEST_DEVICE_ID) }
+        }
+        for (id in peopleToUpdate) {
+            assertEquals(now(), times(id).editedAt)
+            assertEquals(StaleCardNotice.CHANGED, card(id).staleNotice)
+        }
+        assertEquals(before, times(untouched))
+        assertNull(card(untouched).staleNotice)
+    }
+
+    @Test
     fun spec049_nameChangeWritesEditTimeButColorChangeDoesNot() = runTest {
         val person = person()
         add(person, CardEntryFields.Allergy("가상 원인"))
@@ -585,8 +606,9 @@ class HealthCardTest {
 
     @Test
     fun spec055_copyOfIntakeOnlyCardRecordsHistoryWithoutChangingDate() = runTest {
-        val person = person()
-        intake(person, "가상 항목")
+        // Seed a legacy intake without invoking the current intake-save use case.
+        val intake = fx.newIntake()
+        val person = assertNotNull(db.intakeDao().findById(intake)).personId
         assertNull(db.healthCardDao().findByPerson(person))
         fx.at("2026-11-23T08:00")
         assertEquals(EmergencyCopyRecord.RECORDED, notice.recordCopy(person))

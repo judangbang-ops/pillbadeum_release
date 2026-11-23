@@ -67,8 +67,8 @@ import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 
 /**
- * The public privacy policy file on this repository's main branch (REQ-063, TASK-035). The file states its current
- * effective date. Installed apps open this fixed path (`PrivacyPolicyUrlTest`).
+ * The privacy policy's public address (REQ-063, TASK-035): the policy file on this repository's main branch, published
+ * 2026-11-16. An installed app cannot change it, so the file stays at this path (jvm `PrivacyPolicyUrlTest`).
  */
 internal const val PRIVACY_POLICY_URL: String =
     "https://github.com/judangbang-ops/pillbadeum_release/blob/main/docs/release/privacy-policy.md"

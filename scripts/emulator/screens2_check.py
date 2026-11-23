@@ -78,6 +78,7 @@ from backup_restore_check import (
     wait_boot,
 )
 from explore import (
+    ITEM_NAME_LABELS,
     KEYBOARD_NOTES,
     LOG_PARTS,
     WEEKLY,
@@ -94,7 +95,7 @@ from explore import (
     tap_exact,
     tap_scrolled,
     tile,
-    type_into,
+    type_item_name,
 )
 from release_check import WIDGET_LABEL, go_home, place_widget, save_ui
 from reminder_check import PIN, query, seed, set_pin, setting
@@ -259,14 +260,14 @@ def type_name(name: str) -> None:
     the emulator has a hardware keyboard and show_ime_with_hard_keyboard is 0, and it covered 주 1회's weekdays and the
     times of day (screens2 run 43539426392). BACK is pressed only while the keyboard is up, which takes it, and the form
     must still be there after (BACK on the form itself would leave it, BUG-001)."""
-    type_into("약 이름", name)
+    type_item_name(name)
     for _ in range(3):
         time.sleep(1.5)
         if not keyboard_up():
             return
         sh("input keyevent KEYCODE_BACK")
         time.sleep(1.5)
-        if not any(n.text == "약 이름" for n in dump_ui()):
+        if not any(n.text in ITEM_NAME_LABELS for n in dump_ui()):
             raise RuntimeError("BACK left the item form instead of closing the on-screen keyboard")
         KEYBOARD_NOTES.append(f"API {API['n']}: 이름을 넣은 뒤 뜬 화면 키보드를 BACK으로 닫음")
     if keyboard_up():

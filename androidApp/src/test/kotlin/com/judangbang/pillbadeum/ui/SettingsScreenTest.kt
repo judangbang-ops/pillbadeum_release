@@ -39,7 +39,10 @@ import com.judangbang.pillbadeum.TestApp
 import com.judangbang.pillbadeum.boundary.DayBoundaryAlarm
 import com.judangbang.pillbadeum.domain.DoseSource
 import com.judangbang.pillbadeum.status.Labels
+import com.judangbang.pillbadeum.usecase.IntakeDraft
+import com.judangbang.pillbadeum.usecase.IntakeMedicationDraft
 import com.judangbang.pillbadeum.usecase.RecordResult
+import com.judangbang.pillbadeum.usecase.SaveIntakeResult
 import com.judangbang.pillbadeum.usecase.SaveReminderResult
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -277,7 +280,17 @@ class SettingsScreenTest {
     @Test
     fun spec025_an_archived_item_is_deleted_for_good_after_its_question() {
         val seed = app.seedWeek(family = true)
-        runBlocking { assertTrue(core.archiveIntake(seed.morning)) }
+        val medicationIds = runBlocking {
+            val item = checkNotNull(core.db.intakeDao().findById(seed.morning))
+            val draft = IntakeDraft(
+                item.personId, item.name, slotLabel = item.slotLabel,
+                medications = listOf(IntakeMedicationDraft("예시정"), IntakeMedicationDraft("가상정")),
+            )
+            assertTrue(core.saveIntake.update(seed.morning, draft) is SaveIntakeResult.Saved)
+            assertTrue(core.archiveIntake(seed.morning))
+            core.db.intakeMedicationDao().listByIntake(seed.morning).map { it.medicationId }
+        }
+        assertEquals(2, medicationIds.size)
         assertEquals(4, judgments(seed.morning))
         openSettings()
         val archived = row("보관한 항목, 1개").performScrollTo()
@@ -295,12 +308,17 @@ class SettingsScreenTest {
         compose.onNodeWithText("아니요").performClick()
         compose.waitForIdle()
         assertEquals("kept", 4, judgments(seed.morning))
+        assertEquals(2, runBlocking { core.saveIntake.loadMedications(seed.morning).size })
 
         compose.onNodeWithContentDescription("나 아침약 완전 삭제").performScrollTo().performClick()
         inDialog("완전 삭제").performClick()
         waitForText(Labels.deleted("아침약"))
         assertEquals(0, compose.onAllNodesWithContentDescription("보관한 항목", substring = true).fetchSemanticsNodes().size)
-        runBlocking { assertNull(core.db.intakeDao().findById(seed.morning)) }
+        runBlocking {
+            assertNull(core.db.intakeDao().findById(seed.morning))
+            assertTrue(core.saveIntake.loadMedications(seed.morning).isEmpty())
+            for (id in medicationIds) assertNull(core.db.medicationDao().findById(id))
+        }
         assertEquals(0, judgments(seed.morning))
         save("settings-deleted")
     }

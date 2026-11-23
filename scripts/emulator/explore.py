@@ -68,6 +68,7 @@ ZONE = ZoneInfo("Asia/Seoul")
 ME = "나"  # ManagePeople.DEFAULT_PERSON_NAME
 MOM = "Mom"
 ADD_FAMILY = "+ 가족 추가"  # the person field of the item form with one person (ItemScreen.kt, TASK-015)
+ITEM_NAME_LABELS = ("항목 이름", "약 이름")  # current form and the form in older APKs (TASK-059, upgrade tests)
 VITAMIN = "Vitamin"
 BP = "BPpill"
 WEEKLY = "Weekly"
@@ -77,11 +78,12 @@ WEEKLY = "Weekly"
 # Screen helpers on top of backup_restore_check
 
 
-def exact(text: str, timeout: float = 15, below: int = -1) -> Node | None:
-    """A node whose text is exactly `text` (find() matches substrings: "월" is also in "11월")."""
+def exact(text: str | tuple[str, ...], timeout: float = 15, below: int = -1) -> Node | None:
+    """A node whose text exactly matches one of the expected labels."""
+    labels = (text,) if isinstance(text, str) else text
     end = time.time() + timeout
     while True:
-        hits = [n for n in dump_ui() if n.text == text and n.bounds[1] > below]
+        hits = [n for n in dump_ui() if n.text in labels and n.bounds[1] > below]
         if hits:
             return hits[0]
         if time.time() >= end:
@@ -137,25 +139,31 @@ def tile(name: str, timeout: float = 15) -> Node | None:
         time.sleep(1)
 
 
-def type_into(label: str, text: str) -> None:
-    """Types into the text field read as `label` (`약 이름`, `가족 이름`).
+def type_into(label: str, text: str, legacy_label: str | None = None) -> None:
+    """Types into the text field read as `label`, with an optional label for older APKs.
 
     The field's description may sit on a node of its own with the field's bounds instead of on the EditText
     (Compose Multiplatform 1.11 on API 34, run 43357220722: the EditText had no text or description and a View
     with the same bounds read '가족 이름'), so a field also matches by the bounds of a node read as `label`."""
     nodes = dump_ui()
     boxes = [n for n in nodes if n.cls.endswith("EditText")]
-    labelled = {n.bounds for n in nodes if n.desc == label}
-    box = next((n for n in boxes if n.desc == label or n.bounds in labelled), None)
+    labels = (label,) if legacy_label is None else (label, legacy_label)
+    labelled = {candidate: {n.bounds for n in nodes if n.desc == candidate} for candidate in labels}
+    box = next((n for candidate in labels for n in boxes if n.desc == candidate or n.bounds in labelled[candidate]), None)
     if box is None:
         raise RuntimeError(
             f"text field '{label}' not found (fields on screen: {[n.desc for n in boxes]}, "
-            f"read as '{label}': {sorted(labelled)})"
+            f"read as '{label}': {sorted(labelled[label])})"
         )
     tap(box)
     sh(f"input text {text}")
     time.sleep(1)
     hide_keyboard()
+
+
+def type_item_name(name: str) -> None:
+    current, legacy = ITEM_NAME_LABELS
+    type_into(current, name, legacy)
 
 
 IME_BLOCK = re.compile(r"Window\{[^}]*InputMethod\}:(.*?)(?=\n\s*Window #|\Z)", re.S)
@@ -392,7 +400,7 @@ def add_item(r: Report, name: str, person: str, weekly: bool, choice: str, shot:
     """Home > [항목 추가] > name > person > 매일 + time of day, or 주 1회 + weekday > [저장]."""
     ensure_home()
     tap_scrolled("항목 추가")
-    type_into("약 이름", name)
+    type_item_name(name)
     tap_exact(person)
     tap_exact("주 1회" if weekly else "매일")
     # The weekday and time-of-day cells sit under their question; "월" alone is also in other texts.
@@ -627,7 +635,7 @@ def run(r: Report, steps: Steps) -> None:
         # BUG-001 (TASK-016): BACK on a form goes to the first screen, and BACK there leaves the app.
         ensure_home()
         tap_scrolled("항목 추가")
-        if exact("약 이름", 10) is None:
+        if exact(ITEM_NAME_LABELS, 10) is None:
             raise RuntimeError("the item form did not open")
         sh("input keyevent KEYCODE_BACK")
         if exact(HOME_MARK, 5) is None and keyboard_height() > 0:

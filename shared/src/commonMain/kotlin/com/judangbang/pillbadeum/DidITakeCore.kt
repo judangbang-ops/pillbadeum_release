@@ -61,7 +61,7 @@ class DidITakeCore private constructor(
     val archiveIntake: ArchiveIntake = ArchiveIntake(db, clock)
     val people: ManagePeople = ManagePeople(db, clock, ids, deviceId)
     val settings: ManageSettings = ManageSettings(db, clock)
-    val deleteArchivedIntake: DeleteArchivedIntake = DeleteArchivedIntake(db)
+    val deleteArchivedIntake: DeleteArchivedIntake = DeleteArchivedIntake(db, clock)
 
     /** Raises clock warnings (supplement C-1): call on clock, time zone and boot broadcasts. */
     val flagClockMismatch: FlagClockMismatch = FlagClockMismatch(db, clock)

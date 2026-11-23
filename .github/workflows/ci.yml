@@ -74,11 +74,10 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # CI 작업의 이전 Gradle 캐시에서 복원함. 위에서 wrapper 검증을 마침.
+      # CI의 이전 Gradle 캐시에서 복원하며 main에서만 저장함. 위에서 wrapper 검증을 마침.
       - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
         with:
           validate-wrappers: false
-          cache-read-only: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository }}
 
       # --rerun: 입력이 같아도 빌드 캐시의 지난 결과를 쓰지 않고 테스트를 실제로 돌림 (테스트 자체는 2초 안쪽)
       - name: JVM 테스트 (./gradlew :shared:jvmTest)
@@ -121,7 +120,7 @@ jobs:
         run: ./gradlew :androidApp:testDebugUnitTest --rerun
 
       - name: Robolectric Android SDK 캐시 저장
-        if: ${{ !cancelled() && (github.ref == 'refs/heads/main' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) && steps.app-test.outcome == 'success' && steps.robolectric-sdk-cache.outputs.cache-hit != 'true' }}
+        if: ${{ !cancelled() && github.ref == 'refs/heads/main' && steps.app-test.outcome == 'success' && steps.robolectric-sdk-cache.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: ~/.m2/repository/org/robolectric/android-all-instrumented

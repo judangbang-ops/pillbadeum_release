@@ -14,10 +14,11 @@
 
 - **목표**: 앱 화면 시험의 의존성 다운로드 실패를 줄이고 시험 범위와 판정 기준을 유지함.
 - **확인한 것**: [PR 실행 45021627405 2차](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45021627405/attempts/2)와 [main 실행 45055509494 1차](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45055509494/attempts/1)에서 Gradle이 앱 시험의 클래스패스를 구성하며 `nativeruntime-dist-compat:1.0.19` JAR를 받다가 429를 만남. 앞 단계인 `:shared:jvmTest`는 이 의존성을 쓰지 않음. 두 실행의 Gradle 캐시는 [릴리즈 빌드 45011811099](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45011811099)가 먼저 저장했고, [같은 커밋의 CI 45011811086](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45011811086)는 같은 키의 저장 예약에 실패함. 나중에 앱 시험을 통과한 실행도 일치하는 캐시 키를 갱신하지 못함.
-- **한 일**: CI의 Gradle 캐시를 `gradle/actions/setup-gradle`로 옮겨 이전 CI 실행의 파일을 복원하고, 공통 의존성 파일은 여러 캐시 키에서 재사용하게 함. 시험 중에 Robolectric이 `~/.m2`로 받는 `android-all-instrumented`에 별도 복원·저장을 추가함. `--rerun`은 매번 시험을 실제로 돌리는 옵션이라 유지함.
+- **한 일**: CI의 Gradle 캐시를 `gradle/actions/setup-gradle`로 옮겨 이전 CI 실행의 파일을 복원하고, 공통 의존성 파일은 여러 캐시 키에서 재사용하게 함. 시험 중에 Robolectric이 `~/.m2`로 받는 `android-all-instrumented`에 별도 복원·저장을 추가함. 두 캐시는 `main`에서 저장하고 다른 브랜치에서는 복원만 함. `--rerun`은 매번 시험을 실제로 돌리는 옵션이라 유지함.
 - **로컬 검사**: `actionlint 1.7.12`, YAML 구조 대조, `check_docs.py`, `check_writes.py`, `check_wording.py` 통과.
-- **확인하지 못한 것**: 처음 캐시를 만드는 실행이나 새 의존성이 들어간 실행은 Maven Central 상태의 영향을 받음. 다른 APK·에뮬레이터 워크플로는 앱 시험을 실행하지 않아 이 JAR를 받는 경로가 확인되지 않았고, 기존 Gradle 캐시 설정을 따로 검토하기로 함.
-- **다음 행동**: [PR #63](https://github.com/judangbang-ops/pillbadeum_release/pull/63)에서 캐시 저장과 같은 키 복원, 두 실행의 시험 결과를 확인함.
+- **CI에서 확인한 것**: [PR 검증 실행 45097246334](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45097246334)에서 공통 JVM 시험 335개, 앱 화면 시험 127개와 APK 빌드가 통과함. 이 실행에는 PR 캐시 저장을 열어 Gradle 의존성 캐시와 Robolectric SDK 캐시의 저장 로그를 확인함.
+- **확인하지 못한 것**: PR에서 만든 검증용 캐시는 해당 PR에만 보임. `main`의 첫 CI와 새 의존성이 들어간 실행은 Maven Central 상태의 영향을 받음. 다른 APK·에뮬레이터 워크플로에서 앱 시험을 실행하는 경로는 찾지 못해 공용 Gradle 캐시 설정은 후속 검토로 남김.
+- **다음 행동**: [PR #63](https://github.com/judangbang-ops/pillbadeum_release/pull/63)에 최종 커밋의 복원 로그와 시험 결과를 남김.
 
 ### 노션 '최근 업데이트'에 11/22~23 작업의 최종본 한 행 (PR #53~#61)
 

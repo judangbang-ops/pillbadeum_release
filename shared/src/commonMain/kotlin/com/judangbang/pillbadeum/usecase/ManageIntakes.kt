@@ -47,7 +47,7 @@ data class IntakeDraft(
         widgetAlias = widgetAlias?.trim()?.takeIf { it.isNotEmpty() },
         slotLabel = if (rule is ScheduleRule.Daily) slotLabel else null,
         reminder = reminder?.let { it.copy(start = LocalTime(it.start.hour, it.start.minute)) },
-        medications = medications?.map { it.copy(name = it.name.trim()) },
+        medications = medications?.map { it.copy(name = it.name.trim(), quantity = it.quantity.trim()) },
     )
 }
 
@@ -195,8 +195,10 @@ class SaveIntake(
         if (d.name.isEmpty()) return SaveIntakeResult.Invalid(SaveIntakeResult.Invalid.BLANK_NAME)
         val rows = d.medications.orEmpty()
         if (rows.any { it.name.isBlank() }) return SaveIntakeResult.Invalid(SaveIntakeResult.Invalid.BLANK_MEDICATION)
-        if (rows.size > IntakeMedicationDraft.MAX_ROWS ||
-            rows.any { it.name.length > IntakeMedicationDraft.MAX_NAME || it.quantity.length > IntakeMedicationDraft.MAX_QUANTITY }
+        if (rows.size > IntakeMedicationDraft.MAX_ROWS || rows.any { row ->
+                row.name != row.name.takeMedicationCodePoints(IntakeMedicationDraft.MAX_NAME) ||
+                    row.quantity != row.quantity.takeMedicationCodePoints(IntakeMedicationDraft.MAX_QUANTITY)
+            }
         ) {
             return SaveIntakeResult.Invalid(SaveIntakeResult.Invalid.MEDICATION_LIMIT)
         }
@@ -255,7 +257,13 @@ internal suspend fun DidITakeDatabase.markIntakeCardEdited(personId: String, now
     val cards = healthCardDao()
     val existing = cards.findByPerson(personId)
     cards.upsert(
-        existing?.copy(editedAt = now, updatedAt = now, version = existing.version + 1, deviceId = deviceId)
+        existing?.copy(
+            editedAt = now,
+            staleNoticeClosedAt = existing.staleNoticeClosedAt.takeIf { existing.emergencyCopiedAt == null },
+            updatedAt = now,
+            version = existing.version + 1,
+            deviceId = deviceId,
+        )
             ?: HealthCardEntity(personId = personId, editedAt = now, createdAt = now, updatedAt = now, deviceId = deviceId),
     )
 }

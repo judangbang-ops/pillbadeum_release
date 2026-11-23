@@ -13,9 +13,13 @@ import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -28,6 +32,7 @@ import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.judangbang.pillbadeum.usecase.IntakeMedicationDraft
+import com.judangbang.pillbadeum.usecase.takeMedicationCodePoints
 
 internal data class MedicationFormRow(val key: Int, val draft: IntakeMedicationDraft)
 
@@ -103,13 +108,22 @@ private fun MedicationRow(
         }
     }
     val labelStyle = Ui.type(14, color = Ui.Muted, lineHeight = 1.25f)
+    var nameLimited by rememberSaveable { mutableStateOf(false) }
+    var quantityLimited by rememberSaveable { mutableStateOf(false) }
+    val nameLimit = IntakeMedicationDraft.MAX_NAME
+    val quantityLimit = IntakeMedicationDraft.MAX_QUANTITY
     val name: @Composable (Modifier) -> Unit = { modifier ->
         Field(
             label = "약 이름",
             value = draft.name,
-            onChange = { if (it.length <= IntakeMedicationDraft.MAX_NAME) onChange(draft.copy(name = it)) },
+            onChange = { input ->
+                val limited = input.takeMedicationCodePoints(nameLimit)
+                nameLimited = limited.length < input.length
+                onChange(draft.copy(name = limited))
+            },
             placeholder = "",
             error = "약 이름을 입력해 주세요".takeIf { nameError },
+            note = "${nameLimit}자까지 적을 수 있어요".takeIf { nameLimited && !nameError },
             modifier = modifier,
             inputModifier = Modifier.bringIntoViewRequester(bringIntoView).focusRequester(focus),
             spokenLabel = "약 $number, 약 이름",
@@ -121,8 +135,13 @@ private fun MedicationRow(
         Field(
             label = "1회 투약량",
             value = draft.quantity,
-            onChange = { if (it.length <= IntakeMedicationDraft.MAX_QUANTITY) onChange(draft.copy(quantity = it)) },
+            onChange = { input ->
+                val limited = input.takeMedicationCodePoints(quantityLimit)
+                quantityLimited = limited.length < input.length
+                onChange(draft.copy(quantity = limited))
+            },
             placeholder = "예: 1정, 반 알",
+            note = "${quantityLimit}자까지 적을 수 있어요".takeIf { quantityLimited },
             modifier = modifier,
             labelStyle = labelStyle,
             gap = 2.dp,

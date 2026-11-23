@@ -14,6 +14,17 @@ data class IntakeMedicationDraft(val name: String = "", val quantity: String = "
     }
 }
 
+/** Limit by Unicode code points so a surrogate pair counts as one character. */
+internal fun String.takeMedicationCodePoints(limit: Int): String {
+    var end = 0
+    repeat(limit) {
+        if (end == length) return this
+        val high = this[end++].isHighSurrogate()
+        if (high && end < length && this[end].isLowSurrogate()) end++
+    }
+    return substring(0, end)
+}
+
 /** Called inside SaveIntake's writer transaction after validating that draft IDs belong to this item. */
 internal suspend fun DidITakeDatabase.writeIntakeMedications(
     intakeId: String,

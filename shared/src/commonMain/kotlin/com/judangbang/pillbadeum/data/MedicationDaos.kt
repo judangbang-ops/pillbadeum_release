@@ -27,13 +27,14 @@ interface MedicationDao {
 
 @Dao
 interface IntakeMedicationDao {
-    @Query("SELECT * FROM intake_medication WHERE intake_id = :intakeId ORDER BY created_at, id")
+    // One save gives every new row the same timestamp. The rowid retains their insertion order.
+    @Query("SELECT * FROM intake_medication WHERE intake_id = :intakeId ORDER BY created_at, rowid")
     suspend fun listByIntake(intakeId: String): List<IntakeMedicationEntity>
 
     @Query("""
         SELECT im.id, m.name, im.qty_per_take AS quantity
         FROM intake_medication im JOIN medication m ON im.medication_id = m.id
-        WHERE im.intake_id = :intakeId ORDER BY im.created_at, im.id
+        WHERE im.intake_id = :intakeId ORDER BY im.created_at, im.rowid
     """)
     suspend fun listFields(intakeId: String): List<IntakeMedicationFields>
 

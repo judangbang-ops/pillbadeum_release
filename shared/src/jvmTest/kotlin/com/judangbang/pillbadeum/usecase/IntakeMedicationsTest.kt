@@ -77,11 +77,12 @@ class IntakeMedicationsTest {
     @Test
     fun tc093_blank_or_over_limit_input_does_not_write_item_or_medications() = runTest {
         val draft = draft()
+        val character = "🌕"
         val invalid = listOf(
             SaveIntakeResult.Invalid.BLANK_MEDICATION to listOf(examples.first(), IntakeMedicationDraft(" ", "반 알")),
             SaveIntakeResult.Invalid.MEDICATION_LIMIT to List(11) { examples.first() },
-            SaveIntakeResult.Invalid.MEDICATION_LIMIT to listOf(IntakeMedicationDraft("가".repeat(51))),
-            SaveIntakeResult.Invalid.MEDICATION_LIMIT to listOf(IntakeMedicationDraft("예시정", "가".repeat(31))),
+            SaveIntakeResult.Invalid.MEDICATION_LIMIT to listOf(IntakeMedicationDraft(character.repeat(51))),
+            SaveIntakeResult.Invalid.MEDICATION_LIMIT to listOf(IntakeMedicationDraft("예시정", character.repeat(31))),
         )
         for ((reason, rows) in invalid) {
             assertEquals(SaveIntakeResult.Invalid(reason), save.create(draft.copy(medications = rows)))
@@ -96,6 +97,17 @@ class IntakeMedicationsTest {
         assertEquals(SaveIntakeResult.Invalid(SaveIntakeResult.Invalid.BLANK_MEDICATION), save.update(id, invalidEdit))
         assertEquals(before, db.intakeDao().findById(id))
         assertEquals(rows, save.loadMedications(id))
+    }
+
+    @Test
+    fun trims_outer_spaces_and_accepts_the_code_point_limits() = runTest {
+        val name = "가".repeat(49) + "🌕"
+        val quantity = "가".repeat(29) + "🌕"
+        val rows = listOf(IntakeMedicationDraft("  $name ", " $quantity  "), IntakeMedicationDraft("예시정", "   "))
+        val id = create(draft().copy(medications = rows))
+        val saved = save.loadMedications(id).map { it.copy(id = null) }
+        assertEquals(listOf(IntakeMedicationDraft(name, quantity), IntakeMedicationDraft("예시정")), saved)
+        assertNull(db.intakeMedicationDao().listByIntake(id).last().qtyPerTake)
     }
 
     @Test
@@ -118,7 +130,7 @@ class IntakeMedicationsTest {
     }
 
     @Test
-    fun editing_a_row_keeps_its_ids_and_stamps_the_card_with_quantity_verbatim() = runTest {
+    fun editing_a_row_keeps_its_ids_trims_outer_spaces_and_clears_the_stale_notice() = runTest {
         val draft = draft()
         val id = create(draft.copy(medications = examples))
         val rows = save.loadMedications(id)
@@ -129,7 +141,7 @@ class IntakeMedicationsTest {
 
         fx.at("2026-11-11T08:10")
         assertIs<SaveIntakeResult.Saved>(save.update(id, draft.copy(medications = listOf(replacement, rows[1]))))
-        assertEquals(listOf(replacement, rows[1]), save.loadMedications(id))
+        assertEquals(listOf(replacement.copy(quantity = "반  알"), rows[1]), save.loadMedications(id))
         val edited = db.intakeMedicationDao().listByIntake(id).first()
         assertEquals(old.medicationId, edited.medicationId)
         assertEquals(old.createdAt, edited.createdAt)
@@ -138,7 +150,7 @@ class IntakeMedicationsTest {
         val stamped = assertNotNull(db.healthCardDao().findByPerson(draft.personId))
         assertEquals(fx.clock.now().toEpochMilliseconds(), stamped.editedAt)
         assertEquals(card.editedAt, stamped.emergencyCopiedAt)
-        assertEquals(card.editedAt, stamped.staleNoticeClosedAt)
+        assertNull(stamped.staleNoticeClosedAt)
     }
 
     @Test

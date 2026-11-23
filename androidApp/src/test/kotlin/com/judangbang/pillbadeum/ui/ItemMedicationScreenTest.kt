@@ -4,12 +4,15 @@ import android.Manifest
 import android.app.NotificationManager
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -24,6 +27,7 @@ import com.judangbang.pillbadeum.DidITakeCore
 import com.judangbang.pillbadeum.MainActivity
 import com.judangbang.pillbadeum.TestApp
 import com.judangbang.pillbadeum.domain.SlotLabel
+import com.judangbang.pillbadeum.status.Labels
 import com.judangbang.pillbadeum.usecase.IntakeDraft
 import com.judangbang.pillbadeum.usecase.IntakeMedicationDraft
 import com.judangbang.pillbadeum.usecase.PersonColors
@@ -89,7 +93,7 @@ class ItemMedicationScreenTest {
         val id = openWithItem(examples)
         edit()
         val before = stored(id)
-        name(2).performTextReplacement("")
+        name(2).performTextReplacement("   ")
         compose.onNodeWithContentDescription("위젯·알림에 보일 이름").performTextReplacement("아침 약")
         text("저장").performClick()
 
@@ -101,6 +105,7 @@ class ItemMedicationScreenTest {
         assertEquals(null, runBlocking { core.db.intakeDao().findById(id)?.widgetAlias })
 
         // Clear the unrelated edit for the approved error board fixture.
+        name(2).performTextReplacement("")
         compose.onNodeWithContentDescription("위젯·알림에 보일 이름").performTextReplacement("")
         compose.saveScreen("ItemFormMedsError", controller.get())
     }
@@ -188,6 +193,40 @@ class ItemMedicationScreenTest {
         assertEquals(listOf("예시정"), stored(created.id).map { it.name })
     }
 
+    @Test
+    fun pasting_over_the_limits_keeps_whole_code_points_and_explains_the_limit() {
+        val id = openWithItem()
+        edit()
+        text("약 더하기").performScrollTo().performClick()
+        val name = "가".repeat(49) + "🌕"
+        val quantity = "가".repeat(29) + "🌕"
+        name(1).performTextReplacement(name)
+        text("50자까지 적을 수 있어요").assertDoesNotExist()
+        quantity(0).performTextReplacement(quantity)
+        text("30자까지 적을 수 있어요").assertDoesNotExist()
+        name(1).performTextReplacement("${name}다")
+        name(1).assert(hasText(name))
+        text("50자까지 적을 수 있어요").assertExists()
+        quantity(0).performTextReplacement("${quantity}다")
+        quantity(0).assert(hasText(quantity))
+        text("30자까지 적을 수 있어요").assertExists()
+
+        text("저장").performClick()
+        waitForToday()
+        assertEquals(IntakeMedicationDraft(name, quantity), stored(id).single().copy(id = null))
+    }
+
+    @Test
+    fun an_item_archived_during_editing_returns_to_the_opener_with_the_gone_notice() {
+        val id = openWithItem(examples)
+        edit()
+        assertTrue(runBlocking { core.archiveIntake(id) })
+        text("저장").performClick()
+        waitForText(Labels.GONE)
+        waitForText("아직 복용 항목이 없어요.")
+        assertFalse(controller.get().isFinishing)
+    }
+
     private fun assertLayout(stacked: Boolean) {
         val name = bounds(name(1))
         val quantity = bounds(quantity(0))
@@ -216,13 +255,15 @@ class ItemMedicationScreenTest {
     private fun openWithItem(rows: List<IntakeMedicationDraft> = emptyList()): String {
         shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
         shadowOf(app.getSystemService(NotificationManager::class.java)).setNotificationsEnabled(true)
+        val ready = core
+        app.clock.now = at("2026-11-12T09:31")
         val id = runBlocking {
-            val person = core.people.add("엄마", PersonColors.PALETTE[1])
+            val person = ready.people.add("엄마", PersonColors.PALETTE[1])
             val draft = IntakeDraft(
                 person.id, "아침약", slotLabel = SlotLabel.MORNING, reminder = ReminderChoice(true, LocalTime(8, 0)),
                 medications = rows,
             )
-            (core.saveIntake.create(draft) as SaveIntakeResult.Saved).intakeId
+            (ready.saveIntake.create(draft) as SaveIntakeResult.Saved).intakeId
         }
         controller = Robolectric.buildActivity(MainActivity::class.java).setup()
         waitForToday()

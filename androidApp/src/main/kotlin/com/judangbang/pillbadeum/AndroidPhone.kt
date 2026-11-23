@@ -97,9 +97,15 @@ class AndroidPhone(
         val body = "앱 버전: ${appVersion.ifBlank { "-" }} ($buildNumber)\n" +
             "Android 버전: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})\n" +
             "기기 모델: ${Build.MANUFACTURER} ${Build.MODEL}"
-        val draft = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$FEEDBACK_ADDRESS"))
+        // `ACTION_SEND` with its documented extras, and a `SENDTO mailto:` selector so that only mail apps take it. The
+        // extras are documented for SEND only; with SENDTO, Gmail was reported to leave the body empty. Each value goes
+        // in one place only, so no app can fill the body twice. No MIME type: the selector is matched with the main
+        // intent's type, and the mail apps' `mailto` filters have none.
+        val draft = Intent(Intent.ACTION_SEND)
+            .putExtra(Intent.EXTRA_EMAIL, arrayOf(FEEDBACK_ADDRESS))
             .putExtra(Intent.EXTRA_SUBJECT, "[필받음] 의견")
             .putExtra(Intent.EXTRA_TEXT, body)
+        draft.selector = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:"))
         // Start directly, since Android's package visibility can hide an installed mail handler from lookups.
         return try {
             activity.startActivity(draft)

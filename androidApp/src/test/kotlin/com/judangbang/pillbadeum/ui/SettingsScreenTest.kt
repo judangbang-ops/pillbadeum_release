@@ -391,17 +391,25 @@ class SettingsScreenTest {
 
         val draft = shadowOf(activity).nextStartedActivity
         val info = app.packageManager.getPackageInfo(app.packageName, 0)
-        assertEquals(Intent.ACTION_SENDTO, draft.action)
-        assertEquals("mailto:elddlwkd@gmail.com", draft.dataString)
-        assertEquals(setOf(Intent.EXTRA_SUBJECT, Intent.EXTRA_TEXT), draft.extras!!.keySet())
+        val body = "앱 버전: ${info.versionName} (${info.longVersionCode})\n" +
+            "Android 버전: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})\n" +
+            "기기 모델: ${Build.MANUFACTURER} ${Build.MODEL}"
+        // SEND with the three values in its extras only (no data, no type), sent to mail apps by the SENDTO selector.
+        assertEquals(Intent.ACTION_SEND, draft.action)
+        assertNull(draft.data)
+        assertNull(draft.type)
+        assertEquals(Intent.ACTION_SENDTO, draft.selector!!.action)
+        assertEquals("mailto:", draft.selector!!.dataString)
+        assertEquals(setOf(Intent.EXTRA_EMAIL, Intent.EXTRA_SUBJECT, Intent.EXTRA_TEXT), draft.extras!!.keySet())
+        assertEquals(listOf("elddlwkd@gmail.com"), draft.getStringArrayExtra(Intent.EXTRA_EMAIL)!!.toList())
         assertEquals("[필받음] 의견", draft.getStringExtra(Intent.EXTRA_SUBJECT))
-        assertEquals(
-            "앱 버전: ${info.versionName} (${info.longVersionCode})\n" +
-                "Android 버전: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})\n" +
-                "기기 모델: ${Build.MANUFACTURER} ${Build.MODEL}",
-            draft.getStringExtra(Intent.EXTRA_TEXT),
-        )
-        assertNull(draft.clipData)
+        assertEquals(body, draft.getStringExtra(Intent.EXTRA_TEXT))
+        // No attachment. Android copies EXTRA_TEXT of a SEND into ClipData when it starts the activity: text only.
+        draft.clipData?.let { clip ->
+            assertEquals(1, clip.itemCount)
+            assertNull(clip.getItemAt(0).uri)
+            assertEquals(body, clip.getItemAt(0).text.toString())
+        }
         assertNull(shadowOf(activity).nextStartedActivity)
         assertTrue(compose.onAllNodes(isDialog()).fetchSemanticsNodes().isEmpty())
     }

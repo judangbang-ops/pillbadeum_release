@@ -102,7 +102,8 @@ def single_draft(report, apk: Path) -> str:
     api = sh("getprop ro.build.version.sdk").strip()
     maker = sh("getprop ro.product.manufacturer").strip()
     model = sh("getprop ro.product.model").strip()
-    expected = (f"mailto:{ADDRESS} [필받음] 의견 앱 버전: {name} ({code}) "
+    # The fixture shows EXTRA_EMAIL, EXTRA_SUBJECT and EXTRA_TEXT of the SEND it received (FeedbackReceiver.java).
+    expected = (f"to: {ADDRESS} [필받음] 의견 앱 버전: {name} ({code}) "
                 f"Android 버전: {release} (API {api}) 기기 모델: {maker} {model}")
 
     def draft_logs():

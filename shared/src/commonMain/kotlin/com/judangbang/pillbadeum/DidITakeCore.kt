@@ -18,8 +18,12 @@ import com.judangbang.pillbadeum.status.LoadPeople
 import com.judangbang.pillbadeum.status.LoadSettings
 import com.judangbang.pillbadeum.status.LoadStatusBoard
 import com.judangbang.pillbadeum.usecase.ArchiveIntake
+import com.judangbang.pillbadeum.usecase.BuildEmergencyText
 import com.judangbang.pillbadeum.usecase.DeleteArchivedIntake
+import com.judangbang.pillbadeum.usecase.DeleteCardEntries
 import com.judangbang.pillbadeum.usecase.FlagClockMismatch
+import com.judangbang.pillbadeum.usecase.HealthCardNoticeActions
+import com.judangbang.pillbadeum.usecase.LoadHealthCard
 import com.judangbang.pillbadeum.usecase.ManagePeople
 import com.judangbang.pillbadeum.usecase.ManageReminders
 import com.judangbang.pillbadeum.usecase.ManageSettings
@@ -29,6 +33,7 @@ import com.judangbang.pillbadeum.usecase.RecordDose
 import com.judangbang.pillbadeum.usecase.RecordInWindow
 import com.judangbang.pillbadeum.usecase.RecordResult
 import com.judangbang.pillbadeum.usecase.ResolveClockFlag
+import com.judangbang.pillbadeum.usecase.SaveCardEntry
 import com.judangbang.pillbadeum.usecase.SaveIntake
 import com.judangbang.pillbadeum.usecase.TimeEditCommand
 import com.judangbang.pillbadeum.usecase.VoidDose
@@ -86,6 +91,12 @@ class DidITakeCore private constructor(
 
     /** What the people screen shows (SCR-010, TASK-021). */
     val loadPeople: LoadPeople = LoadPeople(db)
+
+    val loadHealthCard = LoadHealthCard(db)
+    val saveCardEntry = SaveCardEntry(db, clock, ids, deviceId)
+    val deleteCardEntries = DeleteCardEntries(db, clock, deviceId)
+    val buildEmergencyText = BuildEmergencyText()
+    val healthCardNoticeActions = HealthCardNoticeActions(db, clock, deviceId)
 
     /** Reminder plan: next alarm after a change, overdue reminders when the alarm rings (TASK-011, N-8). */
     val planReminders: PlanReminders = PlanReminders(db, clock)

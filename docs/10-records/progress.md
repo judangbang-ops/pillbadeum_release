@@ -17,6 +17,7 @@
 - **한 일**: CI의 Gradle 캐시와 wrapper 검증을 `gradle/actions/setup-gradle`에서 하고, Gradle 작업 요약은 실패할 때 표시함. 시험 중에 Robolectric이 `~/.m2`로 받는 `android-all-instrumented`는 Robolectric 버전과 시험의 SDK 번호가 일치하는 캐시만 복원함. SDK 번호가 명시된 시험은 필요한 수만큼 검증된 JAR가 내려왔으면 시험 실패 뒤에도 저장할 수 있음. 두 캐시는 `main`에서 저장하고 다른 브랜치에서는 복원만 함. `--rerun`과 시험 판정은 유지함.
 - **로컬 검사**: `actionlint 1.7.12`, YAML 구조 대조, `check_docs.py`, `check_writes.py`, `check_wording.py` 통과.
 - **CI에서 확인한 것**: [PR 검증 실행 45097246334](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45097246334)에서 공통 JVM 시험 335개, 앱 화면 시험 127개와 APK 빌드가 통과함. 이 실행에는 PR 캐시 저장을 열어 Gradle 의존성 캐시와 Robolectric SDK 캐시의 저장 로그를 확인함.
+- **재리뷰 뒤 확인한 것**: [새 캐시 키 검증 실행 45099052612](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45099052612/job/137445396671)의 앱 시험 XML에서 `repo1.maven.org`가 Robolectric SDK 다운로드에 429를 보낸 것을 확인함. 같은 실행에서 SDK JAR와 체크섬이 들어온 뒤 `Linux-ci-robolectric-sdk-v2-4.17-sdk-35`가 저장됨. 최종 설정은 `main`에서만 저장함.
 - **확인하지 못한 것**: PR에서 만든 검증용 캐시는 해당 PR에만 보임. `main`의 첫 CI와 새 의존성이 들어간 실행은 Maven Central 상태의 영향을 받음. 다른 APK·에뮬레이터 워크플로에서 앱 시험을 실행하는 경로는 찾지 못해 공용 Gradle 캐시 설정은 후속 검토로 남김.
 - **다음 행동**: [PR #63](https://github.com/judangbang-ops/pillbadeum_release/pull/63)에 최종 커밋의 복원 로그와 시험 결과를 남김.
 

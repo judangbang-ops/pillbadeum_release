@@ -253,17 +253,21 @@ class MigrationTest {
     }
 
     @Test
-    fun migrated_file_opens_with_room_and_the_registration_morning_is_scheduled() = runTest {
+    fun v1_to_v3_opens_with_room_and_keeps_schedule_and_card_timestamps() = runTest {
+        val registeredAt = ms("2026-11-11T15:00")
         helper.createDatabase(1).use { v1 ->
             v1.person("p1")
-            v1.intake("a", "p1", createdAt = ms("2026-11-11T15:00"))
-            v1.version("a-v1", "a", "DAILY", "{}", from = ms("2026-11-11T15:00"))
+            v1.intake("a", "p1", createdAt = registeredAt)
+            v1.version("a-v1", "a", "DAILY", "{}", from = registeredAt)
         }
         val db = buildDidITakeDatabase(didITakeDatabaseBuilder(dbFile.toFile()), Dispatchers.IO)
         try {
             val version = db.scheduleVersionDao().findEffective("a", ms("2026-11-11T08:00"))
             assertEquals("a-v1", version?.id, "registration-day morning belongs to the first version (P-4, RR-41)")
             assertTrue(db.scheduleVersionDao().findEffective("a", ms("2026-11-11T03:59")) == null)
+            val card = assertNotNull(db.healthCardDao().findByPerson("p1"))
+            assertEquals(registeredAt, card.editedAt)
+            assertEquals("old-device", card.deviceId)
         } finally {
             db.close()
         }

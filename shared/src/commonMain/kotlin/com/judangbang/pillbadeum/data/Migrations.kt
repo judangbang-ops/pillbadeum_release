@@ -110,7 +110,7 @@ object Migrations {
                 SELECT p.id,
                        MAX(p.updated_at, IFNULL((SELECT MAX(i.updated_at) FROM intake i WHERE i.person_id = p.id), 0)),
                        NULL, NULL, ?1, ?1, 1,
-                       IFNULL((SELECT value FROM setting WHERE key = '${SettingKeys.DEVICE_ID}'), p.device_id)
+                       IFNULL((SELECT `value` FROM `setting` WHERE `key` = 'device_id'), p.device_id)
                 FROM person p
                 """.trimIndent(),
             ).use { statement ->

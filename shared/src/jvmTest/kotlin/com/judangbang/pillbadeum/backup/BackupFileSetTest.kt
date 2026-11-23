@@ -1,7 +1,11 @@
 package com.judangbang.pillbadeum.backup
 
+import androidx.room3.testing.MigrationTestHelper
+import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import androidx.sqlite.execSQL
 import com.judangbang.pillbadeum.data.AllergyEntity
 import com.judangbang.pillbadeum.data.DidITakeDatabase
+import com.judangbang.pillbadeum.data.DidITakeDatabaseConstructor
 import com.judangbang.pillbadeum.data.HealthCardEntity
 import com.judangbang.pillbadeum.data.IntakeEntity
 import com.judangbang.pillbadeum.data.IntakeMedicationEntity
@@ -24,6 +28,7 @@ import com.judangbang.pillbadeum.usecase.RecordCommand
 import com.judangbang.pillbadeum.usecase.RecordDose
 import com.judangbang.pillbadeum.usecase.RecordResult
 import java.io.File
+import kotlin.io.path.Path
 import kotlin.io.path.createTempDirectory
 import kotlin.random.Random
 import kotlin.test.AfterTest
@@ -36,6 +41,7 @@ import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
+import org.junit.Rule
 
 /**
  * TASK-028, record-rules-supplement.md B-1: a backup made of the files the rule file names gives
@@ -55,6 +61,16 @@ import kotlinx.coroutines.test.runTest
 class BackupFileSetTest {
     private val root: File = createTempDirectory("backup-file-set").toFile()
     private val opened = mutableListOf<DidITakeDatabase>()
+    private val v2Source = File(root, "schema-2")
+
+    @get:Rule
+    val migrationHelper = MigrationTestHelper(
+        schemaDirectoryPath = Path("schemas"),
+        databasePath = File(v2Source, DidITakeDatabase.FILE_NAME).toPath(),
+        driver = BundledSQLiteDriver(),
+        databaseClass = DidITakeDatabase::class,
+        databaseFactory = { DidITakeDatabaseConstructor.initialize() },
+    )
 
     @AfterTest
     fun cleanUp() {
@@ -122,12 +138,34 @@ class BackupFileSetTest {
         val records = live.db.doseRecordDao().listByIntake(live.intakeId)
         assertEquals(1, records.size)
 
-        val restored = restore(live, ruleFiles)
+        val restored = restore(live.dir, ruleFiles)
         assertEquals(records, restored.doseRecordDao().listByIntake(live.intakeId))
         assertEquals(card, restored.healthCardDao().findByPerson(personId))
         assertEquals(listOf(entry), restored.allergyDao().listByPerson(personId))
         assertEquals(listOf(line), restored.intakeMedicationDao().listByIntake(live.intakeId))
         assertEquals(medication, restored.medicationDao().findById(line.medicationId))
+    }
+
+    @Test
+    fun v2Backup_restoresWalRows_beforeSeedingCards() = runTest(timeout = 3.minutes) {
+        v2Source.mkdirs()
+        migrationHelper.createDatabase(2).use { v2 ->
+            v2.execSQL("PRAGMA journal_mode = WAL")
+            v2.execSQL("PRAGMA wal_autocheckpoint = 0")
+            v2.execSQL(
+                "INSERT INTO person (id, name, color, created_at, updated_at, version, device_id) " +
+                    "VALUES ('test-person', 'Synthetic person', '#4E79A7', 100, 200, 1, 'old-device')",
+            )
+
+            val full = restore(v2Source, ruleFiles)
+            val person = assertNotNull(full.personDao().findById("test-person"))
+            val card = assertNotNull(full.healthCardDao().findByPerson(person.id))
+            assertEquals(200L, card.editedAt)
+            assertEquals("old-device", card.deviceId)
+
+            val mainOnly = restore(v2Source, setOf(DidITakeDatabase.FILE_NAME))
+            assertTrue(mainOnly.personDao().listAll().isEmpty(), "the schema-2 person was only in the WAL")
+        }
     }
 
     /** Live database state after [count] daily records; the database is left open on purpose. */
@@ -167,13 +205,13 @@ class BackupFileSetTest {
     }
 
     private suspend fun restoredCount(live: Live, names: Set<String>): Int =
-        restore(live, names).doseRecordDao().listByIntake(live.intakeId).size
+        restore(live.dir, names).doseRecordDao().listByIntake(live.intakeId).size
 
     /** Copies [names] that exist in the live folder and opens the copy with the app's builder. */
-    private fun restore(live: Live, names: Set<String>): DidITakeDatabase {
+    private fun restore(source: File, names: Set<String>): DidITakeDatabase {
         val target = File(root, "restore-${opened.size}").apply { mkdirs() }
         names.forEach { name ->
-            File(live.dir, name).takeIf { it.isFile }?.copyTo(File(target, name))
+            File(source, name).takeIf { it.isFile }?.copyTo(File(target, name))
         }
         val restored = buildDidITakeDatabase(didITakeDatabaseBuilder(File(target, DidITakeDatabase.FILE_NAME)), Dispatchers.IO)
         opened += restored

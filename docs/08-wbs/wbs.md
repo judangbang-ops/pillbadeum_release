@@ -1,5 +1,6 @@
-# 작업 분해 (1차 릴리즈)
+# 작업 분해 (1차 릴리즈, 2차 첫 릴리즈)
 
+- 2차 첫 릴리즈 10 WBS (2026-11-23, Claude, 기능 변경): **확인 기다림**. [1.9절](#19-2차-첫-릴리즈-건강-카드-p2-r1)에 TASK-056~069(14개, 17.0일), 2장에 SPEC-045~055와 2차에서 고친 SPEC-025·037의 작업, [3.1절](#31-2차-첫-릴리즈-p2-r1-순서와-pr-단위)에 순서·PR 단위·통합 브랜치 `release/p2-r1`. 담당에 Codex를 더함(0장). 릴리즈 작업 TASK-069의 조건은 '2차 APK 배포 전 사용자님 승인'이고 개인정보처리방침(TASK-067)을 그 앞에 둠. 12 시험 계획 줄 TC-090~118을 함께 씀(02 범위 확인 02-16). 기준: [변경 기록](../10-records/changes/2026-11-22-phase2-release1.md) 2장 '10 WBS' 제안과 6장의 02~09 결과
 - 05·07·08·10 확인 반영 (2026-11-13, Claude): 다음 묶음 계획을 확인받음(2026-11-13 01:04 KST, 동희님 "추천모두승인", 프로젝트 채팅. 질문은 2026-11-13 00:55 KST 프로젝트 스레드 '약봉이 1차 릴리즈 이어 가기'의 Claude 메시지 3·4번). PR #17을 합친 뒤 ① BUG-004 수정(TASK-054, 이때 더함)과 릴리즈 확인 ② R2 위젯·앱 화면(TASK-044 먼저)과 R3 알림을 나란히 함. 코드는 Claude, 실기기와 Play 계정은 동희님. 실기기는 시험용 갤럭시: 동희님 폰이 아이폰이라 동희님이 마련해 동희님 PC에 USB로 꽂아 두고, Claude가 그 PC에서 확인을 돌림. 두 대가 필요한 기기 간 이전 때만 가족 폰을 빌림(TASK-047·032·052)
 - 04 명세 고정 반영 (2026-11-13, Claude): 대상자 되살리기(REQ-095, SPEC-044)의 보관한 동안 처리를 TASK-053으로 더하고 TASK-021이 그 뒤에 오게 함. TASK-025에 정한 잠금 화면 방법(SPEC-013)을 적음. 04 고정은 2026-11-13 00:16 KST 동희님 "추천 모두 승인"([명세 5장](../04-functional-spec/spec.md#5-고정-기록))
 - CORTHEX 10 다시 하기 (2026-11-12, Claude): 2장에 04 명세(SPEC-001~043)마다 작업을 잇고, 05·08에서 찾은 것(첫 실행 안내를 봤는지, 위젯의 고른 대상자 저장 위치)을 TASK-022·TASK-012에 넣음. 작업 번호와 크기는 그대로. 다음 묶음 계획은 2026-11-13에 확인함(맨 위 줄)
@@ -17,6 +18,7 @@
 - **담당** (Claude 제안, 2026-11-12): 한 작업에 한 명
   - Claude: 코드, 문서, CI, 에뮬레이터 확인. PR로 올리고 CI가 통과하면 순서를 확인해 합침(결정 Q14)
   - 동희님: 사람의 기기·계정이 있어야 하는 일. 갤럭시 실기기, Play Console, 개발자 계정, 공개·배포 승인. 키·비밀번호 보관 같은 손작업은 Claude가 동희님 PC에서 직접 함(동희님 "너가 해봐", 2026-11-12 11:05 KST 프로젝트 채팅)
+  - Codex (2차 첫 릴리즈부터, 2026-11-23 제안. 10 확인 10-3): 코드 구현. 필받음 봇(Orca 코디네이터)이 Orca Codex 작업자에게 작업 줄과 PR 단위(3.1절)를 맡김. 리뷰와 합치기는 README 작업 규칙과 3.1절대로
   - 다른 사람이 돕는 몫(예: Play Console 답 초안은 Claude)은 작업 칸에 적음. 결정 Q15의 남은 부분은 가쟈누님과 정하는 결정이라 작업으로 두지 않음
 - **크기**: Claude가 어림한 작업일(AI 도움을 받는 한 사람 기준). 측정값이 아님. '이상'이 붙은 줄은 달력 기간이라 합계에서 뺌
 - **끝난 조건**: 다른 사람이 확인할 수 있는 것으로 씀. 공통 코드는 `./gradlew :shared:jvmTest` 통과가 기본이고, 기존 테스트도 함께 통과해야 함. 에뮬레이터 확인은 캡처나 로그를 PR에 남김
@@ -194,6 +196,31 @@
 - TASK-037 스크린샷과 TASK-045 끝: [PR #46](https://github.com/judangbang-ops/pillbadeum_release/pull/46). Actions의 '스토어 스크린샷'(`store-shots.yml`, `scripts/emulator/store_shots.py`)이 API 34 에뮬레이터를 Pixel 2 기기 정의(1080×1920)로 만들어 보기 데이터(나·엄마의 약 여섯, 0일 앞 31일의 기록 156건)를 넣고 스크린샷 여섯(위젯, 펼친 알림, 첫 화면, 지난 기록, 항목 수정, 글자 200% 위젯)과 런처의 앱 목록을 찍음. 단계마다 화면 덤프와 DB로 판정함. `scripts/release/store_images.py`가 그것을 24-bit PNG 여섯과 그래픽 이미지(1024×500)로 만들어 `docs/release/listing/ko-KR/images/`에 둠. 장면·대체 텍스트·보기 데이터는 [스토어 등록정보 4.3·4.4](../release/store-listing.md#43-찍은-장면). 디버그 수신기에 지난 기록을 쓰는 `RECORD`를 더함(디버그 빌드에만 있음). 사진은 다섯 번째 실행으로 만듦(앞 실행에서 고친 것은 [진행 기록](../10-records/progress.md)). 본 것: 다섯 칸 런처에서 네 칸 폭(296dp) 위젯은 칸을 한 줄에 하나 놓음(`WidgetLayout.plan` 경계 113.6dp 바로 아래, 실기기 갤럭시는 네 칸이라 TASK-032에서 봄), 에뮬레이터는 켤 때 시간대와 시계를 컴퓨터 것으로 돌림
 - TASK-022 끝: [PR #47](https://github.com/judangbang-ops/pillbadeum_release/pull/47). 앱 이름이 든 안내를 두 커밋의 실행으로 봄. PR #46의 마지막 커밋 `1cf4e34`(main `92c5cb6`): 회귀 확인 [43818404064](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43818404064) 1단계(새로 깐 앱의 안내 두 쪽. 1쪽에 '필받음은 기록 도구예요.'와 '한 약은 한 휴대폰에서 기록해 주세요.', 2쪽에 '필받음' 위젯 그림과 [위젯 추가]·[시작하기]. [시작하기] 뒤 빈 첫 화면), 접근성 확인 [43818404042](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43818404042)의 SCR-005 글자 100%·200%(누르는 곳 모두 48dp 이상, 가장 작은 [건너뛰기] 78.7×48dp·124×48dp, 모든 글이 TalkBack이 읽는 말로 있음, 글자 명암비 최소 5.50:1). 이름을 바꾼 PR #43의 `64ecbe8`: 화면 확인 [43794389361](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43794389361) 17단계([위젯 추가] → Pixel 런처의 놓기 창 '필받음 widget', 4 × 2 → 홈 화면에 위젯, 대상자 한 명이라 '전체'로 저장, 위젯 머리 '필받음 · 11/18')와 둘러보기 [43794389204](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/43794389204) 1단계. '첫 실행에만 보임'은 앱 시험 `IntroScreenTest`(CI). 갤럭시 홈(One UI)의 놓기 창은 [갤럭시 확인 순서](../07-qa/device-check.md) 2.4에 단계를 더함(TASK-032)
 
+### 1.9 2차 첫 릴리즈: 건강 카드 (P2-R1)
+
+2차 첫 릴리즈(로드맵 1~4·22번, 서버 없음)의 작업. 순서와 PR 단위는 [3.1절](#31-2차-첫-릴리즈-p2-r1-순서와-pr-단위). 입력은 [04 명세](../04-functional-spec/spec.md) SPEC-045~055와 2차에서 고친 SPEC-025·037, [05 ERD](../05-erd/README.md) 8장 스키마 3, [08 화면 정의](../05-ui/screens.md) SCR-011~015와 '(2차)' 줄, [09 목업](../09-mockup/README.md) 8장 보드, [변경 기록](../10-records/changes/2026-11-22-phase2-release1.md) 2장 '10 WBS' 제안.
+
+| ID | 작업 | 근거 | 닿는 곳 | 먼저 할 것 | 담당 | 크기 | 끝난 조건 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| TASK-056 | 기술 시험 (2차): 앱 코드에 넣기 전에 Actions 에뮬레이터(API 32·34·36)에서 작은 시험 코드로 봄. 시험 코드는 `release/p2-r1`에 합치지 않고 결과만 보고서로 남김. (1) 내보내기: `PdfDocument`로 A4 세로 한 쪽, 앱에 든 Gothic A1 한글, 기기 글자 200%에서도 파일 글자 크기 그대로, 칸이 많으면 2쪽과 쪽마다 이름·쪽 번호, PNG 한 장 (2) `FileProvider`로 앱 캐시의 내보내기 폴더를 공유 창에 넘기기와 다음 실행 때 지우기 (3) 클립보드: `ClipDescription.EXTRA_IS_SENSITIVE`로 Android 13 이상 복사 미리보기가 가려지는지, Android 12 이하의 복사, 시스템 복사 확인 표시와 앱 안내 줄(SCR-014#copied)이 겹쳐 보이는지 (4) 보여 주기: 화면 켜 두기, 잠금 화면 위에 뜨지 않음(`setShowWhenLocked`를 쓰지 않음) (5) 긴급 정보: Pixel(에뮬레이터)과 갤럭시(삼성 공식 도움말)의 메뉴 이름과 경로, 설정을 바로 여는 방법이 있는지, 의료 정보 입력란의 글자 수 한계(09 보드 예시 197자) (6) 119안심콜: 소방청 공식 안내로 등록 항목과 SCR-014의 "119안심콜에 등록할 때도 쓸 수 있어요."가 맞는지 확인. 확인 전에는 그 문장을 빼고 만듦(10 확인 10-4) (7) 메일 앱 열기(`ACTION_SENDTO`, `mailto:`)와 메일 앱이 없을 때, Android 11 이상의 패키지 보기 제한 때문에 매니페스트 `<queries>`가 필요한지 (8) 위 동작으로 권한 목록(`androidApp/expected-permissions.txt`)이 바뀌지 않는지(`INTERNET` 없음, REQ-057) | REQ-100, REQ-101, REQ-102, REQ-105, REQ-107 | SCR-009, SCR-013, SCR-014, SCR-015, 시험 코드(따로 둔 브랜치), `docs/07-qa/`(보고서) | 없음 (10 확인 뒤) | Codex | 1.5일 | `docs/07-qa/<날짜>-p2-tech-test/report.md`에 (1)~(8)마다 API 버전, 결과, 캡처나 로그, 근거 문서 주소와 읽은 날짜가 있음. 결과로 바뀌는 화면 글자(SCR-014 넣는 곳 안내의 메뉴 이름과 119안심콜 문장, 글자 수 안내)는 screens.md를 고치는 제안으로 적고, 승인된 글자를 바꾸면 필받음 봇에게 따로 여쭘. 권한 목록이 바뀌어야 하면 앱 코드를 쓰기 전에 멈추고 여쭘 |
+| TASK-057 | Room 스키마 3: [ERD 8장](../05-erd/README.md#8-2차-첫-릴리즈-스키마-3-설계)의 새 표 여섯(TBL-012~017)과 쓰기 시작하는 표 둘(TBL-009 `medication`, TBL-010 `intake_medication`)의 엔티티·DAO, 데이터베이스 버전 3, `MIGRATION_2_3`(새 표를 만들고 있는 대상자마다 `health_card` 행 하나, ERD 8.5), `shared/schemas`의 `3.json`. `3.json`의 CREATE 문을 ERD 8.3 설계와 대조해 `db/schema.sql`로 옮기고 8.3의 표 주석도 옮김. 백업 규칙 파일은 바꾸지 않음(같은 DB, 변경 기록 3장 2번) | REQ-072, REQ-097, REQ-098 | TBL-009, TBL-010, TBL-012~017, `shared/.../data/`, `shared/schemas`, `db/schema.sql`, `docs/05-erd/README.md` | 없음 | Codex | 1.5일 | `MigrationTest`에 2→3: 스키마 2 DB(가상 대상자 둘, 항목 셋, 판정 10건)를 3으로 옮기면 1차 표의 행이 그대로이고 대상자마다 `health_card` 행이 하나이며 `edited_at`이 ERD 8.5대로 채워짐(TC-111). `check_docs.py`의 스키마 대조가 `3.json`(버전 3)과 `db/schema.sql`이 같다고 함. 기존 jvm·앱 시험과 `BackupFileSetTest`(카드 칸·약 줄이 든 DB, TC-102) 통과 |
+| TASK-058 | 건강 카드 공통 코드(shared): `LoadHealthCard`(카드와 칸, 보관한 대상자 표시), `SaveCardEntry`(칸 종류 다섯의 적기·고치기, 꼭 적는 칸과 아는 만큼의 날짜 검사, 오늘 뒤·1900년 앞은 거절), 칸 지우기와 카드 모두 지우기(한 거래, 대상자·항목·약 줄·판정은 그대로), 카드 요약(지금 먹는 약은 보관하지 않은 항목의 약 줄과 주기·시간대, 같은 약 이름도 합치지 않음, 약 없는 항목은 항목 이름 한 줄, 마지막으로 고친 날짜), `BuildEmergencyText`(이름 → 알레르기 → 지금 먹는 약 → 질환 → 이식형 의료기기 → 보호자 연락처 → 의료기관, 끝 문구, 글자 수), 낡은 문장 안내 판정(`emergency_copied_at`·`edited_at`·`stale_notice_closed_at`·복원 시각), 건강 카드 대상자 고르기(보관한 대상자를 뺌). 시험은 04 명세의 합격 기준을 그대로 씀 | REQ-097, REQ-099, REQ-103, REQ-104, REQ-108, REQ-110 | TBL-012~017, `shared/.../usecase/`, `Labels.kt` | TASK-057 | Codex | 2일 | jvm 시험이 SPEC-045·046·047·049·051(문장 순서와 끝 문구)·054·055의 합격 기준(주어진·하면·그러면)을 하나씩 통과함(TC-090~092·094·096·099·100의 jvm 몫). 카드 내용을 넣는 로그 호출이 없음(CI 개인정보 점검). 기존 시험 통과 |
+| TASK-059 | 복용 항목에 약 적기 (SCR-006): 시간대 칸 아래·알림 위의 '약' 부분(약 이름 필수, 1회 투약량 선택, [빼기], [약 더하기], 10줄까지), 항목 저장과 같은 거래로 `intake_medication`·`medication` 쓰기, 약 이름 빈 줄이면 SCR-006#error에 덧붙임, 카드에서 열었으면 저장·닫기·뒤로 가기가 카드로 돌아감(REQ-094의 '앞 화면으로'), 항목 완전 삭제가 그 약 줄도 지움(SPEC-025 2차). 09 확인 09-3에 따라 이름 칸 글자를 "항목 이름"(입력 예 "예: 아침약"), 별칭 설명을 "홈 화면에서 항목 이름을 가리고 싶을 때 써요."로 바꾸고(`ItemScreen.kt` 160·172줄), 그 칸을 '약 이름'으로 찾는 앱 시험(`AppScreenTest`·`ItemReminderTest`의 `nameField()`)을 고침. 약 줄은 위젯·알림·오늘 목록에 보이지 않음 | REQ-098, REQ-015, REQ-094 | SCR-006, TBL-009, TBL-010, `ItemScreen.kt`, `ManageIntakes` | TASK-057 | Codex | 1.5일 | 앱 시험이 09 보드 `ItemFormMeds`·`ItemFormMeds200`·`ItemFormMedsError`와 같은 배치를 글자 100%·200%로 렌더함. jvm·앱 시험이 SPEC-048과 SPEC-025 2차의 합격 기준(TC-093·101)을 통과함. 위젯·알림 렌더 시험의 글이 바뀌지 않음. 고친 앱 시험 둘이 '항목 이름'으로 칸을 찾고 통과함 |
+| TASK-060 | 건강 카드 화면과 칸 적기 (SCR-011·012): 카드 화면(맨 위 [보여 주기], 그 아래 [응급 대비 문장]·[내보내기], 종류마다 제목·설명 한 줄·칸 줄·[+ 더하기], 지금 먹는 약 줄은 그 항목 화면으로 감, 마지막으로 고친 날짜, [카드 모두 지우기]), 빈 카드(SCR-011#empty, 세 버튼 없음), 보관한 대상자(SCR-011#archived, 약 줄은 눌리지 않음), 낡은 문장 안내 줄 셋(SCR-011#recopy). 칸 적기·고치기 화면(SCR-012: 설명 한 줄과 예, 꼭 적는 칸, 아는 만큼의 날짜, SCR-012#error, SCR-012#gone), 칸 [지우기]와 카드 모두 지우기의 확인 대화상자. 글자 200%는 09 확인 09-2대로 버튼과 [+ 더하기]·[지우기]를 세로로 쌓음 | REQ-097, REQ-104, REQ-108, REQ-110 | SCR-011, SCR-012, `shared/.../ui/`(새 화면) | TASK-058 | Codex | 2일 | 앱 시험이 09 보드 `Card`·`Card200`·`CardEmpty`·`CardArchived`·`CardRecopy`·`CardEntry`·`CardEntry200`·`CardEntryError`와 같은 상태를 렌더(PNG)하고, 화면 글자가 screens.md 2장·7장(표준 용어와 설명 한 줄)과 같음. 누르는 곳 48dp(`assertTargetsAtLeast48dp`). TC-090~092·100·113·114의 앱 시험 몫 통과 |
+| TASK-061 | 건강 카드 열기 (SCR-004·010): 기록 화면 헤더의 [건강 카드]([지난 기록] 앞), 보관하지 않은 대상자가 둘 이상이면 고르기 창(SCR-004#cardpicker), 한 명이면 바로 그 카드. 글자 200%에서 헤더 버튼 셋이 한 줄에 들어가지 않으면 [건강 카드]를 날짜 아래 줄 버튼으로 둠(09-2). 대상자 관리의 '대상자 수정' 맨 위 [건강 카드], '보관됨' 줄은 [되살리기] 밖을 누르면 그 사람의 카드(SCR-011#archived)이고, 200%에서는 이름·항목 수·'건강 카드 보기 ›'·[되살리기]를 쌓음. 시스템 뒤로 가기는 연 화면으로 | REQ-108, REQ-097, REQ-094 | SCR-004, SCR-010, SCR-011, 기록 화면, `PeopleScreen.kt`(`ArchivedLine`) | TASK-060 | Codex | 1일 | 앱 시험이 09 보드 `HomeCard`·`HomeCard200`·`HomeCardPick`·`PeopleCard`·`PeopleCard200`·`PersonEditCard`와 같은 배치를 렌더하고, SPEC-054 합격 기준(TC-099)과 SCR-004#cardpicker(TC-118)를 통과함. 1차 기록 화면·대상자 관리 앱 시험이 그대로 통과함 |
+| TASK-062 | 보여 주기 (SCR-013): 전체 화면에 카드 요약(이름 26sp, 종류 제목 18sp, 칸 20sp, 사람 색 없음, 순서는 REQ-100), 보이는 동안 화면 켜 두기, 잠금 화면 위에 띄우지 않음, 아래에 마지막으로 고친 날짜와 "사용자가 적은 내용이며 의료기관의 기록이 아니에요", 고치기·지우기 버튼 없음, 뒤로 가기는 카드 화면. 방법은 TASK-056 결과를 따름 | REQ-100, REQ-103, REQ-107 | SCR-013 | TASK-056, TASK-060 | Codex | 1일 | 앱 시험이 09 보드 `CardShow`·`CardShow200`과 같은 배치를 렌더함. 에뮬레이터에서 SPEC-050 합격 기준(TC-095: 1분 동안 화면이 켜져 있음, 전원 버튼 뒤 잠금 화면에 카드가 없음, 뒤로 가기 뒤 30초면 꺼짐)과 TC-109를 캡처·로그로 남김 |
+| TASK-063 | 응급 대비 문장 (SCR-014): `BuildEmergencyText`의 문장과 글자 수, [복사](클립보드, Android 13 이상 민감 표시, 앱은 토스트 없이 안내 줄만 바꿈, SCR-014#copied), 그 대상자의 `emergency_copied_at` 쓰기, 넣는 곳 안내(메뉴 이름과 119안심콜 문장은 TASK-056 결과대로, 확인 전에는 119안심콜 문장 없이), "앱은 대신 등록하지 않아요.", 빈 요약이면 SCR-014#empty | REQ-101, REQ-110 | SCR-014, TBL-012 | TASK-056, TASK-060 | Codex | 1일 | 앱 시험이 09 보드 `Emergency`·`EmergencyCopied`와 같은 배치를 렌더함(넣는 곳 안내는 TASK-056 결과). 에뮬레이터 API 34에서 복사 미리보기가 가려지고 API 32에서도 복사됨(TC-096). 복사 뒤 카드를 바꾸면 카드 화면에 안내가 보임(TC-100) |
+| TASK-064 | 내보내기 (SCR-015): PDF(기본)·PNG 고르기, A4 세로 미리보기, 한 쪽을 넘으면 쪽 수 안내(SCR-015#pages)와 쪽마다 이름·쪽 번호, 파일에 마지막으로 고친 날짜·만든 날짜·문구, 파일 이름 `pillbadeum-card-<날짜>.pdf`(대상자 이름 없음), 앱 캐시의 내보내기 폴더에만 만들고 `FileProvider`로 Android 공유 창에 넘김, 다음 실행 때 지움. 앱이 직접 보내지 않음. 방법은 TASK-056 결과를 따름 | REQ-102, REQ-103 | SCR-015, 앱 캐시, 매니페스트(`FileProvider`) | TASK-056, TASK-060 | Codex | 1.5일 | 앱 시험이 09 보드 `Export`·`ExportPages`와 같은 배치를 렌더함. 시험이 만든 PDF가 한 쪽이고 한글 글꼴이 들어감. 에뮬레이터에서 SPEC-052 합격 기준(TC-097: 파일 앱에 저장, 다시 열면 내보내기 폴더가 빔, 칸 60개면 2쪽). 권한 목록이 그대로(CI 권한 비교) |
+| TASK-065 | 의견 보내기 (SCR-009): 설정의 앱 정보 아래 [의견 보내기]와 설명, 메일 앱 열기(받는 사람은 개인정보처리방침 8장의 연락 이메일, 제목, 앱 버전·Android 버전·기기 모델만), 메일 앱이 없으면 SCR-009#nomail(주소와 [복사]). 방법은 TASK-056 결과를 따름 | REQ-105 | SCR-009, 설정 화면 | TASK-056 | Codex | 0.5일 | 앱 시험이 09 보드 `SettingsFeedback`·`SettingsNoMail`과 같은 배치를 렌더함. 에뮬레이터에서 SPEC-053 합격 기준(TC-098). 새 메일에 기록·이름·카드 내용이 없음 |
+| TASK-066 | 2차 개인정보 점검: CI 개인정보 점검(`check_privacy.py`)이 카드·약 줄 값(약 이름, 1회 투약량, 질환, 수술·시술, 알레르기, 이식형 의료기기, 의료기관·담당 의사, 보호자 연락처)을 넣는 로그 호출을 잡게 넓히고, 위젯·알림을 그리는 코드가 카드 표와 약 줄을 읽지 않는지 봄. 클립보드 값과 내보내기 파일이 로그에 없음. 권한 목록과 exported 기준 목록이 그대로인지(`FileProvider`는 exported 아님) | REQ-106, REQ-057, REQ-081 | `.github/scripts/check_privacy.py`, 병합 매니페스트, 위젯·알림 코드 | TASK-059~TASK-065 | Codex | 0.5일 | 일부러 심은 잘못된 로그 호출을 CI가 잡고(시험 커밋), 지운 뒤 통과함. 위젯·알림 렌더 시험의 글에 카드 내용이 없음(TC-108). 결과를 `docs/07-qa/`의 2차 개인정보 점검 보고서에 남김 |
+| TASK-067 | 개인정보처리방침 고치기: 공개본 [방침](../release/privacy-policy.md) 1장 표에 건강 카드 정보(질환, 수술·시술, 알레르기, 이식형 의료기기, 의료기관·담당 의사, 보호자 연락처: 보호자 본인의 정보)와 약 줄을 더하고, 사용자가 내보내기·복사·메일로 직접 넘길 수 있다고 고치며, 5장에 카드 지우기를 더함(변경 기록 3장 4번 '바꿈'). 근거 문서와 시행일을 고침. 공개는 이 파일을 main에 합치는 것이라 **공개 전 사용자님 승인**을 따로 받고, 2차 APK보다 먼저 공개함(방침 9장 "그 앱 업데이트를 내기 전에 이 페이지에 알립니다") | REQ-109 | `docs/release/privacy-policy.md`, `docs/release/privacy-policy-basis.md` | TASK-066 | Claude | 0.5일 | 고친 방침이 TASK-056·059~066의 실제 동작과 맞고(근거 문서에 문장마다 근거), `PrivacyPolicyUrlTest`가 통과하며, 사용자님 공개 승인(말씀과 때·곳)을 적은 뒤 main에 합침. 합친 커밋과 공개 주소를 적음(TC-110) |
+| TASK-068 | 2차 첫 릴리즈 QA: [12 시험 계획](../12-qa/test-plan.md)의 2차 줄(TC-090~118)을 `release/p2-r1`의 한 커밋으로 돌림. 에뮬레이터(API 34·36, 폭 360dp, 글자 100%·200%)로 새 화면 다섯과 바뀐 화면 넷을 걷고 캡처, 접근성 점검(`a11y_check.py`에 새 화면을 더함), 회귀 확인과 업데이트 확인(1차 main 빌드 위에 2차 릴리즈 변형을 덮어 깔아 1차 기록·대상자·위젯이 남고 스키마 3이 됨), 백업·복원 뒤 카드와 약 줄이 돌아옴(SPEC-037 2차). TalkBack은 화면 덤프의 읽는 말로 봄 | REQ-055, REQ-066, REQ-067, REQ-068, REQ-069, REQ-072, REQ-106, REQ-107 | SCR-004, SCR-006, SCR-009~015, `scripts/emulator/`, `docs/07-qa/` | TASK-059~TASK-066 | Claude | 2일 | `docs/07-qa/`에 2차 QA 보고서(커밋, API, 캡처, 측정값, 실기기에서만 보이는 차이)가 있고, test-plan.md의 TC-090~118 '지금' 칸이 결과로 바뀜. 출시 판단에 쓸 남은 문제 목록이 있음 |
+| TASK-069 | 2차 첫 릴리즈 배포: `release/p2-r1`을 main에 합치는 PR 하나. [에이전트 작업 규칙](../../AGENTS.md#pr-리뷰)대로 합치기 직전에 Codex 리뷰를 한 번 요청함(사용 한도로 실패하면 Claude 리뷰로 판단하고 그 사실을 PR에 적음). **조건: 2차 APK 배포 전 사용자님 승인**(실사용자 대상 릴리즈라 오랑이 위임 밖. 승인 말씀과 때·곳을 PR과 이 줄에 적은 뒤에만 합침). 합치면 `publish-apk.yml`이 테스터 폰에 2차 APK를 올림(REQ-096). 개인정보처리방침(TASK-067)이 먼저 공개돼 있어야 함 | REQ-109, REQ-096 | main, `publish-apk.yml`, GitHub 릴리즈 | TASK-067, TASK-068 | Claude | 0.5일 | 사용자님 승인이 적혀 있고, main의 그 커밋에서 `publish-apk.yml`이 성공해 GitHub 릴리즈에 versionCode가 더 큰 APK가 있으며 인증서 SHA-256과 권한 목록이 기준과 같음. 출시 뒤 `obtainium.yml`로 1차 릴리즈에서 이 릴리즈로 업데이트되고 기록이 남음을 봄 |
+
+- 2장 제안과 달라진 것: 제안의 TASK-059(카드 보기·고치기·지우기)를 공통 코드(TASK-058)·카드 화면(TASK-060)·카드 열기(TASK-061)로 나눔. 개인정보 점검(TASK-066)과 배포(TASK-069)를 따로 둠. 제안의 TASK-065(QA)는 TASK-068. 까닭: 11에서 Codex 작업자에게 PR 하나씩 맡기려면 작업 하나가 리뷰할 수 있는 크기여야 하고, 배포는 사용자님 승인이 걸린 따로 된 일임
+- 화면 작업(TASK-059~065)의 끝난 조건에 적은 보드는 [09 목업 8장](../09-mockup/README.md#8-2차-첫-릴리즈-건강-카드-보드-2026-11-23-claude-기능-변경)의 것임. 보드와 다르게 만들어야 하면 그 PR에 까닭을 적고 screens.md 6장에 남김
+- 크기는 Claude가 어림한 작업일(측정값 아님). 2차 합은 17.0일
+
 ## 2. 명세와 작업 (10 다시 하기, 2026-11-12)
 
 [04 기능 명세](../04-functional-spec/spec.md)의 줄마다 그 동작을 만들거나 확인하는 작업. 프로토타입에 이미 있는 동작(SPEC-003·023·024 등)은 회귀 확인 TASK-034가 맡음. 작업 표의 근거 열은 요구(REQ)이고, 이 표가 작업에서 명세로 가는 길임. `check_docs.py`가 모든 SPEC 줄에 작업이 있는지 봄.
@@ -224,7 +251,7 @@
 | SPEC-022 | TASK-007, TASK-019 |
 | SPEC-023 | TASK-004, TASK-034 |
 | SPEC-024 | TASK-034 |
-| SPEC-025 | TASK-010, TASK-020 |
+| SPEC-025 | TASK-010, TASK-020, TASK-059 |
 | SPEC-026 | TASK-008, TASK-021 |
 | SPEC-027 | TASK-008, TASK-012, TASK-015, TASK-021 |
 | SPEC-028 | TASK-023, TASK-026 |
@@ -236,7 +263,7 @@
 | SPEC-034 | TASK-009, TASK-020 |
 | SPEC-035 | TASK-020 |
 | SPEC-036 | TASK-016, TASK-020, TASK-022 |
-| SPEC-037 | TASK-028 |
+| SPEC-037 | TASK-028, TASK-057, TASK-068 |
 | SPEC-038 | TASK-029 |
 | SPEC-039 | TASK-029, TASK-040 |
 | SPEC-040 | TASK-017, TASK-027 |
@@ -244,6 +271,19 @@
 | SPEC-042 | TASK-043 |
 | SPEC-043 | TASK-005, TASK-034 |
 | SPEC-044 | TASK-053, TASK-021 |
+| SPEC-045 | TASK-058, TASK-060 |
+| SPEC-046 | TASK-058, TASK-060 |
+| SPEC-047 | TASK-058, TASK-060 |
+| SPEC-048 | TASK-057, TASK-059 |
+| SPEC-049 | TASK-058, TASK-060, TASK-062, TASK-063, TASK-064 |
+| SPEC-050 | TASK-056, TASK-062 |
+| SPEC-051 | TASK-056, TASK-058, TASK-063 |
+| SPEC-052 | TASK-056, TASK-064 |
+| SPEC-053 | TASK-056, TASK-065 |
+| SPEC-054 | TASK-058, TASK-061 |
+| SPEC-055 | TASK-058, TASK-060, TASK-063 |
+
+- 2차 (2026-11-23): SPEC-045~055는 1.9절의 작업. 2차에서 고친 SPEC-025(완전 삭제가 약 줄도 지움)는 TASK-059, SPEC-037(카드도 백업)은 TASK-057·068이 더 맡음
 
 ## 3. 순서
 
@@ -275,6 +315,7 @@ flowchart LR
 | R3 알림·복원 알림 | TASK-024~TASK-027, TASK-040, TASK-052 | R1 뒤, R2와 함께 | 에뮬레이터 확인. 잠금 화면은 실기기(TASK-052) |
 | R4 품질 확인 | TASK-030~TASK-032, TASK-034, TASK-046 | R2·R3 뒤 | QA 보고서 |
 | R5 Play 비공개 테스트 | TASK-035~TASK-039, TASK-048(지금 시작), TASK-049, TASK-050(계정이 생기면 바로) | 계정·테스터와 TASK-050은 지금부터, 나머지는 R4 뒤. **보류** (2026-11-22 결정 Q11 D: Play 출시 보류, APK만). TASK-035·037은 끝나 있어 다시 할 때 씀 | 테스터가 Play에서 설치하고, 새 개인 계정이면 14일 운영 |
+| P2-R1 2차 첫 릴리즈 | TASK-056~TASK-069 | 2026-11-23 10 WBS 확인 기다림. 11은 통합 브랜치 `release/p2-r1`에서 Codex 작업자가 함(3.1절) | 사용자님 2차 APK 배포 승인 뒤 main에 합쳐 테스터 폰에 2차 APK(TASK-069) |
 | R6 프로덕션 | 이 표 밖 | | |
 
 - 결정이나 승인이 먼저 필요한 작업
@@ -287,10 +328,78 @@ flowchart LR
   - 결정 Q15의 남은 부분(주 1회 묻기): 가쟈누님과 정함. 넣기로 하면 TASK-004·TASK-041 뒤에 작업을 더하고 보충 6장을 고침
 - 사람의 손이 필요한 줄: TASK-032·TASK-036·TASK-038·TASK-039·TASK-047·TASK-048·TASK-050·TASK-052(동희님) → 2026-11-22: TASK-047 끝남, TASK-032·052는 Claude가 에뮬레이터로 해서 같은 날 끝남, 나머지는 Play 보류로 보류
 
+### 3.1 2차 첫 릴리즈 (P2-R1) 순서와 PR 단위
+
+- 상태: 제안 (2026-11-23, Claude. 10 확인 10-1·10-2에서 여쭘). 11은 필받음 봇(Orca 코디네이터)이 이 표로 Codex 작업자에게 맡김
+- 통합 브랜치 `release/p2-r1`: 2차 코드 PR은 main이 아니라 이 브랜치에 합침. 까닭: main에 앱 코드가 들어가면 `publish-apk.yml`이 테스터 폰에 APK를 올리고(TASK-055), 그러면 2차 기능과 스키마 2→3 이주가 사용자님 승인 전에 실사용자에게 감. 이주는 테스터 폰에서 되돌릴 수 없음. 11을 시작할 때 PR #57을 main에 합친 뒤 main에서 만듦. main에 1차 고침이 들어오면 그때마다 main을 이 브랜치에 합침(강제 푸시 없음)
+- 리뷰: PR마다 Claude가 `/code-review`, 보안에 닿는 PR(아래 표 '리뷰' 칸)은 `/security-review`([에이전트 작업 규칙](../../AGENTS.md#pr-리뷰)). Codex 리뷰는 main에 합치기 직전인 P2-PR12·P2-PR14에서만 요청함
+- 앱 코드는 PR마다 CI(jvm·앱 시험, 권한 비교, 개인정보 점검, 회귀 확인, 업데이트 확인)를 통과해야 합침. 화면이 여럿 겹치는 코드(화면 이동)는 PR마다 충돌이 날 수 있어, 앞 PR을 합친 뒤 다음 PR을 그 위에서 시작함
+
+```mermaid
+flowchart TD
+  A(["PR #57 문서를<br/>main에 합침"]) e1@--> B["main에서<br/>release/p2-r1<br/>브랜치를 만듦"]
+  B e2@--> P1["P2-PR1<br/>TASK-056<br/>기술 시험"]
+  B e3@--> P2["P2-PR2<br/>TASK-057<br/>스키마 3"]
+  P2 e4@--> P3["P2-PR3<br/>TASK-058<br/>카드 공통 코드"]
+  P2 e5@--> P4["P2-PR4<br/>TASK-059<br/>항목에 약"]
+  P3 e6@--> P5["P2-PR5<br/>TASK-060<br/>카드 화면"]
+  P5 e7@--> P6["P2-PR6<br/>TASK-061<br/>카드 열기"]
+  P5 e8@--> G["P2-PR7~9<br/>TASK-062~064<br/>보여 주기,<br/>문장, 내보내기"]
+  P1 e9@--> G
+  P1 e10@--> P10["P2-PR10<br/>TASK-065<br/>의견 보내기"]
+  P4 e11@--> P11["P2-PR11<br/>TASK-066<br/>개인정보 점검"]
+  P6 e12@--> P11
+  G e13@--> P11
+  P10 e14@--> P11
+  P11 e15@--> P13["P2-PR13<br/>TASK-068<br/>2차 QA"]
+  P11 e16@--> P12["P2-PR12<br/>TASK-067<br/>방침 고치기"]
+  P12 e17@--> Q1{"사용자님<br/>공개 승인"}
+  Q1 e18@-- 예 --> M1["방침을 main에<br/>합쳐 공개"]
+  M1 e19@--> Q2{"사용자님<br/>2차 APK<br/>배포 승인"}
+  P13 e20@--> Q2
+  Q2 e21@-- 예 --> P14["P2-PR14<br/>TASK-069<br/>main에 합침"]
+  P14 e22@--> Z(["테스터 폰에<br/>2차 APK"])
+  Q1 e23@-- 아니오 --> S(["멈추고<br/>필받음 봇에게<br/>알림"])
+  Q2 e24@-- 아니오 --> S
+  %% legend: below
+  classDef term fill:#e7f5ff,stroke:#1c7ed6,color:#212529
+  classDef proc fill:#f8f9fa,stroke:#495057,color:#212529
+  classDef decide fill:#f3f0ff,stroke:#7048e8,color:#212529
+  classDef pass stroke:#868e96,stroke-width:1.5px
+  class A,Z,S term
+  class B,P1,P2,P3,P4,P5,P6,G,P10,P11,P12,P13,M1,P14 proc
+  class Q1,Q2 decide
+  class e1,e2,e3,e4,e5,e6,e7,e8,e9,e10,e11,e12,e13,e14,e15,e16,e17,e18,e19,e20,e21,e22,e23,e24 pass
+```
+
+그림 읽는 법: 둥근 끝은 시작과 끝, 네모는 PR이나 동작, 마름모는 사용자님 승인. 화살표는 '앞이 합쳐진 뒤 시작함'.
+
+| PR | 작업 | 맡을 작업자 | 합칠 곳 | 먼저 합칠 PR | 리뷰 |
+| --- | --- | --- | --- | --- | --- |
+| P2-PR1 | TASK-056 기술 시험 | Codex 작업자 | `release/p2-r1` (보고서만. 시험 코드는 합치지 않음) | 없음 | `/code-review` |
+| P2-PR2 | TASK-057 스키마 3 | Codex 작업자 | `release/p2-r1` | 없음 (P2-PR1과 나란히) | `/code-review` |
+| P2-PR3 | TASK-058 카드 공통 코드 | Codex 작업자 | `release/p2-r1` | P2-PR2 | `/code-review` |
+| P2-PR4 | TASK-059 항목에 약, '항목 이름' | Codex 작업자 | `release/p2-r1` | P2-PR2 (P2-PR3과 나란히) | `/code-review` |
+| P2-PR5 | TASK-060 카드 화면과 칸 적기 | Codex 작업자 | `release/p2-r1` | P2-PR3 | `/code-review` |
+| P2-PR6 | TASK-061 카드 열기 | Codex 작업자 | `release/p2-r1` | P2-PR5 | `/code-review` |
+| P2-PR7 | TASK-062 보여 주기 | Codex 작업자 | `release/p2-r1` | P2-PR1, P2-PR5 | `/code-review`, `/security-review`(잠금 화면) |
+| P2-PR8 | TASK-063 응급 대비 문장 | Codex 작업자 | `release/p2-r1` | P2-PR1, P2-PR5 | `/code-review`, `/security-review`(클립보드) |
+| P2-PR9 | TASK-064 내보내기 | Codex 작업자 | `release/p2-r1` | P2-PR1, P2-PR5 | `/code-review`, `/security-review`(`FileProvider`) |
+| P2-PR10 | TASK-065 의견 보내기 | Codex 작업자 | `release/p2-r1` | P2-PR1 | `/code-review` |
+| P2-PR11 | TASK-066 2차 개인정보 점검 | Codex 작업자 | `release/p2-r1` | P2-PR4~P2-PR10 | `/code-review`, `/security-review` |
+| P2-PR12 | TASK-067 개인정보처리방침 | Claude | main (사용자님 공개 승인 뒤) | P2-PR11 | `/code-review`, 합치기 직전 Codex 리뷰 |
+| P2-PR13 | TASK-068 2차 QA | Claude | `release/p2-r1` (보고서와 시험 계획 '지금' 칸) | P2-PR11 | `/code-review` |
+| P2-PR14 | TASK-069 배포 | Claude | main ← `release/p2-r1` (사용자님 2차 APK 배포 승인 뒤) | P2-PR12 공개, P2-PR13 | `/code-review`, `/security-review`, 합치기 직전 Codex 리뷰 |
+
+- 나란히 할 수 있는 것: P2-PR1과 P2-PR2, P2-PR3과 P2-PR4, P2-PR5 뒤의 P2-PR6~9. P2-PR10은 P2-PR1 뒤 아무 때나
+- 가장 긴 사슬(`check_docs.py`와 같은 셈으로 TASK-069까지, 2026-11-23): TASK-057 > TASK-058 > TASK-060 > TASK-064 > TASK-066 > TASK-068 > TASK-069, 10.0일
+- 사람의 승인이 걸린 곳 둘: 방침 공개(P2-PR12)와 2차 APK 배포(P2-PR14). 둘 다 사용자님 말씀과 때·곳을 적은 뒤에만 합침
+
 ## 4. 검사 결과
 
 2026-11-12, Claude. 대조 스크립트 [`.github/scripts/check_docs.py`](../../.github/scripts/check_docs.py)를 돌린 결과임(아래 '스크립트'). PR마다 CI에서도 돎.
 
+- 2026-11-23 2차 첫 릴리즈 10 WBS 뒤 (스크립트, PR #57): 작업 69개(TASK-056~069를 더함), 빠진 번호 없음, 담당 Claude 52·Codex 11·동희님 6(0장에 Codex를 더하고 검사의 담당 목록에도 더함). 요구 110개가 모두 작업에 있고(REQ-097~110 포함, Must 중 빠진 것 없음), 반례 RR-26~94와 SPEC-001~055도 모두 작업이 있음. 정의 안 된 화면 상태 참조 없음, '먼저 할 것'에 순환 없음. 크기 합 72.0일(기간이 열린 TASK-039·047 빼고. 2차 TASK-056~069는 17.0일), 끝난 것 50.5일, 1차의 가장 긴 사슬은 그대로 12.0일. 2차의 가장 긴 사슬은 TASK-057 > TASK-058 > TASK-060 > TASK-064 > TASK-066 > TASK-068 > TASK-069의 10.0일(같은 셈을 TASK-069에 돌림, 스크립트는 TASK-038·039만 보임). 시험 118개(TC-090~118을 '계획'으로 더함), 스펙·흐름·비기능 Must·화면 상태 모두 시험이 있음. 문서 검사 문제 없음
 - 2026-11-23 TASK-055 끝남 반영 뒤 (스크립트): 작업 55개, 빠진 번호 없음, 담당 Claude 49·동희님 6. 크기 합 55.0일(기간이 열린 TASK-039·047 빼고), 끝난 것 50.5일(TASK-055 1일을 더함), 가장 긴 사슬은 그대로 12.0일. 시험 89개, 문서 검사 문제 없음
 - 2026-11-22 에뮬레이터 QA 반영 뒤 (스크립트, 같은 PR #55): 작업 55개, 빠진 번호 없음, 담당 Claude 49·동희님 6. 크기 합 55.0일(기간이 열린 TASK-039·047 빼고), 끝난 것 49.5일(TASK-032 2일·052 0.5일·054 0.5일을 더함), 가장 긴 사슬은 그대로 12.0일. 시험 89개, 스펙·흐름·비기능 Must·화면 상태 모두 시험이 있음. 문서 검사 문제 없음
 - 2026-11-22 [PR #55](https://github.com/judangbang-ops/pillbadeum_release/pull/55) 반영 뒤 (스크립트): 작업 55개(TASK-055를 더함), 빠진 번호 없음, 담당 Claude 49·동희님 6. 요구가 모두 작업에 있고(REQ-096 포함), 반례 RR-26~94와 SPEC-001~044도 모두 작업이 있음. 크기 합 55.0일(기간이 열린 TASK-039·047 빼고), 끝난 것 46.5일, 가장 긴 사슬은 그대로 12.0일. 시험 89개, 비기능 Must 요구가 모두 시험이 있음(TC-089)

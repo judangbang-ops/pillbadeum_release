@@ -466,7 +466,8 @@ if covered - set(rows):
     problem(f"wbs: unknown requirement ids {sorted(covered - set(rows))}")
 owners = Counter(t[5] for t in tasks.values())
 print("  owners:", dict(owners))
-bad_owner = [k for k, t in tasks.items() if t[5] not in {"Claude", "동희님", "가쟈누님"}]
+# 2026-11-23: Codex (2차 첫 릴리즈부터 코드 구현, wbs.md 0장 담당)
+bad_owner = [k for k, t in tasks.items() if t[5] not in {"Claude", "Codex", "동희님", "가쟈누님"}]
 if bad_owner:
     problem(f"wbs: tasks without exactly one known owner {bad_owner}")
 no_done = [k for k, t in tasks.items() if not t[7]]

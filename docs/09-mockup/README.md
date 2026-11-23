@@ -179,7 +179,7 @@
 
 ### 8.3 측정한 것
 
-4.1절과 같은 방법([`boards/measure_boards.js`](boards/measure_boards.js), CORTHEX `page-check.js`)으로 2차 보드 25개를 그림. 이 PC의 Chromium(Playwright 1.65.1)이고, 글꼴은 Google Fonts의 Roboto와 Noto Sans KR. 앱 화면은 내용 길이만큼 늘려 잼(`UNROLL=1`). 기본 글자 크기로 25번, 글자 크기를 바꿀 수 있는 보드는 200%로 한 번 더(19번), 모두 44번.
+4.1절과 같은 방법([`boards/measure_boards.js`](boards/measure_boards.js), CORTHEX `page-check.js`)으로 09 확인 때 2차 보드 25개를 그림(설계 바꿈 S-1 뒤 26개·45번의 결과는 8.6). 이 PC의 Chromium(Playwright 1.65.1)이고, 글꼴은 Google Fonts의 Roboto와 Noto Sans KR. 앱 화면은 내용 길이만큼 늘려 잼(`UNROLL=1`). 기본 글자 크기로 25번, 글자 크기를 바꿀 수 있는 보드는 200%로 한 번 더(19번), 모두 44번.
 
 | 경우 | 결과 |
 | --- | --- |

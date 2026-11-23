@@ -1,6 +1,7 @@
 package com.judangbang.pillbadeum.data
 
 import androidx.room3.Dao
+import androidx.room3.Insert
 import androidx.room3.Query
 import androidx.room3.Upsert
 
@@ -11,11 +12,23 @@ interface HealthCardDao {
 
     @Upsert
     suspend fun upsert(card: HealthCardEntity)
+
+    @Query(
+        """
+        UPDATE health_card
+        SET stale_notice_closed_at = NULL, updated_at = :now, version = version + 1, device_id = :deviceId
+        WHERE emergency_copied_at IS NOT NULL AND stale_notice_closed_at IS NOT NULL
+        """,
+    )
+    suspend fun reopenCopiedNotices(now: Long, deviceId: String)
 }
 
 @Dao
 interface ConditionDao {
-    @Query("SELECT * FROM condition WHERE person_id = :personId ORDER BY created_at, id")
+    @Insert
+    suspend fun insert(entry: ConditionEntity)
+
+    @Query("SELECT * FROM condition WHERE person_id = :personId ORDER BY created_at, rowid")
     suspend fun listByPerson(personId: String): List<ConditionEntity>
 
     @Upsert
@@ -30,7 +43,10 @@ interface ConditionDao {
 
 @Dao
 interface ProcedureHistoryDao {
-    @Query("SELECT * FROM procedure_history WHERE person_id = :personId ORDER BY created_at, id")
+    @Insert
+    suspend fun insert(entry: ProcedureHistoryEntity)
+
+    @Query("SELECT * FROM procedure_history WHERE person_id = :personId ORDER BY created_at, rowid")
     suspend fun listByPerson(personId: String): List<ProcedureHistoryEntity>
 
     @Upsert
@@ -45,7 +61,10 @@ interface ProcedureHistoryDao {
 
 @Dao
 interface AllergyDao {
-    @Query("SELECT * FROM allergy WHERE person_id = :personId ORDER BY created_at, id")
+    @Insert
+    suspend fun insert(entry: AllergyEntity)
+
+    @Query("SELECT * FROM allergy WHERE person_id = :personId ORDER BY created_at, rowid")
     suspend fun listByPerson(personId: String): List<AllergyEntity>
 
     @Upsert
@@ -60,7 +79,10 @@ interface AllergyDao {
 
 @Dao
 interface ImplantedDeviceDao {
-    @Query("SELECT * FROM implanted_device WHERE person_id = :personId ORDER BY created_at, id")
+    @Insert
+    suspend fun insert(entry: ImplantedDeviceEntity)
+
+    @Query("SELECT * FROM implanted_device WHERE person_id = :personId ORDER BY created_at, rowid")
     suspend fun listByPerson(personId: String): List<ImplantedDeviceEntity>
 
     @Upsert
@@ -75,7 +97,10 @@ interface ImplantedDeviceDao {
 
 @Dao
 interface CareContactDao {
-    @Query("SELECT * FROM care_contact WHERE person_id = :personId ORDER BY created_at, id")
+    @Insert
+    suspend fun insert(entry: CareContactEntity)
+
+    @Query("SELECT * FROM care_contact WHERE person_id = :personId ORDER BY created_at, rowid")
     suspend fun listByPerson(personId: String): List<CareContactEntity>
 
     @Upsert
@@ -83,6 +108,9 @@ interface CareContactDao {
 
     @Query("DELETE FROM care_contact WHERE person_id = :personId AND id = :id")
     suspend fun delete(personId: String, id: String): Int
+
+    @Query("DELETE FROM care_contact WHERE person_id = :personId AND id = :id AND kind = :kind")
+    suspend fun deleteOfKind(personId: String, id: String, kind: CareContactKind): Int
 
     @Query("DELETE FROM care_contact WHERE person_id = :personId")
     suspend fun deleteByPerson(personId: String): Int

@@ -67,8 +67,18 @@ class ManagePeople(
         val trimmed = name.trim()
         require(trimmed.isNotEmpty()) { "person name is blank" }
         require(PersonColors.isValid(color)) { "color must be #RRGGBB: $color" }
-        val changed = db.personDao().updateDetails(personId, trimmed, color, clock.now().toEpochMilliseconds())
-        return if (changed == 1) PersonChange.Saved else PersonChange.Gone
+        return db.useWriterConnection { writer ->
+            writer.immediateTransaction {
+                val people = db.personDao()
+                val person = people.findById(personId) ?: return@immediateTransaction PersonChange.Gone
+                val now = clock.now().toEpochMilliseconds()
+                if (people.updateDetails(personId, trimmed, color, now) != 1) {
+                    return@immediateTransaction PersonChange.Gone
+                }
+                if (person.name != trimmed) db.markHealthCardEdited(personId, now, deviceId)
+                PersonChange.Saved
+            }
+        }
     }
 
     /** Archives an active person unless it is the last one (checked in the same write transaction). */

@@ -24,6 +24,9 @@ object SettingKeys {
     /** `device_id` the restored database had before this phone replaced it (supplement R-2, REQ-056). */
     const val RESTORED_FROM_DEVICE_ID: String = "restored_from_device_id"
 
+    /** When restore was detected (UTC epoch ms, SPEC-055). */
+    const val RESTORED_AT: String = "restored_at"
+
     /** `1` from restore detection until [확인했어요], else `0` or absent (supplement R-3, REQ-073). */
     const val RESTORE_NOTICE_PENDING: String = "restore_notice_pending"
 

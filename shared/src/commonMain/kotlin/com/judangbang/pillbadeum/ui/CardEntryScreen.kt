@@ -177,7 +177,9 @@ private fun CardDateInput(
         val item: @Composable (Int, Modifier) -> Unit = { index, modifier ->
             Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 FormInput(
-                    parts[index], { onPart(index, it) }, "$label, ${spokenUnits[index]}",
+                    // Digits only, up to the unit's width: SaveCardEntry still checks the date itself.
+                    parts[index], { onPart(index, it.filter { c -> c in '0'..'9' }.take(if (index == 0) 4 else 2)) },
+                    "$label, ${spokenUnits[index]}",
                     modifier = Modifier.widthIn(min = 48.dp).weight(1f),
                     invalid = error != null,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),

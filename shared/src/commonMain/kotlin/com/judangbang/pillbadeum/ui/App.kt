@@ -579,7 +579,7 @@ fun App(
                             navigation = { BarIconButton("닫기", true) { go(current.back) } },
                         )
                         Column(Modifier.padding(horizontal = Ui.Side, vertical = 8.dp)) {
-                            if (entryFailed || failed) {
+                            if (entryFailed || (core == null && failed)) {
                                 CardReadFailed {
                                     entryFailed = false
                                     if (core == null) { failed = false; retries++ } else attempts++
@@ -651,8 +651,9 @@ fun App(
                 val editing = current.intakeId?.let { id -> loaded?.items?.firstOrNull { it.intakeId == id } }
                 val savedMedications = medications
                 when {
-                    !checkedOpening && !medicationReadFailed -> Loading()
+                    // First, so an opening that cannot read the database still offers [다시 시도] (PR #71 review).
                     loaded == null && failed -> HomeScreen(HomeState.Failed, null, zone, homeOnlyRetry { failed = false; retries++ })
+                    !checkedOpening && !medicationReadFailed -> Loading()
                     loaded == null -> Loading()
                     checkedOpening && current.intakeId != null && editing == null -> LaunchedEffect(current) {
                         // SCR-006#gone: archived or deleted meanwhile.

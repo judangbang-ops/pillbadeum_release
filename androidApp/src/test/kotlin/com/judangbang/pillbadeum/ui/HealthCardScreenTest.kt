@@ -334,7 +334,9 @@ class HealthCardScreenTest {
         waitForCard()
         add("수술·시술")
         field("이름").performTextReplacement("예시 수술")
-        field("시기, 연도").performTextReplacement("1900")
+        // A pasted date keeps only the digits that fit the unit.
+        field("시기, 연도").performTextReplacement("1900년 3월")
+        field("시기, 연도").assert(hasText("1900"))
         save()
         waitForCard()
         assertEquals(listOf("2026-11-23", "1900"), entries(person).map { (it.fields as CardEntryFields.Procedure).performedOn })
@@ -499,9 +501,27 @@ class HealthCardScreenTest {
     }
 
     @Test
+    fun tc103_item_from_card_offers_retry_when_reopening_the_database_fails(): Unit = runBlocking {
+        openItemFromCard()
+        controller.get().intent.putExtra("failFirstOpen", true)
+        controller.recreate()
+        controller.get().firstOpenGate.complete(Unit)
+        waitFor(Labels.LOAD_FAILED)
+        text("다시 시도").performClick()
+        waitFor("항목 수정")
+        back()
+        waitForCard()
+        text(medication).assertIsDisplayed()
+    }
+
+    @Test
     fun r16_card_and_editor_suppress_recents_until_returning_home() = runBlocking {
         val person = createPerson()
         open(person)
+        assertEquals(listOf(false), controller.get().recentsEnabled)
+        // A recreated activity (rotation) applies it again.
+        controller.recreate()
+        waitForCard()
         assertEquals(listOf(false), controller.get().recentsEnabled)
         add("알레르기")
         assertEquals(listOf(false), controller.get().recentsEnabled)

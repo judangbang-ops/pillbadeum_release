@@ -105,7 +105,7 @@ class HealthCardScreenTest {
     fun tc113_card200_stacks_actions_add_and_delete() = runBlocking {
         val person = createPerson()
         seedCard(person)
-        open(person, height = 3200, scale = 2f)
+        open(person, height = 3800, scale = 2f)
         assertCardLayout(stacked = true)
         render("Card200")
     }
@@ -130,6 +130,7 @@ class HealthCardScreenTest {
         text("약은 대상자를 되살린 뒤 복용 항목에서 고쳐요").assertIsDisplayed()
         text("보여 주기").assertIsEnabled()
         text("응급 대비 문장").assertIsEnabled()
+        text("카드 모두 지우기").assertIsDisplayed()
         render("CardArchived")
 
         add("알레르기")
@@ -163,7 +164,7 @@ class HealthCardScreenTest {
     }
 
     @Test
-    fun tc113_card_load_failure_retries_and_resume_reloads_the_card() = runBlocking {
+    fun tc113_card_load_failure_retries_and_resume_reloads_the_card(): Unit = runBlocking {
         val person = createPerson()
         val intent = Intent(app, CardTestActivity::class.java)
             .putExtra("person", person)
@@ -206,6 +207,7 @@ class HealthCardScreenTest {
         open(person, height = 1850)
         val changed = "카드가 바뀌었어요. 휴대폰 긴급 정보에 넣은 문장도 다시 넣어 주세요"
         text(changed).assertIsDisplayed()
+        text("카드 모두 지우기").assertIsDisplayed()
         compose.onAllNodesWithText("응급 대비 문장")[0].performClick()
         assertEquals(null, core.db.healthCardDao().findByPerson(person)?.staleNoticeClosedAt)
         text(changed).assertIsDisplayed()
@@ -263,7 +265,8 @@ class HealthCardScreenTest {
         field("이름").performTextReplacement("홍가상")
         field("관계").performTextReplacement("딸")
         save()
-        text("전화번호를 입력해 주세요").assertIsDisplayed()
+        waitFor("전화번호를 입력해 주세요")
+        text("전화번호를 입력해 주세요").performScrollTo().assertIsDisplayed()
         field("이름").assert(hasText("홍가상"))
         field("관계").assert(hasText("딸"))
         assertTrue(entries(person).isEmpty())
@@ -277,6 +280,7 @@ class HealthCardScreenTest {
         add("알레르기")
         field("원인").performTextReplacement("   ")
         save()
+        waitFor("원인을 입력해 주세요")
         text("원인을 입력해 주세요").assertIsDisplayed()
         field("원인").performTextReplacement("  페니실린\n계열  ")
         save()
@@ -311,6 +315,7 @@ class HealthCardScreenTest {
         field("시기, 월").performTextReplacement("11")
         field("시기, 일").performTextReplacement("24")
         save()
+        waitFor("오늘보다 뒤의 날은 적을 수 없어요")
         text("오늘보다 뒤의 날은 적을 수 없어요").assertIsDisplayed()
         assertTrue(entries(person).isEmpty())
         render("CardEntryFutureDate")
@@ -318,6 +323,7 @@ class HealthCardScreenTest {
         tap("연도만")
         field("시기, 연도").performTextReplacement("1899")
         save()
+        waitFor("1900년부터 적을 수 있어요")
         text("1900년부터 적을 수 있어요").assertIsDisplayed()
         render("CardEntryEarlyDate")
         tap("연·월·일")
@@ -366,7 +372,8 @@ class HealthCardScreenTest {
         desc("수술·시술, 쓸개 수술, 2019년").performScrollTo().performClick()
         field("이름").performTextReplacement("예시 수술")
         controller.recreate()
-        waitFor("수술·시술 고치기")
+        waitFor("저장")
+        text("수술·시술 고치기").assertIsDisplayed()
         field("이름").assert(hasText("예시 수술"))
         core.deleteCardEntries.one(person, procedure.kind, id, confirmed = true)
         save()
@@ -389,7 +396,7 @@ class HealthCardScreenTest {
     }
 
     @Test
-    fun tc091_single_delete_can_be_cancelled_and_only_removes_the_confirmed_entry() = runBlocking {
+    fun tc091_single_delete_can_be_cancelled_and_only_removes_the_confirmed_entry(): Unit = runBlocking {
         val person = createPerson()
         seedEntry(person, allergy)
         seedEntry(person, procedure)
@@ -408,7 +415,7 @@ class HealthCardScreenTest {
     }
 
     @Test
-    fun tc092_clear_preserves_intakes_medications_judgments_and_another_person() = runBlocking {
+    fun tc092_clear_preserves_intakes_medications_judgments_and_another_person(): Unit = runBlocking {
         val person = createPerson()
         val me = core.people.list().first { it.id != person }
         val items = (1..2).map { createIntake(person, "가상약 $it", SlotLabel.MORNING) }
@@ -443,7 +450,7 @@ class HealthCardScreenTest {
     }
 
     @Test
-    fun tc103_item_save_returns_to_the_same_card() = runBlocking {
+    fun tc103_item_save_returns_to_the_same_card(): Unit = runBlocking {
         openItemFromCard()
         field("약 1, 약 이름").performScrollTo().performTextReplacement("보기정")
         save()
@@ -452,7 +459,7 @@ class HealthCardScreenTest {
     }
 
     @Test
-    fun tc103_item_close_returns_to_the_same_card() = runBlocking {
+    fun tc103_item_close_returns_to_the_same_card(): Unit = runBlocking {
         openItemFromCard()
         desc("닫기").performClick()
         waitForCard()
@@ -460,7 +467,7 @@ class HealthCardScreenTest {
     }
 
     @Test
-    fun tc103_item_back_returns_to_the_same_card_after_recreation() = runBlocking {
+    fun tc103_item_back_returns_to_the_same_card_after_recreation(): Unit = runBlocking {
         openItemFromCard()
         controller.recreate()
         waitFor("항목 수정")
@@ -470,7 +477,7 @@ class HealthCardScreenTest {
     }
 
     @Test
-    fun tc103_item_gone_returns_to_the_same_card_and_reloads() = runBlocking {
+    fun tc103_item_gone_returns_to_the_same_card_and_reloads(): Unit = runBlocking {
         val item = openItemFromCard()
         assertTrue(core.archiveIntake(item))
         save()
@@ -480,7 +487,7 @@ class HealthCardScreenTest {
     }
 
     @Test
-    fun tc103_item_quiet_hours_confirmation_returns_to_the_same_card() = runBlocking {
+    fun tc103_item_quiet_hours_confirmation_returns_to_the_same_card(): Unit = runBlocking {
         openItemFromCard()
         tap("자기 전")
         desc("알림 받기").performScrollTo().performClick()

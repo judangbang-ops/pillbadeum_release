@@ -140,8 +140,10 @@ private fun HealthCardBody(
     if (card.medications.isNotEmpty()) {
         CardDivider()
         CardSectionTitle(Labels.CARD_MEDICATIONS)
-        card.medications.forEach { row ->
-            CardMedicationRow(row.text, row.dose, stacked, enabled, card.archived) { actions.onItem(row.intakeId) }
+        Column(Modifier.fillMaxWidth()) {
+            card.medications.forEach { row ->
+                CardMedicationRow(row.text, row.dose, stacked, enabled, card.archived) { actions.onItem(row.intakeId) }
+            }
         }
         CardNote(if (card.archived) Labels.CARD_ARCHIVED_MEDICATION_HINT else Labels.CARD_MEDICATION_HINT)
     }
@@ -365,7 +367,7 @@ private fun CardSectionTitle(text: String, modifier: Modifier = Modifier) {
 
 @Composable
 private fun CardDivider() {
-    Box(Modifier.fillMaxWidth().padding(top = 12.dp).height(1.dp).background(Ui.LineSubtle))
+    Box(Modifier.fillMaxWidth().padding(top = 8.dp).height(1.dp).background(Ui.LineSubtle))
 }
 
 @Composable

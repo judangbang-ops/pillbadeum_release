@@ -38,7 +38,9 @@ class EmergencyClipboardDeviceTest : Instrumentation() {
 
     override fun onStart() {
         try {
-            check(Build.VERSION.SDK_INT in setOf(32, 34)) { "Run on the API 32 or API 34 test emulator" }
+            check(Build.HARDWARE == "ranchu" && Build.VERSION.SDK_INT in setOf(32, 34)) {
+                "Run on the API 32 or API 34 test emulator"
+            }
             val expected = seedCard()
             // The production entry point is TASK-061; open at SCR-011 like the Robolectric tests.
             val activity = startActivitySync(Intent(targetContext, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -119,7 +121,9 @@ class EmergencyClipboardDeviceTest : Instrumentation() {
     }
 
     private fun click(label: String) {
-        val button = waitForNode(label) { it.isClickable && (it.text == label || it.contentDescription == label) }
+        val button = waitForNode(label) {
+            it.isClickable && (it.text?.toString() == label || it.contentDescription?.toString() == label)
+        }
         check(button.performAction(AccessibilityNodeInfo.ACTION_CLICK)) { "Could not tap $label" }
     }
 

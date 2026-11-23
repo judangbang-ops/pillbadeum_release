@@ -361,7 +361,8 @@ class HealthCardScreenTest {
         val changed = "카드가 바뀌었어요. 휴대폰 긴급 정보에 넣은 문장도 다시 넣어 주세요"
         text(changed).assertIsDisplayed()
         text("카드 모두 지우기").assertIsDisplayed()
-        compose.onAllNodesWithText("응급 대비 문장")[0].performClick()
+        openEmergency()
+        closeEmergency()
         assertEquals(null, core.db.healthCardDao().findByPerson(person)?.staleNoticeClosedAt)
         text(changed).assertIsDisplayed()
         render("CardRecopy")

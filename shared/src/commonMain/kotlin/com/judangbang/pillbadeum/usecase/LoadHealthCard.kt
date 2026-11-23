@@ -99,7 +99,11 @@ class LoadHealthCard(private val db: DidITakeDatabase) {
         }
 }
 
-/** An intake-only summary can exist before the first card write. */
+/**
+ * The migration 2→3 formula (ERD 8.5) for a person with items but no card row. Migration 2→3 gives every person a row
+ * and, since TASK-059, every item path writes one with `markHealthCardEdited`, so the app itself never lands here.
+ * Kept so that a database written some other way still shows a date rather than failing.
+ */
 internal fun summaryEditedAt(person: PersonEntity, intakes: List<IntakeEntity>): Long =
     maxOf(person.updatedAt, intakes.maxOfOrNull { it.updatedAt } ?: person.updatedAt)
 

@@ -38,7 +38,7 @@ class DeleteArchivedIntake(private val db: DidITakeDatabase, private val clock: 
             purge.deleteScheduleVersions(intakeId)
             check(purge.deleteArchivedIntake(intakeId) == 1) { "archived intake $intakeId was not deleted" }
             val deviceId = db.settingDao().get(SettingKeys.DEVICE_ID) ?: intake.deviceId
-            db.markIntakeCardEdited(intake.personId, clock.now().toEpochMilliseconds(), deviceId)
+            db.markHealthCardEdited(intake.personId, clock.now().toEpochMilliseconds(), deviceId)
             DeleteIntakeResult.Deleted
         }
     }

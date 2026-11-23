@@ -3,7 +3,6 @@ package com.judangbang.pillbadeum.usecase
 import androidx.room3.immediateTransaction
 import androidx.room3.useWriterConnection
 import com.judangbang.pillbadeum.data.DidITakeDatabase
-import com.judangbang.pillbadeum.data.HealthCardEntity
 import com.judangbang.pillbadeum.data.IntakeEntity
 import com.judangbang.pillbadeum.data.ScheduleParams
 import com.judangbang.pillbadeum.data.ScheduleVersionEntity
@@ -125,7 +124,7 @@ class SaveIntake(
                 val from = firstVersionStart(d.rule, Instant.fromEpochMilliseconds(now), settings).toEpochMilliseconds()
                 insertVersion(intakeId, d.rule, now, effectiveFrom = from)
                 d.medications?.let { db.writeIntakeMedications(intakeId, it, emptyMap(), now, ids, deviceId) }
-                db.markIntakeCardEdited(d.personId, now, deviceId)
+                db.markHealthCardEdited(d.personId, now, deviceId)
                 SaveIntakeResult.Saved(intakeId, newScheduleVersion = true, quiet = d.reminder?.let { saveReminder(intakeId, it, now) })
             }
         }
@@ -170,8 +169,8 @@ class SaveIntake(
                 val medicationsChanged = d.medications?.let { db.writeIntakeMedications(intakeId, it, existing, now, ids, deviceId) } == true
                 val personChanged = previous.personId != d.personId
                 if (personChanged || changed || medicationsChanged || previous.name != d.name || previous.slotLabel != d.slotLabel) {
-                    db.markIntakeCardEdited(d.personId, now, deviceId)
-                    if (personChanged) db.markIntakeCardEdited(previous.personId, now, deviceId)
+                    // SPEC-049: moving an item to someone else changes both cards.
+                    db.markHealthCardEdited(setOf(d.personId, previous.personId), now, deviceId)
                 }
                 SaveIntakeResult.Saved(intakeId, newScheduleVersion = changed, quiet = d.reminder?.let { saveReminder(intakeId, it, now) })
             }
@@ -246,24 +245,8 @@ class ArchiveIntake(
             val now = clock.now().toEpochMilliseconds()
             if (db.intakeDao().archive(intakeId, now) != 1) return@immediateTransaction false
             val deviceId = db.settingDao().get(SettingKeys.DEVICE_ID) ?: intake.deviceId
-            db.markIntakeCardEdited(intake.personId, now, deviceId)
+            db.markHealthCardEdited(intake.personId, now, deviceId)
             true
         }
     }
-}
-
-/** SPEC-049: record a change to what the item contributes to the person's card, in the item's transaction. */
-internal suspend fun DidITakeDatabase.markIntakeCardEdited(personId: String, now: Long, deviceId: String) {
-    val cards = healthCardDao()
-    val existing = cards.findByPerson(personId)
-    cards.upsert(
-        existing?.copy(
-            editedAt = now,
-            staleNoticeClosedAt = existing.staleNoticeClosedAt.takeIf { existing.emergencyCopiedAt == null },
-            updatedAt = now,
-            version = existing.version + 1,
-            deviceId = deviceId,
-        )
-            ?: HealthCardEntity(personId = personId, editedAt = now, createdAt = now, updatedAt = now, deviceId = deviceId),
-    )
 }

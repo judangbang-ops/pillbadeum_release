@@ -22,6 +22,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 
 class IntakeMedicationsTest {
@@ -235,6 +236,30 @@ class IntakeMedicationsTest {
         assertEquals(fx.clock.now().toEpochMilliseconds(), editedAt(draft.personId))
         assertEquals(rows, save.loadMedications(id))
         assertTrue(board().items.isEmpty())
+    }
+
+    @Test
+    fun item_paths_write_the_card_row_so_the_date_ignores_color_and_alias_and_moves_on_archive() = runTest {
+        // PR #67 review 3: without a card row the date came from updated_at of the person and the items.
+        val draft = draft()
+        val person = draft.personId
+        val card = LoadHealthCard(db)
+        assertNull(db.healthCardDao().findByPerson(person))
+        val morning = create(draft)
+        assertNotNull(db.healthCardDao().findByPerson(person))
+        create(draft.copy(name = "저녁약", slotLabel = SlotLabel.EVENING))
+        assertEquals(LocalDate(2026, 11, 11), assertNotNull(card(person)).lastEditedDate)
+
+        fx.at("2026-11-12T09:00")
+        assertIs<SaveIntakeResult.Saved>(save.update(morning, draft.copy(widgetAlias = "아침 약")))
+        fx.at("2026-11-13T09:00")
+        val me = assertNotNull(db.personDao().findById(person))
+        assertEquals(PersonChange.Saved, people.update(person, me.name, PersonColors.PALETTE.first { it != me.color }))
+        assertEquals(LocalDate(2026, 11, 11), assertNotNull(card(person)).lastEditedDate)
+
+        fx.at("2026-11-14T09:00")
+        assertTrue(archive(morning))
+        assertEquals(LocalDate(2026, 11, 14), assertNotNull(card(person)).lastEditedDate)
     }
 
     @Test

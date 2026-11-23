@@ -1,8 +1,8 @@
 # 05 ERD: 필받음 데이터 (1차, 2차 첫 릴리즈)
 
-- 상태 (2차 첫 릴리즈): **스키마 3 고정** (2026-11-23 KST, 필받음 봇이 전한 사용자님 답 "추천안 모두 승인"(05-1~05-5, 근거는 사용자님 말씀(오랑이 채팅, 2026-11-23 01시대 KST)과 필받음 봇 질문 `msg_198e01fb413a`에 대한 오랑이 답)). 새 표 여섯(TBL-012~017)과 쓰기 시작하는 표 둘(TBL-009·010)을 [8장](#8-2차-첫-릴리즈-스키마-3-설계)에 둠. Room 스키마 3(`3.json`)과 이주 2→3은 11 개발에서 만들고, 그때 `db/schema.sql`에 옮김. 그 전까지 `db/schema.sql`은 스키마 2 그대로이고 표 주석만 고침. 입력은 04 명세 SPEC-045~055와 고친 SPEC-025·SPEC-037(고정 2026-11-23 KST), 01 도메인 CTX-006·TERM-032~044
+- 상태 (2차 첫 릴리즈): **스키마 3 고정** (2026-11-23 KST, 필받음 봇이 전한 사용자님 답 "추천안 모두 승인"(05-1~05-5, 근거는 사용자님 말씀(오랑이 채팅, 2026-11-23 01시대 KST)과 필받음 봇 질문 `msg_198e01fb413a`에 대한 오랑이 답)). 새 표 여섯(TBL-012~017)과 쓰기 시작하는 표 둘(TBL-009·010)을 [8장](#8-2차-첫-릴리즈-스키마-3-설계)에 둠. TASK-057에서 Room 스키마 3과 이주 2→3을 구현하고 CREATE 문을 `db/schema.sql`에 옮김. 입력은 04 명세 SPEC-045~055와 고친 SPEC-025·SPEC-037(고정 2026-11-23 KST), 01 도메인 CTX-006·TERM-032~044
 - 상태 (1차): **고정** (2026-11-13 01:04 KST, 동희님 "추천모두승인", 프로젝트 채팅. 질문은 2026-11-13 00:55 KST 프로젝트 스레드 '약봉이 1차 릴리즈 이어 가기'의 Claude 메시지 1번. 기록은 [7장](#7-고정-기록)). 1차 스키마는 Room 스키마 2(TBL-001~011) 그대로임. 고정한 뒤 표를 바꾸려면 동희님 결정이 필요하고 이주를 함께 만듦. 초안은 2026-11-12 Claude가 씀. 04 명세 고정(2026-11-13 00:16 KST)에서 5장 3을 정함(대상자 되살리기, 스키마 그대로).
-- 원본: [`db/schema.sql`](../../db/schema.sql) (TBL-001~011). 그 파일은 Room이 내보낸 [스키마 2](../../shared/schemas/com.judangbang.pillbadeum.data.DidITakeDatabase/2.json)의 CREATE 문을 그대로 옮기고 표마다 TBL 번호·맥락(CTX)·명세(SPEC)·용어(TERM)를 단 것. `check_docs.py`가 두 쪽이 같은지 봄.
+- 원본: [`db/schema.sql`](../../db/schema.sql) (TBL-001~017). 그 파일은 Room이 내보낸 [스키마 3](../../shared/schemas/com.judangbang.pillbadeum.data.DidITakeDatabase/3.json)의 CREATE 문을 그대로 옮기고 표마다 TBL 번호·맥락(CTX)·명세(SPEC)·용어(TERM)를 단 것. `check_docs.py`가 두 쪽이 같은지 봄.
 - 입력: [04 기능 명세](../04-functional-spec/spec.md) SPEC-001~044(고정), [01 도메인](../01-domain/domain.md) CTX-001~005·TERM-001~031.
 - 이전 시안: 가쟈누님 DidITake `docs/02-design/data-model.md`. 표 구조는 그 시안으로 이미 만들어져 앱에 들어가 있음. 이번 단계는 표를 새로 짜지 않고, 01~04에서 다시 정한 말과 동작에 비춰 빠진 것·남는 것을 찾음.
 
@@ -105,7 +105,12 @@ erDiagram
 | TBL-009 | medication | CTX-002 (2차부터 씀) | TERM-033 약 | SPEC-025, 048, 049 |
 | TBL-010 | intake_medication | CTX-002 (2차부터 씀) | TERM-033 약, TERM-034 1회 투약량 | SPEC-025, 048, 049 |
 | TBL-011 | dose_version | 2차 | 없음 | 없음 |
-| TBL-012~017 | health_card, condition, procedure_history, allergy, implanted_device, care_contact | CTX-006 | TERM-032, TERM-035~040 | 스키마 3 설계(8장). Room 3.json이 생기면 이 표에 한 줄씩 |
+| TBL-012 | health_card | CTX-006 | TERM-032 건강 카드 | SPEC-045~049, 051, 054, 055 |
+| TBL-013 | condition | CTX-006 | TERM-035 질환 | SPEC-045~047, 049 |
+| TBL-014 | procedure_history | CTX-006 | TERM-036 수술·시술 | SPEC-045~047, 049 |
+| TBL-015 | allergy | CTX-006 | TERM-037 알레르기 | SPEC-045~047, 049 |
+| TBL-016 | implanted_device | CTX-006 | TERM-038 이식형 의료기기 | SPEC-045~047, 049 |
+| TBL-017 | care_contact | CTX-006 | TERM-039 의료기관·담당 의사, TERM-040 보호자 연락처 | SPEC-045~047, 049 |
 
 DB가 직접 막는 규칙은 셋:
 
@@ -209,7 +214,7 @@ DB가 직접 막는 규칙은 셋:
 - 용어집의 TERM이 모두 어느 표의 `terms:`나 `without a table:` 줄에 있음
 - 이 문서 3장에 모든 SPEC 행이 있음
 
-이주가 빈 DB에서 스키마를 다시 만드는지: 새 설치는 Room이 스키마 2를 바로 만들고, 1 → 2 이주는 `MigrationTest`가 옛 스키마 1로 만든 DB를 이주한 뒤 스키마 2와 같은지 확인함(CI의 jvmTest).
+새 설치에서 Room은 스키마 3을 바로 만듦. `MigrationTest`가 각각 스키마 1과 2로 만든 DB를 이주해 내보낸 스키마와 보존한 행을 확인함(CI의 jvmTest). 2 → 3의 카드 행 확인은 8.5절에 있음.
 
 ## 7. 고정 기록
 
@@ -221,7 +226,7 @@ DB가 직접 막는 규칙은 셋:
 
 ## 8. 2차 첫 릴리즈: 스키마 3 설계
 
-- 상태: 고정 (2026-11-23 KST, 8.7). Room 스키마 3과 이주 2→3은 11 개발에서 만듦(REQ-072). 그 작업이 `3.json`을 내보내면 CREATE 문이 8.3의 설계와 같은지 보고 `db/schema.sql`에 옮긴 뒤, 8.3의 표 주석을 그 파일로 옮김
+- 상태는 고정(2026-11-23 KST, 8.7). TASK-057에서 Room 스키마 3과 이주 2→3을 구현함(REQ-072). 8.3과 Room이 내보낸 CREATE 문이 같음을 확인하고 표 주석과 함께 `db/schema.sql`에 옮김.
 - 입력: [04 명세](../04-functional-spec/spec.md) SPEC-045~055와 2차에서 고친 SPEC-025·SPEC-037, [01 도메인](../01-domain/domain.md) CTX-006 규칙과 TERM-032~044, [변경 기록](../10-records/changes/2026-11-22-phase2-release1.md) 2장 '05 ERD' 제안
 - 1차 표 TBL-001~008의 열은 바뀌지 않음
 
@@ -312,7 +317,7 @@ TBL-011 `dose_version`은 다음 릴리즈(용량 바뀜 이력)까지 빈 표�
 
 ### 8.3 DDL 설계
 
-Room이 내보내는 형식으로 씀. 열 순서는 엔터티의 필드 순서를 따르므로 `3.json`과 다르면 `3.json`이 기준이고, 그때 이 절을 맞춤.
+아래 CREATE 문은 Room이 내보낸 `3.json`과 같음. 열 순서는 엔터티의 필드 순서를 따름.
 
 ```sql
 -- TBL-012 health_card (CTX-006) ← SPEC-045, SPEC-046, SPEC-047, SPEC-048, SPEC-049, SPEC-051, SPEC-054, SPEC-055 | terms: TERM-032

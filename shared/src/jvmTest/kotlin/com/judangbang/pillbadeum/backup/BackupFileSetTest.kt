@@ -1,7 +1,15 @@
 package com.judangbang.pillbadeum.backup
 
+import androidx.room3.testing.MigrationTestHelper
+import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import androidx.sqlite.execSQL
+import com.judangbang.pillbadeum.data.AllergyEntity
 import com.judangbang.pillbadeum.data.DidITakeDatabase
+import com.judangbang.pillbadeum.data.DidITakeDatabaseConstructor
+import com.judangbang.pillbadeum.data.HealthCardEntity
 import com.judangbang.pillbadeum.data.IntakeEntity
+import com.judangbang.pillbadeum.data.IntakeMedicationEntity
+import com.judangbang.pillbadeum.data.MedicationEntity
 import com.judangbang.pillbadeum.data.PersonEntity
 import com.judangbang.pillbadeum.data.ScheduleParams
 import com.judangbang.pillbadeum.data.ScheduleVersionEntity
@@ -20,17 +28,21 @@ import com.judangbang.pillbadeum.usecase.RecordCommand
 import com.judangbang.pillbadeum.usecase.RecordDose
 import com.judangbang.pillbadeum.usecase.RecordResult
 import java.io.File
+import java.nio.ByteBuffer
+import kotlin.io.path.Path
 import kotlin.io.path.createTempDirectory
 import kotlin.random.Random
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
+import org.junit.Rule
 
 /**
  * TASK-028, record-rules-supplement.md B-1: a backup made of the files the rule file names gives
@@ -45,10 +57,21 @@ import kotlinx.coroutines.test.runTest
  * - RR-27: 400 records, the main file was checkpointed twice and still misses the newest rows
  * - RR-28: negative control. Without the WAL the same check must fail, otherwise the positive
  *   tests prove nothing
+ * - TC-102: a record, a health-card entry and a medication line restore together
  */
 class BackupFileSetTest {
     private val root: File = createTempDirectory("backup-file-set").toFile()
     private val opened = mutableListOf<DidITakeDatabase>()
+    private val v2Source = File(root, "schema-2")
+
+    @get:Rule
+    val migrationHelper = MigrationTestHelper(
+        schemaDirectoryPath = Path("schemas"),
+        databasePath = File(v2Source, DidITakeDatabase.FILE_NAME).toPath(),
+        driver = BundledSQLiteDriver(),
+        databaseClass = DidITakeDatabase::class,
+        databaseFactory = { DidITakeDatabaseConstructor.initialize() },
+    )
 
     @AfterTest
     fun cleanUp() {
@@ -89,6 +112,68 @@ class BackupFileSetTest {
         assertTrue(withoutWal < 400, "main file alone must miss the newest records, got $withoutWal")
     }
 
+    @Test
+    fun tc102_ruleFilesRestoreRecordCardEntryAndMedicationLine() = runTest(timeout = 3.minutes) {
+        val live = writeRecords(count = 1)
+        val intake = assertNotNull(live.db.intakeDao().findById(live.intakeId))
+        val personId = intake.personId
+        val now = intake.createdAt
+        val card = HealthCardEntity(
+            personId = personId, editedAt = now, createdAt = now, updatedAt = now, deviceId = TEST_DEVICE_ID,
+        )
+        val entry = AllergyEntity(
+            id = "test-entry", personId = personId, substance = "Synthetic substance",
+            createdAt = now, updatedAt = now, deviceId = TEST_DEVICE_ID,
+        )
+        val medication = MedicationEntity(
+            id = "test-med", name = "Synthetic medication", createdAt = now, updatedAt = now, deviceId = TEST_DEVICE_ID,
+        )
+        val line = IntakeMedicationEntity(
+            id = "test-line", intakeId = live.intakeId, medicationId = medication.id, qtyPerTake = "Test quantity",
+            effectiveFrom = now, createdAt = now, updatedAt = now, deviceId = TEST_DEVICE_ID,
+        )
+        live.db.healthCardDao().upsert(card)
+        live.db.allergyDao().upsert(entry)
+        live.db.medicationDao().upsert(medication)
+        live.db.intakeMedicationDao().upsert(line)
+        val records = live.db.doseRecordDao().listByIntake(live.intakeId)
+        assertEquals(1, records.size)
+
+        val restored = restore(live.dir, ruleFiles)
+        assertEquals(records, restored.doseRecordDao().listByIntake(live.intakeId))
+        assertEquals(card, restored.healthCardDao().findByPerson(personId))
+        assertEquals(listOf(entry), restored.allergyDao().listByPerson(personId))
+        assertEquals(listOf(line), restored.intakeMedicationDao().listByIntake(live.intakeId))
+        assertEquals(medication, restored.medicationDao().findById(line.medicationId))
+    }
+
+    @Test
+    fun v2Backup_restoresWalRows_beforeSeedingCards() = runTest(timeout = 3.minutes) {
+        v2Source.mkdirs()
+        migrationHelper.createDatabase(2).use { v2 ->
+            v2.execSQL("PRAGMA journal_mode = WAL")
+            // The helper writes schema 2 into the WAL. Checkpoint it so the main file alone is a
+            // schema-2 database and only the newest row below waits in the WAL.
+            v2.execSQL("PRAGMA wal_checkpoint(TRUNCATE)")
+            v2.execSQL("PRAGMA wal_autocheckpoint = 0")
+            v2.execSQL(
+                "INSERT INTO person (id, name, color, created_at, updated_at, version, device_id) " +
+                    "VALUES ('test-person', 'Synthetic person', '#4E79A7', 100, 200, 1, 'old-device')",
+            )
+
+            val full = restore(v2Source, ruleFiles)
+            val person = assertNotNull(full.personDao().findById("test-person"))
+            val card = assertNotNull(full.healthCardDao().findByPerson(person.id))
+            assertEquals(200L, card.editedAt)
+            assertEquals("old-device", card.deviceId)
+
+            val mainFile = File(v2Source, DidITakeDatabase.FILE_NAME)
+            assertEquals(2, storedUserVersion(mainFile), "the main file alone is a schema-2 database")
+            val mainOnly = restore(v2Source, setOf(DidITakeDatabase.FILE_NAME))
+            assertTrue(mainOnly.personDao().listAll().isEmpty(), "the schema-2 person was only in the WAL")
+        }
+    }
+
     /** Live database state after [count] daily records; the database is left open on purpose. */
     private class Live(val dir: File, val intakeId: String, val db: DidITakeDatabase)
 
@@ -125,14 +210,20 @@ class BackupFileSetTest {
         return Live(dir, intakeId, db)
     }
 
-    /** Copies [names] that exist in the live folder to a new folder and counts the records there. */
-    private suspend fun restoredCount(live: Live, names: Set<String>): Int {
+    /** `PRAGMA user_version` as written in the main file's header (bytes 60-63, big-endian), read without SQLite. */
+    private fun storedUserVersion(file: File): Int = ByteBuffer.wrap(file.readBytes(), 60, 4).int
+
+    private suspend fun restoredCount(live: Live, names: Set<String>): Int =
+        restore(live.dir, names).doseRecordDao().listByIntake(live.intakeId).size
+
+    /** Copies [names] that exist in the live folder and opens the copy with the app's builder. */
+    private fun restore(source: File, names: Set<String>): DidITakeDatabase {
         val target = File(root, "restore-${opened.size}").apply { mkdirs() }
         names.forEach { name ->
-            File(live.dir, name).takeIf { it.isFile }?.copyTo(File(target, name))
+            File(source, name).takeIf { it.isFile }?.copyTo(File(target, name))
         }
         val restored = buildDidITakeDatabase(didITakeDatabaseBuilder(File(target, DidITakeDatabase.FILE_NAME)), Dispatchers.IO)
         opened += restored
-        return restored.doseRecordDao().listByIntake(live.intakeId).size
+        return restored
     }
 }

@@ -45,7 +45,8 @@
       <button class="btn line sm" type="button" aria-label="알레르기 복사">복사</button></section>
     <section class="ln"><h3>지금 먹는 약</h3><p class="lt">가상정 <span style="white-space:nowrap">10</span>mg 1정 매일 아침, 보기정 <span style="white-space:nowrap">500</span>mg 반 알 매일 아침, 가상정 <span style="white-space:nowrap">10</span>mg 1정 매일 저녁, 비타민 매일</p>
       <button class="btn line sm" type="button" aria-label="지금 먹는 약 복사">복사</button>
-      <p class="ok" style="display: {{line}}">이제 긴급 정보에 붙여 넣어 주세요.</p></section>
+      <p class="ok" style="display: {{line}}">이제 긴급 정보에 붙여 넣어 주세요.</p>
+      <p class="ok" style="display: {{linerecopy}}">이제 긴급 정보에 붙여 넣어 주세요. 다 넣었으면 <span style="white-space:nowrap">[다 넣었어요]를</span> 눌러 주세요.</p></section>
     <section class="ln"><h3>질환</h3><p class="lt">고혈압, 골다공증</p>
       <button class="btn line sm" type="button" aria-label="질환 복사">복사</button></section>
     <section class="ln"><h3>보호자 연락처</h3><p class="lt">홍가상(딸) <span style="white-space:nowrap">010-0000-0000</span></p>
@@ -55,12 +56,13 @@
   </div>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"fontScale": {"editor": "enum", "options": ["100", "200"], "default": "100"}, "state": {"editor": "enum", "options": ["normal", "copied", "line"], "default": "normal"}, "$preview": {"width": 360, "height": 1000}}'>
+<script type="text/x-dc" data-dc-script data-props='{"fontScale": {"editor": "enum", "options": ["100", "200"], "default": "100"}, "state": {"editor": "enum", "options": ["normal", "copied", "line", "linerecopy"], "default": "normal"}, "$preview": {"width": 360, "height": 1000}}'>
 class Component extends DCLogic {
   renderVals() {
     const st = this.props.state ?? 'normal';
     return { fs: (this.props.fontScale ?? '100') === '200' ? 'fs200' : '',
-      copied: st === 'copied' ? 'block' : 'none', line: st === 'line' ? 'block' : 'none' };
+      copied: st === 'copied' ? 'block' : 'none', line: st === 'line' ? 'block' : 'none',
+      linerecopy: st === 'linerecopy' ? 'block' : 'none' };
   }
 }
 </script>

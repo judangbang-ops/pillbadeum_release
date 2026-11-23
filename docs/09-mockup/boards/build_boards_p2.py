@@ -149,7 +149,7 @@ def card_body():
   <div class="body">
     <p class="arch note" style="display: {{arch}}">보관한 대상자예요. 카드는 그대로 쓸 수 있어요.</p>
     <div class="band" style="display: {{recopy}}; margin-bottom: var(--space-md)">카드가 바뀌었어요. 휴대폰 긴급 정보에 넣은 문장도 다시 넣어 주세요.
-      <div class="bb"><button class="btn ink sm" type="button">응급 대비 문장</button><button class="btn line sm" type="button">닫기</button></div></div>
+      <div class="bb"><button class="btn ink sm" type="button">응급 대비 문장</button><button class="btn line sm" type="button">다 넣었어요</button></div></div>
     <div class="acts">
       <button class="btn ink" type="button">보여 주기</button>
       <div class="two"><button class="btn line" type="button">응급 대비 문장</button><button class="btn line" type="button">내보내기</button></div>
@@ -173,6 +173,7 @@ cb = card_body()
 board('Card', 'SCR-011 건강 카드', cb, css=CARD_CSS, h=1610, props={**FSP, **CARD_STATES}, logic=CARD_LOGIC)
 board('Card200', 'SCR-011 건강 카드 · 글자 200%', cb, css=CARD_CSS, h=3150,
       props={**FSP, "fontScale": {**FSP["fontScale"], "default": "200"}, **CARD_STATES}, logic=CARD_LOGIC)
+# 개발 중 설계 바꿈 S-2(2026-11-23 '바꿈 승인'): 안내의 [닫기]를 [다 넣었어요]로 부름(요약이 빈 문구의 [닫기]는 그대로, 그 문구는 보드에 없음).
 board('CardRecopy', 'SCR-011 건강 카드 · 낡은 문장 안내', cb, css=CARD_CSS, h=1740,
       props={**FSP, **{"state": {**CARD_STATES["state"], "default": "recopy"}}}, logic=CARD_LOGIC)
 board('CardArchived', 'SCR-011 건강 카드 · 보관한 대상자', cb, css=CARD_CSS, h=1630,
@@ -278,6 +279,9 @@ for _t, _in_sent, _text in EM_LINES:  # 두 복사가 같은 내용을 넣음
     assert f'{_in_sent}: {_text}.' in SENT, _in_sent
 EM_LINE_COPIED = '지금 먹는 약'  # EmergencyCopied: 이 줄의 [복사]를 누른 뒤
 OK = '이제 긴급 정보에 붙여 넣어 주세요.'  # SCR-014#copied, Android 13 이상
+# 설계 바꿈 S-2: 카드의 낡은 문장 안내가 보이는 동안 줄을 복사하면 안내 줄 끝에 더함(줄 복사는 안내를 지우지 않음)
+S2 = '다 넣었으면 [다 넣었어요]를 눌러 주세요.'
+S2_HTML = S2.replace('[다 넣었어요]를', '<span style="white-space:nowrap">[다 넣었어요]를</span>')  # 버튼 이름은 줄을 나누지 않음
 
 
 def nowrap_nums(s):
@@ -285,15 +289,17 @@ def nowrap_nums(s):
 
 
 def em_line(title, text):
-    ok = f'\n      <p class="ok" style="display: {{{{line}}}}">{OK}</p>' if title == EM_LINE_COPIED else ''
+    ok = (f'\n      <p class="ok" style="display: {{{{line}}}}">{OK}</p>'
+          f'\n      <p class="ok" style="display: {{{{linerecopy}}}}">{OK} {S2_HTML}</p>') if title == EM_LINE_COPIED else ''
     return (f'    <section class="ln"><h3>{title}</h3><p class="lt">{nowrap_nums(text)}</p>\n'
             f'      <button class="btn line sm" type="button" aria-label="{title} 복사">복사</button>{ok}</section>\n')
 
 
 EM_LOGIC = ("class Component extends DCLogic {\n  renderVals() {\n    const st = this.props.state ?? 'normal';\n"
             "    return { fs: (this.props.fontScale ?? '100') === '200' ? 'fs200' : '',\n"
-            "      copied: st === 'copied' ? 'block' : 'none', line: st === 'line' ? 'block' : 'none' };\n  }\n}")
-EM_PROPS = {**FSP, "state": {"editor": "enum", "options": ["normal", "copied", "line"], "default": "normal"}}
+            "      copied: st === 'copied' ? 'block' : 'none', line: st === 'line' ? 'block' : 'none',\n"
+            "      linerecopy: st === 'linerecopy' ? 'block' : 'none' };\n  }\n}")
+EM_PROPS = {**FSP, "state": {"editor": "enum", "options": ["normal", "copied", "line", "linerecopy"], "default": "normal"}}
 EM_BODY = '''
 <div class="s {{fs}}">
   <div class="bar back"><button class="ib" type="button" aria-label="닫기">@CLOSE@</button><h1>응급 대비 문장</h1></div>
@@ -326,8 +332,10 @@ EM_CSS = '''
 .fs200 .ln .btn{justify-self:start;margin-top:var(--space-sm)}
 '''
 board('Emergency', 'SCR-014 응급 대비 문장', EM_BODY, css=EM_CSS, h=1000, props=EM_PROPS, logic=EM_LOGIC)
-board('EmergencyCopied', 'SCR-014 응급 대비 문장 · 칸별 복사한 뒤 (Android 13 이상)', EM_BODY, css=EM_CSS, h=1030,
-      props={**EM_PROPS, "state": {**EM_PROPS["state"], "default": "line"}}, logic=EM_LOGIC)
+# EmergencyCopied: 설계 바꿈 S-2부터 카드의 낡은 문장 안내가 보일 때 '지금 먹는 약' 줄을 복사한 뒤(state 'linerecopy').
+# 안내가 없을 때의 줄 복사 뒤는 state 'line', [모두 복사] 뒤는 'copied'.
+board('EmergencyCopied', 'SCR-014 응급 대비 문장 · 카드 안내가 보일 때 칸별 복사한 뒤 (Android 13 이상)', EM_BODY, css=EM_CSS, h=1050,
+      props={**EM_PROPS, "state": {**EM_PROPS["state"], "default": "linerecopy"}}, logic=EM_LOGIC)
 board('Emergency200', 'SCR-014 응급 대비 문장 · 글자 200%', EM_BODY, css=EM_CSS, h=2190,
       props={**EM_PROPS, "fontScale": {**FSP["fontScale"], "default": "200"}}, logic=EM_LOGIC)
 

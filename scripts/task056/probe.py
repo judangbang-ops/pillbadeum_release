@@ -93,7 +93,8 @@ class Probe:
     def start(self, mode, cold=False):
         if cold:
             shell("am", "force-stop", APP)
-        text = shell("am", "start", "-W", "-n", ACTIVITY, "--es", "mode", mode)
+        flags = "0x10008000" if cold else "0x10000000"
+        text = shell("am", "start", "-W", "-f", flags, "-n", ACTIVITY, "--es", "mode", mode)
         if "Error" in text:
             raise RuntimeError(text)
 
@@ -225,20 +226,12 @@ class Probe:
         self.expect(self.wait_log("MAIL resolved=ComponentInfo{" + RECIPIENT, start),
                     "(7) with queries; resolveActivity sees the receiver")
 
-    def emergency(self):
-        self.log("(5) installed emergency packages: " + ", ".join(
-            line for line in shell("pm", "list", "packages").splitlines()
-            if "emergency" in line or "safetyhub" in line))
-        for label in ("긴급 설정", "의료 정보 편집", "의료 정보 항목 편집", "설정"):
-            self.start("settings", cold=True)
-            self.tap(label)
-            self.log("(5) " + next((line.split("SETTINGS ", 1)[1] for line in reversed(self.tagged().splitlines())
-                                    if "SETTINGS " in line), "no settings result"))
+    def open_medical_field(self):
         section = self.find({"safety & emergency", "safety and emergency", "emergency information"}, swipes=4)
         if section is None:
             self.log(f"(5) Settings route unavailable in this image: {self.labels(self.tree())}")
             self.screen("emergency-settings")
-            return
+            return None
         self.log(f"(5) Settings > {section.get('text')}")
         self.tap_node(section)
         self.screen("emergency-settings")
@@ -250,45 +243,72 @@ class Probe:
             self.tap_node(item)
         self.screen("emergency-information")
         self.log(f"(5) information labels: {self.labels(self.tree())}")
-        field = self.find({"allergies", "medications", "medical conditions", "add information"}, swipes=2)
-        if field is not None and field.get("text").casefold() == "add information":
+        return self.open_edit_text()
+
+    def open_edit_text(self):
+        field = self.find({"allergies", "medications", "medical conditions", "add information", "edit information"},
+                          swipes=2)
+        if field is not None and field.get("text").casefold() in {"add information", "edit information"}:
             self.tap_node(field)
             field = self.find({"allergies", "medications", "medical conditions"}, swipes=1)
         if field is None:
             self.log("(5) no editable medical field; length not measured")
-            return
+            return None
         self.log(f"(5) field: {field.get('text')}")
         self.tap_node(field)
-        node = next((n for n in self.tree() if n.get("class") == "android.widget.EditText"), None)
+        return self.edit_text()
+
+    def edit_text(self):
+        return next((node for node in self.tree() if node.get("class") == "android.widget.EditText"), None)
+
+    def emergency(self):
+        self.log("(5) installed emergency packages: " + ", ".join(
+            line for line in shell("pm", "list", "packages").splitlines()
+            if "emergency" in line or "safetyhub" in line))
+        for label in ("긴급 설정", "의료 정보 편집", "의료 정보 항목 편집", "설정"):
+            self.start("settings", cold=True)
+            offset = len(self.tagged())
+            self.tap(label)
+            self.log("(5) " + next((line.split("SETTINGS ", 1)[1] for line in reversed(self.tagged()[offset:].splitlines())
+                                    if "SETTINGS " in line), "no settings result"))
+        node = self.open_medical_field()
         if node is None:
             self.log("(5) field did not expose an EditText")
             return
         self.screen("emergency-edit")
+        shell("input", "keyevent", "KEYCODE_BACK")
         for length in (197, 1024):
-            self.start("copy")
+            self.start("copy", cold=True)
             self.tap(f"붙여넣기 시험 {length}자")
-            shell("input", "keyevent", "KEYCODE_BACK")
-            editor = next((n for n in self.tree() if n.get("class") == "android.widget.EditText"), None)
-            if editor is not None:
-                node = editor
+            opened = shell("am", "start", "-W", "-a", "android.emergency.EDIT_MEDICAL_INFO", check=False)
+            if "Error" in opened:
+                shell("am", "start", "-W", "-a", "android.settings.SETTINGS")
+                node = self.open_medical_field()
+            else:
+                node = self.open_edit_text()
+            if node is None:
+                self.log(f"(5) could not reopen input for {length}-character paste")
+                break
             self.tap_node(node)
-            if length != 197:
-                shell("input", "keyevent", "KEYCODE_MOVE_END")
-                shell("input", "keyevent", *["KEYCODE_DEL"] * min(197, len(node.get("text", ""))))
             shell("input", "keyevent", "KEYCODE_PASTE")
             method = "pasted"
-            editor = next((n for n in self.tree() if n.get("class") == "android.widget.EditText"), None)
+            editor = self.edit_text()
             if editor is not None and not re.fullmatch(r"A+Z?", editor.get("text", "")):
                 shell("input", "text", "A" * (length - 1) + "Z")
                 method = "typed (paste did not populate field)"
-            node = next((n for n in self.tree() if n.get("class") == "android.widget.EditText"), None)
+            node = self.edit_text()
             if node is None:
                 self.log(f"(5) {length} ASCII characters, field could not be read after input")
                 break
             entered = node.get("text", "")
             self.log(f"(5) {method} {length}, read {len(entered)}, final sentinel Z={entered.endswith('Z')}")
             self.screen(f"emergency-length-{length}")
-        shell("input", "keyevent", "KEYCODE_BACK")
+            cancel = self.find({"cancel"})
+            if cancel is not None:
+                self.tap_node(cancel)
+            else:
+                shell("input", "keyevent", "KEYCODE_BACK")
+                shell("input", "keyevent", "KEYCODE_BACK")
 
     def show(self):
         shell("svc", "power", "stayon", "false")

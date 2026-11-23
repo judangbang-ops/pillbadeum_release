@@ -246,19 +246,22 @@ class Probe:
             return None
         self.log(f"(5) Settings > {section.get('text')}")
         self.tap_node(section)
+        section_nodes = self.tree()
         self.screen("emergency-settings")
-        self.log(f"(5) section labels: {self.labels(self.tree())}")
-        item = self.find({"medical information", "medical info", "emergency information", "open emergency information",
-                          "open personal safety"})
+        self.log(f"(5) section labels: {self.labels(section_nodes)}")
+        item = self.find({"medical information", "medical info"})
+        if item is None:
+            item = self.find({"emergency information", "open emergency information", "open personal safety"})
         if item is not None:
             self.log(f"(5) section > {item.get('text')}")
             self.tap_node(item)
+        information_nodes = self.tree()
         self.screen("emergency-information")
-        self.log(f"(5) information labels: {self.labels(self.tree())}")
+        self.log(f"(5) information labels: {self.labels(information_nodes)}")
         return self.open_edit_text()
 
     def open_edit_text(self):
-        fields = {"allergies", "medications", "medical conditions", "medical notes"}
+        fields = {"allergies", "medications", "medical conditions", "medical notes", "current medications"}
         field = self.find(fields | {"add information", "edit information"}, swipes=2)
         if field is not None and field.get("text").casefold() in {"add information", "edit information"}:
             self.tap_node(field)

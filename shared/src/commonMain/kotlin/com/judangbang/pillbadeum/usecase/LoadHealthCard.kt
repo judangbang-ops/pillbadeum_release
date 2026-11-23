@@ -21,13 +21,19 @@ data class CardMedication(
     val quantity: String?,
     val rule: ScheduleRule?,
     val slot: SlotLabel?,
+    val hasMedicationName: Boolean,
 ) {
     private val dose get() = listOfNotNull(name, quantity?.takeIf { it.isNotBlank() }).joinToString(" ")
     private val schedule get() = rule?.let { Labels.healthCardSchedule(it, slot) }
 
-    val text get() = listOfNotNull(dose, schedule).joinToString(" · ")
-    internal val emergencyText get() = listOfNotNull(dose, schedule).joinToString(" ")
+    val text: String get() {
+        val row = listOfNotNull(dose, schedule).joinToString(" · ")
+        return if (hasMedicationName) row else "$row (${Labels.CARD_MEDICATION_NAME_MISSING})"
+    }
+    internal val emergencyText get() = if (hasMedicationName) listOfNotNull(dose, schedule).joinToString(" ") else text
 }
+
+enum class HealthCardDisplay { EMPTY, ARCHIVED, NORMAL }
 
 data class HealthCardSummary(
     val person: PersonEntity,
@@ -38,6 +44,15 @@ data class HealthCardSummary(
 ) {
     val archived get() = person.archivedAt != null
     val isEmpty get() = entries.isEmpty() && medications.isEmpty()
+    val display: HealthCardDisplay get() = when {
+        isEmpty -> HealthCardDisplay.EMPTY
+        archived -> HealthCardDisplay.ARCHIVED
+        else -> HealthCardDisplay.NORMAL
+    }
+
+    fun canShowOrExport(): Boolean = !isEmpty
+
+    fun canOpenEmergencyText(): Boolean = medications.isNotEmpty() || entries.any { it.fields.kind != CardEntryKind.PROCEDURE }
 }
 
 sealed interface HealthCardSelection {
@@ -99,11 +114,11 @@ private suspend fun DidITakeDatabase.currentMedications(intakes: List<IntakeEnti
         val rule = scheduleVersionDao().findOpen(intake.id)?.let(ScheduleParams::toRule)
         val rows = intakeMedicationDao().listByIntake(intake.id)
         if (rows.isEmpty()) {
-            listOf(CardMedication(intake.id, intake.name, null, rule, intake.slotLabel))
+            listOf(CardMedication(intake.id, intake.name, null, rule, intake.slotLabel, hasMedicationName = false))
         } else {
             rows.map { row ->
                 val medication = checkNotNull(medicationDao().findById(row.medicationId))
-                CardMedication(intake.id, medication.name, row.qtyPerTake, rule, intake.slotLabel)
+                CardMedication(intake.id, medication.name, row.qtyPerTake, rule, intake.slotLabel, hasMedicationName = true)
             }
         }
     }

@@ -106,6 +106,7 @@ object Labels {
     const val CARD_ARCHIVED = "보관됨"
     const val CARD_ARCHIVED_HINT = "보관한 대상자예요. 카드는 그대로 쓸 수 있어요"
     const val CARD_MEDICATION_HINT = "약은 복용 항목에서 고쳐요"
+    const val CARD_MEDICATION_NAME_MISSING = "약 이름 미입력"
     const val CARD_ARCHIVED_MEDICATION_HINT = "약은 대상자를 되살린 뒤 복용 항목에서 고쳐요"
     const val CARD_DISCLAIMER = "사용자가 적은 내용이며 의료기관의 기록이 아니에요"
     const val CARD_LOAD_FAILED = "카드를 불러오지 못했어요"
@@ -179,7 +180,7 @@ object Labels {
 
     fun cardEntryError(kind: CardEntryKind, field: CardField, problem: CardFieldProblem): String = when (problem) {
         CardFieldProblem.REQUIRED -> "${withObject(cardEntryField(kind, field))} 입력해 주세요"
-        CardFieldProblem.TOO_LONG -> "글자 수를 줄여 주세요"
+        CardFieldProblem.TOO_LONG -> "${checkNotNull(field.maxCharacters)}자까지 적을 수 있어요"
         CardFieldProblem.INVALID_DATE -> "날짜를 확인해 주세요"
         CardFieldProblem.BEFORE_1900 -> "1900년부터 적을 수 있어요"
         CardFieldProblem.FUTURE_DATE -> "오늘보다 뒤의 날은 적을 수 없어요"

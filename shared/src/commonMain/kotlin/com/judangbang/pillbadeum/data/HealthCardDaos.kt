@@ -12,6 +12,15 @@ interface HealthCardDao {
 
     @Upsert
     suspend fun upsert(card: HealthCardEntity)
+
+    @Query(
+        """
+        UPDATE health_card
+        SET stale_notice_closed_at = NULL, updated_at = :now, version = version + 1, device_id = :deviceId
+        WHERE emergency_copied_at IS NOT NULL AND stale_notice_closed_at IS NOT NULL
+        """,
+    )
+    suspend fun reopenCopiedNotices(now: Long, deviceId: String)
 }
 
 @Dao

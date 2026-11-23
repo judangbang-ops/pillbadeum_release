@@ -92,6 +92,7 @@ class CheckInstall(
                 settings.upsert(SettingEntity(SettingKeys.DEVICE_ID, id))
                 settings.upsert(SettingEntity(SettingKeys.RESTORED_FROM_DEVICE_ID, previous))
                 settings.upsert(SettingEntity(SettingKeys.RESTORED_AT, now.toString()))
+                db.healthCardDao().reopenCopiedNotices(now, id)
                 settings.upsert(SettingEntity(SettingKeys.RESTORE_NOTICE_LAST_RECORD_AT, lastRecordValue(now)))
                 settings.upsert(SettingEntity(SettingKeys.RESTORE_NOTICE_PENDING, PENDING))
                 settings.saveReminderAlarmAt(null)

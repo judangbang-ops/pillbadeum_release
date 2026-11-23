@@ -7,12 +7,12 @@ enum class EmergencySection { ALLERGY, MEDICATION, CONDITION, IMPLANTED_DEVICE, 
 data class EmergencyLine(val section: EmergencySection, val text: String)
 
 data class EmergencyText(val text: String, val lines: List<EmergencyLine>) {
-    val characterCount: Int get() = text.length
+    val characterCount: Int get() = text.codePointCount()
 }
 
 class BuildEmergencyText {
     operator fun invoke(card: HealthCardSummary): EmergencyText? {
-        if (card.isEmpty) return null
+        if (!card.canOpenEmergencyText()) return null
         val entries = card.entries.groupBy { it.fields.kind }
         val lines = buildList {
             fun addSection(section: EmergencySection, parts: List<String>) {

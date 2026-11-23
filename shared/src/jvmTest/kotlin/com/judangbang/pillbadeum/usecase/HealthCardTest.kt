@@ -92,12 +92,14 @@ class HealthCardTest {
         val id = save.newEntryId()
         suspend fun writeDate(date: String) = save.add(person, id, CardEntryFields.Condition("가상 질환", date))
         assertEquals(SaveCardEntryResult.Invalid(CardField.DATE, CardFieldProblem.BEFORE_1900), writeDate("1899-12-31"))
+        assertEquals("1900년부터 적을 수 있어요", Labels.cardEntryError(CardEntryKind.CONDITION, CardField.DATE, CardFieldProblem.BEFORE_1900))
         for (date in listOf("2024-2", "2024-13", "2023-02-29", "2024-02-00")) {
             assertEquals(SaveCardEntryResult.Invalid(CardField.DATE, CardFieldProblem.INVALID_DATE), writeDate(date))
         }
         for (date in listOf("2026-12", "2026-11-20")) {
             assertEquals(SaveCardEntryResult.Invalid(CardField.DATE, CardFieldProblem.FUTURE_DATE), writeDate(date))
         }
+        assertEquals("오늘보다 뒤의 날은 적을 수 없어요", Labels.cardEntryError(CardEntryKind.CONDITION, CardField.DATE, CardFieldProblem.FUTURE_DATE))
         val validDates = listOf("1900", "2024-02-29", "2026-11", "2026-11-19")
         for (date in validDates) add(person, CardEntryFields.Condition("가상 질환", date))
         assertEquals(validDates, db.conditionDao().listByPerson(person).map { it.diagnosedOn })
@@ -121,17 +123,25 @@ class HealthCardTest {
         val firstCreated = now()
         fx.at("2026-11-23T08:00")
         val changed = listOf(
-            CardEntryFields.Condition("  가상 질환 둘  ", "2024-01", " 가상 새 메모  "),
+            CardEntryFields.Condition("  가상 질환 둘  ", " 2024-01 ", " 가상  새 메모  "),
             CardEntryFields.Procedure("가상 시술 둘", "2024-02-29", " 가상 새 기관"),
             CardEntryFields.Allergy("가상 원인 둘", "  가상 새 반응"),
             CardEntryFields.ImplantedDevice("가상 기기 둘", "2023", "가상 새 메모  "),
-            CardEntryFields.CareProvider("가상 의료기관 둘", "가상 새 진료과", "가상 새 의사", " 010-0000-0000"),
+            CardEntryFields.CareProvider("가상 의료기관 둘", "가상 새 진료과", "가상 새 의사", "  "),
             CardEntryFields.Guardian("가상 딸 둘", "010-0000-0000 ", "가상 새 관계"),
         )
         for ((id, fields) in ids.zip(changed)) {
             assertEquals(SaveCardEntryResult.Saved(id), save.edit(person, id, fields))
         }
-        assertEquals(ids.zip(changed).toMap(), card(person).entries.associate { it.id to it.fields })
+        val expected = listOf(
+            CardEntryFields.Condition("가상 질환 둘", "2024-01", "가상  새 메모"),
+            CardEntryFields.Procedure("가상 시술 둘", "2024-02-29", "가상 새 기관"),
+            CardEntryFields.Allergy("가상 원인 둘", "가상 새 반응"),
+            CardEntryFields.ImplantedDevice("가상 기기 둘", "2023", "가상 새 메모"),
+            CardEntryFields.CareProvider("가상 의료기관 둘", "가상 새 진료과", "가상 새 의사"),
+            CardEntryFields.Guardian("가상 딸 둘", "010-0000-0000", "가상 새 관계"),
+        )
+        assertEquals(ids.zip(expected).toMap(), card(person).entries.associate { it.id to it.fields })
         assertEquals(firstCreated, db.conditionDao().listByPerson(person).single().createdAt)
         assertEquals(2, db.conditionDao().listByPerson(person).single().version)
         assertEquals(now(), times(person).editedAt)
@@ -141,20 +151,27 @@ class HealthCardTest {
     fun spec045_enforcesFieldAndPerKindLimitsAndDeduplicatesSave() = runTest {
         val person = person()
         val id = save.newEntryId()
-        val draft = CardEntryFields.Guardian("가".repeat(50), "0".repeat(20), "가".repeat(50))
+        val supplementaryCharacter = "🟢"
+        val draft = CardEntryFields.Guardian(supplementaryCharacter.repeat(50), "0".repeat(20), "가".repeat(50))
         val submits = List(2) { async { save.add(person, id, draft) } }
         assertEquals(listOf(SaveCardEntryResult.Saved(id), SaveCardEntryResult.Saved(id)), submits.map { it.await() })
         assertEquals(1, times(person).version)
         assertEquals(draft, card(person).entries.single().fields)
         val mistakes = listOf(
             CardEntryFields.Allergy("  ") to SaveCardEntryResult.Invalid(CardField.SUBSTANCE, CardFieldProblem.REQUIRED),
-            CardEntryFields.Allergy("가".repeat(51)) to SaveCardEntryResult.Invalid(CardField.SUBSTANCE, CardFieldProblem.TOO_LONG),
+            CardEntryFields.Allergy(supplementaryCharacter.repeat(51)) to
+                SaveCardEntryResult.Invalid(CardField.SUBSTANCE, CardFieldProblem.TOO_LONG),
             CardEntryFields.Allergy("가상", "가".repeat(201)) to SaveCardEntryResult.Invalid(CardField.REACTION, CardFieldProblem.TOO_LONG),
             draft.copy(phone = "0".repeat(21)) to SaveCardEntryResult.Invalid(CardField.PHONE, CardFieldProblem.TOO_LONG),
         )
         for ((fields, error) in mistakes) assertEquals(error, save.add(person, save.newEntryId(), fields))
+        assertEquals(
+            "50자까지 적을 수 있어요",
+            Labels.cardEntryError(CardEntryKind.ALLERGY, CardField.SUBSTANCE, CardFieldProblem.TOO_LONG),
+        )
         repeat(19) { add(person, CardEntryFields.Guardian("가상 보호자 $it", "010-0000-0000")) }
         assertEquals(SaveCardEntryResult.LimitReached, save.add(person, save.newEntryId(), draft))
+        assertEquals(SaveCardEntryResult.Saved(id), save.edit(person, id, draft.copy(relation = "가상 관계")))
         add(person, CardEntryFields.CareProvider("가상 의료기관"))
         assertEquals(20, db.careContactDao().listByPerson(person).count { it.kind == CareContactKind.GUARDIAN })
         assertEquals(21, card(person).entries.size)
@@ -261,7 +278,7 @@ class HealthCardTest {
         intake(person, "비타민")
         medication(intake(person("가상 대상자"), "다른 약"), "가상 다른 약")
         assertEquals(
-            listOf("가상정 10mg 1정 · 매일 아침", "가상정 10mg 1정 · 매일 저녁", "비타민 · 매일"),
+            listOf("가상정 10mg 1정 · 매일 아침", "가상정 10mg 1정 · 매일 저녁", "비타민 · 매일 (약 이름 미입력)"),
             card(person).medications.map { it.text },
         )
     }
@@ -277,7 +294,11 @@ class HealthCardTest {
             update.update(weekly, IntakeDraft(person, "가상 주간", rule = ScheduleRule.Weekly(DayOfWeek.MONDAY))),
         )
         assertEquals(
-            listOf("가상 첫째 · 매일 아침", "가상 둘째 · 매일 아침", "가상 주간 · 매주 월"),
+            listOf(
+                "가상 첫째 · 매일 아침 (약 이름 미입력)",
+                "가상 둘째 · 매일 아침 (약 이름 미입력)",
+                "가상 주간 · 매주 월 (약 이름 미입력)",
+            ),
             card(person).medications.map { it.text },
         )
     }
@@ -304,7 +325,7 @@ class HealthCardTest {
     fun spec049_nameChangeWritesEditTimeButColorChangeDoesNot() = runTest {
         val person = person()
         add(person, CardEntryFields.Allergy("가상 원인"))
-        assertEquals(EmergencyCopyRecord.RECORDED, notice.recordCopy(person, EmergencyCopy.ALL))
+        assertEquals(EmergencyCopyRecord.RECORDED, notice.recordCopy(person))
         val before = times(person)
         fx.at("2026-11-23T08:00")
         assertEquals(PersonChange.Saved, people.update(person, "가상 엄마", PersonColors.PALETTE.last()))
@@ -371,6 +392,32 @@ class HealthCardTest {
     }
 
     @Test
+    fun spec051_procedureOnlyCardCanBeShownOrExportedButHasNoEmergencyText() = runTest {
+        val person = person()
+        assertFalse(card(person).canShowOrExport())
+        assertFalse(card(person).canOpenEmergencyText())
+        add(person, CardEntryFields.Procedure("가상 시술"))
+        assertTrue(card(person).canShowOrExport())
+        assertFalse(card(person).canOpenEmergencyText())
+        assertNull(buildText(card(person)))
+    }
+
+    @Test
+    fun spec051_intakeWithoutMedicationNameUsesMarkedSummaryRowInBothCopyFormats() = runTest {
+        val person = person()
+        intake(person, "아침약 🟢", SlotLabel.MORNING)
+        val summary = card(person)
+        assertTrue(summary.canShowOrExport())
+        assertTrue(summary.canOpenEmergencyText())
+        val row = "아침약 🟢 · 매일 아침 (약 이름 미입력)"
+        assertEquals(row, summary.medications.single().text)
+        val emergency = emergency(person)
+        assertEquals(row, emergency.lines.single().text)
+        assertTrue(emergency.text.contains("지금 먹는 약: $row."))
+        assertEquals(emergency.text.length - 1, emergency.characterCount)
+    }
+
+    @Test
     fun spec054_archivedPersonIsExcludedFromPickerButCardSurvivesAndCanBeEdited() = runTest {
         val me = person("나")
         fx.at("2026-11-20T08:01")
@@ -382,6 +429,7 @@ class HealthCardTest {
         assertEquals(HealthCardSelection.Open(me), load.selection())
         assertNull(load.fromHistory(person))
         assertTrue(card(person).archived)
+        assertEquals(HealthCardDisplay.ARCHIVED, card(person).display)
         assertEquals(allergy, card(person).entries.single().id)
         assertEquals(1, card(person).medications.size)
         assertIs<SaveCardEntryResult.Saved>(save.edit(person, allergy, CardEntryFields.Allergy("가상 새 원인")))
@@ -391,21 +439,33 @@ class HealthCardTest {
     }
 
     @Test
-    fun spec055_allCopyClearsNoticeAfterCardChange() = runTest {
+    fun spec054_emptyStateTakesPrecedenceForArchivedPerson() = runTest {
+        person("나")
+        val person = person()
+        assertEquals(PersonChange.Saved, people.archive(person))
+        val emptyCard = card(person)
+        assertTrue(emptyCard.archived)
+        assertEquals(HealthCardDisplay.EMPTY, emptyCard.display)
+        assertFalse(emptyCard.canShowOrExport())
+        assertFalse(emptyCard.canOpenEmergencyText())
+    }
+
+    @Test
+    fun spec055_allCopyDuringNoticeLeavesBothTimestampsAndNoticeIntact() = runTest {
         val person = copiedCardThatChanged()
         assertEquals(StaleCardNotice.CHANGED, card(person).staleNotice)
-        val editedAt = times(person).editedAt
-        assertEquals(EmergencyCopyRecord.RECORDED, notice.recordCopy(person, EmergencyCopy.ALL))
-        assertEquals(now(), times(person).emergencyCopiedAt)
-        assertEquals(editedAt, times(person).editedAt)
-        assertNull(card(person).staleNotice)
+        val before = times(person)
+        // [모두 복사] uses the same common recording action as an individual line.
+        assertEquals(EmergencyCopyRecord.NOTICE_REMAINS, notice.recordCopy(person))
+        assertEquals(before, times(person))
+        assertEquals(StaleCardNotice.CHANGED, card(person).staleNotice)
     }
 
     @Test
     fun spec055_lineCopyDuringNoticeLeavesTimestampAndNoticeIntact() = runTest {
         val person = copiedCardThatChanged()
         val before = times(person)
-        assertEquals(EmergencyCopyRecord.NOTICE_REMAINS, notice.recordCopy(person, EmergencyCopy.LINE))
+        assertEquals(EmergencyCopyRecord.NOTICE_REMAINS, notice.recordCopy(person))
         assertEquals(before, times(person))
         assertEquals(StaleCardNotice.CHANGED, card(person).staleNotice)
         assertEquals("다 넣었으면 [다 넣었어요]를 눌러 주세요", Labels.CARD_COPY_STALE)
@@ -417,8 +477,9 @@ class HealthCardTest {
         add(person, CardEntryFields.Allergy("페니실린 계열"))
         fx.at("2026-11-21T08:00")
         assertNull(card(person).staleNotice)
-        assertEquals(EmergencyCopyRecord.RECORDED, notice.recordCopy(person, EmergencyCopy.LINE))
+        assertEquals(EmergencyCopyRecord.RECORDED, notice.recordCopy(person))
         assertEquals(now(), times(person).emergencyCopiedAt)
+        assertEquals(now(), times(person).staleNoticeClosedAt)
         assertNull(card(person).staleNotice)
         fx.at("2026-11-23T08:00")
         add(person, CardEntryFields.Allergy("가상 원인"))
@@ -463,19 +524,63 @@ class HealthCardTest {
     fun spec055_firstLaunchAfterRestoreShowsNoticeWithNoCardEdits() = runTest {
         val person = person()
         add(person, CardEntryFields.Allergy("가상 원인"))
-        assertEquals(EmergencyCopyRecord.RECORDED, notice.recordCopy(person, EmergencyCopy.ALL))
+        assertEquals(EmergencyCopyRecord.RECORDED, notice.recordCopy(person))
         val original = times(person)
         fx.at("2026-11-23T08:00")
         val check = restore()
         assertEquals(now().toString(), db.settingDao().get(SettingKeys.RESTORED_AT))
-        assertEquals(original, times(person))
+        assertEquals(original.editedAt, times(person).editedAt)
+        assertEquals(original.emergencyCopiedAt, times(person).emergencyCopiedAt)
+        assertNull(times(person).staleNoticeClosedAt)
         assertEquals(StaleCardNotice.RESTORED, card(person).staleNotice)
         val restoredAt = now()
         fx.at("2026-11-24T08:00")
         assertIs<InstallState.Normal>(check().state)
         assertEquals(restoredAt.toString(), db.settingDao().get(SettingKeys.RESTORED_AT))
-        assertEquals(EmergencyCopyRecord.RECORDED, notice.recordCopy(person, EmergencyCopy.ALL))
+        assertEquals(EmergencyCopyRecord.NOTICE_REMAINS, notice.recordCopy(person))
+        assertTrue(notice.closeNotice(person))
         assertNull(card(person).staleNotice)
+    }
+
+    @Test
+    fun spec055_secondRestoreReopensEveryPreviouslyCopiedCard() = runTest {
+        val one = person()
+        val two = person("가상 대상자")
+        val neverCopied = person("가상 다른 대상자")
+        for (id in listOf(one, two, neverCopied)) add(id, CardEntryFields.Allergy("가상 원인"))
+        for (id in listOf(one, two)) assertEquals(EmergencyCopyRecord.RECORDED, notice.recordCopy(id))
+        // Restore at exactly the edit time, including the equality case in the notice wording.
+        restore()
+        for (id in listOf(one, two)) {
+            assertEquals(StaleCardNotice.RESTORED, card(id).staleNotice)
+            assertTrue(notice.closeNotice(id))
+            assertNull(card(id).staleNotice)
+        }
+        fx.at("2026-11-23T08:00")
+        assertIs<InstallState.Restored>(CheckInstall(db, fx.clock, fx.ids, FakeInstallMarker())().state)
+        assertEquals(now().toString(), db.settingDao().get(SettingKeys.RESTORED_AT))
+        for (id in listOf(one, two)) {
+            assertEquals(StaleCardNotice.RESTORED, card(id).staleNotice)
+            assertNull(times(id).staleNoticeClosedAt)
+        }
+        assertNull(card(neverCopied).staleNotice)
+    }
+
+    @Test
+    fun spec055_editsReopenEvenAtTheSameMillisecondOrAfterClockRollback() = runTest {
+        val person = person()
+        val fields = CardEntryFields.Allergy("가상 원인")
+        val id = add(person, fields)
+        assertEquals(EmergencyCopyRecord.RECORDED, notice.recordCopy(person))
+        val copiedAt = now()
+        assertEquals(SaveCardEntryResult.Saved(id), save.edit(person, id, fields.copy(reaction = "가상 반응")))
+        assertEquals(copiedAt, times(person).editedAt)
+        assertEquals(StaleCardNotice.CHANGED, card(person).staleNotice)
+        assertTrue(notice.closeNotice(person))
+        fx.at("2026-11-19T08:00")
+        assertEquals(SaveCardEntryResult.Saved(id), save.edit(person, id, fields.copy(reaction = "가상 두 번째 반응")))
+        assertTrue(times(person).editedAt < checkNotNull(times(person).emergencyCopiedAt))
+        assertEquals(StaleCardNotice.CHANGED, card(person).staleNotice)
     }
 
     @Test
@@ -484,7 +589,7 @@ class HealthCardTest {
         intake(person, "가상 항목")
         assertNull(db.healthCardDao().findByPerson(person))
         fx.at("2026-11-23T08:00")
-        assertEquals(EmergencyCopyRecord.RECORDED, notice.recordCopy(person, EmergencyCopy.LINE))
+        assertEquals(EmergencyCopyRecord.RECORDED, notice.recordCopy(person))
         assertEquals(now(), times(person).emergencyCopiedAt)
         assertEquals(LocalDate(2026, 11, 20), card(person).lastEditedDate)
         assertNull(card(person).staleNotice)
@@ -518,7 +623,7 @@ class HealthCardTest {
     private suspend fun copiedCardThatChanged(): String {
         val person = person()
         add(person, CardEntryFields.Allergy("페니실린 계열"))
-        assertEquals(EmergencyCopyRecord.RECORDED, notice.recordCopy(person, EmergencyCopy.ALL))
+        assertEquals(EmergencyCopyRecord.RECORDED, notice.recordCopy(person))
         fx.at("2026-11-23T08:00")
         add(person, CardEntryFields.Allergy("가상 원인"))
         return person

@@ -15,7 +15,9 @@ import kotlin.time.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.toLocalDateTime
 
-enum class CardField { NAME, SUBSTANCE, PROVIDER_NAME, DATE, NOTE, PLACE, REACTION, DEPARTMENT, DOCTOR, PHONE, RELATION }
+enum class CardField(val maxCharacters: Int? = 50) {
+    NAME, SUBSTANCE, PROVIDER_NAME, DATE(null), NOTE(200), PLACE, REACTION(200), DEPARTMENT, DOCTOR, PHONE(20), RELATION,
+}
 
 enum class CardFieldProblem { REQUIRED, TOO_LONG, INVALID_DATE, BEFORE_1900, FUTURE_DATE }
 
@@ -48,8 +50,9 @@ class SaveCardEntry(
                 val instant = clock.now()
                 val now = instant.toEpochMilliseconds()
                 val today = instant.toLocalDateTime(db.settingDao().loadWindowSettings().baseZone).date
-                fields.invalid(today)?.let { return@immediateTransaction it }
-                val result = write(personId, id, fields, create, now)
+                val normalized = fields.normalized()
+                normalized.invalid(today)?.let { return@immediateTransaction it }
+                val result = write(personId, id, normalized, create, now)
                 if (result == null) db.markHealthCardEdited(personId, now, deviceId)
                 result ?: SaveCardEntryResult.Saved(id)
             }
@@ -216,31 +219,32 @@ class SaveCardEntry(
 
 private fun CardEntryFields.invalid(today: LocalDate): SaveCardEntryResult.Invalid? = when (this) {
     is CardEntryFields.Condition ->
-        textProblem(CardField.NAME, name, 50, required = true) ?: dateProblem(diagnosedOn, today)
-            ?: textProblem(CardField.NOTE, note, 200)
+        textProblem(CardField.NAME, name, required = true) ?: dateProblem(diagnosedOn, today)
+            ?: textProblem(CardField.NOTE, note)
     is CardEntryFields.Procedure ->
-        textProblem(CardField.NAME, name, 50, required = true) ?: dateProblem(performedOn, today)
-            ?: textProblem(CardField.PLACE, place, 50)
+        textProblem(CardField.NAME, name, required = true) ?: dateProblem(performedOn, today)
+            ?: textProblem(CardField.PLACE, place)
     is CardEntryFields.Allergy ->
-        textProblem(CardField.SUBSTANCE, substance, 50, required = true)
-            ?: textProblem(CardField.REACTION, reaction, 200)
+        textProblem(CardField.SUBSTANCE, substance, required = true)
+            ?: textProblem(CardField.REACTION, reaction)
     is CardEntryFields.ImplantedDevice ->
-        textProblem(CardField.NAME, name, 50, required = true) ?: dateProblem(implantedOn, today)
-            ?: textProblem(CardField.NOTE, note, 200)
+        textProblem(CardField.NAME, name, required = true) ?: dateProblem(implantedOn, today)
+            ?: textProblem(CardField.NOTE, note)
     is CardEntryFields.CareProvider ->
-        textProblem(CardField.PROVIDER_NAME, name, 50, required = true)
-            ?: textProblem(CardField.DEPARTMENT, department, 50)
-            ?: textProblem(CardField.DOCTOR, doctor, 50)
-            ?: textProblem(CardField.PHONE, phone, 20)
+        textProblem(CardField.PROVIDER_NAME, name, required = true)
+            ?: textProblem(CardField.DEPARTMENT, department)
+            ?: textProblem(CardField.DOCTOR, doctor)
+            ?: textProblem(CardField.PHONE, phone)
     is CardEntryFields.Guardian ->
-        textProblem(CardField.NAME, name, 50, required = true)
-            ?: textProblem(CardField.RELATION, relation, 50)
-            ?: textProblem(CardField.PHONE, phone, 20, required = true)
+        textProblem(CardField.NAME, name, required = true)
+            ?: textProblem(CardField.RELATION, relation)
+            ?: textProblem(CardField.PHONE, phone, required = true)
 }
 
-private fun textProblem(field: CardField, value: String?, limit: Int, required: Boolean = false) = when {
+private fun textProblem(field: CardField, value: String?, required: Boolean = false) = when {
     required && value.isNullOrBlank() -> SaveCardEntryResult.Invalid(field, CardFieldProblem.REQUIRED)
-    value != null && value.length > limit -> SaveCardEntryResult.Invalid(field, CardFieldProblem.TOO_LONG)
+    value != null && value.codePointCount() > checkNotNull(field.maxCharacters) ->
+        SaveCardEntryResult.Invalid(field, CardFieldProblem.TOO_LONG)
     else -> null
 }
 

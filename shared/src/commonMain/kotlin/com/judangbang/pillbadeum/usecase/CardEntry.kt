@@ -5,7 +5,7 @@ import kotlinx.datetime.LocalDate
 /** Section order of the health card (SCR-011). */
 enum class CardEntryKind { ALLERGY, CONDITION, PROCEDURE, IMPLANTED_DEVICE, CARE_PROVIDER, GUARDIAN }
 
-/** The editor keeps these values as entered. A date, when present, uses ISO year, year-month or date. */
+/** Card entry fields. A date, when present, uses ISO year, year-month or date. */
 sealed interface CardEntryFields {
     val kind: CardEntryKind
 
@@ -40,6 +40,26 @@ sealed interface CardEntryFields {
 }
 
 data class CardEntry(val id: String, val fields: CardEntryFields)
+
+internal fun CardEntryFields.normalized(): CardEntryFields = when (this) {
+    is CardEntryFields.Allergy -> copy(substance = substance.trim(), reaction = reaction.trimmedOptional())
+    is CardEntryFields.Condition -> copy(name = name.trim(), diagnosedOn = diagnosedOn.trimmedOptional(), note = note.trimmedOptional())
+    is CardEntryFields.Procedure -> copy(name = name.trim(), performedOn = performedOn.trimmedOptional(), place = place.trimmedOptional())
+    is CardEntryFields.ImplantedDevice -> copy(name = name.trim(), implantedOn = implantedOn.trimmedOptional(), note = note.trimmedOptional())
+    is CardEntryFields.CareProvider -> copy(
+        name = name.trim(),
+        department = department.trimmedOptional(),
+        doctor = doctor.trimmedOptional(),
+        phone = phone.trimmedOptional(),
+    )
+    is CardEntryFields.Guardian -> copy(name = name.trim(), phone = phone.trim(), relation = relation.trimmedOptional())
+}
+
+private fun String?.trimmedOptional(): String? = this?.trim()?.takeIf { it.isNotEmpty() }
+
+internal fun String.codePointCount(): Int = indices.count { index ->
+    !this[index].isLowSurrogate() || index == 0 || !this[index - 1].isHighSurrogate()
+}
 
 internal const val MIN_CARD_YEAR = 1900
 private val cardDatePattern = Regex("[0-9]{4}(-[0-9]{2}){0,2}")

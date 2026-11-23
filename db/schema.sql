@@ -93,8 +93,9 @@ CREATE INDEX IF NOT EXISTS `ix_dose_version_medication_from` ON `dose_version` (
 
 -- TBL-012 health_card (CTX-006) ← SPEC-045, SPEC-046, SPEC-047, SPEC-048, SPEC-049, SPEC-051, SPEC-054, SPEC-055 | terms: TERM-032
 --   대상자 한 명의 건강 카드에 딸린 시각. 칸은 종류마다 아래 표 다섯에 둠.
---   edited_at: 카드 고친 시각(SPEC-049). 마지막으로 고친 날짜(REQ-103)와 낡은 문장 안내(REQ-110)가 읽음.
---   emergency_copied_at: 응급 대비 문장을 마지막으로 복사한 때(SPEC-051). stale_notice_closed_at: 낡은 문장 안내를 닫은 때(SPEC-055).
+--   edited_at: 카드 고친 시각(SPEC-049). 마지막으로 고친 날짜(REQ-103)가 읽고, 낡은 문장 안내(REQ-110)는 문구를 고를 때만 읽음.
+--   emergency_copied_at: 안내가 없을 때 응급 대비 문장을 복사한 때(SPEC-051). 안내가 보이는 동안의 복사는 쓰지 않음.
+--   stale_notice_closed_at: 낡은 문장 안내를 닫은 상태(SPEC-055). 있으면 닫힘, 비면 emergency_copied_at이 있을 때 안내가 보임(ERD 8.4 4).
 --   rule (CTX-006, DB가 막음): 대상자 하나에 카드 하나 = PRIMARY KEY person_id.
 --   rule (코드): 행은 edited_at이나 복사 시각을 처음 쓸 때 만듦(edited_at은 그때). 카드를 모두 지워도(SPEC-047) 이 행은 남김. 행이 없으면 빈 카드.
 CREATE TABLE IF NOT EXISTS `health_card` (`person_id` TEXT NOT NULL, `edited_at` INTEGER NOT NULL, `emergency_copied_at` INTEGER, `stale_notice_closed_at` INTEGER, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `version` INTEGER NOT NULL, `device_id` TEXT NOT NULL, PRIMARY KEY(`person_id`), FOREIGN KEY(`person_id`) REFERENCES `person`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION );

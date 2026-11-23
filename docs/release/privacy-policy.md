@@ -1,8 +1,8 @@
 # 필받음 개인정보처리방침
 
-시행일: 2026년 11월 16일
+시행일: 2026년 11월 23일
 
-고동희(이하 "개발자")는 Android 앱 필받음(이하 "앱")을 만들어 Google Play로 배포합니다. 이 방침은 앱이 어떤 정보를 어디에 저장하는지, 개발자가 무엇을 받지 않는지, 정보를 지우는 방법을 알려 드립니다.
+고동희(이하 "개발자")는 Android 앱 필받음(이하 "앱")을 APK 파일로 배포합니다. 처음 시험에 참여한 분들께는 설치용 APK를 직접 전달했습니다. 이후에는 [필받음 GitHub 릴리즈](https://github.com/judangbang-ops/pillbadeum_release/releases)에서 새 버전을 직접 내려받거나 Obtainium 같은 업데이트 앱을 설정해 받을 수 있습니다. 이 방침은 앱이 어떤 정보를 어디에 저장하는지, 개발자가 무엇을 받지 않는지, 정보를 지우는 방법을 알려 드립니다.
 
 ## 요약
 
@@ -34,7 +34,7 @@
 - 앱은 인터넷 권한(`android.permission.INTERNET`)을 요청하지 않습니다. 그래서 앱이 1장의 정보를 휴대폰 밖으로 보낼 수 없습니다.
 - 광고, 사용 분석, 오류(크래시) 보고, AI 도구를 넣지 않았습니다.
 - 개발자는 개인정보를 다른 곳에 제공하거나 처리를 맡기지(위탁) 않고, 국외로 옮기거나 가명정보로 처리하지 않습니다. 쿠키 같은 자동 수집 장치도 쓰지 않습니다.
-- 앱 설정의 [개인정보처리방침]을 누르면 휴대폰의 브라우저가 이 페이지(https://github.com/judangbang-ops/pillbadeum_release/blob/main/docs/release/privacy-policy.md)를 엽니다. 이 페이지를 보여 주는 서비스(GitHub)가 방문 기록을 남길 수 있으며, 그것은 그 서비스의 방침을 따릅니다.
+- 앱 설정의 [개인정보처리방침]을 누르면 휴대폰의 브라우저가 이 페이지(https://github.com/judangbang-ops/pillbadeum_release/blob/main/docs/release/privacy-policy.md)를 엽니다. 사용자가 이 페이지를 열거나 APK를 내려받을 때, 또는 Obtainium 같은 업데이트 앱이 새 버전을 확인할 때 GitHub는 IP 주소와 요청 시각을 기록할 수 있습니다. 이 기록은 [GitHub의 개인정보처리방침](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement)을 따릅니다.
 
 ## 3. Google 백업과 새 휴대폰으로 옮기기
 

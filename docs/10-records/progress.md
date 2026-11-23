@@ -8,6 +8,68 @@
 - 칸: 목표, 한 일, 확인한 것, 확인하지 못한 것, 다음 행동. 숫자는 이름을 적은 명령 출력이나 실행에서 옮김
 - 비밀값(키, 비밀번호, 폰 PIN)은 쓰지 않음
 
+## 2026-11-23
+
+### 개인정보처리방침 첫 문단을 APK 배포로 고침
+
+- **받은 말**: 2026-11-23 10:23 KST 동희님이 작업 스레드의 카드 "개인정보처리방침의 'Google Play로 배포합니다' 문구를 고칠까요?"에서 'APK 배포로 고침'을 고름(Claude 추천). 공개 문서라 답을 받기 전에는 고치지 않았음(2026-11-22 결정 Q11 기록의 '고쳐야 하지만 아직 안 고친 것')
+- **한 일**: [방침](../release/privacy-policy.md) 첫 문단에 첫 설치용 APK 직접 전달과 GitHub 릴리즈 업데이트 경로를 적음. 2장에는 APK를 내려받거나 업데이트를 확인할 때 GitHub가 IP 주소와 요청 시각을 기록할 수 있다고 적음. 결정과 근거는 [근거와 정할 것](../release/privacy-policy-basis.md) 3.2절
+- **확인한 것**: 공식 릴리즈 페이지와 APK 주소가 로그인 없이 열림. 앱 설정이 여는 방침 주소와 시행일 줄 형식은 `PrivacyPolicyUrlTest`에서 확인함
+- **다음 행동**: 공개 승인 뒤 합치기 직전에 방침 상단의 시행일을 `main`에 합치는 날(KST)로 맞춤. 합치는 순간 공개 방침이 바뀜
+- **다음 앱 코드 변경 때**: `SettingsScreen.kt` KDoc의 `published 2026-11-16` 문구를 정리함. PR #62는 방침 문서만 다뤄 테스터 APK 배포를 시작하지 않음
+
+### CI 앱 화면 시험의 Maven Central 429 줄이기
+
+- **목표**: 앱 화면 시험의 의존성 다운로드 실패를 줄이고 시험 범위와 판정 기준을 유지함.
+- **확인한 것**: [PR 실행 45021627405 2차](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45021627405/attempts/2)와 [main 실행 45055509494 1차](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45055509494/attempts/1)에서 Gradle이 앱 시험의 클래스패스를 구성하며 `nativeruntime-dist-compat:1.0.19` JAR를 받다가 429를 만남. 앞 단계인 `:shared:jvmTest`는 이 의존성을 쓰지 않음. 두 실행의 Gradle 캐시는 [릴리즈 빌드 45011811099](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45011811099)가 먼저 저장했고, [같은 커밋의 CI 45011811086](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45011811086)는 같은 키의 저장 예약에 실패함. 나중에 앱 시험을 통과한 실행도 일치하는 캐시 키를 갱신하지 못함.
+- **한 일**: CI의 Gradle 캐시와 wrapper 검증을 `gradle/actions/setup-gradle`에서 하고, Gradle 작업 요약은 실패할 때 표시함. 시험 중에 Robolectric이 `~/.m2`로 받는 `android-all-instrumented`는 Robolectric 버전과 시험의 SDK 번호가 일치하는 캐시만 복원함. SDK 번호가 명시된 시험은 필요한 수만큼 검증된 JAR가 내려왔으면 시험 실패 뒤에도 저장할 수 있음. 두 캐시는 `main`에서 저장하고 다른 브랜치에서는 복원만 함. `--rerun`과 시험 판정은 유지함.
+- **로컬 검사**: `actionlint 1.7.12`, YAML 구조 대조, `check_docs.py`, `check_writes.py`, `check_wording.py` 통과.
+- **CI에서 확인한 것**: [PR 검증 실행 45097246334](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45097246334)에서 공통 JVM 시험 335개, 앱 화면 시험 127개와 APK 빌드가 통과함. 이 실행에는 PR 캐시 저장을 열어 Gradle 의존성 캐시와 Robolectric SDK 캐시의 저장 로그를 확인함.
+- **재리뷰 뒤 확인한 것**: [새 캐시 키 검증 실행 45099052612](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45099052612/job/137445396671)의 앱 시험 XML에서 `repo1.maven.org`가 Robolectric SDK 다운로드에 429를 보낸 것을 확인함. 같은 실행에서 SDK JAR와 체크섬이 들어온 뒤 `Linux-ci-robolectric-sdk-v2-4.17-sdk-35`가 저장됨. 최종 설정은 `main`에서만 저장함.
+- **확인하지 못한 것**: PR에서 만든 검증용 캐시는 해당 PR에만 보임. `main`의 첫 CI와 새 의존성이 들어간 실행은 Maven Central 상태의 영향을 받음. 다른 APK·에뮬레이터 워크플로에서 앱 시험을 실행하는 경로는 찾지 못해 공용 Gradle 캐시 설정은 후속 검토로 남김.
+- **다음 행동**: [PR #63](https://github.com/judangbang-ops/pillbadeum_release/pull/63)에 최종 커밋의 복원 로그와 시험 결과를 남김.
+
+### 노션 '최근 업데이트'에 11/22~23 작업의 최종본 한 행 (PR #53~#61)
+
+- **목표**: 2026-11-15 15:31 KST 동희님 지시("노션에는 한번에 최종본만 올리고")대로, 11/22~23 작업(Q11 답과 결정, 에뮬레이터 QA, 테스터 폰 자동 업데이트)을 노션에 한 번만 올림
+- **한 일**: 2026-11-23 03:15 KST쯤 [최근 업데이트 행](https://app.notion.com/p/420bf16cc3ec81708c6fc1b906491ea8) 하나를 만듦(종류 '진행·결과', 읽었어요 꺼짐). 본문에 한 일 다섯, 새로 알게 된 것 넷, 정해 주실 것·하실 것 둘(테스터 Obtainium 첫 설정, 개인정보처리방침 문구), 다음 일, 링크를 둠. 비밀값과 이메일 주소는 쓰지 않음. 프로젝트 페이지의 '다음 행동' 속성과 최근 갱신일(2026-11-23)을 고침. PR #57(2차 기능 변경)은 다른 작업이라 이 행에 넣지 않음
+- **확인한 것**: 같은 날 행이 없는지 데이터 소스를 먼저 조회함(마지막 행 11/17). 행에 쓴 WBS 숫자(작업 55개 중 49개 끝남, 크기로 50.5일 / 55.0일, 기간이 열린 TASK-047·039 빼고)는 이 PR 브랜치의 `check_docs.py` 출력에서 옮김. 용어 검사
+- **다음 행동**: PR #61 검사가 통과하면 병합 직전 Codex 리뷰를 요청하고 합침
+
+### 테스터 폰 자동 업데이트 끝남: 에뮬레이터에서 Obtainium A·B 통과 (TASK-055, TC-089)
+
+- **목표**: 2026-11-22 16:07 KST 동희님 "다음 apk부터는 우리쪽에서 업데이트하면 자동으로 그쪽에서도 업데이트 되게끔 만들어줘"와 "전체적으로 QA는 너가 직접 해". 테스터 폰과 같은 상태의 에뮬레이터에서 Obtainium이 실제로 업데이트하는지 봄
+- **한 일**
+  - 2026-11-22 19:26 KST 동희님이 이 작업 스레드에서 "앱 서명 키 비밀값 2개를 personal-apk 환경에 올려". `APP_SIGNING_KEYSTORE_BASE64`·`APP_SIGNING_KEYSTORE_PASSWORD`를 환경 `personal-apk`에 올림(값은 어디에도 적지 않음)
+  - 첫 자동 릴리즈 `v0.1.0.297`: 19:31 KST, 커밋 `406419c`, [실행 45012853707](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45012853707), APK `pillbadeum-0.1.0.297.apk` 14,248,887바이트, 인증서 SHA-256 `35:64:B6:…:95:36`(앱 서명 키와 같음)
+  - 에뮬레이터 확인 워크플로 `obtainium.yml`과 `scripts/emulator/obtainium_check.py`를 [PR #56](https://github.com/judangbang-ops/pillbadeum_release/pull/56)(adb가 놓친 표지 다시 보내기), [PR #58](https://github.com/judangbang-ops/pillbadeum_release/pull/58)(apksigner 0.9의 인증서 줄 읽기), [PR #59](https://github.com/judangbang-ops/pillbadeum_release/pull/59)(시작 화면에 멈추면 다시 시작, 첫 시작 대화상자, B를 '다음 버전 직전 상태'에서 손대지 않고 기다리게 다시 짬)로 합침. PR #59에는 다른 세션이 로컬 Windows 에뮬레이터에서 A를 돌리며 올린 `a39960c`~`8071db6`(대화상자 대기, B 준비 전 Obtainium 멈춤, 저장소 추가 대기)도 들어 있음
+  - 리뷰: Claude 리뷰 두 차례와 처리([처리 1](https://github.com/judangbang-ops/pillbadeum_release/pull/59#issuecomment-7081586168), [처리 2](https://github.com/judangbang-ops/pillbadeum_release/pull/59#issuecomment-7081600000), [최종 처리](https://github.com/judangbang-ops/pillbadeum_release/pull/59#issuecomment-7082605175)). 병합 직전 Codex 리뷰를 한 번 요청했으나 26분 동안 답도 반응도 없어, PR #60과 같이 Claude 리뷰와 검사 16개 통과로 판단해 합침([기록](https://github.com/judangbang-ops/pillbadeum_release/pull/59#issuecomment-7082953529))
+  - main `6254533`에서 `obtainium.yml`(A·B)을 실행함: [실행 45050351093](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45050351093)
+- **결과** (API 34, Obtainium 1.7.4, 판정 9줄 모두 통과)
+  - A(테스터가 한 번 하는 첫 업데이트): 손으로 깐 `0.1.0`(versionCode 274) 위에 Obtainium이 릴리즈 `0.1.0.297`을 깖. Android 확인 창이 한 번 뜨고 [Update]로 넘어감. 설치한 앱이 Obtainium으로 바뀌고 기록 `TestA`가 남음
+  - B(그 뒤 손대지 않는 업데이트): Obtainium이 깐 `0.1.0.296`과 '마지막 확인 7시간 전' 기록에서 HOME만 누르고 기다림. 15분 32초 뒤 Obtainium 예약 작업이 297을 확인 창 없이 깖(logcat "BG install task: Installing 1 apps silently"). 설치한 앱은 그대로 Obtainium
+- **알게 된 것** (테스터 안내와 다음 확인에 씀)
+  - Obtainium 1.7.4는 처음 열 때 'Welcome'과 'Note' 창을 띄움. 둘 다 [Okay]
+  - Obtainium은 깔린 버전 `0.1.0`과 태그 `v0.1.0.297`을 비교함. 한 번 Obtainium으로 깔면 태그를 깔린 버전으로 적고 '최신'으로 봄. 그래서 B는 297 직전 버전(296)을 Obtainium이 깐 상태로 만들어 시험함
+  - 손대지 않는 업데이트는 WorkManager 예약 작업(15분마다)이 마지막 확인에서 6시간(기본값)이 지난 앱을 볼 때 일어남. 실기기에서는 새 릴리즈 뒤 길게는 6시간쯤 걸림. 확인 창 없이 깔리려면 Android 12 이상, 설치한 앱이 Obtainium이어야 함
+  - CI 에뮬레이터의 Obtainium 첫 시작이 시작 화면에 멈춘 적이 있음([실행 45018288077](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45018288077)). 다시 시작하면 그림
+- **확인한 것**: 실행 45050351093의 보고서 판정 9줄, B 뒤 HOME 화면 캡처(확인 창 없음), B logcat의 설치 줄, 첫 릴리즈의 인증서. PR #59 head `8071db6`의 GitHub 검사 16개 통과. 문서 검사(`check_docs.py`), 문구 검사, 용어 검사
+- **확인하지 못한 것**
+  - 테스터 실기기. 폰의 Android 버전, 갤럭시 절전이 Obtainium 예약 작업을 늦추는지, Android 11 이하의 알림 경로는 보지 않음
+  - Obtainium 'Note' 창이 말하는 Google 개발자 인증(2027년부터 나라별)의 한국 적용
+  - PR #59 중간 커밋 `a39960c`의 릴리즈 변형 확인(API 34)이 한 번 실패함: 항목 추가 화면에서 `input text TestA`가 칸에 들어가지 않음. 같은 작업을 다시 돌려 통과함. 이 PR과 관계없는 공용 함수 `add_item`의 입력 흔들림이라 이번에는 고치지 않음. 다시 나오면 입력 뒤 칸의 글자를 확인하고 다시 입력하게 고침
+- **다음 행동**
+  - 테스터 두 분이 [Obtainium 안내](../07-qa/obtainium-testers.md) 1~5번을 한 번 해야 함(사람 손이 필요함). 그 뒤로는 main에 앱 변경이 합쳐질 때마다 릴리즈가 올라가고 폰이 알아서 받음
+  - 공개한 [개인정보처리방침](../release/privacy-policy.md)의 "Google Play로 배포합니다"를 바꿀지 동희님께 여쭘
+
+### Obtainium 에뮬레이터 확인 리뷰 반영 (TC-089, PR #59)
+
+- **목표**: 첫 실행 대화상자가 A를 가리는 문제와 B 시험 상태가 덮이는 문제를 줄임. [Claude 리뷰 9건](https://github.com/judangbang-ops/pillbadeum_release/pull/59#issuecomment-7081579145)
+- **한 일**: 원격의 `d8054ad`, `0ee3ba6`을 이어받음. A는 대화상자가 늦게 뜨거나 'Dismiss' 없이 Welcome·Note가 보여도 닫고, 화면 파일 이름은 정해 둔 글자만 씀. 저장소를 추가할 때는 폼의 URL과 추가된 앱 화면을 구별함. B는 앱을 멈춘 뒤 시험 상태를 만들고, 앱을 다시 열어 세 필드를 확인한 뒤 HOME을 누름. 대기 중 30초마다 버전과 설치 창을 읽음. A만 요청하면 B용 빌드와 APK 검사를 건너뜀
+- **확인한 것**: Python 문법, 문서·판정 쓰기·문구 검사, YAML과 워크플로 문법, 시작 재시도·대화상자·입력·기록 검증·설치 창 읽기 모의 시험
+- **확인하지 못한 것**: 변경된 main용 워크플로에서 A·B를 함께 실행한 결과. PR의 검사와 로컬 A 실행 결과는 [PR #59](https://github.com/judangbang-ops/pillbadeum_release/pull/59)에 기록함
+- **다음 행동**: 초안에서 검토를 마친 뒤, 병합된 main에서 키를 쓰는 TC-089 워크플로로 A·B를 확인함
+
 ## 2026-11-22
 
 ### 2차 첫 릴리즈 기능 변경을 엶 (로드맵 1~4·22번)
@@ -49,6 +111,15 @@
 - **찾은 사실**: `db/schema.sql`에 2차용 표 `medication`(TBL-009)·`intake_medication`(TBL-010, `qty_per_take`)·`dose_version`(TBL-011)이 이미 있고 쓰지 않음. 답 10은 그대로이고, 이 표를 쓸지는 05 ERD에서 정함
 - **확인 3 여쭘 (20:16 KST, 이 스레드)**: 질문 12 용어집과 화면 글자 나누기(추천 용어집은 표준 용어, 화면 글자는 08에서 쉬운 말), 13 카드의 '먹는 약' 출처(추천 복용 항목의 약 줄을 읽음, 보관한 항목은 뺌, 테스터 피드백 뒤 다시 봄). 핵심 경계가 그대로라 새 핵심 규칙 없음. 이 단계가 바꾸는 승인 항목: 1차 domain.md의 CTX-002 표, CTX-005 한 줄, 정책 16의 뜻, 의존 표(화살표 7개 더함, 2개 글자 바뀜). 빼거나 미루는 것 없음. 확인 1·2가 그린 그대로라 10분 훑어보기를 한 번 제안함
 - **다음 행동**: 확인 3 답을 받아 `docs/01-domain/domain.md`를 한 번에 고침(CTX-006 절, CTX-002·005, 정책·의존·지도, TERM-032부터, 2절 확인 기록 '그린 그대로 승인', 그린 그대로 승인한 규칙은 6절 핫스팟에 '02에서 다시 봄'). 그 뒤 02 요구
+
+### 결정: PR마다 Claude 리뷰, 병합 직전에 Codex 리뷰
+
+- **받은 말** 2026-11-22 23시대 KST에 동희님이 오랑이 항목 8에서 '그렇게 바꾸기'를 고름 (오랑이 전달)
+- **정함** PR마다 Claude가 리뷰하고 항목별 처리 결과를 댓글에 남김. Codex 리뷰는 병합 직전에 한 번만 요청함. 사용 한도로 실패하면 PR에 적고 Claude 리뷰 결과로 판단함
+- **한 일** 절차를 [에이전트 작업 규칙](../../AGENTS.md#pr-리뷰)에 적고 README 작업 규칙에서 연결함. `CLAUDE.md`에서 같은 규칙을 불러옴
+- **출처** 이 저장소에 Codex 자동 리뷰가 없다는 내용은 2026-11-22 오랑이 전달에 따름
+- **확인하지 못한 것** 새 규칙에 따른 병합 직전 Codex 리뷰 결과
+- **다음 행동** 각 PR에서 Claude 리뷰와 항목별 처리를 기록하고, 병합 직전에 Codex 리뷰를 요청함
 
 ### 결정: 테스터 폰 자동 업데이트는 Obtainium + CI 자동 서명 (TASK-055)
 

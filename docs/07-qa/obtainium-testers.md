@@ -3,6 +3,7 @@
 필받음 새 버전이 나오면 테스터 폰이 알아서 받아 깔게 하는 설정입니다. 처음 한 번만 합니다(약 5분).
 
 - **정함**: 2026-11-22 16:07 KST 동희님이 프로젝트 채팅에서 "다음 apk부터는 우리쪽에서 업데이트하면 자동으로 그쪽에서도 업데이트 되게끔 만들어줘". 방법은 16:12 KST에 낸 카드에서 19:06 KST 동희님이 'Obtainium, CI 자동 서명'을 고름(앱 서명 키를 main 전용 환경 `personal-apk`에 두고 CI가 서명). 근거와 OS 제약은 [진행 기록](../10-records/progress.md) 2026-11-22 '테스터 폰 자동 업데이트'
+- **확인**: 2026-11-23 에뮬레이터(Android 14, Obtainium 1.7.4)에서 테스터 폰과 같은 상태로 아래 1~4번과 그 뒤 자동 업데이트를 확인함([TC-089](../12-qa/test-plan.md), [실행 45050351093](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45050351093)). 첫 업데이트는 Android 확인 창 한 번, 그다음 버전은 손대지 않아도 확인 창 없이 깔림. 테스터 실기기에서는 아직 안 봄
 - **대상**: 지금 개인 APK를 쓰는 테스터(가쟈누님, 동희님 누나). 동희님이 이 안내를 보내 드림
 - **어떻게 도는지**: main에 앱 코드가 합쳐지고 에뮬레이터 확인([release-emulator.yml](../../.github/workflows/release-emulator.yml))이 통과하면, [publish-apk.yml](../../.github/workflows/publish-apk.yml)이 앱 서명 키로 서명한 APK를 이 저장소의 [GitHub 릴리즈](https://github.com/judangbang-ops/pillbadeum_release/releases)에 올림. 테스터 폰의 Obtainium이 6시간마다(기본값) 릴리즈를 보고 새 버전을 깖
 - **같은 키**: 릴리즈 APK는 테스터 폰에 깔린 APK와 같은 앱 서명 키로 서명함(인증서 SHA-256 `35:64:B6:82:4B:1E:3D:A0:74:7A:2E:97:96:6E:F5:5D:B9:CC:93:C5:E8:8A:7D:45:24:64:2F:E6:2A:32:95:36`). 워크플로가 올리기 전에 이 값과 대조하고, 다르면 올리지 않음. 그래서 덮어 깔아도 기록이 남음
@@ -15,16 +16,18 @@
    - GitHub: `https://github.com/ImranR98/Obtainium/releases` (가장 위 릴리즈의 APK. 대부분의 갤럭시는 이름에 `arm64-v8a`가 들어간 것)
    - IzzyOnDroid: `https://apt.izzysoft.de/fdroid/index/apk/dev.imranr.obtainium`
    - 진짜인지 보려면: 패키지 이름 `dev.imranr.obtainium`, 서명 인증서 SHA-256 `B3:53:60:1F:6A:1D:5F:D6:60:3A:E2:F5:0B:E8:0C:F3:01:36:7B:86:B6:AB:8B:1F:66:24:3D:A9:6C:D5:73:62` (Obtainium README, 2026-11-22 읽음)
-2. **Obtainium 열기**: 알림 권한을 물으면 [허용]. 새 버전 알림이 이 권한으로 옴
+2. **Obtainium 열기**: 처음 열면 'Welcome'(안내)과 'Note'(Google 개발자 인증 안내) 창이 차례로 뜸. 둘 다 [Okay]. 알림 권한을 물으면 [허용]. 새 버전 알림이 이 권한으로 옴
 3. **필받음 추가**: 아래쪽 [앱 추가] → '앱 소스 URL'에 `https://github.com/judangbang-ops/pillbadeum_release` 를 붙여 넣고 → [추가]
+   - 추가하면 필받음 화면이 열림. GitHub에서 릴리즈를 읽느라 몇십 초 걸릴 수 있음
+   - 그 화면의 'Certificate Hash'가 위 '같은 키'의 값(`35:64:B6:…:95:36`)과 같으면 맞는 앱임
 4. **첫 업데이트 한 번**: 목록의 필받음에 업데이트가 보이면 눌러 [설치]나 [업데이트] → Android 창에서 Obtainium에 '이 출처 허용'을 켜고 → [업데이트]
-   - 지금 깔린 버전 이름은 `0.1.0`이고, 새 버전은 `0.1.0.<번호>`(예: `0.1.0.280`)라서 처음에는 업데이트로 보임
+   - 지금 깔린 버전 이름은 `0.1.0`이고, 새 버전은 `0.1.0.<번호>`(예: `0.1.0.297`)라서 처음에는 업데이트로 보임
    - 기록은 그대로 남음. 앱 [설정] 맨 아래 '앱 정보'의 버전이 `0.1.0.<번호>`로 바뀌면 끝
 5. **설정 확인** (보통 그대로 두면 됨): Obtainium [설정]에서 '백그라운드 업데이트 활성화'가 켜져 있고, '백그라운드 업데이트 확인 간격'이 6시간인지 봄(둘 다 기본값)
 
 ## 2. 그 뒤
 
-- 새 버전이 나오면 Obtainium이 받아 깖. Android 12 이상에서는 4번에서 한 번 업데이트한 뒤로 확인 창 없이 깔림. Android 11 이하이거나 폰이 막으면 'Obtainium 업데이트' 알림이 오고, 눌러서 [업데이트]를 누르면 됨
+- 새 버전이 나오면 Obtainium이 받아 깖. Obtainium이 6시간마다 확인하므로 새 버전이 나온 뒤 길게는 6시간쯤 걸림. Android 12 이상에서는 4번에서 한 번 업데이트한 뒤로 확인 창 없이 깔림(에뮬레이터 Android 14에서 확인). Android 11 이하이거나 폰이 막으면 'Obtainium 업데이트' 알림이 오고, 눌러서 [업데이트]를 누르면 됨
 - 바로 받고 싶으면 Obtainium을 열고 위에서 아래로 당겨 새로 고침
 - 갤럭시가 Obtainium을 잠재우면 확인이 늦어질 수 있음. 늦어지면 갤럭시 설정의 배터리 메뉴에서 Obtainium을 절전 예외로 둠
 

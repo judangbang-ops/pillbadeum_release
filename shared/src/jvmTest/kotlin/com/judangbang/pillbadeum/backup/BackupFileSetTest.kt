@@ -1,7 +1,11 @@
 package com.judangbang.pillbadeum.backup
 
+import com.judangbang.pillbadeum.data.AllergyEntity
 import com.judangbang.pillbadeum.data.DidITakeDatabase
+import com.judangbang.pillbadeum.data.HealthCardEntity
 import com.judangbang.pillbadeum.data.IntakeEntity
+import com.judangbang.pillbadeum.data.IntakeMedicationEntity
+import com.judangbang.pillbadeum.data.MedicationEntity
 import com.judangbang.pillbadeum.data.PersonEntity
 import com.judangbang.pillbadeum.data.ScheduleParams
 import com.judangbang.pillbadeum.data.ScheduleVersionEntity
@@ -26,6 +30,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
@@ -45,6 +50,7 @@ import kotlinx.coroutines.test.runTest
  * - RR-27: 400 records, the main file was checkpointed twice and still misses the newest rows
  * - RR-28: negative control. Without the WAL the same check must fail, otherwise the positive
  *   tests prove nothing
+ * - TC-102: a record, a health-card entry and a medication line restore together
  */
 class BackupFileSetTest {
     private val root: File = createTempDirectory("backup-file-set").toFile()
@@ -89,6 +95,41 @@ class BackupFileSetTest {
         assertTrue(withoutWal < 400, "main file alone must miss the newest records, got $withoutWal")
     }
 
+    @Test
+    fun tc102_ruleFilesRestoreRecordCardEntryAndMedicationLine() = runTest(timeout = 3.minutes) {
+        val live = writeRecords(count = 1)
+        val intake = assertNotNull(live.db.intakeDao().findById(live.intakeId))
+        val personId = intake.personId
+        val now = intake.createdAt
+        val card = HealthCardEntity(
+            personId = personId, editedAt = now, createdAt = now, updatedAt = now, deviceId = TEST_DEVICE_ID,
+        )
+        val entry = AllergyEntity(
+            id = "test-entry", personId = personId, substance = "Synthetic substance",
+            createdAt = now, updatedAt = now, deviceId = TEST_DEVICE_ID,
+        )
+        val medication = MedicationEntity(
+            id = "test-med", name = "Synthetic medication", createdAt = now, updatedAt = now, deviceId = TEST_DEVICE_ID,
+        )
+        val line = IntakeMedicationEntity(
+            id = "test-line", intakeId = live.intakeId, medicationId = medication.id, qtyPerTake = "Test quantity",
+            effectiveFrom = now, createdAt = now, updatedAt = now, deviceId = TEST_DEVICE_ID,
+        )
+        live.db.healthCardDao().upsert(card)
+        live.db.allergyDao().upsert(entry)
+        live.db.medicationDao().upsert(medication)
+        live.db.intakeMedicationDao().upsert(line)
+        val records = live.db.doseRecordDao().listByIntake(live.intakeId)
+        assertEquals(1, records.size)
+
+        val restored = restore(live, ruleFiles)
+        assertEquals(records, restored.doseRecordDao().listByIntake(live.intakeId))
+        assertEquals(card, restored.healthCardDao().findByPerson(personId))
+        assertEquals(listOf(entry), restored.allergyDao().listByPerson(personId))
+        assertEquals(listOf(line), restored.intakeMedicationDao().listByIntake(live.intakeId))
+        assertEquals(medication, restored.medicationDao().findById(line.medicationId))
+    }
+
     /** Live database state after [count] daily records; the database is left open on purpose. */
     private class Live(val dir: File, val intakeId: String, val db: DidITakeDatabase)
 
@@ -125,14 +166,17 @@ class BackupFileSetTest {
         return Live(dir, intakeId, db)
     }
 
-    /** Copies [names] that exist in the live folder to a new folder and counts the records there. */
-    private suspend fun restoredCount(live: Live, names: Set<String>): Int {
+    private suspend fun restoredCount(live: Live, names: Set<String>): Int =
+        restore(live, names).doseRecordDao().listByIntake(live.intakeId).size
+
+    /** Copies [names] that exist in the live folder and opens the copy with the app's builder. */
+    private fun restore(live: Live, names: Set<String>): DidITakeDatabase {
         val target = File(root, "restore-${opened.size}").apply { mkdirs() }
         names.forEach { name ->
             File(live.dir, name).takeIf { it.isFile }?.copyTo(File(target, name))
         }
         val restored = buildDidITakeDatabase(didITakeDatabaseBuilder(File(target, DidITakeDatabase.FILE_NAME)), Dispatchers.IO)
         opened += restored
-        return restored.doseRecordDao().listByIntake(live.intakeId).size
+        return restored
     }
 }

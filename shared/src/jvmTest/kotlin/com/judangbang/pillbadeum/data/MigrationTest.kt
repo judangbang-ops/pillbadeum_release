@@ -12,7 +12,9 @@ import kotlin.io.path.deleteIfExists
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlin.time.Clock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDateTime
@@ -21,9 +23,8 @@ import kotlinx.datetime.toInstant
 import org.junit.Rule
 
 /**
- * Schema migrations against the exported schema JSON (REQ-072, TASK-003). Each test builds a real
- * version-1 database file with raw SQL, migrates it and lets Room validate the result against
- * `schemas/.../2.json`.
+ * Schema migrations against the exported schema JSON (REQ-072). The tests build real files
+ * from the previous Room schema and check both the migrated schema and the stored rows.
  */
 class MigrationTest {
     private val dbFile: Path = Files.createTempFile("pillbadeum-migration", ".db")
@@ -171,6 +172,87 @@ class MigrationTest {
     }
 
     @Test
+    fun v2_to_v3_keeps_first_release_rows_and_seeds_each_card() = runTest {
+        val tables = mapOf(
+            "person" to "id", "intake" to "id", "schedule_version" to "id", "dose_record" to "id",
+            "clock_flag" to "dose_id", "reminder_rule" to "intake_id", "reminder_snooze" to "intake_id",
+            "setting" to "key", "medication" to "id", "intake_medication" to "id", "dose_version" to "id",
+        )
+        val originalRows = helper.createDatabase(2).use { v2 ->
+            v2.person("p1")
+            v2.person("p2")
+            v2.intake("a", "p1", createdAt = 100L)
+            v2.intake("b", "p1", createdAt = 100L)
+            v2.intake("c", "p2", createdAt = 100L)
+            v2.execSQL("UPDATE person SET updated_at = 300, archived_at = 300 WHERE id = 'p1'")
+            v2.execSQL("UPDATE person SET updated_at = 800 WHERE id = 'p2'")
+            v2.execSQL("UPDATE intake SET updated_at = 600, archived_at = 600 WHERE id = 'a'")
+            v2.execSQL("UPDATE intake SET updated_at = 200 WHERE id = 'b'")
+            v2.execSQL("UPDATE intake SET updated_at = 700 WHERE id = 'c'")
+
+            listOf("a", "b", "c").forEach { id ->
+                v2.version("$id-v1", id, "DAILY", "{}", from = 100L)
+            }
+            repeat(10) { index ->
+                val intakeId = listOf("a", "b", "c")[index % 3]
+                val day = "2026-01-${10 + index}"
+                v2.dose("d$index", intakeId, "$intakeId-v1", day, ms("${day}T08:00"), active = index != 9)
+            }
+            v2.execSQL("INSERT INTO clock_flag (dose_id, flagged_at) VALUES ('d0', 1000)")
+            v2.execSQL(
+                "INSERT INTO reminder_rule (intake_id, enabled, start_time, created_at, updated_at, version, device_id) " +
+                    "VALUES ('b', 1, '08:00', 100, 200, 1, 'old-device')",
+            )
+            v2.execSQL("INSERT INTO reminder_snooze (intake_id, period_key, fire_at) VALUES ('c', '2026-01-12', 2000)")
+            v2.setting(SettingKeys.DEVICE_ID, "test-install")
+            assertEquals(10L, v2.count("SELECT COUNT(*) FROM dose_record"))
+            tables.mapValues { (table, key) -> v2.rows("SELECT * FROM `$table` ORDER BY `$key`") }
+        }
+
+        val beforeMigration = Clock.System.now().toEpochMilliseconds()
+        helper.runMigrationsAndValidate(3, listOf(Migrations.MIGRATION_2_3)).use { v3 ->
+            val afterMigration = Clock.System.now().toEpochMilliseconds()
+            tables.forEach { (table, key) ->
+                assertEquals(originalRows.getValue(table), v3.rows("SELECT * FROM `$table` ORDER BY `$key`"), table)
+            }
+            assertEquals(
+                listOf(
+                    listOf("p1", "600", null, null, "1", "test-install"),
+                    listOf("p2", "800", null, null, "1", "test-install"),
+                ),
+                v3.rows(
+                    "SELECT person_id, edited_at, emergency_copied_at, stale_notice_closed_at, version, device_id " +
+                        "FROM health_card ORDER BY person_id",
+                ),
+            )
+            val created = v3.longs("SELECT person_id, created_at FROM health_card")
+            assertEquals(created, v3.longs("SELECT person_id, updated_at FROM health_card"))
+            assertTrue(created.values.toSet().single() in beforeMigration..afterMigration)
+            for (table in listOf("condition", "procedure_history", "allergy", "implanted_device", "care_contact")) {
+                assertEquals(0L, v3.count("SELECT COUNT(*) FROM `$table`"), table)
+            }
+            assertTrue(v3.rows("PRAGMA foreign_key_check").isEmpty())
+        }
+    }
+
+    @Test
+    fun v2_without_intakes_or_install_id_uses_person_metadata_when_opened() = runTest {
+        helper.createDatabase(2).use { v2 ->
+            v2.person("p1")
+            v2.execSQL("UPDATE person SET updated_at = 500 WHERE id = 'p1'")
+        }
+
+        val db = buildDidITakeDatabase(didITakeDatabaseBuilder(dbFile.toFile()), Dispatchers.IO)
+        try {
+            val card = assertNotNull(db.healthCardDao().findByPerson("p1"))
+            assertEquals(500L, card.editedAt)
+            assertEquals("old-device", card.deviceId)
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
     fun migrated_file_opens_with_room_and_the_registration_morning_is_scheduled() = runTest {
         helper.createDatabase(1).use { v1 ->
             v1.person("p1")
@@ -187,7 +269,7 @@ class MigrationTest {
         }
     }
 
-    // --- raw version-1 rows (column lists from schemas/.../1.json) ---
+    // --- raw rows shared by schemas 1 and 2 ---
 
     private fun SQLiteConnection.person(id: String) = execSQL(
         "INSERT INTO person (id, name, color, created_at, updated_at, version, device_id) " +

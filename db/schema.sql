@@ -7,6 +7,8 @@
 -- SQLite. 시각은 모두 UTC 밀리초 INTEGER, id는 UUID TEXT. created_at·updated_at·version·device_id는 행마다 둠(2차 동기화 대비).
 -- 이주(migration): Migrations.kt의 MIGRATION_1_2, 시험은 shared/src/jvmTest/.../data/MigrationTest.kt.
 -- 새 설치는 Room이 이 스키마(2.json)를 바로 만듦. 1 → 2 이주 뒤 스키마가 2.json과 같은지는 MigrationTest가 확인.
+-- 2차 첫 릴리즈의 스키마 3(건강 카드 표 여섯, 약 줄)은 docs/05-erd/README.md 8장의 설계. Room 3.json이 생기는 개발 작업에서
+--   이 파일에 그 CREATE 문과 TBL-012~017 주석을 옮김. 그 전까지 이 파일의 CREATE 문은 2.json 그대로.
 --
 -- without a table: TERM-001 (계정 없음), TERM-006 (창: 주기·창 설정으로 계산), TERM-007 (dose_record.period_key),
 --   TERM-009·TERM-010 (dose_record.kind 값), TERM-011 (미완료: 활성 판정이 없는 창, 계산), TERM-013 (늦은 입력: taken_at),
@@ -14,7 +16,10 @@
 --   TERM-025 (위젯: Android 위젯과 Glance 상태 파일), TERM-026 (고른 대상자: 위젯마다 Glance 상태에 둘 것, 백업 제외, 아직 없음),
 --   TERM-027 (기기 표식: noBackupFilesDir의 install_marker 파일), TERM-028 (복원: 사건), TERM-029 (복원 안내: setting restore_notice_*),
 --   TERM-031 (빠짐: 계산),
---   TERM-032·TERM-033·TERM-034·TERM-035·TERM-036·TERM-037·TERM-038·TERM-039·TERM-040·TERM-041·TERM-042·TERM-043·TERM-044 (2차 첫 릴리즈 용어, 2026-11-23 01 도메인에서 더함. 05 ERD에서 표를 정하고 이 줄에서 뺌)
+--   TERM-032·TERM-035·TERM-036·TERM-037·TERM-038·TERM-039·TERM-040 (건강 카드와 칸: 스키마 3의 health_card·condition·procedure_history·allergy·
+--     implanted_device·care_contact, docs/05-erd/README.md 8장. Room 3.json을 만드는 작업에서 표 주석으로 옮기고 이 줄에서 뺌),
+--   TERM-041 (카드 요약: 읽기 모델, 계산), TERM-042 (응급 대비 문장: 계산, 복사 시각은 스키마 3의 health_card),
+--   TERM-043 (내보내기 파일: 앱 캐시 파일, 백업 밖), TERM-044 (의견 보내기: 메일 앱에 맡김)
 
 
 -- TBL-001 person (CTX-002) ← SPEC-001, SPEC-004, SPEC-005, SPEC-026, SPEC-027, SPEC-044 | terms: TERM-002, TERM-003, TERM-018
@@ -26,7 +31,7 @@ CREATE TABLE IF NOT EXISTS `person` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `
 -- TBL-002 intake (CTX-002) ← SPEC-003, SPEC-006, SPEC-015, SPEC-023, SPEC-024, SPEC-025 | terms: TERM-004, TERM-018
 --   복용 항목 하나. 대상자 한 명에 속함. widget_alias는 위젯에 보일 짧은 이름(선택), slot_label은 매일 항목의 시간대
 --   MORNING·NOON·EVENING·BEDTIME(보이기·정렬과 알림 기본 시작 시각에만 씀, 창을 나누지 않음).
---   rule (코드): 보관된 항목만 완전 삭제할 수 있음(TERM-019, DeleteIntake). 삭제는 자식 표부터: clock_flag → dose_record → reminder_snooze → reminder_rule → intake_medication → schedule_version → intake.
+--   rule (코드): 보관된 항목만 완전 삭제할 수 있음(TERM-019, DeleteIntake). 삭제는 자식 표부터: clock_flag → dose_record → reminder_snooze → reminder_rule → intake_medication → (2차) 그 약 줄의 medication → schedule_version → intake.
 --   FK는 모두 ON DELETE NO ACTION이고 Room이 foreign_keys를 켬(DoseRecordDaoTest.foreignKeys_*): 판정이 남은 항목은 실수로 지워지지 않음.
 CREATE TABLE IF NOT EXISTS `intake` (`id` TEXT NOT NULL, `person_id` TEXT NOT NULL, `name` TEXT NOT NULL, `widget_alias` TEXT, `slot_label` TEXT, `sort_order` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `version` INTEGER NOT NULL, `device_id` TEXT NOT NULL, `archived_at` INTEGER, PRIMARY KEY(`id`), FOREIGN KEY(`person_id`) REFERENCES `person`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION );
 CREATE INDEX IF NOT EXISTS `ix_intake_person` ON `intake` (`person_id`);
@@ -73,12 +78,14 @@ CREATE TABLE IF NOT EXISTS `reminder_snooze` (`intake_id` TEXT NOT NULL, `period
 --   rule (코드): day_start·base_zone은 바꾼 때부터 적용(TERM-014). 이미 쓴 판정의 period_key는 바꾸지 않음.
 CREATE TABLE IF NOT EXISTS `setting` (`key` TEXT NOT NULL, `value` TEXT NOT NULL, PRIMARY KEY(`key`));
 
--- TBL-009 medication (2차) ← 없음 | terms: none
---   2차 약 정보용. 1차 앱은 읽지도 쓰지도 않음(빈 표). 남긴 까닭과 뺄지는 docs/05-erd/README.md 5장.
+-- TBL-009 medication (CTX-002) ← SPEC-025, SPEC-048, SPEC-049 | terms: TERM-033
+--   약 줄의 약 이름. 1차 앱은 읽지도 쓰지도 않음(빈 표, docs/05-erd/README.md 5장 4). 2차부터 약 줄 하나에 행 하나
+--   (같은 이름도 합치지 않음, REQ-099). product_code는 비움(식약처 목록은 다음 릴리즈). 2차 쓰임은 README 8장 5.
 CREATE TABLE IF NOT EXISTS `medication` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `product_code` TEXT, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `version` INTEGER NOT NULL, `device_id` TEXT NOT NULL, `archived_at` INTEGER, PRIMARY KEY(`id`));
 
--- TBL-010 intake_medication (2차) ← 없음 | terms: none
---   2차: 복용 항목에 든 약. 1차 앱은 완전 삭제 때 지우기만 함(빈 표).
+-- TBL-010 intake_medication (CTX-002) ← SPEC-025, SPEC-048, SPEC-049 | terms: TERM-033, TERM-034
+--   복용 항목에 든 약 줄. 1차 앱은 완전 삭제 때 지우기만 함(빈 표). 2차부터 qty_per_take는 1회 투약량(TERM-034) 글 그대로,
+--   effective_from은 만든 때, effective_to는 비움(약을 빼면 이 행과 그 medication 행을 지움). 줄 순서는 created_at.
 CREATE TABLE IF NOT EXISTS `intake_medication` (`id` TEXT NOT NULL, `intake_id` TEXT NOT NULL, `medication_id` TEXT NOT NULL, `qty_per_take` TEXT, `effective_from` INTEGER NOT NULL, `effective_to` INTEGER, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `version` INTEGER NOT NULL, `device_id` TEXT NOT NULL, `archived_at` INTEGER, PRIMARY KEY(`id`), FOREIGN KEY(`intake_id`) REFERENCES `intake`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION , FOREIGN KEY(`medication_id`) REFERENCES `medication`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION );
 CREATE INDEX IF NOT EXISTS `ix_intake_medication_intake` ON `intake_medication` (`intake_id`);
 CREATE INDEX IF NOT EXISTS `ix_intake_medication_medication` ON `intake_medication` (`medication_id`);

@@ -16,19 +16,19 @@
 | 문서 | 내용 | 상태 |
 | --- | --- | --- |
 | [기획 v4](docs/01-planning/planning-v4.md) | DidITake 기획 v3 뒤에 정한 결정(1차 범위, 백업, Play 비공개 테스트, 범위 확정)으로 바뀐 점 | 범위 확정 반영 (2026-11-12) |
-| [01 도메인 설계](docs/01-domain/domain.md) | 경계 CTX-001~005와 용어집 TERM-001~031. Miro 보드와 맞춤 | 확인 1~3 지남 (2026-11-12 16:03 KST) |
-| [02 요구사항](docs/01-planning/requirements.md) | 요구 REQ-001~095, 합격 기준, v3 뒤에 정한 결정(0장) | 범위 확인 지남 (2026-11-12 16:32 KST). REQ-095는 04 고정 때 더함 |
-| [03 사용자 흐름](docs/03-user-flow/README.md) | 흐름 FL-001~010. 흐름마다 Mermaid 그림 | 확인 끝 (2026-11-12 23:50 KST) |
-| [04 기능 명세](docs/04-functional-spec/spec.md) | 동작마다 한 줄인 SPEC-001~044(출처, 전제, 예외, 합격 기준) | 고정 (2026-11-13 00:16 KST) |
+| [01 도메인 설계](docs/01-domain/domain.md) | 경계 CTX-001~005와 용어집 TERM-001~031. Miro 보드와 맞춤. 2차 첫 릴리즈: CTX-006 건강 카드, TERM-032~044 | 확인 1~3 지남 (2026-11-12 16:03 KST). 2차 확인 1~3 지남 (2026-11-23 KST) |
+| [02 요구사항](docs/01-planning/requirements.md) | 요구 REQ-001~095, 합격 기준, v3 뒤에 정한 결정(0장). REQ-096(테스터 폰 자동 업데이트), 2차 첫 릴리즈 REQ-097~110(2.13절) | 범위 확인 지남 (2026-11-12 16:32 KST). REQ-095는 04 고정 때 더함. 2차 범위 확인 지남 (2026-11-23 KST) |
+| [03 사용자 흐름](docs/03-user-flow/README.md) | 흐름 FL-001~010, 2차 첫 릴리즈 FL-011~015. 흐름마다 Mermaid 그림 | 확인 끝 (2026-11-12 23:50 KST). 2차 확인 끝 (2026-11-23 KST) |
+| [04 기능 명세](docs/04-functional-spec/spec.md) | 동작마다 한 줄인 SPEC-001~044(출처, 전제, 예외, 합격 기준), 2차 첫 릴리즈 SPEC-045~055 | 고정 (2026-11-13 00:16 KST). 2차 고정 (2026-11-23 KST) |
 | [기록 규칙 보충](docs/04-spec/record-rules-supplement.md) | 04 명세가 따르는 규칙(I·B·R·S·P·N·W·C)과 반례 RR-26~92. 주 1회 약은 결정 Q15의 1차 방식 | 개발 기준 (2026-11-12, 2026-11-13 P-9·RR-90, R3 PR #20의 N-12·RR-91·92 더함) |
-| [05 ERD](docs/05-erd/README.md) · [`db/schema.sql`](db/schema.sql) | 표 TBL-001~011. Room이 내보낸 스키마와 같음 | 고정 (2026-11-13 01:04 KST) |
-| [07 화면 목록](docs/05-ui/sitemap.yaml) · [08 화면 상태](docs/05-ui/screens.md) | 화면 SCR-001~010과 화면별 상태, 화면에서 정한 것 | 승인 (2026-11-13 01:04 KST) |
-| [09 목업](docs/09-mockup/README.md) | 2안 요일 약통 보드와 토큰([`design/base.tokens.json`](design/base.tokens.json)) | 확인 끝 (2026-11-12 19:11 KST). 글꼴만 2026-11-13에 기기 글꼴로 바꿈 |
-| [10 작업 분해](docs/08-wbs/wbs.md) | 작업 TASK-001~054, 담당, 릴리즈 단계 R0~R5와의 대응. 지금 프로토타입에서 Play 비공개 테스트까지 | 다음 묶음 계획 확인 (2026-11-13 01:04 KST) |
+| [05 ERD](docs/05-erd/README.md) · [`db/schema.sql`](db/schema.sql) | 표 TBL-001~011. Room이 내보낸 스키마와 같음. 2차 첫 릴리즈의 스키마 3(TBL-012~017)은 ERD 8장의 설계이고 개발(TASK-057)에서 `db/schema.sql`에 옮김 | 고정 (2026-11-13 01:04 KST). 스키마 3 고정 (2026-11-23 KST) |
+| [07 화면 목록](docs/05-ui/sitemap.yaml) · [08 화면 상태](docs/05-ui/screens.md) | 화면 SCR-001~010과 화면별 상태, 화면에서 정한 것. 2차 첫 릴리즈 SCR-011~015와 바뀐 SCR-004·006·009·010 | 승인 (2026-11-13 01:04 KST). 2차 07·08 확인 끝 (2026-11-23 KST) |
+| [09 목업](docs/09-mockup/README.md) | 2안 요일 약통 보드와 토큰([`design/base.tokens.json`](design/base.tokens.json)). 2차 첫 릴리즈 보드 25개(8장) | 확인 끝 (2026-11-12 19:11 KST). 글꼴만 2026-11-13에 기기 글꼴로 바꿈. 2차 확인 끝 (2026-11-23 KST) |
+| [10 작업 분해](docs/08-wbs/wbs.md) | 작업 TASK-001~054, 담당, 릴리즈 단계 R0~R5와의 대응. 지금 프로토타입에서 Play 비공개 테스트까지. TASK-055, 2차 첫 릴리즈 TASK-056~069(1.9절, 순서·PR 단위는 3.1절) | 다음 묶음 계획 확인 (2026-11-13 01:04 KST). 2차 확인 끝 (2026-11-23 KST) |
 | [개인정보처리방침](docs/release/privacy-policy.md) · [근거와 정할 것](docs/release/privacy-policy-basis.md) | 공개 저장소에 게시하고 앱 설정(SCR-009)에서 여는 방침(TASK-035, REQ-063) | 첫 공개와 앱 설정의 링크는 2026-11-16(PR #41·#42). APK 배포를 반영한 판의 시행일은 방침 상단에 적음(PR #62). Play Console 등록은 보류(Q11 D) |
 | [Play '앱 콘텐츠' 답](docs/release/play-app-content.md) | 데이터 보안·건강 앱 신고·콘텐츠 등급·타겟층 등의 답과 도움말 근거(TASK-036, REQ-063) | 초안 (2026-11-15). 타겟 연령 18세 이상만 정함(2026-11-16). 계정 종류(Q11)는 Play 지원 답을 받은 뒤, 지원 문의 글은 0장 |
 | [스토어 등록정보](docs/release/store-listing.md) · [붙여 넣을 글](docs/release/listing/ko-KR/) | 앱 이름·간단한 설명·자세한 설명과 건강 정책 고지, 스크린샷 계획, 카테고리(TASK-037, REQ-064·REQ-087) | 초안 (2026-11-15). 앱 이름 필받음·카테고리 의료·연락 이메일 정함, 앱 아이콘 만듦(2026-11-16). 스크린샷·그래픽 이미지는 다음 PR, 입력은 TASK-038 |
-| [12 QA 시험 계획](docs/12-qa/test-plan.md) | 시험 사례 TC-001~088과 버그 BUG ID. 이전 QA 보고서는 [`docs/07-qa/`](docs/07-qa/) | 초안, 출시 판단 전 |
+| [12 QA 시험 계획](docs/12-qa/test-plan.md) | 시험 사례 TC-001~089와 버그 BUG ID, 2차 첫 릴리즈 TC-090~118('계획'). 이전 QA 보고서는 [`docs/07-qa/`](docs/07-qa/) | 초안, 출시 판단 전 |
 | [설계 독립 검토](docs/06-review/design-review-2026-11-11.md) | 2026-11-11 독립 검토 의견과 근거 파일 | 끝남 (PR #3) |
 | [범위 확정 반영 검토](docs/06-review/scope-confirm-review-2026-11-12.md) | 2026-11-12 Fable 5.2 독립 검토 의견(조건부 통과). 반영한 곳은 각 문서에 '2026-11-12 검토'로 적음 | 반영함 (PR #5) |
 | [.corthex/project.json](.corthex/project.json) | CORTHEX 단계별 원본 위치와 확인 기록 요약. 06 API와 13 발표는 뺌 | |

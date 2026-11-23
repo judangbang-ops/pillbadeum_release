@@ -485,7 +485,8 @@ PEOPLE_BODY = '''
 board('PeopleCard', 'SCR-010 대상자 관리 · 보관한 대상자의 건강 카드', PEOPLE_BODY, css=PEOPLE_CSS)
 board('PeopleCard200', 'SCR-010 대상자 관리 · 보관한 대상자의 건강 카드 · 글자 200%', PEOPLE_BODY, css=PEOPLE_CSS, h=800,
       props={"fontScale": {**FSP["fontScale"], "default": "200"}})
-COLORS = ''.join(f'<button class="sw p{i}{" on" if i == 2 else ""}" type="button" aria-label="{n}"{" aria-pressed=\"true\"" if i == 2 else ""}>{"@CHECK@" if i == 2 else ""}</button>'
+PRESSED = ' aria-pressed="true"'  # outside the f-string: Python before 3.12 allows no backslash inside {}
+COLORS = ''.join(f'<button class="sw p{i}{" on" if i == 2 else ""}" type="button" aria-label="{n}"{PRESSED if i == 2 else ""}>{"@CHECK@" if i == 2 else ""}</button>'
                  for i, n in enumerate(['파랑', '주황', '초록', '보라', '장미', '청록'], 1))
 board('PersonEditCard', 'SCR-010 대상자 수정 · 건강 카드', '''
 <div class="s {{fs}}">

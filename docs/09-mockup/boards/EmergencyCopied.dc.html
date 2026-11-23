@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>SCR-014 응급 대비 문장 · 복사한 뒤 (Android 13 이상)</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;800&amp;family=Roboto:wght@400;600;800&amp;display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="box.css">
+<style>
+.ex{margin:0 var(--space-2xs) var(--space-md)!important;font-size:var(--font-size-body-sm);line-height:var(--font-line-height-normal);color:var(--color-ink-muted)}
+.txt{background:var(--color-surface-sunken);border-radius:var(--radius-tile);padding:var(--space-lg);line-height:var(--font-line-height-normal);font-size:var(--font-size-body)}
+.cnt{text-align:right;padding:var(--space-xs) var(--space-2xs) var(--space-md);font-size:var(--font-size-body-sm);color:var(--color-ink-muted)}
+.ok{margin-top:var(--space-sm)!important;padding:0 var(--space-2xs);font-size:var(--font-size-body-sm);font-weight:var(--font-weight-semibold);line-height:var(--font-line-height-normal)}
+</style>
+</helmet>
+<div class="s {{fs}}">
+  <div class="bar back"><button class="ib" type="button" aria-label="닫기"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h1>응급 대비 문장</h1></div>
+  <div class="body">
+    <p class="ex">휴대폰 긴급 정보에 붙여 넣을 짧은 글이에요.</p>
+    <div class="txt">엄마. 알레르기: 페니실린 계열(두드러기). 지금 먹는 약: 가상정 <span style="white-space:nowrap">10</span>mg 1정 매일 아침, 보기정 <span style="white-space:nowrap">500</span>mg 반 알 매일 아침, 가상정 <span style="white-space:nowrap">10</span>mg 1정 매일 저녁, 비타민 매일. 질환: 고혈압, 골다공증. 보호자: 홍가상(딸) <span style="white-space:nowrap">010-0000-0000</span>. 의료기관: 가상내과의원 내과 <span style="white-space:nowrap">02-000-0000</span>. 필받음 건강 카드, <span style="white-space:nowrap">2026-11-23</span> 고침.</div>
+    <p class="cnt">197자</p>
+    <button class="btn ink" type="button">복사</button>
+    <p class="ok" style="display: {{copied}}">이제 긴급 정보에 붙여 넣어 주세요.</p>
+    <h2>넣는 곳</h2>
+    <p class="sm" style="padding:0 var(--space-2xs)">휴대폰 설정의 긴급 정보에서 의료 정보에 붙여 넣어 주세요. 119안심콜에 등록할 때도 쓸 수 있어요.</p>
+    <p class="note" style="padding:var(--space-xs) var(--space-2xs) var(--space-xl)">앱은 대신 등록하지 않아요.</p>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"fontScale": {"editor": "enum", "options": ["100", "200"], "default": "100"}, "state": {"editor": "enum", "options": ["normal", "copied"], "default": "copied"}, "$preview": {"width": 360, "height": 800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const c = (this.props.state ?? 'normal') === 'copied';
+    return { fs: (this.props.fontScale ?? '100') === '200' ? 'fs200' : '', copied: c ? 'block' : 'none' };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>SCR-011 건강 카드 · 빈 카드</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;800&amp;family=Roboto:wght@400;600;800&amp;display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="box.css">
+<style>
+.bar h1 .tag{display:inline-block;vertical-align:middle;margin-left:var(--space-xs);padding:2px var(--space-sm);border-radius:var(--radius-cell);
+  background:var(--color-surface-skip);color:var(--color-ink-muted);font-size:var(--font-size-body-sm);font-weight:var(--font-weight-semibold)}
+.arch{margin-bottom:var(--space-md);padding:0 var(--space-2xs)}
+.band .bb{display:flex;gap:var(--space-sm);flex-wrap:wrap;margin-top:var(--space-sm)}
+.band .bb .btn{margin-top:0}
+.acts{display:flex;flex-direction:column;gap:var(--space-sm);margin-top:var(--space-xs)}
+.acts .two{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-sm)}
+.acts .note{padding:0 var(--space-2xs)}
+.med{display:flex;align-items:center;gap:var(--space-sm);min-height:var(--size-target);padding:var(--space-xs) var(--space-2xs);border-bottom:var(--border-thin) solid var(--color-line-subtle)}
+.med .k{flex-grow:1;line-height:var(--font-line-height-tight)}
+.med .k b{font-weight:var(--font-weight-semibold)}
+.med .k span{color:var(--color-ink-muted);white-space:nowrap}
+.med .muted{display:var(--chev,flex)}
+.medn{margin-top:var(--space-xs);padding:0 var(--space-2xs)}
+.kind{margin-top:var(--space-xl);border-top:var(--border-thin) solid var(--color-line-subtle);padding-top:var(--space-md)}
+.kh{display:flex;align-items:center;gap:var(--space-sm);padding:0 var(--space-2xs)}
+.kh h3{margin:0;flex-grow:1;font-size:var(--font-size-title-sm);font-weight:var(--font-weight-extrabold);line-height:var(--font-line-height-tight)}
+.add{min-height:var(--size-target);padding:0 var(--space-md);border-radius:var(--radius-button);border:var(--border-strong) dashed var(--color-line-strong);
+  background:var(--color-surface-default);font:inherit;font-size:var(--font-size-label);font-weight:var(--font-weight-semibold);color:inherit;display:flex;align-items:center;gap:var(--space-2xs);flex-shrink:0}
+.ex{margin-top:var(--space-2xs)!important;padding:0 var(--space-2xs);font-size:var(--font-size-body-sm);line-height:var(--font-line-height-normal);color:var(--color-ink-muted)}
+.en{display:flex;align-items:center;gap:var(--space-sm);min-height:var(--size-input);padding:var(--space-xs) var(--space-2xs);border-bottom:var(--border-thin) solid var(--color-line-subtle)}
+.en:last-child{border-bottom:0}
+.en .k{flex-grow:1;line-height:var(--font-line-height-tight);font-weight:var(--font-weight-semibold)}
+.en .k small{display:block;font-weight:var(--font-weight-regular);font-size:var(--font-size-body-sm);color:var(--color-ink-muted);margin-top:2px;line-height:var(--font-line-height-normal)}
+.del{min-height:var(--size-target);padding:0 var(--space-md);border:0;background:none;font:inherit;font-size:var(--font-size-label);font-weight:var(--font-weight-semibold);color:var(--color-ink-danger);flex-shrink:0}
+.last{padding:var(--space-xl) var(--space-2xs) 0}
+/* 글자 200%: 버튼 셋은 세로로, 칸 종류의 [+ 더하기]와 칸 줄의 [지우기]는 줄 아래로 */
+.fs200 .acts .two{grid-template-columns:1fr}
+.fs200 .kh{flex-wrap:wrap}
+.fs200 .kh h3{flex-basis:100%}
+.fs200 .kh .add{margin-top:var(--space-xs)}
+.fs200 .en{flex-wrap:wrap}
+.fs200 .en .k{flex-basis:100%}
+.fs200 .en .del{padding-left:0}
+.fs200 .med{flex-wrap:wrap}
+
+.empty{padding:var(--space-xl) var(--space-lg);border-radius:var(--radius-tile);border:var(--border-strong) dashed var(--color-line-strong);text-align:center;line-height:var(--font-line-height-normal)}
+.empty .et{font-size:var(--font-size-title-sm);font-weight:var(--font-weight-extrabold);margin-bottom:var(--space-xs)!important}
+</style>
+</helmet>
+<div style="height: 840px" class="s {{fs}}">
+  <div class="bar back"><button class="ib" type="button" aria-label="닫기"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h1>나의 건강 카드</h1></div>
+  <div class="body">
+    <div class="empty"><p class="et">아직 적은 내용이 없어요.</p>
+      <p class="muted sm">아래에서 칸을 적거나, 복용 항목에 약을 적으면 여기에 보여요.</p></div>
+<section class="kind"><div class="kh"><h3>알레르기</h3><button class="add" type="button"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>더하기</button></div><p class="ex">약이나 음식 때문에 생기는 반응과 그 원인. 예: 페니실린 계열, 두드러기</p></section>
+<section class="kind"><div class="kh"><h3>질환</h3><button class="add" type="button"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>더하기</button></div><p class="ex">앓고 있거나 앓았던 병. 예: 고혈압, 당뇨병</p></section>
+<section class="kind"><div class="kh"><h3>수술·시술</h3><button class="add" type="button"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>더하기</button></div><p class="ex">받은 수술이나 시술과 그때. 예: 쓸개 수술, 2019년</p></section>
+<section class="kind"><div class="kh"><h3>이식형 의료기기</h3><button class="add" type="button"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>더하기</button></div><p class="ex">몸 안에 넣은 의료기기. 예: 심장 박동기, 인공 관절, 스텐트</p></section>
+<section class="kind"><div class="kh"><h3>의료기관·담당 의사</h3><button class="add" type="button"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>더하기</button></div><p class="ex">다니는 병원과 진료과, 담당 의사</p></section>
+<section class="kind"><div class="kh"><h3>보호자 연락처</h3><button class="add" type="button"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>더하기</button></div><p class="ex">응급 때 병원이 연락할 사람</p></section>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"fontScale": {"editor": "enum", "options": ["100", "200"], "default": "100"}, "$preview": {"width": 360, "height": 840}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { fs: (this.props.fontScale ?? '100') === '200' ? 'fs200' : '' };
+  }
+}
+</script>
+</body>
+</html>

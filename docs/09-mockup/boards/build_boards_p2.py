@@ -293,11 +293,22 @@ board('EmergencyCopied', 'SCR-014 응급 대비 문장 · 복사한 뒤 (Android
       props={**EM_PROPS, "state": {**EM_PROPS["state"], "default": "copied"}}, logic=EM_LOGIC)
 
 # ------------------------------------------------------------------ SCR-015 내보내기
-MINI = ''.join(f'<b>{t}</b>' + ''.join(f'<i>{i}</i>' for i in items) for t, items in SHOW)
-PAPER = ('<div class="paper"><p class="pn">엄마</p>' + MINI +
-         '<p class="pf">마지막으로 고친 날 2026-11-23 · 만든 날 2026-11-23<br>사용자가 적은 내용이며 의료기관의 기록이 아니에요</p></div>')
+# SPEC-052: 한 쪽을 넘치면 쪽마다 대상자 이름·만든 날짜·쪽 번호. 2쪽 예(`pages`)는 보호자 연락처가 2쪽으로 넘어간 모양
+# (PR #57 리뷰에서 다시 그림, 2026-11-23). 한 쪽(`normal`)은 모든 종류와 두 날짜·문구가 한 쪽에 듦.
+def mini(rows):
+    return ''.join(f'<b>{t}</b>' + ''.join(f'<i>{i}</i>' for i in items) for t, items in rows)
+
+
+FINE = '마지막으로 고친 날 2026-11-23 · 만든 날 2026-11-23<br>사용자가 적은 내용이며 의료기관의 기록이 아니에요'
+PAPER = ('<div class="paper"><p class="pn">엄마<span style="display: {{pagesIn}}"> · 1/2쪽</span></p>' + mini(SHOW[:-1]) +
+         '<div style="display: {{one}}">' + mini(SHOW[-1:]) + '</div>'
+         '<p class="pf" style="display: {{one}}">' + FINE + '</p>'
+         '<p class="pf" style="display: {{pages}}">만든 날 2026-11-23</p></div>'
+         '<div class="paper p2nd" style="display: {{pages}}"><p class="pn">엄마 · 2/2쪽</p>' + mini(SHOW[-1:]) +
+         '<p class="pf">' + FINE + '</p></div>')
 EX_LOGIC = ("class Component extends DCLogic {\n  renderVals() {\n    const p = (this.props.state ?? 'normal') === 'pages';\n"
-            "    return { fs: (this.props.fontScale ?? '100') === '200' ? 'fs200' : '', pages: p ? 'block' : 'none', one: p ? 'none' : 'block' };\n  }\n}")
+            "    return { fs: (this.props.fontScale ?? '100') === '200' ? 'fs200' : '', pages: p ? 'block' : 'none', "
+            "pagesIn: p ? 'inline' : 'none', one: p ? 'none' : 'block' };\n  }\n}")
 EX_PROPS = {**FSP, "state": {"editor": "enum", "options": ["normal", "pages"], "default": "normal"}}
 EX_BODY = ('''
 <div class="s {{fs}}">
@@ -305,7 +316,7 @@ EX_BODY = ('''
   <div class="body">
     <div class="pick" style="grid-template-columns:1fr 1fr"><button class="c on" type="button" aria-pressed="true">PDF</button><button class="c" type="button">사진(PNG)</button></div>
     <div class="band" style="display: {{pages}}; margin-top: var(--space-md)">카드가 길어 2쪽이에요. 쪽마다 이름과 쪽 번호가 들어가요.</div>
-    <div class="pv">''' + PAPER + '''<div class="paper p2nd" style="display: {{pages}}"><p class="pn">엄마 · 2/2쪽</p><b>보호자 연락처</b><i>홍가상 (딸) 010-0000-0000</i></div></div>
+    <div class="pv">''' + PAPER + '''</div>
     <p class="note" style="padding:0 var(--space-2xs)">파일 이름: pillbadeum-card-20261123.pdf (대상자 이름은 넣지 않아요)</p>
   </div>
   <div class="foot line"><p class="note" style="text-align:center">앱이 직접 보내지 않아요. 고른 앱이 보내요.</p><button class="btn ink" type="button">보내기</button></div>

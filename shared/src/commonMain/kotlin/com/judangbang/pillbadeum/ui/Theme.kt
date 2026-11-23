@@ -202,6 +202,7 @@ internal fun ActionButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    spoken: String? = null,
     icon: (@Composable () -> Unit)? = null,
 ) {
     val shown = if (enabled) look else look.copy(fill = Ui.Sunken, ink = Ui.Muted, border = null)
@@ -216,7 +217,7 @@ internal fun ActionButton(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         icon?.invoke()
-        Words(label, Ui.type(16, shown.weight, shown.ink, lineHeight = 1.25f, center = true))
+        Words(label, Ui.type(16, shown.weight, shown.ink, lineHeight = 1.25f, center = true), spoken = spoken)
     }
 }
 

@@ -219,6 +219,17 @@ object Labels {
 
     fun emergencyCharacterCount(count: Int): String = "${count}자"
 
+    fun emergencyPerson(name: String): String {
+        val last = name.lastOrNull()
+        val hasFinalConsonant = when (last) {
+            in '가'..'힣' -> (checkNotNull(last) - '가') % 28 != 0
+            in 'ᆨ'..'ᇂ', '0', '1', '3', '6', '7', '8' -> true
+            else -> false
+        }
+        val particle = if (hasFinalConsonant) "이" else "가"
+        return "${name}의 정보예요. $name$particle 쓰는 휴대폰의 긴급 정보에 넣어 주세요."
+    }
+
     /**
      * [word] with the object particle its last letter takes: `아침약을`, `철분제를`. A name that does not end in a Korean
      * letter (`Vitamin`, `오메가3`) gets both, `Vitamin을(를)`.

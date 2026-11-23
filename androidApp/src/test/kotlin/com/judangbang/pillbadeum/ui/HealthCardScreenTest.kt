@@ -648,7 +648,7 @@ class HealthCardScreenTest {
         core.settings.markIntroSeen()
         controller = Robolectric.buildActivity(CardTestActivity::class.java).setup()
         waitFor(Labels.HEALTH_CARD)
-        tap(Labels.HEALTH_CARD)
+        text(Labels.HEALTH_CARD).performClick()
         waitFor("누구의 건강 카드를 볼까요?")
         desc(title).performClick()
         waitForCard()

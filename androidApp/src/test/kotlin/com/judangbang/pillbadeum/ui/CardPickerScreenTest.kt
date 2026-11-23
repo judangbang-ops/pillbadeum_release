@@ -63,6 +63,7 @@ class CardPickerScreenTest {
     private val mother = "가상 엄마"
     private val daughter = "가상 딸"
     private val allergy = "가상 알레르기"
+    private val allergyLine = "알레르기, $allergy"
     private val sameNameNotice = "이름이 같은 대상자가 있어요. 대상자 관리에서 이름을 바꾸면 헷갈리지 않아요"
 
     @Before
@@ -122,19 +123,20 @@ class CardPickerScreenTest {
         tap(Labels.HEALTH_CARD)
         waitForText(Labels.healthCardTitle("나"))
         text(pickerTitle).assertDoesNotExist()
+        waitForText(Labels.CARD_EMPTY)
         text(Labels.CARD_EMPTY).assertIsDisplayed()
         back()
         openPeople(active = 1)
         val line = archivedLine(mother)
         assertEquals("건강 카드 보기", line.fetchSemanticsNode().config[SemanticsActions.OnClick].label)
         line.performScrollTo().performTouchInput { click() }
-        waitForText(allergy)
+        waitForDesc(allergyLine)
         text(Labels.CARD_ARCHIVED_HINT).assertIsDisplayed()
         back()
         waitForText("대상자 추가")
         desc("$mother 되살리기").performScrollTo().performTouchInput { click() }
         waitForDesc("$mother, 약 1개")
-        text(allergy).assertDoesNotExist()
+        desc(allergyLine).assertDoesNotExist()
         back()
         waitForText("설정")
         back()
@@ -142,7 +144,7 @@ class CardPickerScreenTest {
         waitForText(pickerTitle)
         assertTrue(bounds(cardOption("나")).top < bounds(cardOption(mother)).top)
         cardOption(mother).performClick()
-        waitForText(allergy)
+        waitForDesc(allergyLine)
         text(Labels.CARD_ARCHIVED_HINT).assertDoesNotExist()
         back()
         waitForText(Labels.HEALTH_CARD)

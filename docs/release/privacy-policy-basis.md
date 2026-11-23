@@ -8,6 +8,7 @@
 
 | 방침 | 문장 | 근거 |
 | --- | --- | --- |
+| 첫 문단 | 첫 설치용 APK를 직접 전달했고 새 버전은 GitHub 릴리즈에서 받음 | 결정 Q11 D, TASK-055 [Obtainium 설정 안내](../07-qa/obtainium-testers.md)와 [필받음 GitHub 릴리즈](https://github.com/judangbang-ops/pillbadeum_release/releases) |
 | 요약, 2장 | 인터넷 권한이 없어 기기 밖으로 보낼 수 없음 | REQ-057. CI가 PR마다 디버그·릴리즈 APK의 권한을 [`expected-permissions.txt`](../../androidApp/expected-permissions.txt)와 비교하고, `INTERNET`은 그 파일과 상관없이 늘 실패로 봄(`check_permissions.py`). [개인정보 점검](../07-qa/2026-11-14-privacy/report.md) 2절 |
 | 요약, 2장 | 광고·사용 분석·오류 보고·AI 도구 없음 | REQ-083·REQ-090·REQ-059. 개인정보 점검 4절: 릴리즈 라이브러리 147개에 분석·크래시·광고·AI SDK와 네트워크 클라이언트가 없음. CI의 '개인정보 점검'이 PR마다 다시 봄 |
 | 요약 | 회원 가입·로그인 없음 | REQ-057(서버·계정 없음) |
@@ -17,6 +18,7 @@
 | 1장 | 연락처·위치·사진·카메라·마이크·다른 앱 정보에 접근하지 않음 | 병합 매니페스트의 권한 7개에 해당 권한이 없음(개인정보 점검 2절) |
 | 1장 | 권한 설명 | 개인정보 점검 2절의 권한 표: 앱이 넣은 3개(`RECEIVE_BOOT_COMPLETED`·`POST_NOTIFICATIONS`·`SCHEDULE_EXACT_ALARM`), WorkManager 2.7.1이 넣은 `WAKE_LOCK`·`ACCESS_NETWORK_STATE`·`FOREGROUND_SERVICE`(와 겹치는 `RECEIVE_BOOT_COMPLETED`), androidx.core의 이 앱 전용 서명 권한 1개. 이 앱의 WorkManager 작업에는 네트워크 조건이 없음 |
 | 2장 | 제공·위탁·국외 이전 없음 | 개발자가 받는 정보가 없음(인터넷 권한 없음). 백업은 사용자가 켠 Android 기능이고 개발자가 맡긴 처리가 아님(3장) |
+| 2장 | GitHub가 방침 열기·APK 내려받기·새 버전 확인의 IP 주소와 요청 시각을 기록할 수 있음 | [GitHub 개인정보처리방침](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement#automatically)의 서비스 사용 정보(2026-11-23 확인). 요청은 브라우저나 Obtainium 같은 업데이트 앱이 보냄. 필받음 앱은 인터넷 권한이 없어 1장의 정보를 보내지 않음 |
 | 3장 | 기록 DB만 백업, 위젯 상태는 넣지 않음 | REQ-055, [보충 B-1](../04-spec/record-rules-supplement.md#1-백업에-넣는-파일-a1). [`data_extraction_rules.xml`](../../androidApp/src/main/res/xml/data_extraction_rules.xml)·`backup_rules.xml`이 `diditake.db`·`-wal`·`-journal`만 넣음. 설치 표식은 `noBackupFilesDir`라 빠짐 |
 | 3장 | 화면 잠금이 있는 Android 9 이상에서만 Google 계정으로 백업, 8.x는 백업하지 않음 | 결정 Q16, 보충 B-3: Android 12 이상 `disableIfNoEncryptionCapabilities="true"`, 9~11 `requireFlags="clientSideEncryption"`, 8.x는 규칙 파일을 읽지 못해 백업을 건너뜀(에뮬레이터 API 26·27, [백업·복원 QA](../07-qa/2026-11-12-backup-restore/report.md)). 설정 화면 문구는 REQ-054 |
 | 3장 | 기기 간 이전은 화면 잠금과 상관없이 옮겨짐 | 보충 B-3: `device-transfer`(12 이상)와 `requireFlags="deviceToDeviceTransfer"` 줄(9~11). 9~11의 실제 이전과 Smart Switch는 확인 전(4장) |
@@ -109,14 +111,7 @@
 - 4 공개 위치: 3.1의 가(이 공개 저장소의 파일). 방침 2장의 게시 서비스는 GitHub, 9장의 이전 판은 그 파일의 커밋 목록
 - 5 문안 승인과 시행일: 문안 승인. 시행일은 2026년 11월 16일, main에 합쳐 공개한 날(Claude). 아래 표의 추천은 'Play Console에 넣는 날'이었으나, 저장소 파일은 합치는 날 바로 공개되고, 앱 설정(SCR-009)도 Play보다 먼저(시험용 갤럭시, TASK-047) 이 주소를 엶. 시행일을 Play Console에 넣는 날로 바꾸라고 하시면 그날 고침
 
-**바꿈** (2026-11-23): 첫 문단의 배포 경로.
-
-- 2026-11-22 결정 Q11 D(Play 출시 보류, APK만)와 테스터 폰 자동 업데이트(TASK-055, GitHub 릴리즈)로 첫 문단의 "Google Play로 배포합니다"가 실제와 달라짐
-- 2026-11-23 10:23 KST 동희님이 작업 스레드의 카드 "개인정보처리방침의 'Google Play로 배포합니다' 문구를 고칠까요?"에서 'APK 배포로 고침'을 고름(카드 설명: "첫 문단을 GitHub 릴리즈의 APK로 나눠 준다고 고칩니다. Play를 다시 하면 되돌립니다.", Claude 추천)
-- 첫 문단을 "GitHub 릴리즈에 올린 APK 파일로 배포합니다"로 고치고, 9장("새 시행일과 함께 올립니다")대로 시행일을 main에 합치는 날인 2026년 11월 23일로 바꿈. 다른 장은 그대로임(앱이 다루는 정보와 권한은 바뀌지 않음)
-- Play 출시를 다시 하면 첫 문단을 Play 배포로 되돌리고 시행일을 다시 바꿈
-
-아래는 물을 때의 표임.
+아래 표는 2026-11-15 첫 공개 전에 물을 때의 표임.
 
 | # | 정할 것 | 왜 필요한가 | Claude 추천 |
 | --- | --- | --- | --- |
@@ -137,6 +132,14 @@
 - **추천: 가.** 1차 비공개 테스트에는 따로 설정 없이 바로 쓸 수 있고, 이력이 git에 남음. 나중에 나(Pages)로 옮겨도 가의 주소는 계속 읽힘
 - 반론: 일반 사용자가 보기에는 나가 깔끔함. 정식 출시 전에는 나로 옮기는 것을 다시 봄
 - 어느 쪽이든 저장소를 비공개로 돌리기 전에 방침을 다른 공개 위치로 옮겨야 함
+
+### 3.2 APK 배포에 따른 개정 (PR #62)
+
+- 2026-11-22 결정 Q11 D(Play 출시 보류, APK만)와 테스터 폰 자동 업데이트(TASK-055, GitHub 릴리즈)로 첫 문단의 "Google Play로 배포합니다"가 실제와 달라짐
+- 2026-11-23 10:23 KST 작업 스레드의 카드에서 'APK 배포로 고침'을 선택함
+- 첫 문단에 직접 전달한 첫 설치용 APK와 새 버전을 받을 공식 릴리즈 주소를 적음. 2장에는 브라우저와 업데이트 앱의 요청을 GitHub가 기록할 수 있다고 적음
+- 방침 9장에 따라 합치기 직전에 시행일을 `main`에 합치는 날(KST)로 맞춤. 개정판의 시행일은 [방침](privacy-policy.md) 맨 위에서 확인함
+- Play 출시를 다시 하면 첫 문단의 배포 경로를 실제에 맞게 고치고 시행일을 다시 맞춤
 
 ## 4. 확인하지 못한 것
 

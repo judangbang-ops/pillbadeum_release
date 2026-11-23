@@ -13,7 +13,8 @@
 --   TERM-019 (완전 삭제: 동작), TERM-020 (dose_record.source), TERM-022 (알림 칸: 계산),
 --   TERM-025 (위젯: Android 위젯과 Glance 상태 파일), TERM-026 (고른 대상자: 위젯마다 Glance 상태에 둘 것, 백업 제외, 아직 없음),
 --   TERM-027 (기기 표식: noBackupFilesDir의 install_marker 파일), TERM-028 (복원: 사건), TERM-029 (복원 안내: setting restore_notice_*),
---   TERM-031 (빠짐: 계산)
+--   TERM-031 (빠짐: 계산),
+--   TERM-032·TERM-033·TERM-034·TERM-035·TERM-036·TERM-037·TERM-038·TERM-039·TERM-040·TERM-041·TERM-042·TERM-043·TERM-044 (2차 첫 릴리즈 용어, 2026-11-23 01 도메인에서 더함. 05 ERD에서 표를 정하고 이 줄에서 뺌)
 
 
 -- TBL-001 person (CTX-002) ← SPEC-001, SPEC-004, SPEC-005, SPEC-026, SPEC-027, SPEC-044 | terms: TERM-002, TERM-003, TERM-018

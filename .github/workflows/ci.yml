@@ -66,18 +66,15 @@ jobs:
           # 릴리즈 변형의 버전 번호를 빌드한 커밋까지의 커밋 수로 정하므로 전체 이력을 받음 (TASK-002)
           fetch-depth: 0
 
-      # 커밋된 gradle-wrapper.jar가 Gradle 공식 배포본과 같은지 확인함. 서드파티 액션이라 커밋으로 고정함.
-      - uses: gradle/actions/wrapper-validation@0723195856401067f7a2779048b490ace7a47d7c # v5
-
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
-      # CI의 이전 Gradle 캐시에서 복원하며 main에서만 저장함. 위에서 wrapper 검증을 마침.
+      # 공식 wrapper인지 검증하고 CI의 이전 Gradle 캐시에서 복원함. main에서만 저장함.
       - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c # v5
         with:
-          validate-wrappers: false
+          add-job-summary: on-failure
 
       # --rerun: 입력이 같아도 빌드 캐시의 지난 결과를 쓰지 않고 테스트를 실제로 돌림 (테스트 자체는 2초 안쪽)
       - name: JVM 테스트 (./gradlew :shared:jvmTest)
@@ -105,22 +102,50 @@ jobs:
       # 앱 화면 시험: Robolectric이 Android 15의 Compose·뷰·글꼴로 앱 화면과 위젯을 메모리 DB 위에 그려 동작과
       # TalkBack이 읽는 값을 확인하고 PNG를 남김 (TASK-012 이후). 저장소가 공개로 바뀐 2026-11-13부터 PR마다 돌림.
       # Gradle이 받는 nativeruntime-dist-compat와 별도로, Robolectric은 시험 중 Android SDK JAR를 ~/.m2에 받음.
+      - name: Robolectric Android SDK 캐시 키
+        id: robolectric-sdk-key
+        if: ${{ !cancelled() && steps.jvm-test.outcome != 'skipped' }}
+        run: python3 .github/scripts/robolectric_sdk_cache_key.py | tee -a "$GITHUB_OUTPUT"
+        shell: bash
+
       - name: Robolectric Android SDK 캐시 복원
         id: robolectric-sdk-cache
-        if: ${{ !cancelled() && steps.jvm-test.outcome != 'skipped' }}
+        if: ${{ !cancelled() && steps.robolectric-sdk-key.outcome == 'success' }}
         uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: ~/.m2/repository/org/robolectric/android-all-instrumented
-          key: ${{ runner.os }}-ci-robolectric-sdk-v1-${{ hashFiles('gradle/libs.versions.toml', 'androidApp/build.gradle.kts') }}
-          restore-keys: ${{ runner.os }}-ci-robolectric-sdk-v1-
+          key: ${{ runner.os }}-ci-robolectric-sdk-v2-${{ steps.robolectric-sdk-key.outputs.key }}
 
       - name: 앱 화면 시험 (./gradlew :androidApp:testDebugUnitTest)
         id: app-test
         if: ${{ !cancelled() && steps.jvm-test.outcome != 'skipped' }}
         run: ./gradlew :androidApp:testDebugUnitTest --rerun
 
+      - name: 내려받은 Robolectric Android SDK 확인
+        id: robolectric-sdk-ready
+        if: ${{ !cancelled() && steps.app-test.outcome != 'skipped' && steps.robolectric-sdk-cache.outcome == 'success' && steps.robolectric-sdk-cache.outputs.cache-hit != 'true' }}
+        shell: bash
+        env:
+          APP_TEST_OUTCOME: ${{ steps.app-test.outcome }}
+          REQUIRED_SDK_JARS: ${{ steps.robolectric-sdk-key.outputs.required_jars }}
+        run: |
+          shopt -s nullglob
+          jars=0
+          for jar in "$HOME"/.m2/repository/org/robolectric/android-all-instrumented/*/android-all-instrumented-*.jar; do
+            if [[ -s "$jar" && -s "$jar.sha512" ]]; then
+              jars=$((jars + 1))
+            fi
+          done
+          echo "Robolectric SDK JAR: $jars"
+          if (( jars > 0 && jars >= REQUIRED_SDK_JARS )) && {
+            (( REQUIRED_SDK_JARS > 0 )) || [[ "$APP_TEST_OUTCOME" == success ]];
+          }; then
+            echo 'ready=true' >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Robolectric Android SDK 캐시 저장
-        if: ${{ !cancelled() && github.ref == 'refs/heads/main' && steps.app-test.outcome == 'success' && steps.robolectric-sdk-cache.outputs.cache-hit != 'true' }}
+        # PR에서 v2 캐시 저장·복원을 검증한 뒤 main 저장 정책으로 되돌림.
+        if: ${{ !cancelled() && (github.ref == 'refs/heads/main' || github.ref == 'refs/pull/63/merge') && steps.robolectric-sdk-ready.outputs.ready == 'true' }}
         uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: ~/.m2/repository/org/robolectric/android-all-instrumented

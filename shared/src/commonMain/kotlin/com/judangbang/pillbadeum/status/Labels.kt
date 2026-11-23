@@ -7,9 +7,15 @@ import com.judangbang.pillbadeum.domain.QuietNotice
 import com.judangbang.pillbadeum.domain.ReminderSettings
 import com.judangbang.pillbadeum.domain.ScheduleRule
 import com.judangbang.pillbadeum.domain.SlotLabel
+import com.judangbang.pillbadeum.usecase.CardEntryKind
+import com.judangbang.pillbadeum.usecase.CardField
+import com.judangbang.pillbadeum.usecase.CardFieldProblem
+import com.judangbang.pillbadeum.usecase.EmergencySection
 import com.judangbang.pillbadeum.usecase.InvalidTimeReason
 import com.judangbang.pillbadeum.usecase.PersonColors
 import com.judangbang.pillbadeum.usecase.RecordResult
+import com.judangbang.pillbadeum.usecase.StaleCardNotice
+import com.judangbang.pillbadeum.usecase.earliestCardDate
 import kotlin.time.Duration
 import kotlin.time.Instant
 import kotlinx.datetime.DateTimeUnit
@@ -90,6 +96,128 @@ object Labels {
 
     /** `월요일` (TalkBack). */
     fun weekdayName(day: DayOfWeek): String = weekday(day) + "요일"
+
+    /** Health card terminology and notices (screens.md, SCR-011 to SCR-014 and section 7). */
+    const val HEALTH_CARD = "건강 카드"
+    const val CARD_MEDICATIONS = "지금 먹는 약"
+    const val CARD_SHOW = "보여 주기"
+    const val CARD_EXPORT = "내보내기"
+    const val CARD_EMPTY = "아직 적은 내용이 없어요. 아래에서 칸을 적거나, 복용 항목에 약을 적으면 여기에 보여요"
+    const val CARD_ARCHIVED = "보관됨"
+    const val CARD_ARCHIVED_HINT = "보관한 대상자예요. 카드는 그대로 쓸 수 있어요"
+    const val CARD_MEDICATION_HINT = "약은 복용 항목에서 고쳐요"
+    const val CARD_MEDICATION_NAME_MISSING = "약 이름 미입력"
+    const val CARD_ARCHIVED_MEDICATION_HINT = "약은 대상자를 되살린 뒤 복용 항목에서 고쳐요"
+    const val CARD_DISCLAIMER = "사용자가 적은 내용이며 의료기관의 기록이 아니에요"
+    const val CARD_LOAD_FAILED = "카드를 불러오지 못했어요"
+    const val CARD_ADD = "+ 더하기"
+    const val CARD_ENTRY_LIMIT = "20칸까지 적을 수 있어요"
+    const val CARD_ENTRY_GONE = "이 칸은 지워졌어요"
+    const val CARD_SAVE_FAILED = "저장하지 못했어요. 다시 눌러 주세요"
+    const val CARD_ENTRY_DELETE_PROMPT = "이 칸을 지울까요? 지운 칸은 되살릴 수 없어요"
+    const val CARD_DELETE_ALL = "카드 모두 지우기"
+    const val CARD_DELETE_FAILED = "지우지 못했어요. 다시 눌러 주세요"
+    const val CARD_DATE_YEAR = "연도만"
+    const val CARD_DATE_MONTH = "연·월"
+    const val CARD_DATE_DAY = "연·월·일"
+    const val CARD_EMERGENCY = "응급 대비 문장"
+    const val CARD_EMERGENCY_HINT = "휴대폰 긴급 정보에 붙여 넣을 짧은 글"
+    const val CARD_COPY_ALL = "모두 복사"
+    const val CARD_COPY_LINE = "복사"
+    const val CARD_COPY_DONE = "이제 긴급 정보에 붙여 넣어 주세요"
+    const val CARD_COPY_DONE_LEGACY = "복사했어요. 긴급 정보에 붙여 넣어 주세요"
+    const val CARD_COPY_PREVIEW_LEGACY = "이 휴대폰에서는 복사한 글이 클립보드 미리보기에 보일 수 있어요"
+    const val CARD_COPY_STALE = "다 넣었으면 [다 넣었어요]를 눌러 주세요"
+    const val CARD_COPY_FAILED = "복사하지 못했어요. 다시 눌러 주세요"
+    const val CARD_NOTICE_ACKNOWLEDGED = "다 넣었어요"
+    const val CARD_NOTICE_ACTION_FAILED = "다시 눌러 주세요"
+    const val CARD_EMERGENCY_DESTINATION =
+        "갤럭시는 설정 → 안전 및 긴급 → 의료정보, Pixel은 위급 상황 정보 앱 → 내 정보 → 의료 정보에서 열어요. 칸마다 맞는 줄을 복사해 붙여 넣어 주세요."
+    const val CARD_EMERGENCY_MANUAL = "앱은 대신 등록하지 않아요."
+
+    fun healthCardTitle(name: String): String = "${name}의 $HEALTH_CARD"
+
+    fun cardDeleteAllPrompt(name: String): String =
+        "${healthCardTitle(name)}를 모두 지울까요? 지운 칸은 되살릴 수 없어요. 복용 항목·약·기록은 그대로예요"
+
+    fun cardLastEdited(date: LocalDate): String = "마지막으로 고친 날 $date"
+
+    fun cardEntryTitle(kind: CardEntryKind): String = when (kind) {
+        CardEntryKind.CONDITION -> "질환"
+        CardEntryKind.PROCEDURE -> "수술·시술"
+        CardEntryKind.ALLERGY -> "알레르기"
+        CardEntryKind.IMPLANTED_DEVICE -> "이식형 의료기기"
+        CardEntryKind.CARE_PROVIDER -> "의료기관·담당 의사"
+        CardEntryKind.GUARDIAN -> "보호자 연락처"
+    }
+
+    fun cardEntryHint(kind: CardEntryKind): String = when (kind) {
+        CardEntryKind.CONDITION -> "앓고 있거나 앓았던 병. 예: 고혈압, 당뇨병"
+        CardEntryKind.PROCEDURE -> "받은 수술이나 시술과 그때. 예: 쓸개 수술, 2019년"
+        CardEntryKind.ALLERGY -> "약이나 음식 때문에 생기는 반응과 그 원인. 예: 페니실린 계열, 두드러기"
+        CardEntryKind.IMPLANTED_DEVICE -> "몸 안에 넣은 의료기기. 예: 심장 박동기, 인공 관절, 스텐트"
+        CardEntryKind.CARE_PROVIDER -> "다니는 병원과 진료과, 담당 의사"
+        CardEntryKind.GUARDIAN -> "응급 때 병원이 연락할 사람"
+    }
+
+    fun cardEntryField(kind: CardEntryKind, field: CardField): String = when (field) {
+        CardField.NAME -> "이름"
+        CardField.SUBSTANCE -> "원인"
+        CardField.PROVIDER_NAME -> "기관 이름"
+        CardField.DATE -> when (kind) {
+            CardEntryKind.CONDITION -> "진단 시기"
+            CardEntryKind.IMPLANTED_DEVICE -> "넣은 시기"
+            else -> "시기"
+        }
+        CardField.NOTE -> "메모"
+        CardField.PLACE -> "받은 의료기관"
+        CardField.REACTION -> "반응"
+        CardField.DEPARTMENT -> "진료과"
+        CardField.DOCTOR -> "담당 의사"
+        CardField.PHONE -> "전화번호"
+        CardField.RELATION -> "관계"
+    }
+
+    fun cardEntryError(kind: CardEntryKind, field: CardField, problem: CardFieldProblem): String = when (problem) {
+        CardFieldProblem.REQUIRED -> "${withObject(cardEntryField(kind, field))} 입력해 주세요"
+        CardFieldProblem.TOO_LONG -> "${checkNotNull(field.maxCharacters)}자까지 적을 수 있어요"
+        CardFieldProblem.INVALID_DATE -> "날짜를 확인해 주세요"
+        CardFieldProblem.BEFORE_1900 -> "1900년부터 적을 수 있어요"
+        CardFieldProblem.FUTURE_DATE -> "오늘보다 뒤의 날은 적을 수 없어요"
+    }
+
+    fun cardDate(iso: String): String {
+        val date = earliestCardDate(iso) ?: return iso
+        return when (iso.length) {
+            4 -> "${date.year}년"
+            7 -> monthTitle(date)
+            else -> "${monthTitle(date)} ${date.day}일"
+        }
+    }
+
+    fun healthCardSchedule(rule: ScheduleRule, slot: SlotLabel?): String = when (rule) {
+        ScheduleRule.Daily -> schedule(rule, slot)
+        is ScheduleRule.Weekly -> "매주 ${weekday(rule.anchor)}"
+    }
+
+    fun cardNotice(notice: StaleCardNotice): String = when (notice) {
+        StaleCardNotice.CHANGED -> "카드가 바뀌었어요. 휴대폰 긴급 정보에 넣은 문장도 다시 넣어 주세요"
+        StaleCardNotice.RESTORED -> "백업에서 복원했어요. 이 휴대폰의 긴급 정보에도 문장을 넣어 주세요"
+        StaleCardNotice.EMPTY -> "카드 내용이 없어요. 휴대폰 긴급 정보에 넣은 문장도 지워 주세요"
+    }
+
+    fun emergencySection(section: EmergencySection, inSentence: Boolean = false): String = when (section) {
+        EmergencySection.ALLERGY -> cardEntryTitle(CardEntryKind.ALLERGY)
+        EmergencySection.MEDICATION -> CARD_MEDICATIONS
+        EmergencySection.CONDITION -> cardEntryTitle(CardEntryKind.CONDITION)
+        EmergencySection.IMPLANTED_DEVICE -> cardEntryTitle(CardEntryKind.IMPLANTED_DEVICE)
+        EmergencySection.GUARDIAN -> if (inSentence) "보호자" else cardEntryTitle(CardEntryKind.GUARDIAN)
+        EmergencySection.CARE_PROVIDER -> "의료기관"
+    }
+
+    fun emergencyFooter(date: LocalDate): String = "$APP_NAME $HEALTH_CARD, $date 고침"
+
+    fun emergencyCharacterCount(count: Int): String = "${count}자"
 
     /**
      * [word] with the object particle its last letter takes: `아침약을`, `철분제를`. A name that does not end in a Korean

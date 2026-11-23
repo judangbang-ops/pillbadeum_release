@@ -708,7 +708,7 @@ Codex(gpt-6.2-sol, ChatGPT 구독)가 `release/p2-r1`의 `7f3fe98`(PR #66 병합
 - 02 요구: 바뀜. 0장 한 줄, REQ-097·099·101·102·103·109·110
 - 03 흐름: 바뀜. FL-006·009·011·012·013·014·015(R 메모와 실패 경로, FL-011~014는 그림의 노드 글). 노드·화살표 수는 그대로(FL-011은 항목 화면 노드 J에서 나가는 선 e26의 끝을 '끝'에서 카드 노드 D로 바꾸고, '끝'은 e27에서 정의함)
 - 04 명세: 바뀜. SPEC-025·037·045~055, 3장 다섯 줄 더함·여섯 줄 고침, 5장 한 줄
-- 05 ERD: 바뀜(글만). 8장 열 설명·규칙 4·8.6·8.7, `db/schema.sql`의 TBL-012 주석. 표·열·CREATE 문은 그대로(`3.json`과 같음)
+- 05 ERD: 바뀜(글만). 8장 열 설명·규칙 4·8.6·8.7, `db/schema.sql`의 TBL-012 주석. PR #69 리뷰 뒤 3장의 SPEC-038·047·049·051·055 줄, 4장 `restored_at` 줄, 8.1 그림의 `emergency_copied_at` 이름표도 규칙 4에 맞춤(아래 'PR #69 리뷰 뒤 고친 것'). 앞 절 S-2의 05 ERD 줄이 '그대로' 둔 '`stale_notice_closed_at`(닫기 때 씀)'도 이때 고침. 표·열·CREATE 문은 그대로(`3.json`과 같음)
 - 06 API: 건너뜀(프로젝트 설정)
 - 07 사이트맵: 바뀜. SCR-013 reqs에 REQ-099, 머리 주석. 화면·경로·links는 그대로
 - 08 화면 상태: 바뀜. SCR-004·006·010·011~015, 3장 사례 다섯 줄 고침, 6장 한 줄, 7장(고지 문구, 대상자 줄, 약 이름 미입력, '긴급 연락처'). 상태 ID는 더하거나 빼지 않음
@@ -742,3 +742,9 @@ Codex(gpt-6.2-sol, ChatGPT 구독)가 `release/p2-r1`의 `7f3fe98`(PR #66 병합
 - **한 일**: [검토 보고서](../../07-qa/2026-11-23-p2-design-review/report.md) 옮김, [요구](../../01-planning/requirements.md), [흐름](../../03-user-flow/README.md) FL-006·009·011~015, [명세](../../04-functional-spec/spec.md), [ERD](../../05-erd/README.md) 8장과 `db/schema.sql` 주석, [사이트맵](../../05-ui/sitemap.yaml), [screens.md](../../05-ui/screens.md), [`build_boards_p2.py`](../../09-mockup/boards/build_boards_p2.py)와 보드·`canvas-p2.json`·PNG, [09 README](../../09-mockup/README.md) 8장, [작업 분해](../../08-wbs/wbs.md), [시험 계획](../../12-qa/test-plan.md), 이 절, progress.md
 - **확인한 것** (이 PC, 2026-11-24 KST): `check_docs.py` 문제 없음(작업 69개, 시험 118개, 문서 66개의 상대 링크 938개·표 325개, 스키마 대조는 `3.json` 버전 3의 표 17개). `db/schema.sql`은 주석 줄만 바뀜(바뀐 줄 가운데 주석이 아닌 줄 0). `check_wording.py` 문제 없음. CORTHEX `diagram-check.py`: FL-006 상자 34·선 50, FL-011 18·27, FL-012 17·21, FL-013 13·14, FL-014 16·19, FL-015 7·7로 찾은 것 0. FL-009는 찾은 것 24개로 `7f3fe98`과 같음(1차 그림이고 이 PR은 그림 밖의 메모만 고침). `measure_boards.js`(`UNROLL=1`, CORTHEX `page-check.js`, Playwright 1.65.1)로 2차 보드 27개를 47번 그림: 오류 0, 보드 끝을 넘는 글자·상자 0, 옆으로 잘린 글자 0, 아래로 잘린 상자 0, 경고 20(바꾸기 전 26개·45번은 19. 늘어난 1개는 새 보드의 창 제목 줄로 `HomeCardPick`과 같은 경고). CORTHEX `term-check.py`: 바꾼 파일마다 `7f3fe98`과 후보 수를 견줘 새로 생긴 넷(ERD '묶음' 1, 09 README '낱말' 2·'잰' 1)을 표준 용어로 고침. 나머지 후보는 바꾸기 전과 같은 수
 - **확인하지 못한 것**: 앱 동작 전부(문서만 고친 PR. 코드는 TASK-058·059 작업자가 '전한 세부'로 고침). 기기 SQLite의 `secure_delete` 기본값 [추정: 켜져 있음, TASK-066이 봄]. 갤럭시·Pixel이 아닌 기기의 일반 안내가 실제 메뉴 이름과 맞는지, 저장·잠금 화면 표시 과정(실기기 확인 목록 8번). 에뮬레이터 이미지에 TalkBack이 있는지(없으면 실기기 확인 목록 9번). Android 13 이상의 최근 앱 미리보기 끄기가 모든 카드 화면에서 듣는지(TASK-066·068). 이 PR의 CI는 올린 뒤 PR에 적음
+
+#### PR #69 리뷰 뒤 고친 것 (2026-11-24 KST)
+
+- **받은 말**: 필받음 봇 작업 지시 `task_824caa57133a`(2026-11-24 KST): SPEC-055, ERD 8.4 4, 열 주석, '약 이름 미입력', R-1, 문장 고르기 막음은 승인대로 들어갔음을 확인함. 합치기 전에 ERD 3장 SPEC-051 줄("health_card `emergency_copied_at`을 씀")과 SPEC-055 줄("`stale_notice_closed_at`(닫기 때 씀)")을 8.4 4의 상태 규칙에 맞추고, 같은 뜻으로 남은 줄도 함께 맞추라고 함
+- **고친 것**: [ERD](../../05-erd/README.md) 3장 SPEC-051(안내가 없을 때의 복사만 `emergency_copied_at`·`stale_notice_closed_at`을 쓰고 보이면 쓰지 않음), SPEC-055(보이는 때, `stale_notice_closed_at`을 쓰는 일과 비우는 일, 문구를 고를 때만 읽는 열), 같은 뜻으로 남은 SPEC-038(복원 감지가 비움), SPEC-047('`edited_at`만 씀' → 비움도 함), SPEC-049(`edited_at`을 쓰는 거래가 비움), 4장 `restored_at`('안내가 보이게 함' → 복원 문구를 고를 때 읽음), 8.1 그림의 `emergency_copied_at` 이름표('마지막 복사' → '안내 없을 때의 복사'), 8.7 기록 한 줄. 승인 범위는 위 R 05 그대로이고 새 결정은 없음
+- **찾았으나 고치지 않은 것**: [도메인](../../01-domain/domain.md) TERM-042 뜻에 "Android 긴급 정보나 119안심콜에 직접 넣음"이 남아 있음(R 10과 같은 문제이나, 이번 지시는 열의 뜻에 관한 것이고 R 10 추천안이 고칠 곳으로 REQ-101·FL-013·SPEC-051만 들었음). 고칠지는 필받음 봇에게 알림

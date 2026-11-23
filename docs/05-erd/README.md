@@ -161,7 +161,7 @@ DB가 직접 막는 규칙은 셋:
 | SPEC-035 | 없음(Android 화면 잠금·버전을 그때 읽음) |
 | SPEC-036 | 없음 |
 | SPEC-037 | DB 파일 전체가 백업 대상(`backup_rules.xml`), 기기 표식 파일은 제외 |
-| SPEC-038 | 기기 표식 파일, setting `device_id`·`restored_from_device_id`·`restore_notice_pending`, (2차) `restored_at` |
+| SPEC-038 | 기기 표식 파일, setting `device_id`·`restored_from_device_id`·`restore_notice_pending`, (2차) `restored_at`, health_card `stale_notice_closed_at`(같은 거래에서 `emergency_copied_at`이 있는 모든 카드의 값을 비움, 8.4 4) |
 | SPEC-039 | setting `restore_notice_pending`·`restore_notice_last_record_at` |
 | SPEC-040 | setting `day_start`·`base_zone` |
 | SPEC-041 | setting `reminder_alarm_at`·`reminder_last_run_at`, clock_flag |
@@ -170,15 +170,15 @@ DB가 직접 막는 규칙은 셋:
 | SPEC-044 | person의 archived_at, schedule_version(되살릴 때 그 대상자 항목의 열린 버전을 보관한 때에 닫고 새로 엶, 보충 P-9) |
 | SPEC-045 | 칸 종류의 표 하나에 씀(condition·procedure_history·allergy·implanted_device·care_contact, `source` USER). health_card `edited_at`을 씀(행이 없으면 만듦). person을 읽음 |
 | SPEC-046 | 그 칸의 행을 지움. health_card `edited_at` |
-| SPEC-047 | 그 대상자의 칸 표 다섯 행을 한 거래에서 지움. health_card 행은 남기고 `edited_at`만 씀(복사 시각을 지켜 SPEC-055가 쓰게) |
+| SPEC-047 | 그 대상자의 칸 표 다섯 행을 한 거래에서 지움. health_card 행은 남기고 `edited_at`을 씀(복사 시각을 지켜 SPEC-055가 쓰게. `emergency_copied_at`이 있으면 같은 거래에서 `stale_notice_closed_at`을 비움, 8.4 4) |
 | SPEC-048 | 항목 저장과 같은 거래에서 intake_medication·medication을 쓰고 지움(약 줄 하나에 두 표의 행 하나씩, 8장 5). health_card `edited_at` |
-| SPEC-049 | 칸 표 다섯, person `name`·`archived_at`, intake(보관하지 않은 것)의 `name`·`slot_label`·`created_at`, 열린 schedule_version, intake_medication·medication, health_card `edited_at`, setting `base_zone`(날짜). `edited_at`은 SPEC-003·023·024·025·026·045~048이 씀 |
+| SPEC-049 | 칸 표 다섯, person `name`·`archived_at`, intake(보관하지 않은 것)의 `name`·`slot_label`·`created_at`, 열린 schedule_version, intake_medication·medication, health_card `edited_at`, setting `base_zone`(날짜). `edited_at`은 SPEC-003·023·024·025·026·045~048이 쓰고, 쓰는 같은 거래에서 `emergency_copied_at`이 있으면 `stale_notice_closed_at`을 비움(8.4 4) |
 | SPEC-050 | SPEC-049의 요약. 화면 켜 두기는 표 밖(화면 창의 설정) |
-| SPEC-051 | SPEC-049의 요약. health_card `emergency_copied_at`을 씀. 클립보드는 표 밖 |
+| SPEC-051 | SPEC-049의 요약. 낡은 문장 안내가 보이지 않을 때의 복사만 health_card `emergency_copied_at`·`stale_notice_closed_at`에 지금 시각을 쓰고, 안내가 보이면 아무것도 쓰지 않음([모두 복사]·종류별 줄 [복사] 모두, 8.4 4). 클립보드는 표 밖 |
 | SPEC-052 | SPEC-049의 요약. 파일은 앱 캐시의 내보내기 폴더(표 밖, 백업 밖) |
 | SPEC-053 | 없음(앱 버전·Android 버전·기기 모델은 그때 읽고, 받는 주소는 앱 안의 글) |
 | SPEC-054 | person(`archived_at` 포함), health_card |
-| SPEC-055 | health_card `edited_at`·`emergency_copied_at`·`stale_notice_closed_at`(닫기 때 씀), setting `restored_at` |
+| SPEC-055 | health_card `edited_at`·`emergency_copied_at`·`stale_notice_closed_at`, setting `restored_at`. 안내는 `emergency_copied_at`이 있고 `stale_notice_closed_at`이 빌 때 보임. `stale_notice_closed_at`은 [다 넣었어요]·요약이 빈 문구의 [닫기]와 안내가 없을 때의 복사(SPEC-051)가 지금 시각을 쓰고, 카드 고침(SPEC-049의 `edited_at` 쓰기)과 복원 감지(SPEC-038)가 비움. `edited_at`·`restored_at`은 문구를 고를 때만 읽음(8.4 4) |
 
 ## 4. setting 키
 
@@ -193,7 +193,7 @@ DB가 직접 막는 규칙은 셋:
 | `device_id` | 이 설치의 id. 복원 뒤 새로 만듦(보충 R-1, R-2) | SPEC-001, 038 |
 | `restored_from_device_id` | 복원한 DB가 갖고 있던 옛 `device_id` | SPEC-038 |
 | `restore_notice_pending`, `restore_notice_last_record_at` | 복원 안내를 확인할 때까지 `1`, 복원 전 마지막 기록 시각 | SPEC-038, 039 |
-| `restored_at` | (2차) 복원을 감지한 때(UTC epoch ms). 낡은 응급 대비 문장 안내가 복원 뒤에 보이게 함(8장 4) | SPEC-038, 055 |
+| `restored_at` | (2차) 복원을 감지한 때(UTC epoch ms). 낡은 응급 대비 문장 안내의 복원 문구를 고를 때 읽음. 복원 뒤 안내가 보이는 것은 같은 거래에서 `stale_notice_closed_at`을 비워서임(8장 4) | SPEC-038, 055 |
 | `intro_seen_at` | 첫 실행 안내를 다 본 때. 값이 없으면 첫 실행 안내를 보임. 05 고정(2026-11-13)에서 정하고 TASK-022에서 더함(5장 1) | SPEC-002 |
 | `backup_policy` | 키만 정의돼 있고 앱이 읽거나 쓰지 않음 | 없음 |
 
@@ -249,7 +249,7 @@ erDiagram
     health_card {
         TEXT person_id PK "FK person"
         INTEGER edited_at "카드 고친 시각"
-        INTEGER emergency_copied_at "마지막 복사"
+        INTEGER emergency_copied_at "안내 없을 때의 복사"
         INTEGER stale_notice_closed_at "안내를 닫은 상태"
     }
     condition {
@@ -409,4 +409,4 @@ FROM `person` p;
 - 함께 전해진 것: 설계 문서에 대한 승인이고, 실사용자 대상 릴리즈(2차 APK 배포 포함) 등은 위임 밖(오랑이). 10 WBS 릴리즈 줄의 조건으로 남김
 - 고정한 뒤 표를 바꾸려면 사용자님 결정이 필요하고, 바꾸면 이주와 `MigrationTest`를 함께 고침
 - PR #57 리뷰에서 바꿈 (2026-11-23 KST, [변경 기록](../10-records/changes/2026-11-22-phase2-release1.md) 6장 'PR #57 리뷰에서 바꾼 승인 항목' R3): 8.5 시험의 준비 데이터를 '판정 다섯'에서 TASK-057과 같은 '판정 10건'으로. 표와 이주는 그대로. 승인한 사람은 사용자님. 근거는 사용자님 말씀(오랑이 채팅, 2026-11-23 01시대 KST, "야 누가 너한테 체크포인트때 뭐 물어보면 추천 모두 승인이라고 해")과 필받음 봇 질문 `msg_d0454863115a`에 대한 오랑이 답(2026-11-23 KST). 리뷰 작업자의 질문 `msg_aab1b29ee04e`에 필받음 봇이 답장 `msg_e0b11e2309c9`로 전함: "1 추천, 2 추천, 3 추천이에요. 셋 다 고쳐 주세요."
-- 설계 독립 검토 반영에서 바꿈 (2026-11-23 KST, [변경 기록](../10-records/changes/2026-11-22-phase2-release1.md) 6장 '개발 중 설계 바꿈 R' 05·21): 8.4 4를 시각 견줌에서 상태 판정으로, 8.3과 `db/schema.sql`의 health_card 열 주석을 그에 맞게, 8.1 그림의 열 이름표 하나와 8.6 2·3을 고침. 표·열·CREATE 문과 이주는 그대로. 승인한 사람은 사용자님. 근거는 사용자님 말씀(오랑이 채팅, 2026-11-23 01시대 KST, "야 누가 너한테 체크포인트때 뭐 물어보면 추천 모두 승인이라고 해")과 필받음 봇 질문 `msg_422b96fb86bb`에 대한 오랑이 답(2026-11-23 KST, 추천안 모두 승인, 05는 스키마 3의 표·열을 바꾸지 않는 상태 판정 안)
+- 설계 독립 검토 반영에서 바꿈 (2026-11-23 KST, [변경 기록](../10-records/changes/2026-11-22-phase2-release1.md) 6장 '개발 중 설계 바꿈 R' 05·21): 8.4 4를 시각 견줌에서 상태 판정으로, 8.3과 `db/schema.sql`의 health_card 열 주석을 그에 맞게, 8.1 그림의 열 이름표 하나와 8.6 2·3을 고침. PR #69 리뷰(필받음 봇, 2026-11-24 KST, 작업 지시 `task_824caa57133a`)에 따라 3장의 SPEC-038·047·049·051·055 줄, 4장 `restored_at` 줄, 8.1 그림의 `emergency_copied_at` 이름표도 8.4 4에 맞춤. 표·열·CREATE 문과 이주는 그대로. 승인한 사람은 사용자님. 근거는 사용자님 말씀(오랑이 채팅, 2026-11-23 01시대 KST, "야 누가 너한테 체크포인트때 뭐 물어보면 추천 모두 승인이라고 해")과 필받음 봇 질문 `msg_422b96fb86bb`에 대한 오랑이 답(2026-11-23 KST, 추천안 모두 승인, 05는 스키마 3의 표·열을 바꾸지 않는 상태 판정 안)

@@ -103,6 +103,7 @@ from explore import (
     tap_scrolled,
     tile,
     type_into,
+    type_item_name,
 )
 from release_check import PICK_TITLE, go_home, on_screen, place_widget, save_ui, screen_size
 from reminder_check import ACTION_NAMES_ON_LOCK, SEED, query, zone_to
@@ -485,7 +486,7 @@ def add(r: Report, name: str, person: str | None, choice: str, shot: str | None 
     """Home > [항목 추가] > name > person (only shown from two people on, TASK-015) > 매일 + time of day > [저장]."""
     to_home()
     tap_scrolled("항목 추가")
-    type_into("약 이름", name)
+    type_item_name(name)
     if person is not None:
         tap_exact(person)
     tap_exact("매일")

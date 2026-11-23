@@ -34,6 +34,7 @@ import com.judangbang.pillbadeum.status.StatusBoard
 import com.judangbang.pillbadeum.status.showsPeople
 import com.judangbang.pillbadeum.usecase.ClockFlagResult
 import com.judangbang.pillbadeum.usecase.DeleteIntakeResult
+import com.judangbang.pillbadeum.usecase.IntakeMedicationDraft
 import com.judangbang.pillbadeum.usecase.PersonChange
 import com.judangbang.pillbadeum.usecase.RecordResult
 import com.judangbang.pillbadeum.usecase.SaveIntakeResult
@@ -70,9 +71,9 @@ internal sealed interface Route {
     }
 
     /** SCR-006; [intakeId] null adds a new item. */
-    data class Item(val intakeId: String?) : Route {
-        override val key get() = "item:${intakeId ?: ""}"
-        override val back: Route get() = Home
+    data class Item(val intakeId: String?, val from: Route = Home) : Route {
+        override val key get() = "item:${intakeId ?: ""}" + if (from == Home) "" else "@${from.key}"
+        override val back: Route get() = from
     }
 
     /**
@@ -120,9 +121,10 @@ internal sealed interface Route {
     companion object {
         fun parse(key: String): Route {
             if ('@' in key) {
-                val from = parse(key.substringAfter('@')) as? History
+                val from = parse(key.substringAfter('@'))
                 return when (val route = parse(key.substringBefore('@'))) {
-                    is Judge -> route.copy(from = from)
+                    is Item -> route.copy(from = from)
+                    is Judge -> route.copy(from = from as? History)
                     else -> route
                 }
             }
@@ -385,8 +387,8 @@ fun App(
                             board?.baseDate?.let { today -> openHistory(Route.History(LocalDate(today.year, today.month, 1), null)) }
                         },
                         settings = { openSettings() },
-                        add = { go(Route.Item(null)) },
-                        edit = { go(Route.Item(it.intakeId)) },
+                        add = { go(Route.Item(null, from = current)) },
+                        edit = { go(Route.Item(it.intakeId, from = current)) },
                         more = { go(Route.Judge(it.intakeId, it.scheduleVersionId, it.window.periodKey)) },
                         record = { item ->
                             write { c ->
@@ -452,18 +454,44 @@ fun App(
                 var asking by remember { mutableStateOf(false) }
                 // SCR-006#quiet (REQ-077): what quiet hours take from the reminder just saved, said before going back.
                 var quiet by rememberSaveable { mutableStateOf<String?>(null) }
+                var medications by remember {
+                    mutableStateOf<List<IntakeMedicationDraft>?>(if (current.intakeId == null) emptyList() else null)
+                }
+                var medicationReadFailed by remember { mutableStateOf(false) }
+                var medicationAttempts by remember { mutableStateOf(0) }
+                LaunchedEffect(core, medicationAttempts) {
+                    val id = current.intakeId ?: return@LaunchedEffect
+                    val c = core ?: return@LaunchedEffect
+                    try {
+                        medications = c.saveIntake.loadMedications(id)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        medicationReadFailed = true
+                    }
+                }
                 val loaded = board
                 val editing = current.intakeId?.let { id -> loaded?.items?.firstOrNull { it.intakeId == id } }
+                val savedMedications = medications
                 when {
                     loaded == null && failed -> HomeScreen(HomeState.Failed, null, zone, homeOnlyRetry { failed = false; retries++ })
                     loaded == null -> Loading()
                     current.intakeId != null && editing == null -> LaunchedEffect(current) {
                         // SCR-006#gone: archived or deleted meanwhile.
-                        go(Route.Home)
+                        go(current.back)
                         message = Labels.GONE
                     }
+                    medicationReadFailed -> HomeScreen(
+                        HomeState.Failed, null, zone,
+                        homeOnlyRetry {
+                            medicationReadFailed = false
+                            medicationAttempts++
+                        },
+                    )
+                    savedMedications == null -> Loading()
                     else -> ItemScreen(
                         editing = editing,
+                        savedMedications = savedMedications,
                         people = people,
                         message = message,
                         access = access.takeUnless { asking },
@@ -486,7 +514,7 @@ fun App(
                                 afterWrite()
                             }
                         },
-                        onClose = { go(Route.Home) },
+                        onClose = { go(current.back) },
                         onSave = { draft ->
                             write(failure = "저장하지 못했어요. 다시 눌러 주세요") { c ->
                                 val id = current.intakeId
@@ -495,7 +523,7 @@ fun App(
                                     is SaveIntakeResult.Saved -> {
                                         val saved = result.quiet
                                         if (saved == null) {
-                                            go(Route.Home)
+                                            go(current.back)
                                         } else {
                                             message = null
                                             quiet = Labels.itemQuiet(saved.notice, saved.settings)
@@ -504,10 +532,11 @@ fun App(
                                     }
                                     is SaveIntakeResult.Invalid -> message = when (result.reason) {
                                         SaveIntakeResult.Invalid.BLANK_NAME -> Labels.NAME_REQUIRED
-                                        else -> "누구 약인지 다시 골라 주세요"
+                                        SaveIntakeResult.Invalid.UNKNOWN_PERSON -> "누구 약인지 다시 골라 주세요"
+                                        else -> Labels.SAVE_FAILED
                                     }
                                     SaveIntakeResult.Gone -> {
-                                        go(Route.Home)
+                                        go(current.back)
                                         message = Labels.GONE
                                         afterWrite()
                                     }
@@ -517,7 +546,7 @@ fun App(
                         onArchive = { item ->
                             write(failure = "보관하지 못했어요. 다시 눌러 주세요") { c ->
                                 c.archiveIntake(item.intakeId)
-                                go(Route.Home)
+                                go(current.back)
                                 message = "${Labels.withObject(item.name)} 보관했어요. 지난 기록은 남아요"
                                 afterWrite()
                             }
@@ -525,10 +554,10 @@ fun App(
                     )
                 }
                 quiet?.let { text ->
-                    // Saved already: `[확인]`, back or a tap outside all go to the first screen (screens.md SCR-006#quiet).
+                    // Saved already: `[확인]`, back or a tap outside all return to the opener (SCR-006#quiet).
                     NoticeDialog(Labels.ITEM_SAVED, text) {
                         quiet = null
-                        go(Route.Home)
+                        go(current.back)
                     }
                 }
             }

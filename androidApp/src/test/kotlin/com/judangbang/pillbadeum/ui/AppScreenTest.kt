@@ -412,7 +412,7 @@ class AppScreenTest {
         return controller!!.get()
     }
 
-    private fun nameField(): SemanticsNodeInteraction = compose.onNode(hasSetTextAction() and hasContentDescription("약 이름"))
+    private fun nameField(): SemanticsNodeInteraction = compose.onNode(hasSetTextAction() and hasContentDescription("항목 이름"))
 
     private fun assertTargetsAtLeast48dp() = compose.assertTargetsAtLeast48dp()
 

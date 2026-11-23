@@ -200,7 +200,10 @@ class ItemReminderTest {
         runBlocking { assertTrue(core.reminders.saveRule(seed.morning, enabled = true, start = LocalTime(7, 30)) is SaveReminderResult.Saved) }
         open()
         compose.onAllNodes(editTile() and hasContentDescription("아침약", substring = true)).onFirst().performClick()
-        compose.onNodeWithText("07:30").performScrollTo().assertExists()
+        val firstTime = Labels.reminderStartSpoken(LocalTime(7, 30))
+        compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription(firstTime).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription(firstTime).performScrollTo()
+        compose.onNodeWithText("07:30").assertExists()
 
         switch().performScrollTo().performClick()
         assertGone("07:30")

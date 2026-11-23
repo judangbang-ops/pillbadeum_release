@@ -250,7 +250,7 @@ erDiagram
         TEXT person_id PK "FK person"
         INTEGER edited_at "카드 고친 시각"
         INTEGER emergency_copied_at "마지막 복사"
-        INTEGER stale_notice_closed_at "안내를 닫은 때"
+        INTEGER stale_notice_closed_at "안내를 닫은 상태"
     }
     condition {
         TEXT id PK
@@ -322,8 +322,9 @@ TBL-011 `dose_version`은 다음 릴리즈(용량 바뀜 이력)까지 빈 표�
 ```sql
 -- TBL-012 health_card (CTX-006) ← SPEC-045, SPEC-046, SPEC-047, SPEC-048, SPEC-049, SPEC-051, SPEC-054, SPEC-055 | terms: TERM-032
 --   대상자 한 명의 건강 카드에 딸린 시각. 칸은 종류마다 아래 표 다섯에 둠.
---   edited_at: 카드 고친 시각(SPEC-049). 마지막으로 고친 날짜(REQ-103)와 낡은 문장 안내(REQ-110)가 읽음.
---   emergency_copied_at: 응급 대비 문장을 마지막으로 복사한 때(SPEC-051). stale_notice_closed_at: 낡은 문장 안내를 닫은 때(SPEC-055).
+--   edited_at: 카드 고친 시각(SPEC-049). 마지막으로 고친 날짜(REQ-103)가 읽고, 낡은 문장 안내(REQ-110)는 문구를 고를 때만 읽음.
+--   emergency_copied_at: 안내가 없을 때 응급 대비 문장을 복사한 때(SPEC-051). 안내가 보이는 동안의 복사는 쓰지 않음.
+--   stale_notice_closed_at: 낡은 문장 안내를 닫은 상태(SPEC-055). 있으면 닫힘, 비면 emergency_copied_at이 있을 때 안내가 보임(8.4 4).
 --   rule (CTX-006, DB가 막음): 대상자 하나에 카드 하나 = PRIMARY KEY person_id.
 --   rule (코드): 행은 edited_at이나 복사 시각을 처음 쓸 때 만듦(edited_at은 그때). 카드를 모두 지워도(SPEC-047) 이 행은 남김. 행이 없으면 빈 카드.
 CREATE TABLE IF NOT EXISTS `health_card` (`person_id` TEXT NOT NULL, `edited_at` INTEGER NOT NULL, `emergency_copied_at` INTEGER, `stale_notice_closed_at` INTEGER, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `version` INTEGER NOT NULL, `device_id` TEXT NOT NULL, PRIMARY KEY(`person_id`), FOREIGN KEY(`person_id`) REFERENCES `person`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION );
@@ -362,7 +363,13 @@ CREATE INDEX IF NOT EXISTS `ix_care_contact_person_kind` ON `care_contact` (`per
 1. **아는 만큼의 날짜**(`diagnosed_on`·`performed_on`·`implanted_on`): TEXT, ISO 8601의 정밀도를 줄인 형식 `YYYY`·`YYYY-MM`·`YYYY-MM-DD`. 글의 길이가 정밀도라 정밀도 칸을 따로 두지 않음. 글 순서로 정렬해도 시간 순. 1900년부터 오늘까지는 코드가 막음(SPEC-045)
 2. **시각**: 1차 표처럼 UTC epoch ms INTEGER. 날짜로 보일 때는 setting `base_zone`
 3. **글자 수·칸 수 한계**(04 명세 3장): 코드가 막음. Room 엔터티에는 CHECK 제약이 없음. 꼭 적는 열의 빈 글('')도 코드가 막음(NOT NULL은 빈 글을 막지 못함)
-4. **낡은 문장 안내**(SPEC-055): `emergency_copied_at`이 있고 MAX(`edited_at`, setting `restored_at`)가 MAX(`emergency_copied_at`, `stale_notice_closed_at`)보다 뒤면 보임(빈 값은 0으로 셈). `restored_at`은 복원 감지(SPEC-038)가 `device_id`를 새로 쓰는 같은 거래에서 씀
+4. **낡은 문장 안내**(SPEC-055): 시각을 견주지 않고 상태로 정함(R 05, 표·열은 그대로). 거래(transaction)는 DB에 함께 쓰는 한 단위
+   - 보이는 때: `emergency_copied_at`이 있고 `stale_notice_closed_at`이 빔
+   - 복사([모두 복사]든 줄 [복사]든, SPEC-051): 안내가 보이지 않으면 두 열에 지금 시각을 씀. 보이면 아무것도 쓰지 않음
+   - 카드 고침(SPEC-049): `edited_at`을 쓰는 같은 거래에서, `emergency_copied_at`이 있으면 `stale_notice_closed_at`을 비움
+   - 복원 감지(SPEC-038): `device_id`를 새로 쓰는 같은 거래에서 `emergency_copied_at`이 있는 모든 카드의 `stale_notice_closed_at`을 비우고 setting `restored_at`을 씀
+   - 닫기: [다 넣었어요]와 요약이 빈 문구의 [닫기]는 `stale_notice_closed_at`에 지금 시각을 씀
+   - 문구 고르기: 요약이 비면 '카드 내용이 없어요' 문구. 아니면 `restored_at`이 있고 `restored_at` ≥ `edited_at`이면 복원 문구, 그 밖은 '카드가 바뀌었어요' 문구. 시각은 문구를 고를 때만 견주므로, 휴대폰 시계가 앞서거나 뒤처져도 안내가 보이고 사라지는 것은 바뀌지 않음
 5. **약 줄**(SPEC-048): 줄 하나 = intake_medication 행 하나 + medication 행 하나. 이름을 고치면 `medication.name`, 1회 투약량을 고치면 `intake_medication.qty_per_take`. 빼면 두 행을 지움. 같은 이름의 줄도 medication 행을 따로 둠(REQ-099, 합치지 않음). `product_code`·`effective_to`는 비우고 `effective_from`은 만든 때. 항목 완전 삭제(SPEC-025)는 intake_medication 다음에 그 medication 행을 지움
 6. **지우기**: 칸은 지우면 행을 지움(REQ-104, 되살리지 않음). 그래서 칸 표에는 `archived_at`을 두지 않음. 대상자 완전 삭제(다음 릴리즈, 로드맵 15번)는 칸 표 다섯과 health_card를 먼저 지우고 person을 지움(외래 키가 ON DELETE NO ACTION)
 7. **백업**: 같은 DB 파일이라 함께 백업·복원됨(SPEC-037). 내보내기 파일은 앱 캐시라 백업 밖
@@ -390,8 +397,8 @@ FROM `person` p;
 ### 8.6 01~04와 대조해 찾은 것
 
 1. **변경 기록 2장 '05 ERD' 제안과 달라진 것** (질문 05-2): (가) 시각을 담는 health_card 표를 더함. 카드 고친 시각·복사 시각·닫은 시각은 칸 하나가 아니라 카드에 딸리고, 카드를 모두 지워도 남아야 함(SPEC-047·055). 그래서 칸 표 번호가 하나씩 밀려 TBL-013~017 (나) 날짜는 '날짜와 정밀도' 두 칸이 아니라 정밀도를 줄인 ISO 8601 글 한 칸 (다) 칸 표에 `archived_at`을 두지 않음. 칸은 보관이 없고 지우면 DB에서 지움(REQ-104) (라) care_contact에는 코드 칸을 두지 않음. 연락처에 붙는 의학 코드가 없음
-2. SPEC-045의 '첫 칸을 저장할 때 생김'은 화면에 보이는 카드를 말함. health_card 행은 항목을 더할 때처럼 더 일찍 생길 수 있음(8.3의 행 만드는 규칙). 명세 글은 그대로 둠
-3. 복원 뒤 낡은 문장 안내(04 명세 3장)는 복원한 때를 알아야 해서 setting `restored_at`을 더함(질문 05-4). setting은 키·값 표라 스키마 버전과 상관없음
+2. SPEC-045의 '첫 칸을 저장할 때 생김'은 화면에 보이는 카드를 말함. health_card 행은 항목을 더할 때처럼 더 일찍 생길 수 있음(8.3의 행 만드는 규칙). 이주(8.5)로 기존 대상자는 첫 입력 전에도 행이 있음. 설계 독립 검토 R 21에서 SPEC-045에 이 사실을 적음
+3. 복원 뒤 낡은 문장 안내(04 명세 3장)는 복원한 때를 알아야 해서 setting `restored_at`을 더함(질문 05-4). setting은 키·값 표라 스키마 버전과 상관없음. R 05부터 안내가 보이는지는 상태로 정하고 `restored_at`은 복원 문구를 고를 때만 읽음
 4. 1차의 TBL-009·010(05 고정 5장 4에서 '지우지 않고 둠')을 약 줄에 씀(질문 05-5). 약 줄 하나에 medication 행 하나라, medication이 약 제품 목록 노릇을 하지는 않음. 식약처 목록을 붙이는 다음 릴리즈에서 같은 이름의 행을 합칠지 다시 봄 [추론]
 5. 2차가 읽는 1차 열: person `name`·`archived_at`, intake `name`·`slot_label`·`created_at`·`archived_at`, 열린 schedule_version. 1차 표의 열은 바뀌지 않음
 
@@ -402,3 +409,4 @@ FROM `person` p;
 - 함께 전해진 것: 설계 문서에 대한 승인이고, 실사용자 대상 릴리즈(2차 APK 배포 포함) 등은 위임 밖(오랑이). 10 WBS 릴리즈 줄의 조건으로 남김
 - 고정한 뒤 표를 바꾸려면 사용자님 결정이 필요하고, 바꾸면 이주와 `MigrationTest`를 함께 고침
 - PR #57 리뷰에서 바꿈 (2026-11-23 KST, [변경 기록](../10-records/changes/2026-11-22-phase2-release1.md) 6장 'PR #57 리뷰에서 바꾼 승인 항목' R3): 8.5 시험의 준비 데이터를 '판정 다섯'에서 TASK-057과 같은 '판정 10건'으로. 표와 이주는 그대로. 승인한 사람은 사용자님. 근거는 사용자님 말씀(오랑이 채팅, 2026-11-23 01시대 KST, "야 누가 너한테 체크포인트때 뭐 물어보면 추천 모두 승인이라고 해")과 필받음 봇 질문 `msg_d0454863115a`에 대한 오랑이 답(2026-11-23 KST). 리뷰 작업자의 질문 `msg_aab1b29ee04e`에 필받음 봇이 답장 `msg_e0b11e2309c9`로 전함: "1 추천, 2 추천, 3 추천이에요. 셋 다 고쳐 주세요."
+- 설계 독립 검토 반영에서 바꿈 (2026-11-23 KST, [변경 기록](../10-records/changes/2026-11-22-phase2-release1.md) 6장 '개발 중 설계 바꿈 R' 05·21): 8.4 4를 시각 견줌에서 상태 판정으로, 8.3과 `db/schema.sql`의 health_card 열 주석을 그에 맞게, 8.1 그림의 열 이름표 하나와 8.6 2·3을 고침. 표·열·CREATE 문과 이주는 그대로. 승인한 사람은 사용자님. 근거는 사용자님 말씀(오랑이 채팅, 2026-11-23 01시대 KST, "야 누가 너한테 체크포인트때 뭐 물어보면 추천 모두 승인이라고 해")과 필받음 봇 질문 `msg_422b96fb86bb`에 대한 오랑이 답(2026-11-23 KST, 추천안 모두 승인, 05는 스키마 3의 표·열을 바꾸지 않는 상태 판정 안)

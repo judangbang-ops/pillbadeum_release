@@ -31,6 +31,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public final class TechActivity extends Activity {
@@ -81,8 +82,8 @@ public final class TechActivity extends Activity {
             message = text("", 16);
             text("넣는 곳", 18);
             button("민감 표시 없이 복사", () -> copy("TASK056-PUBLIC-PREVIEW", false));
-            button("붙여넣기 시험 197자", () -> copy("A".repeat(196) + "Z", true));
-            button("붙여넣기 시험 1024자", () -> copy("A".repeat(1023) + "Z", true));
+            button("붙여넣기 시험 197자", () -> copy(lengthFixture(197), true));
+            button("붙여넣기 시험 1024자", () -> copy(lengthFixture(1024), true));
         } else if ("export".equals(mode)) {
             text("내보내기", 22);
             button("Android 공유 창 PDF", () -> share("pdf"));
@@ -186,6 +187,13 @@ public final class TechActivity extends Activity {
                 + " count=" + value.length());
         message.setText(Build.VERSION.SDK_INT >= 33 ? COPIED : "복사했어요. 긴급 정보에 붙여 넣어 주세요\n"
                 + "이 휴대폰에서는 복사한 글이 클립보드 미리보기에 보일 수 있어요");
+    }
+
+    private static String lengthFixture(int length) {
+        char[] fixture = new char[length];
+        Arrays.fill(fixture, 'A');
+        fixture[length - 1] = 'Z';
+        return new String(fixture);
     }
 
     private void startSettings(String action) {

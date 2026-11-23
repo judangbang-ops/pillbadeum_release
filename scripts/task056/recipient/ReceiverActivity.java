@@ -7,8 +7,8 @@ import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.TextView;
+import java.io.DataInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
 public final class ReceiverActivity extends Activity {
@@ -38,11 +38,12 @@ public final class ReceiverActivity extends Activity {
         String extension = "application/pdf".equals(intent.getType()) ? "pdf" : "png";
         boolean read = false;
         boolean writeDenied = false;
-        try (InputStream stream = getContentResolver().openInputStream(uri)) {
-            byte[] signature = stream.readNBytes(4);
+        try (DataInputStream stream = new DataInputStream(getContentResolver().openInputStream(uri))) {
+            byte[] signature = new byte[4];
+            stream.readFully(signature);
             read = "pdf".equals(extension)
                     ? "%PDF".equals(new String(signature, StandardCharsets.US_ASCII))
-                    : signature.length == 4 && signature[0] == (byte) 137
+                    : signature[0] == (byte) 137
                         && signature[1] == 'P' && signature[2] == 'N' && signature[3] == 'G';
         } catch (IOException | SecurityException ignored) {
             // Results are reported as booleans without logging the synthetic payload.

@@ -236,6 +236,24 @@ class MigrationTest {
     }
 
     @Test
+    fun v2_to_v3_without_people_creates_empty_card_tables() = runTest {
+        helper.createDatabase(2).use { v2 -> v2.setting(SettingKeys.DEVICE_ID, "test-install") }
+
+        helper.runMigrationsAndValidate(3, listOf(Migrations.MIGRATION_2_3)).use { v3 ->
+            val cardTables = listOf(
+                "health_card", "condition", "procedure_history", "allergy", "implanted_device", "care_contact",
+            )
+            for (table in cardTables) {
+                assertEquals(0L, v3.count("SELECT COUNT(*) FROM `$table`"), table)
+            }
+            assertEquals(
+                listOf(listOf(SettingKeys.DEVICE_ID, "test-install")),
+                v3.rows("SELECT `key`, `value` FROM setting"),
+            )
+        }
+    }
+
+    @Test
     fun v2_without_intakes_or_install_id_uses_person_metadata_when_opened() = runTest {
         helper.createDatabase(2).use { v2 ->
             v2.person("p1")

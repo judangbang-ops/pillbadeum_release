@@ -28,6 +28,7 @@ import com.judangbang.pillbadeum.usecase.RecordCommand
 import com.judangbang.pillbadeum.usecase.RecordDose
 import com.judangbang.pillbadeum.usecase.RecordResult
 import java.io.File
+import java.nio.ByteBuffer
 import kotlin.io.path.Path
 import kotlin.io.path.createTempDirectory
 import kotlin.random.Random
@@ -151,6 +152,9 @@ class BackupFileSetTest {
         v2Source.mkdirs()
         migrationHelper.createDatabase(2).use { v2 ->
             v2.execSQL("PRAGMA journal_mode = WAL")
+            // The helper writes schema 2 into the WAL. Checkpoint it so the main file alone is a
+            // schema-2 database and only the newest row below waits in the WAL.
+            v2.execSQL("PRAGMA wal_checkpoint(TRUNCATE)")
             v2.execSQL("PRAGMA wal_autocheckpoint = 0")
             v2.execSQL(
                 "INSERT INTO person (id, name, color, created_at, updated_at, version, device_id) " +
@@ -163,6 +167,8 @@ class BackupFileSetTest {
             assertEquals(200L, card.editedAt)
             assertEquals("old-device", card.deviceId)
 
+            val mainFile = File(v2Source, DidITakeDatabase.FILE_NAME)
+            assertEquals(2, storedUserVersion(mainFile), "the main file alone is a schema-2 database")
             val mainOnly = restore(v2Source, setOf(DidITakeDatabase.FILE_NAME))
             assertTrue(mainOnly.personDao().listAll().isEmpty(), "the schema-2 person was only in the WAL")
         }
@@ -203,6 +209,9 @@ class BackupFileSetTest {
         }
         return Live(dir, intakeId, db)
     }
+
+    /** `PRAGMA user_version` as written in the main file's header (bytes 60-63, big-endian), read without SQLite. */
+    private fun storedUserVersion(file: File): Int = ByteBuffer.wrap(file.readBytes(), 60, 4).int
 
     private suspend fun restoredCount(live: Live, names: Set<String>): Int =
         restore(live.dir, names).doseRecordDao().listByIntake(live.intakeId).size

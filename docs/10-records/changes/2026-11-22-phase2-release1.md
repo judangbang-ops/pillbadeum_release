@@ -522,9 +522,9 @@ PR #57을 쓰지 않은 Claude 작업자가 `/code-review high`로 리뷰하며 
 
 ### 개발 중 설계 바꿈: 응급 대비 문장 칸별 복사 (2026-11-23, Claude 작업자)
 
-11 개발 중에 TASK-056 기술 시험 결과로 승인된 설계를 바꾼 것. 이름은 필받음 봇 질문의 추천안 번호를 따라 S-1로 부름. 기준 커밋은 `release/p2-r1`의 a06c6bc(main과 같음).
+11 개발 중에 TASK-056 기술 시험 결과로 승인된 설계를 바꾼 것. 이름은 필받음 봇 질문의 추천안 번호를 따라 S-1로 부름. 처음 기준 커밋은 `release/p2-r1`의 a06c6bc(main과 같음)였고, PR #65가 `release/p2-r1`에 합쳐진 뒤(ea9c7bb) 그 위로 옮김.
 
-- **발견** (사실, TASK-056 기술 시험 보고서 5장. [PR #65](https://github.com/judangbang-ops/pillbadeum_release/pull/65), 브랜치 `kodonghui/task-056-tech-test`의 92f2068, 아직 합치지 않음):
+- **발견** (사실, TASK-056 기술 시험 보고서 5장. [보고서](../../07-qa/2026-11-23-p2-tech-test/report.md), [PR #65](https://github.com/judangbang-ops/pillbadeum_release/pull/65)로 `release/p2-r1`에 합쳐짐(ea9c7bb)):
   - 삼성전자서비스의 Android 12·13·14 안내는 `설정 → 안전 및 긴급 → 의료정보`에서 건강 상태, 알레르기, 복용 중인 약 등을 나누어 입력함(2026-11-23 열람). 갤럭시 실기기는 시험하지 않음
   - Google Pixel 도움말은 `위급 상황 정보 앱 → 내 정보 → 의료 정보 → 항목 선택`을 안내함(2026-11-23 열람)
   - 관찰: 에뮬레이터 API 32·34의 긴급 정보는 'Allergies' 같은 칸에 붙여 넣음. API 36은 Personal Safety 약관 단계에서 멈춰 칸을 보지 못함

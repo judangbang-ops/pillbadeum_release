@@ -281,14 +281,20 @@ public final class TechActivity extends Activity {
             current.add(row);
             cursor += rowHeight(row);
         }
-        try (PdfDocument document = new PdfDocument(); FileOutputStream output = new FileOutputStream(file)) {
+        PdfDocument document = new PdfDocument();
+        try (FileOutputStream output = new FileOutputStream(file)) {
             for (int i = 0; i < pages.size(); i++) {
                 PdfDocument.Page page = document.startPage(new PdfDocument.PageInfo.Builder(WIDTH, HEIGHT, i + 1).create());
                 String number = pages.size() > 1 ? " · " + (i + 1) + "/" + pages.size() + "쪽" : "";
-                draw(page.getCanvas(), HEIGHT, pages.get(i), number, body, title);
-                document.finishPage(page);
+                try {
+                    draw(page.getCanvas(), HEIGHT, pages.get(i), number, body, title);
+                } finally {
+                    document.finishPage(page);
+                }
             }
             document.writeTo(output);
+        } finally {
+            document.close();
         }
         Log.i(TAG, "PDF " + file.getName() + " pages=" + pages.size() + " pt=" + WIDTH + "x" + HEIGHT);
     }
@@ -331,8 +337,8 @@ public final class TechActivity extends Activity {
         Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".task056", file);
         Intent send = new Intent(Intent.ACTION_SEND).setType("pdf".equals(extension) ? "application/pdf" : "image/png")
                 .putExtra(Intent.EXTRA_STREAM, uri)
-                .setClipData(ClipData.newRawUri("Export", uri))
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        send.setClipData(ClipData.newRawUri("Export", uri));
         startActivity(Intent.createChooser(send, "TASK056 share"));
     }
 }

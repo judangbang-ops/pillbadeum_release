@@ -265,16 +265,28 @@ class Probe:
             return
         self.screen("emergency-edit")
         for length in (197, 1024):
+            self.start("copy")
+            self.tap(f"붙여넣기 시험 {length}자")
+            shell("input", "keyevent", "KEYCODE_BACK")
+            editor = next((n for n in self.tree() if n.get("class") == "android.widget.EditText"), None)
+            if editor is not None:
+                node = editor
             self.tap_node(node)
-            shell("input", "keyevent", "KEYCODE_MOVE_END")
-            shell("input", "keyevent", *["KEYCODE_DEL"] * min(197, length)) if length != 197 else None
-            shell("input", "text", "A" * (length - 1) + "Z")
+            if length != 197:
+                shell("input", "keyevent", "KEYCODE_MOVE_END")
+                shell("input", "keyevent", *["KEYCODE_DEL"] * min(197, len(node.get("text", ""))))
+            shell("input", "keyevent", "KEYCODE_PASTE")
+            method = "pasted"
+            editor = next((n for n in self.tree() if n.get("class") == "android.widget.EditText"), None)
+            if editor is not None and not re.fullmatch(r"A+Z?", editor.get("text", "")):
+                shell("input", "text", "A" * (length - 1) + "Z")
+                method = "typed (paste did not populate field)"
             node = next((n for n in self.tree() if n.get("class") == "android.widget.EditText"), None)
             if node is None:
                 self.log(f"(5) {length} ASCII characters, field could not be read after input")
                 break
             entered = node.get("text", "")
-            self.log(f"(5) typed {length}, read {len(entered)}, final sentinel Z={entered.endswith('Z')}")
+            self.log(f"(5) {method} {length}, read {len(entered)}, final sentinel Z={entered.endswith('Z')}")
             self.screen(f"emergency-length-{length}")
         shell("input", "keyevent", "KEYCODE_BACK")
 

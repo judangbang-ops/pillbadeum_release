@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>SCR-013 보여 주기 · 글자 200%</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;800&amp;family=Roboto:wght@400;600;800&amp;display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="box.css">
+<style>
+.bar .sp{flex-grow:1}
+.who{font-size:var(--font-size-display);font-weight:var(--font-weight-extrabold);line-height:var(--font-line-height-tight);padding:0 var(--space-2xs) var(--space-sm)}
+.sk{border-top:var(--border-strong) solid var(--color-ink-default);padding:var(--space-md) var(--space-2xs) var(--space-lg)}
+.sk h3{margin:0 0 var(--space-xs);font-size:var(--font-size-title-sm);font-weight:var(--font-weight-extrabold);color:var(--color-ink-muted);line-height:var(--font-line-height-tight)}
+.it{font-size:var(--font-size-title-md);font-weight:var(--font-weight-semibold);line-height:var(--font-line-height-normal)}
+.it+.it{margin-top:var(--space-xs)!important}
+.it .sub{display:block;font-size:var(--font-size-title-sm);font-weight:var(--font-weight-regular)}
+.fine{border-top:var(--border-thin) solid var(--color-line-strong);padding:var(--space-md) var(--space-2xs) var(--space-xl);font-size:var(--font-size-body);line-height:var(--font-line-height-normal);color:var(--color-ink-muted)}
+</style>
+</helmet>
+<div style="height: 1650px" class="s {{fs}}">
+  <div class="bar"><span class="sp"></span><button class="ib" type="button" aria-label="닫기"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+  <div class="body">
+    <p class="who">엄마</p>
+<section class="sk"><h3>지금 먹는 약</h3><p class="it">가상정 10mg 1정 · 매일 아침</p><p class="it">보기정 500mg 반 알 · 매일 아침</p><p class="it">가상정 10mg 1정 · 매일 저녁</p><p class="it">비타민 · 매일</p></section>
+<section class="sk"><h3>알레르기</h3><p class="it">페니실린 계열 (반응: 두드러기)</p></section>
+<section class="sk"><h3>질환</h3><p class="it">고혈압 (2015년)</p><p class="it">골다공증 (2023년 3월)</p></section>
+<section class="sk"><h3>수술·시술</h3><p class="it">쓸개 수술 (2019년)</p></section>
+<section class="sk"><h3>의료기관·담당 의사</h3><p class="it">가상내과의원 (내과)<span class="sub">담당 의사 이가상 · 02-000-0000</span></p></section>
+<section class="sk"><h3>보호자 연락처</h3><p class="it">홍가상 (딸) 010-0000-0000</p></section>
+
+    <div class="fine"><p>마지막으로 고친 날 2026-11-23</p><p>사용자가 적은 내용이며 의료기관의 기록이 아니에요</p></div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"fontScale": {"editor": "enum", "options": ["100", "200"], "default": "200"}, "$preview": {"width": 360, "height": 1650}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { fs: (this.props.fontScale ?? '100') === '200' ? 'fs200' : '' };
+  }
+}
+</script>
+</body>
+</html>

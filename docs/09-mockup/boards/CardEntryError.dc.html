@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>SCR-012 카드 칸 적기 · 보호자 연락처 · 전화번호 없이 저장</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;800&amp;family=Roboto:wght@400;600;800&amp;display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="box.css">
+<style>
+.ex{margin:0 var(--space-2xs) var(--space-lg)!important;font-size:var(--font-size-body-sm);line-height:var(--font-line-height-normal);color:var(--color-ink-muted)}
+.unit{grid-template-columns:repeat(3,1fr)}
+.ymd{display:flex;align-items:center;gap:var(--space-sm)}
+.ymd .in{width:120px}
+.cnt{align-self:flex-end;font-size:var(--font-size-body-sm);color:var(--color-ink-muted)}
+.fs200 .unit{grid-template-columns:1fr}
+.fs200 .ymd .in{width:160px}
+</style>
+</helmet>
+<div class="s {{fs}}">
+  <div class="bar back"><button class="ib" type="button" aria-label="닫기"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h1>보호자 연락처 적기</h1></div>
+  <div class="body">
+    <p class="ex">응급 때 병원이 연락할 사람</p>
+    <div class="fld"><label>이름</label><div class="in">홍가상</div></div>
+    <div class="fld"><span class="lbl">관계 <span class="opt">(선택)</span></span><div class="in">딸</div></div>
+    <div class="fld"><label>전화번호</label><div class="in err"></div>
+      <p class="err-msg">전화번호를 입력해 주세요</p></div>
+  </div>
+  <div class="foot line"><button class="btn ink" type="button">저장</button></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"fontScale": {"editor": "enum", "options": ["100", "200"], "default": "100"}, "$preview": {"width": 360, "height": 800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { fs: (this.props.fontScale ?? '100') === '200' ? 'fs200' : '' };
+  }
+}
+</script>
+</body>
+</html>

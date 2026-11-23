@@ -1,6 +1,8 @@
-# 09 목업: 2안 요일 약통 (1차 릴리즈)
+# 09 목업: 2안 요일 약통 (1차 릴리즈, 2차 첫 릴리즈)
 
-상태: **09 확인 끝** (2026-11-12 19:11 KST, 동희님 "모두 승인"). 방향은 2안 요일 약통, 화면 10개를 그렸고 토큰을 굳혔음. 토큰 값을 바꾸려면 다시 확인받음. 2026-11-13에 글꼴 값을 04 명세 고정 질문 4의 승인으로, 2026-11-14에 `color.line.strong` 값을 TASK-030 접근성 점검 뒤의 승인으로 바꿈(0장 마지막 두 줄, 4.1절).
+상태 (2차 첫 릴리즈): **09 확인 기다림** (2026-11-23, Claude). 건강 카드 화면 다섯과 바뀐 화면 넷의 보드 25개를 그림. [8장](#8-2차-첫-릴리즈-건강-카드-보드-2026-11-23-claude-기능-변경)
+
+상태 (1차): **09 확인 끝** (2026-11-12 19:11 KST, 동희님 "모두 승인"). 방향은 2안 요일 약통, 화면 10개를 그렸고 토큰을 굳혔음. 토큰 값을 바꾸려면 다시 확인받음. 2026-11-13에 글꼴 값을 04 명세 고정 질문 4의 승인으로, 2026-11-14에 `color.line.strong` 값을 TASK-030 접근성 점검 뒤의 승인으로 바꿈(0장 마지막 두 줄, 4.1절).
 
 - 목업 캔버스: [필받음 1차 목업 (2안 요일 약통)](https://claude.ai/artifact/QW5JRsx1Zpz5ekeqHmjpKC). claude.ai Design 아티팩트이고 동희님 계정에서만 열림. 보드는 2안 18개와 참고로 남긴 1안 3개임. 2026-11-13의 글꼴 변경과 대상자 관리 보드 수정, 2026-11-14의 `color.line.strong` 변경은 이 저장소의 보드에만 있고 캔버스에는 아직 올리지 않았음(지금 Claude 계정은 캔버스를 읽지 못함)
 - 보드 원본: [boards/](boards/). 캔버스에 올린 2안 보드와 같은 파일이고, `canvas.json`은 1안을 뺀 배치임
@@ -138,3 +140,60 @@
 - 버튼과 칸의 높이는 `size.*`를 씀. 누르는 곳은 48dp 이상임.
 - 위젯의 `minResizeWidth`·`minResizeHeight`를 실제 4×2 칸보다 작게 줄지 않는 값으로 올림. 지금 250×110dp는 Pixel 세로에서 3칸 폭까지 줄어듦(칸 폭 약 87dp, Claude 계산이고 기기에서 재 보지 않음).
 - 위젯 넘침 화살표는 글자 없이 그리고 `contentDescription`은 '더 있음'.
+
+## 8. 2차 첫 릴리즈: 건강 카드 보드 (2026-11-23, Claude, 기능 변경)
+
+- 상태: **09 확인 기다림**. 2안 요일 약통과 지금 토큰을 그대로 쓰고 토큰은 바꾸지도 더하지도 않음. 08 화면 정의(2장 SCR-011~015와 '(2차)' 줄, 7장 화면 글자)를 그림
+- 보드 원본: [`boards/build_boards_p2.py`](boards/build_boards_p2.py)가 2차 보드 25개와 배치 [`boards/canvas-p2.json`](boards/canvas-p2.json)을 씀. 1차 보드와 `build_boards.py`는 건드리지 않음. `HomeCard*`는 손으로 쓴 `BoxHome`에 [건강 카드]를 더해 만듦
+- 그림: [`renders-p2/`](renders-p2/)에 보드마다 PNG 한 장(배율 1, 스크롤 전체). 캔버스(claude.ai Design)에는 올리지 않음(8.5절)
+- 예시는 모두 가상임: 대상자 '나'·'엄마'·'아빠'(1차 보드와 같음), 약 '가상정 10mg'·'보기정 500mg', 사람 '홍가상'·'이가상', 전화번호 010-0000-0000, 의견 주소 feedback@example.com
+
+### 8.1 그린 화면과 상태
+
+| 화면 | 보드 | 그린 상태 |
+| --- | --- | --- |
+| SCR-011 건강 카드 | [`Card`](boards/Card.dc.html) ([그림](renders-p2/Card.png)), [`Card200`](boards/Card200.dc.html) ([그림](renders-p2/Card200.png)), [`CardRecopy`](boards/CardRecopy.dc.html) ([그림](renders-p2/CardRecopy.png)), [`CardArchived`](boards/CardArchived.dc.html) ([그림](renders-p2/CardArchived.png)), [`CardEmpty`](boards/CardEmpty.dc.html) ([그림](renders-p2/CardEmpty.png)) | normal(글자 100%·200%), recopy, archived, empty |
+| SCR-012 카드 칸 적기·고치기 | [`CardEntry`](boards/CardEntry.dc.html) ([그림](renders-p2/CardEntry.png)), [`CardEntry200`](boards/CardEntry200.dc.html) ([그림](renders-p2/CardEntry200.png)), [`CardEntryError`](boards/CardEntryError.dc.html) ([그림](renders-p2/CardEntryError.png)) | normal(수술·시술, 글자 100%·200%), error(보호자 연락처의 전화번호 없음) |
+| SCR-013 보여 주기 | [`CardShow`](boards/CardShow.dc.html) ([그림](renders-p2/CardShow.png)), [`CardShow200`](boards/CardShow200.dc.html) ([그림](renders-p2/CardShow200.png)) | normal(글자 100%·200%) |
+| SCR-014 응급 대비 문장 | [`Emergency`](boards/Emergency.dc.html) ([그림](renders-p2/Emergency.png)), [`EmergencyCopied`](boards/EmergencyCopied.dc.html) ([그림](renders-p2/EmergencyCopied.png)) | normal, copied(Android 13 이상) |
+| SCR-015 내보내기 | [`Export`](boards/Export.dc.html) ([그림](renders-p2/Export.png)), [`ExportPages`](boards/ExportPages.dc.html) ([그림](renders-p2/ExportPages.png)) | normal(PDF 미리보기), pages(2쪽) |
+| SCR-004 기록 (바뀜) | [`HomeCard`](boards/HomeCard.dc.html) ([그림](renders-p2/HomeCard.png)), [`HomeCard200`](boards/HomeCard200.dc.html) ([그림](renders-p2/HomeCard200.png)), [`HomeCardPick`](boards/HomeCardPick.dc.html) ([그림](renders-p2/HomeCardPick.png)) | 헤더 [건강 카드](글자 100%·200%), cardpicker |
+| SCR-006 항목 추가·수정 (바뀜) | [`ItemFormMeds`](boards/ItemFormMeds.dc.html) ([그림](renders-p2/ItemFormMeds.png)), [`ItemFormMeds200`](boards/ItemFormMeds200.dc.html) ([그림](renders-p2/ItemFormMeds200.png)), [`ItemFormMedsError`](boards/ItemFormMedsError.dc.html) ([그림](renders-p2/ItemFormMedsError.png)) | 약 두 줄(글자 100%·200%), error(약 이름 빈 줄) |
+| SCR-009 설정 (바뀜) | [`SettingsFeedback`](boards/SettingsFeedback.dc.html) ([그림](renders-p2/SettingsFeedback.png)), [`SettingsNoMail`](boards/SettingsNoMail.dc.html) ([그림](renders-p2/SettingsNoMail.png)) | 아래쪽의 [의견 보내기], nomail |
+| SCR-010 대상자 관리 (바뀜) | [`PeopleCard`](boards/PeopleCard.dc.html) ([그림](renders-p2/PeopleCard.png)), [`PeopleCard200`](boards/PeopleCard200.dc.html) ([그림](renders-p2/PeopleCard200.png)), [`PersonEditCard`](boards/PersonEditCard.dc.html) ([그림](renders-p2/PersonEditCard.png)) | '보관됨' 줄의 건강 카드 보기(글자 100%·200%), 대상자 수정의 [건강 카드] |
+
+그리지 않은 상태: 화면마다 loading·stale·permission(1차와 같이 그 화면 작업에서 그림), SCR-012의 gone, SCR-013의 error. 1차 보드(`ItemForm`, `People`, `Settings`, `BoxHome`)는 그대로 둠.
+
+### 8.2 그리면서 정한 것
+
+- **글자 200%의 SCR-004 헤더** (`HomeCard200`): 헤더 버튼 셋이 한 줄에 들어가지 않으면 [건강 카드]를 헤더에서 빼고 날짜 아래에 줄 버튼으로 둠. [지난 기록]·[설정]은 헤더에 남음. 글자 100%에서는 셋 다 헤더(`HomeCard`)
+- **글자 200%의 SCR-010 '보관됨' 줄** (`PeopleCard200`): 이름, '약 1개 · 지난 기록은 남아요', '건강 카드 보기 ›', [되살리기] 차례로 쌓음. [되살리기]를 이름 아래로 내리는 것은 1차 규칙(4.1절)과 같음. 줄의 [되살리기] 밖을 누르면 카드
+- **설명 한 줄이 든 적는 화면**: 카드 화면은 종류 제목 아래(`Card`, `CardEmpty`), 칸 적기는 헤더 아래(`CardEntry`, `CardEntryError`), 항목 화면은 '약' 제목 아래와 약 줄 아래(`ItemFormMeds`). 설명은 `font.size.body-sm`·`color.ink.muted`로 입력과 구별함
+- **카드 화면** (`Card`): 맨 위 [보여 주기](검은 큰 버튼), 그 아래 [응급 대비 문장]·[내보내기](테두리 버튼 둘, 200%에서는 세로). 지금 먹는 약과 칸 종류 여섯은 같은 제목 크기(`font.size.title-sm`). 칸 줄의 [지우기]는 `color.ink.danger` 글자 버튼
+- **보여 주기** (`CardShow`): 대상자 이름 `font.size.display`(26sp), 종류 제목 `title-sm`(18sp, 보조 글자), 칸 `title-md`(20sp, 앱 본문 16sp보다 큼). 종류 사이는 진한 선. 사람 색은 쓰지 않음. 글자 200%에서 이름 36.7sp·칸 34sp이고 자르지 않음(`CardShow200`)
+- **내보내기 미리보기** (`Export`): A4 세로 비율 종이를 작게 그림. 미리보기 글자는 기기 글자 크기와 상관없음(SPEC-052)
+- **응급 대비 문장** (`Emergency`): 문장은 옅은 면 상자에 읽기만, 오른쪽 아래 글자 수, [복사]. 복사한 뒤(`EmergencyCopied`)는 Android 13 이상 모양(시스템이 복사를 알리고 앱은 안내 줄만)
+
+### 8.3 측정한 것
+
+4.1절과 같은 방법([`boards/measure_boards.js`](boards/measure_boards.js), CORTHEX `page-check.js`)으로 2차 보드 25개를 그림. 이 PC의 Chromium(Playwright 1.65.1)이고, 글꼴은 Google Fonts의 Roboto와 Noto Sans KR. 앱 화면은 내용 길이만큼 늘려 잼(`UNROLL=1`). 기본 글자 크기로 25번, 글자 크기를 바꿀 수 있는 보드는 200%로 한 번 더(19번), 모두 44번.
+
+| 경우 | 결과 |
+| --- | --- |
+| 44번 모두 | 오류 0. 보드 끝을 넘는 글자·상자 0, 옆으로 잘린 글자 0, 아래로 잘린 상자 0 |
+| 고치기 전 | 메일 앱이 없을 때(`SettingsNoMail`) 200%에서 주소가 입력 상자를 14px 넘음. 주소를 아무 데서나 줄을 바꿀 수 있게 고침 |
+| 남은 경고 | 줄 끝에 짧은 단어 하나만 남는 줄 20개(대부분 200%의 설명 문장). 1차처럼 기기 폭마다 달라 개발 때 다시 봄 |
+
+색: 토큰 짝만 씀. 1차 2장에 없던 짝 둘을 WCAG 식으로 계산함(Claude, 2026-11-23): 흰 바탕의 위험 글자(`color.ink.danger`, [지우기]·[빼기]) 6.57:1, 옅은 면(`surface.sunken`, 응급 대비 문장 상자) 위 글자 16.15:1. 나머지는 1차 2장의 짝임. 내보내기 미리보기 안의 작은 글자(6~12px)는 읽으라는 글이 아니라 종이 모양을 보이는 그림임.
+
+### 8.4 08 화면 정의와 다르게 그린 것 (09 확인에서 여쭘)
+
+- SCR-006 이름 칸의 글자: 1차 보드와 앱은 항목 이름 칸을 '약 이름'으로 씀(`ItemForm`, `ItemScreen.kt`). 2차에서 같은 화면에 약 줄의 '약 이름'(TERM-033)이 생겨 한 화면에 같은 글자가 두 뜻으로 보임. 2차 보드는 항목 이름 칸을 '항목 이름'(TERM-004 복용 항목)으로, 위젯 별칭 설명을 "홈 화면에서 항목 이름을 가리고 싶을 때 써요."로 그림(`ItemFormMeds`). 09 확인 09-3
+- 보여 주기에는 사람 색을 쓰지 않음. 변경 기록 2장 제안은 '사람 색은 머리에만'이었음. 의료진에게 사람 색은 뜻이 없고 내보내기 파일(흑백 인쇄)과 같은 모양이 되게 함
+- 2장 제안의 '내보낸 PDF 한 장'은 따로 보드를 두지 않고 `Export`의 미리보기로 그림. 실제 PDF는 11 개발에서 만들고 12에서 봄
+
+### 8.5 하지 않은 것
+
+- 캔버스에 올리지 않음: 1차 캔버스는 동희님 계정의 claude.ai Design 아티팩트이고 지금 Claude 계정은 읽지 못함(이 문서 머리). 게시는 물어야 하는 일이라 09 확인 09-4에서 여쭘. 그동안 보드 원본과 PNG를 이 저장소에 둠
+- 안드로이드 기기·에뮬레이터에서 보지 않음. 갤럭시 제조사 글꼴로 재지 않음
+- TalkBack 읽기 순서는 화면 정의(08)의 규칙에만 있고 보드로는 보지 않음

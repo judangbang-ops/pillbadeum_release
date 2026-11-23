@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>SCR-015 내보내기</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;800&amp;family=Roboto:wght@400;600;800&amp;display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="box.css">
+<style>
+.pv{display:flex;flex-direction:column;align-items:center;gap:var(--space-md);padding:var(--space-lg) 0;margin:var(--space-md) 0;background:var(--color-surface-sunken);border-radius:var(--radius-tile)}
+.paper{width:220px;aspect-ratio:210/297;background:var(--color-surface-default);border:var(--border-thin) solid var(--color-line-strong);padding:14px 14px;
+  font-size:7px;line-height:1.4;color:var(--color-ink-default);overflow:hidden;font-family:Roboto,'Noto Sans KR',var(--font-family-base)}
+.paper .pn{font-size:12px;font-weight:var(--font-weight-extrabold);margin-bottom:4px!important}
+.paper b{display:block;margin-top:5px;font-size:7px;font-weight:var(--font-weight-extrabold);color:var(--color-ink-muted);border-top:var(--border-thin) solid var(--color-ink-default);padding-top:3px}
+.paper i{display:block;font-style:normal;font-size:8px;font-weight:var(--font-weight-semibold)}
+.paper i .sub{display:block;font-weight:var(--font-weight-regular)}
+.paper .pf{margin-top:8px!important;font-size:6px;color:var(--color-ink-muted)}
+</style>
+</helmet>
+<div class="s {{fs}}">
+  <div class="bar back"><button class="ib" type="button" aria-label="닫기"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h1>내보내기</h1></div>
+  <div class="body">
+    <div class="pick" style="grid-template-columns:1fr 1fr"><button class="c on" type="button" aria-pressed="true">PDF</button><button class="c" type="button">사진(PNG)</button></div>
+    <div class="band" style="display: {{pages}}; margin-top: var(--space-md)">카드가 길어 2쪽이에요. 쪽마다 이름과 쪽 번호가 들어가요.</div>
+    <div class="pv"><div class="paper"><p class="pn">엄마</p><b>지금 먹는 약</b><i>가상정 10mg 1정 · 매일 아침</i><i>보기정 500mg 반 알 · 매일 아침</i><i>가상정 10mg 1정 · 매일 저녁</i><i>비타민 · 매일</i><b>알레르기</b><i>페니실린 계열 (반응: 두드러기)</i><b>질환</b><i>고혈압 (2015년)</i><i>골다공증 (2023년 3월)</i><b>수술·시술</b><i>쓸개 수술 (2019년)</i><b>의료기관·담당 의사</b><i>가상내과의원 (내과)<span class="sub">담당 의사 이가상 · 02-000-0000</span></i><b>보호자 연락처</b><i>홍가상 (딸) 010-0000-0000</i><p class="pf">마지막으로 고친 날 2026-11-23 · 만든 날 2026-11-23<br>사용자가 적은 내용이며 의료기관의 기록이 아니에요</p></div><div class="paper p2nd" style="display: {{pages}}"><p class="pn">엄마 · 2/2쪽</p><b>보호자 연락처</b><i>홍가상 (딸) 010-0000-0000</i></div></div>
+    <p class="note" style="padding:0 var(--space-2xs)">파일 이름: pillbadeum-card-20261123.pdf (대상자 이름은 넣지 않아요)</p>
+  </div>
+  <div class="foot line"><p class="note" style="text-align:center">앱이 직접 보내지 않아요. 고른 앱이 보내요.</p><button class="btn ink" type="button">보내기</button></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"fontScale": {"editor": "enum", "options": ["100", "200"], "default": "100"}, "state": {"editor": "enum", "options": ["normal", "pages"], "default": "normal"}, "$preview": {"width": 360, "height": 800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const p = (this.props.state ?? 'normal') === 'pages';
+    return { fs: (this.props.fontScale ?? '100') === '200' ? 'fs200' : '', pages: p ? 'block' : 'none', one: p ? 'none' : 'block' };
+  }
+}
+</script>
+</body>
+</html>

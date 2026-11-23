@@ -1,6 +1,6 @@
 # 화면 목록과 상태 (1차 릴리즈, 2차 첫 릴리즈)
 
-- 상태 (2차 첫 릴리즈): **07 화면 지도 확인 끝** (2026-11-23 KST, 필받음 봇이 전한 사용자님 답 "추천안 모두 승인"(07-1~07-5, 근거는 사용자님 말씀(오랑이 채팅, 2026-11-23 01시대 KST)과 필받음 봇 질문 `msg_97c052ed16f3`에 대한 오랑이 답)). **08 화면 정의 확인 기다림** (2026-11-23 KST, Claude, 기능 변경): 2장에 SCR-011~015의 정의와 상태를 더하고 SCR-004·006·009·010을 고침(각 화면에서 '(2차)'를 붙인 줄). 화면 글자와 용어집 표준 용어의 짝은 [7장](#7-2차-첫-릴리즈-화면-글자와-표준-용어). 07 지도는 [sitemap.yaml](sitemap.yaml)에서 고치고 1장을 `draw_sitemap.py`로 다시 그림. 기록은 [6장](#6-승인-기록) 맨 아래
+- 상태 (2차 첫 릴리즈): **07 화면 지도 확인 끝** (2026-11-23 KST, 필받음 봇이 전한 사용자님 답 "추천안 모두 승인"(07-1~07-5, 근거는 사용자님 말씀(오랑이 채팅, 2026-11-23 01시대 KST)과 필받음 봇 질문 `msg_97c052ed16f3`에 대한 오랑이 답)). **08 화면 정의 확인 끝** (2026-11-23 KST, 필받음 봇이 전한 사용자님 답 "추천안 모두 승인"(08-1~08-6, 근거는 사용자님 말씀(오랑이 채팅, 2026-11-23 01시대 KST)과 필받음 봇 질문 `msg_74425407eb6a`에 대한 오랑이 답). 08-2~08-6은 '바꿈 승인'). **09 목업 확인 기다림**(보드 25개, [09 목업 8장](../09-mockup/README.md#8-2차-첫-릴리즈-건강-카드-보드-2026-11-23-claude-기능-변경)). 08에서 한 일(Claude, 기능 변경): 2장에 SCR-011~015의 정의와 상태를 더하고 SCR-004·006·009·010을 고침(각 화면에서 '(2차)'를 붙인 줄). 화면 글자와 용어집 표준 용어의 짝은 [7장](#7-2차-첫-릴리즈-화면-글자와-표준-용어). 07 지도는 [sitemap.yaml](sitemap.yaml)에서 고치고 1장을 `draw_sitemap.py`로 다시 그림. 기록은 [6장](#6-승인-기록) 맨 아래
 - 상태 (1차): **화면 정의 승인** (2026-11-13 01:04 KST, 동희님 "추천모두승인", 프로젝트 채팅. 질문은 2026-11-13 00:55 KST 프로젝트 스레드 '약봉이 1차 릴리즈 이어 가기'의 Claude 메시지 2번. 기록은 [6장](#6-승인-기록)). 07 화면 지도(1장)도 같은 답으로 확인 끝. 그 전: CORTHEX 08 다시 하기 초안 (2026-11-12, Claude). 화면 구성과 5장 7개는 2026-11-12 10:18 KST 동희님 범위 확정 그대로이고, 다시 하기에서는 흐름을 03의 FL ID로, 화면마다 보이는 04 명세(SPEC)를, 화면 글자를 01 용어(보관·완전 삭제 등)로 맞춤. 상태별 와이어프레임: TASK-044가 위젯 큰 글씨·잠금 화면·판정 고치기를 [states/](states/README.md)에 그림(2026-11-13, PR #19). 나머지는 화면 작업 PR마다 그림
 - 기준: DidITake develop `7a800ac`의 [UI 초안](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/05-ui/README.md), [시안 v3](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/05-ui/ui-mockup-v3.html), [플로우](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/04-flow/flows.md), [기록 규칙](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/02-design/record-rules.md), 지금 코드(`App.kt`, `DidITakeWidget.kt`, `Labels.kt`)
 - 화면 목록의 원본은 [sitemap.yaml](sitemap.yaml)이고, 1장의 그림과 표는 그 파일에서 옮겨 그림. 요구는 [requirements.md](../01-planning/requirements.md)
@@ -225,7 +225,7 @@ flowchart TD
 
 명세: SPEC-015, SPEC-016, SPEC-018, SPEC-020, SPEC-028, SPEC-029, SPEC-039, SPEC-040, SPEC-042, SPEC-043, SPEC-054
 
-목업 (09, 2안 요일 약통): [캔버스](https://claude.ai/artifact/QW5JRsx1Zpz5ekeqHmjpKC)의 보드 [`BoxHome`](../09-mockup/boards/BoxHome.dc.html), [`HomeEmpty`](../09-mockup/boards/HomeEmpty.dc.html), [`HomeRestored`](../09-mockup/boards/HomeRestored.dc.html)
+목업 (09, 2안 요일 약통): [캔버스](https://claude.ai/artifact/QW5JRsx1Zpz5ekeqHmjpKC)의 보드 [`BoxHome`](../09-mockup/boards/BoxHome.dc.html), [`HomeEmpty`](../09-mockup/boards/HomeEmpty.dc.html), [`HomeRestored`](../09-mockup/boards/HomeRestored.dc.html). 2차 보드: [`HomeCard`](../09-mockup/boards/HomeCard.dc.html) ([그림](../09-mockup/renders-p2/HomeCard.png)), [`HomeCard200`](../09-mockup/boards/HomeCard200.dc.html) ([그림](../09-mockup/renders-p2/HomeCard200.png)), [`HomeCardPick`](../09-mockup/boards/HomeCardPick.dc.html) ([그림](../09-mockup/renders-p2/HomeCardPick.png))
 
 | 보여 주는 것 | 출처 |
 | --- | --- |
@@ -273,7 +273,7 @@ flowchart TD
 - TalkBack은 SCR-001과 같은 문장으로 읽음 (REQ-068). 칸 하나를 한 번에 읽고(`아침약, 복용함, 오늘 08:02`, 대상자 둘 이상이면 `엄마 혈압약, …`, 시계 경고가 있으면 `…, 시계 확인 필요`), 칸의 버튼과 [⋯](`아침약 판정 고치기`)는 따로 읽음. 앱은 별칭 대신 이름을 읽음 (TASK-015). 이번 주 약통은 줄마다 `혈압약 이번 주: 월 화 복용, 수 빠짐, 목 아직` (TASK-016)
 - 누르는 곳은 모두 48dp 이상. [⋯]는 09 목업의 44px 대신 48dp (REQ-067, TASK-016)
 - 글은 낱말 가운데서 줄이 바뀌지 않음 (BUG-002, 위젯과 같은 `keepWords`)
-- (2차) 헤더 버튼은 [건강 카드]·[지난 기록]·[설정] 셋이고 글자 200%에서 놓는 법은 09에서 그림. 고르기 창의 줄은 56dp 이상이고 TalkBack은 `가상 엄마의 건강 카드`로 읽음. 고르기 창은 다시 만들어진 화면에서도 남음. 카드에서 돌아오면 이 화면(고르기 창은 닫힘)
+- (2차) 헤더 버튼은 [건강 카드]·[지난 기록]·[설정] 셋. 한 줄에 들어가지 않으면(글자 200% 등) [건강 카드]를 헤더에서 빼고 날짜 아래 줄 버튼으로 둠(09 `HomeCard200`). 고르기 창의 줄은 56dp 이상이고 TalkBack은 `가상 엄마의 건강 카드`로 읽음. 고르기 창은 다시 만들어진 화면에서도 남음. 카드에서 돌아오면 이 화면(고르기 창은 닫힘)
 - 시스템 뒤로 가기는 첫 화면에서 앱을 나가고, 다른 앱 화면에서는 첫 화면으로 돌아옴(대상자 관리는 설정으로) (REQ-094). 위젯 머리글·알림은 어느 화면에 있었든 첫 화면을 엶 (`MainActivity.homeIntent`)
 - 화면을 켜 둔 채 하루 시작 시각을 넘기면 그 시각에 다시 읽음(`#stale`, TASK-017). 경계 시각은 보이는 판의 다음 하루 시작(`StatusBoard.staleAt`)이고, 기다리는 동안 1분마다 시계를 봐서 시계를 앞으로 옮겨도 1분 안에 바뀜. 앱으로 돌아올 때도 다시 읽음. 다시 읽기 전에 누른 [먹었어]는 기록하지 않고 "날짜가 바뀌었어요. 다시 눌러 주세요" 뒤 새 날짜를 보임
 - 알림이 오지 않을 때(`#permission`, TASK-026): 알림을 켠 항목(보관되지 않은 항목·대상자의 켜진 알림 규칙, `StatusBoard.remindersOn`)이 있을 때만 맨 위에 띠 하나를 보임. 앱 알림이나 복용 알림 채널이 꺼져 있으면 "알림이 꺼져 있어 알려 드릴 수 없어요"와 [설정 열기](채널만 꺼졌으면 그 채널의 설정, 아니면 앱 알림 설정) (REQ-089). 알림은 켜져 있는데 정확 알람(Android 12 이상)이 허용되지 않았으면 "알림이 늦을 수 있어요"와 [허용하기](이 앱의 정확 알람 허용 화면) (REQ-050). 두 문장 모두 분 단위 약속이 없음 (REQ-048). 배터리 사용 제한은 첫 화면에 띄우지 않고 설정에만 둠. 띠는 복원 안내 아래, 시계 경고 위. 첫 화면에 올 때와 앱으로 돌아올 때마다 휴대폰 상태를 다시 읽어, 시스템 화면에서 켜고 돌아오면 띠가 사라짐. 시스템 화면이 없으면 앱 정보 화면을 열고, 그것도 열지 못하면 "설정 화면을 열지 못했어요. 휴대폰 설정의 앱 목록에서 필받음을 찾아 주세요". 상태 읽기와 화면 열기는 `Phone.reminderAccess`·`openAccessSettings`(Android는 `AndroidPhone`)로 하고 권한을 더 받지 않음. 정확 알람 권한 선언(`SCHEDULE_EXACT_ALARM`)은 R3 PR #20에 있어, PR #19만 있는 판에서는 Android 12 이상에서 정확 알람이 늘 허용되지 않은 것으로 읽힘
@@ -338,7 +338,7 @@ flowchart TD
 
 명세: SPEC-003, SPEC-004, SPEC-010, SPEC-021, SPEC-023, SPEC-024, SPEC-028, SPEC-031, SPEC-048
 
-목업 (09, 2안 요일 약통): [캔버스](https://claude.ai/artifact/QW5JRsx1Zpz5ekeqHmjpKC)의 보드 [`ItemForm`](../09-mockup/boards/ItemForm.dc.html), [`ItemFormError`](../09-mockup/boards/ItemFormError.dc.html), [`ItemForm200`](../09-mockup/boards/ItemForm200.dc.html)
+목업 (09, 2안 요일 약통): [캔버스](https://claude.ai/artifact/QW5JRsx1Zpz5ekeqHmjpKC)의 보드 [`ItemForm`](../09-mockup/boards/ItemForm.dc.html), [`ItemFormError`](../09-mockup/boards/ItemFormError.dc.html), [`ItemForm200`](../09-mockup/boards/ItemForm200.dc.html). 2차 보드: [`ItemFormMeds`](../09-mockup/boards/ItemFormMeds.dc.html) ([그림](../09-mockup/renders-p2/ItemFormMeds.png)), [`ItemFormMeds200`](../09-mockup/boards/ItemFormMeds200.dc.html) ([그림](../09-mockup/renders-p2/ItemFormMeds200.png)), [`ItemFormMedsError`](../09-mockup/boards/ItemFormMedsError.dc.html) ([그림](../09-mockup/renders-p2/ItemFormMedsError.png))
 
 | 보여 주는 것 | 출처 |
 | --- | --- |
@@ -375,7 +375,7 @@ flowchart TD
 - 모양은 09 ItemForm (TASK-016): 이름·별칭 칸, "누구 약인가요?" 세 칸씩, "얼마나 자주?" 매일/주 1회, "무슨 요일에?" 네 칸씩과 "수요일부터 화요일 사이에 한 번 먹으면 완료예요.", "언제 먹나요?" 다섯 칸(글자가 크면 세 칸). [+ 가족]은 이 화면 안에 이름·색·"한 약은 한 휴대폰에서 기록해 주세요"를 펼침. 색은 09 PersonAdd처럼 이름(파랑·주황·초록·보라·장미·청록)으로 읽히는 48dp 칸, 이 칸 안에서는 세 칸씩 (REQ-067)
 - 화면이 다시 만들어져도(회전, 키보드 연결 등) 보던 화면과 입력이 남음 (BUG-003, TASK-016)
 - (2차) SCR-011의 지금 먹는 약 줄에서 열었으면 [저장]·[×]·시스템 뒤로 가기·`#gone`은 SCR-004 대신 SCR-011로 돌아가고 카드가 다시 읽음 (REQ-094, SPEC-049)
-- (2차) 약 줄은 위젯·알림·오늘 목록에 보이지 않음(SPEC-048). 글자 200%에서는 약 이름과 1회 투약량을 세로로 쌓음(09에서 그림). TalkBack은 줄을 `약 1, 약 이름 가상정 10mg, 1회 투약량 1정`으로, [빼기]는 `가상정 10mg 빼기`로 읽음
+- (2차) 약 줄은 위젯·알림·오늘 목록에 보이지 않음(SPEC-048). 글자 200%에서는 약 이름·1회 투약량·[빼기]를 세로로 쌓음(09 `ItemFormMeds200`). 이름 칸의 글자를 '약 이름'에서 '항목 이름'으로, 별칭 설명의 '약 이름'을 '항목 이름'으로 바꾸는 것은 09 확인 09-3에서 여쭘(약 줄의 '약 이름'과 겹침). TalkBack은 줄을 `약 1, 약 이름 가상정 10mg, 1회 투약량 1정`으로, [빼기]는 `가상정 10mg 빼기`로 읽음
 - 수정 화면 맨 아래 [보관]과 "보관해도 지난 기록은 지워지지 않아요." 확인은 "아침약을 보관할까요?" + "위젯·알림·오늘 목록에서 빠지고 지난 기록은 남아요." (REQ-014, TERM-018, TASK-016)
 - 알림 칸 모양은 09 ItemForm (TASK-023): 주기·요일·시간대 칸 아래 '알림 받기' 스위치(주 1회 약이면 그 아래 "그 주의 월요일에만 울려요."), 켜면 '첫 알림 시각'과 시각 버튼, "다시 알림 간격·하루 최대·방해 금지는 설정에서 바꿔요.". 시각은 SCR-009처럼 시스템 시각 고르기(24시간, 분 단위). 글자가 커서 시각 버튼이 줄 폭의 45%를 넘으면 이름 아래로. TalkBack은 스위치를 "알림 받기"(주 1회 약은 안내 문장까지), 시각 버튼을 "첫 알림 시각, 21시"로 읽음
 
@@ -505,7 +505,7 @@ flowchart TD
 
 명세: SPEC-021, SPEC-025, SPEC-029, SPEC-030, SPEC-031, SPEC-033, SPEC-034, SPEC-035, SPEC-036, SPEC-053
 
-목업 (09, 2안 요일 약통): [캔버스](https://claude.ai/artifact/QW5JRsx1Zpz5ekeqHmjpKC)의 보드 [`Settings`](../09-mockup/boards/Settings.dc.html)
+목업 (09, 2안 요일 약통): [캔버스](https://claude.ai/artifact/QW5JRsx1Zpz5ekeqHmjpKC)의 보드 [`Settings`](../09-mockup/boards/Settings.dc.html). 2차 보드: [`SettingsFeedback`](../09-mockup/boards/SettingsFeedback.dc.html) ([그림](../09-mockup/renders-p2/SettingsFeedback.png)), [`SettingsNoMail`](../09-mockup/boards/SettingsNoMail.dc.html) ([그림](../09-mockup/renders-p2/SettingsNoMail.png))
 
 | 보여 주는 것 | 출처 |
 | --- | --- |
@@ -572,7 +572,7 @@ flowchart TD
 
 명세: SPEC-004, SPEC-021, SPEC-026, SPEC-027, SPEC-044, SPEC-054
 
-목업 (09, 2안 요일 약통): [캔버스](https://claude.ai/artifact/QW5JRsx1Zpz5ekeqHmjpKC)의 보드 [`People`](../09-mockup/boards/People.dc.html), [`PersonAdd`](../09-mockup/boards/PersonAdd.dc.html)
+목업 (09, 2안 요일 약통): [캔버스](https://claude.ai/artifact/QW5JRsx1Zpz5ekeqHmjpKC)의 보드 [`People`](../09-mockup/boards/People.dc.html), [`PersonAdd`](../09-mockup/boards/PersonAdd.dc.html). 2차 보드: [`PeopleCard`](../09-mockup/boards/PeopleCard.dc.html) ([그림](../09-mockup/renders-p2/PeopleCard.png)), [`PeopleCard200`](../09-mockup/boards/PeopleCard200.dc.html) ([그림](../09-mockup/renders-p2/PeopleCard200.png)), [`PersonEditCard`](../09-mockup/boards/PersonEditCard.dc.html) ([그림](../09-mockup/renders-p2/PersonEditCard.png))
 
 | 보여 주는 것 | 출처 |
 | --- | --- |
@@ -605,7 +605,7 @@ flowchart TD
 - 대상자가 둘 이상이 되면 위젯·앱에 배지와 대상자 고르기가 보이기 시작함 (REQ-018)
 - 글자가 크면(200%) '보관됨' 줄의 [되살리기]는 이름 아래 줄로 내림. 한 줄에 두면 화면 오른쪽 끝을 넘음 ([09 목업 4.1절](../09-mockup/README.md#41-기기-글꼴로-다시-잼-2026-11-13-claude))
 - 배지는 이름 첫 글자라 "엄마"와 "엄지"가 같아 보임. 색으로 구분함 (QA 5장 알려진 제한). 두 글자 배지나 직접 고르는 글자는 2차 후보 (검토 B12)
-- (2차) '보관됨' 줄은 [되살리기]와 줄 탭이 따로 눌림. TalkBack은 줄을 `아빠, 약 1개 · 지난 기록은 남아요`와 동작 `건강 카드 보기`로, 버튼은 `아빠 되살리기`로 읽음. 보관하지 않은 사람의 줄 탭은 그대로 '이름·색 바꾸기'이고, [건강 카드]는 '대상자 수정'의 이름 칸 위에 둠
+- (2차) '보관됨' 줄은 [되살리기]와 줄 탭이 따로 눌림. 줄에 '건강 카드 보기 ›'를 보이고, 글자 200%에서는 이름·항목 수·'건강 카드 보기'·[되살리기]를 차례로 쌓음(09 `PeopleCard200`). TalkBack은 줄을 `아빠, 약 1개 · 지난 기록은 남아요`와 동작 `건강 카드 보기`로, 버튼은 `아빠 되살리기`로 읽음. 보관하지 않은 사람의 줄 탭은 그대로 '이름·색 바꾸기'이고, [건강 카드]는 '대상자 수정'의 이름 칸 위에 둠
 
 구현 (2026-11-13, TASK-021, [PR #19](https://github.com/judangbang-ops/pillbadeum_release/pull/19))
 
@@ -634,7 +634,7 @@ flowchart TD
 
 명세: SPEC-046, SPEC-047, SPEC-049, SPEC-054, SPEC-055
 
-목업: 09에서 그림 (2차 첫 릴리즈)
+목업 (09, 2차 첫 릴리즈): 보드 [`Card`](../09-mockup/boards/Card.dc.html) ([그림](../09-mockup/renders-p2/Card.png)), [`Card200`](../09-mockup/boards/Card200.dc.html) ([그림](../09-mockup/renders-p2/Card200.png)), [`CardRecopy`](../09-mockup/boards/CardRecopy.dc.html) ([그림](../09-mockup/renders-p2/CardRecopy.png)), [`CardArchived`](../09-mockup/boards/CardArchived.dc.html) ([그림](../09-mockup/renders-p2/CardArchived.png)), [`CardEmpty`](../09-mockup/boards/CardEmpty.dc.html) ([그림](../09-mockup/renders-p2/CardEmpty.png)). [09 목업 8장](../09-mockup/README.md#8-2차-첫-릴리즈-건강-카드-보드-2026-11-23-claude-기능-변경)
 
 | 보여 주는 것 | 출처 |
 | --- | --- |
@@ -682,7 +682,7 @@ flowchart TD
 
 명세: SPEC-045
 
-목업: 09에서 그림 (2차 첫 릴리즈)
+목업 (09, 2차 첫 릴리즈): 보드 [`CardEntry`](../09-mockup/boards/CardEntry.dc.html) ([그림](../09-mockup/renders-p2/CardEntry.png)), [`CardEntry200`](../09-mockup/boards/CardEntry200.dc.html) ([그림](../09-mockup/renders-p2/CardEntry200.png)), [`CardEntryError`](../09-mockup/boards/CardEntryError.dc.html) ([그림](../09-mockup/renders-p2/CardEntryError.png)). [09 목업 8장](../09-mockup/README.md#8-2차-첫-릴리즈-건강-카드-보드-2026-11-23-claude-기능-변경)
 
 | 보여 주는 것 | 출처 |
 | --- | --- |
@@ -721,7 +721,7 @@ flowchart TD
 
 명세: SPEC-049, SPEC-050
 
-목업: 09에서 그림 (2차 첫 릴리즈)
+목업 (09, 2차 첫 릴리즈): 보드 [`CardShow`](../09-mockup/boards/CardShow.dc.html) ([그림](../09-mockup/renders-p2/CardShow.png)), [`CardShow200`](../09-mockup/boards/CardShow200.dc.html) ([그림](../09-mockup/renders-p2/CardShow200.png)). [09 목업 8장](../09-mockup/README.md#8-2차-첫-릴리즈-건강-카드-보드-2026-11-23-claude-기능-변경)
 
 | 보여 주는 것 | 출처 |
 | --- | --- |
@@ -758,7 +758,7 @@ flowchart TD
 
 명세: SPEC-049, SPEC-051
 
-목업: 09에서 그림 (2차 첫 릴리즈)
+목업 (09, 2차 첫 릴리즈): 보드 [`Emergency`](../09-mockup/boards/Emergency.dc.html) ([그림](../09-mockup/renders-p2/Emergency.png)), [`EmergencyCopied`](../09-mockup/boards/EmergencyCopied.dc.html) ([그림](../09-mockup/renders-p2/EmergencyCopied.png)). [09 목업 8장](../09-mockup/README.md#8-2차-첫-릴리즈-건강-카드-보드-2026-11-23-claude-기능-변경)
 
 | 보여 주는 것 | 출처 |
 | --- | --- |
@@ -793,7 +793,7 @@ flowchart TD
 
 명세: SPEC-049, SPEC-052
 
-목업: 09에서 그림 (2차 첫 릴리즈)
+목업 (09, 2차 첫 릴리즈): 보드 [`Export`](../09-mockup/boards/Export.dc.html) ([그림](../09-mockup/renders-p2/Export.png)), [`ExportPages`](../09-mockup/boards/ExportPages.dc.html) ([그림](../09-mockup/renders-p2/ExportPages.png)). [09 목업 8장](../09-mockup/README.md#8-2차-첫-릴리즈-건강-카드-보드-2026-11-23-claude-기능-변경)
 
 | 보여 주는 것 | 출처 |
 | --- | --- |
@@ -902,11 +902,12 @@ flowchart TD
 - 2026-11-16 TASK-045 앱 이름 (**정함**: 2026-11-16 10:09 KST 동희님이 '필받음 재구축 인계' 채팅에서 앱 이름 '필받음'): 앱 이름 상수(`Labels.APP_NAME`)와 런처·위젯 목록의 이름(`app_name`·`widget_label`)이 'DidITake'에서 '필받음'으로 바뀜. 화면에 보이는 곳은 위젯 머리글('필받음 · 11/16', SCR-001), SCR-005 1쪽 "필받음은 기록 도구예요."(09 Welcome1과 같아짐)와 2쪽 단계 "'위젯'에서 필받음 찾기", SCR-004·SCR-009의 "필받음을 찾아" 두 문장이고, 조사는 이름 끝 글자에 맞춰 붙음. 화면 구조는 그대로임. 같은 PR에서 런처 아이콘(캡슐과 체크)을 더함. 화면 정의 밖이라 이 장의 승인 대상은 아니고 Claude가 고름
 - 2026-11-16 BUG-006 고침 (Claude, 고침): 앱 화면 위의 상태 표시줄을 흰 바탕에 어두운 아이콘으로 함. Android 15 이상에서는 앱이 상태 표시줄 밑까지 그려져 흰 아이콘이 흰 화면에 묻혔음([시험 계획 6장](../12-qa/test-plan.md#6-버그) BUG-006). Android 14 이하에서는 회색 띠였던 것이 흰 띠가 되고, Android 8.1 이상은 아래 내비게이션 바도 흰 바탕에 어두운 버튼이 됨. SCR-002는 Android 15 이상에서만 어두운 아이콘이고 그 아래에서는 시스템이 그리는 어두운 띠 그대로임. 화면 내용은 그대로이고, 상태 표시줄은 화면 정의 밖이라 Claude가 정함
 - 2026-11-23 2차 첫 릴리즈 07 사이트맵 (Claude, 기능 변경. 확인 질문 07-1~07-5(`msg_2a4b2f0cb923`), **정함**: 2026-11-23 KST, 필받음 봇이 전한 사용자님 답 "추천안 모두 승인"(07-1~07-5, 근거는 사용자님 말씀(오랑이 채팅, 2026-11-23 01시대 KST)과 필받음 봇 질문 `msg_97c052ed16f3`에 대한 오랑이 답). 07-2~07-5는 '바꿈 승인'): 화면 지도에 SCR-011 건강 카드(SCR-004 아래)와 그 아래 SCR-012 카드 칸 적기·고치기, SCR-013 보여 주기, SCR-014 응급 대비 문장, SCR-015 내보내기를 더함. SCR-004·006·009·010의 흐름·요구·용어와 링크(SCR-010 → SCR-011, SCR-011 → SCR-006)를 고침. 1장은 `draw_sitemap.py`로 다시 그림. [변경 기록](../10-records/changes/2026-11-22-phase2-release1.md) 6장 '07 사이트맵'
+- 2026-11-23 2차 첫 릴리즈 08 화면 상태 (Claude, 기능 변경. 확인 질문 08-1~08-6(`msg_7fb38fa59756`), **정함**: 2026-11-23 KST, 필받음 봇이 전한 사용자님 답 "추천안 모두 승인"(08-1~08-6, 근거는 사용자님 말씀(오랑이 채팅, 2026-11-23 01시대 KST)과 필받음 봇 질문 `msg_74425407eb6a`에 대한 오랑이 답). 08-2~08-6은 '바꿈 승인'): 2장에 SCR-011~015의 정의와 상태를 더하고, SCR-004·006·009·010에 '(2차)' 줄을 더함(1차 승인 줄은 그대로, 예외는 SCR-006#error 줄과 네 화면의 목적·`명세:` 줄). 7장에 화면 글자와 표준 용어의 짝을 적음: 이름은 표준 용어, 쉬운 말은 설명 한 줄과 예(08-2, 01 2차 확인 3 답 12-가의 '쉬운 말'을 이렇게 하기로 바꿈). 자세한 것은 변경 기록 6장 '08 화면 상태'
 
 ## 7. 2차 첫 릴리즈: 화면 글자와 표준 용어
 
 - 정할 것: 01 2차 확인 3의 답 12-가 "용어집은 표준 용어(TERM-032부터), 화면 글자는 08에서 쉬운 말"(2026-11-23 오후 KST, [도메인 문서](../01-domain/domain.md)의 확인 기록). 이 장은 그 '쉬운 말'을 화면에서 어떻게 하는지와 용어집 말과의 짝을 적음. 1차 화면 글자는 바꾸지 않음
-- 추천 (08 확인 08-2, 답 기다림): 제목·버튼·입력란 이름에는 표준 용어를 그대로 쓰고, 처음 적는 곳(카드 화면 SCR-011, 칸 적기 SCR-012, 항목 화면 SCR-006의 약 부분)에 쉬운 설명 한 줄과 예를 붙임. 의사·간호사가 읽는 보여 주기(SCR-013)·내보내기 파일(SCR-015)·응급 대비 문장(SCR-014)에는 표준 용어만 씀
+- **정함** (08 확인 08-2 '바꿈 승인', 2026-11-23 KST, 필받음 봇이 전한 사용자님 답 "추천안 모두 승인"(08-1~08-6, 근거는 사용자님 말씀(오랑이 채팅, 2026-11-23 01시대 KST)과 필받음 봇 질문 `msg_74425407eb6a`에 대한 오랑이 답)): 제목·버튼·입력란 이름에는 표준 용어를 그대로 쓰고, 처음 적는 곳(카드 화면 SCR-011, 칸 적기 SCR-012, 항목 화면 SCR-006의 약 부분)에 쉬운 설명 한 줄과 예를 붙임. 의사·간호사가 읽는 보여 주기(SCR-013)·내보내기 파일(SCR-015)·응급 대비 문장(SCR-014)에는 표준 용어만 씀
 - 까닭: 사용자가 적는 화면과 의사가 보는 화면의 말이 같아야 어느 칸에 무엇을 적었는지 맞춰 볼 수 있음. 쉬운 말은 다른 이름을 붙이는 것이 아니라 처음 나오는 곳에서 설명하는 것으로 함(CORTHEX 원칙 9)
 - 다른 안: 입력 화면의 제목을 쉬운 말로 바꿈. 용어집 '피할 말'의 화면 글자 후보(앓는 병, 몸에 넣은 장치, 다니는 병원, 한 번에 먹는 양, 한 장, 불편해요)를 씀. 그러면 적는 화면과 보여 주는 화면의 제목이 달라짐
 - 반론: '이식형 의료기기'·'1회 투약량'은 낯선 말이라 처음 쓰는 사람이 망설일 수 있음. 설명 한 줄과 예로 메우고, 테스터 의견(의견 보내기)에서 다시 봄

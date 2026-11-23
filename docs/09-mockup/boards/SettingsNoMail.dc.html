@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>SCR-009 설정 · 메일 앱이 없을 때</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;800&amp;family=Roboto:wght@400;600;800&amp;display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="box.css">
+<style>
+.scrim{position:absolute;inset:0;background:color-mix(in srgb,var(--color-ink-default) 45%,transparent)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--color-surface-default);border-radius:var(--radius-widget) var(--radius-widget) 0 0;padding:var(--space-xl) var(--space-lg) var(--space-lg)}
+.sheet .st{font-size:var(--font-size-title-sm);font-weight:var(--font-weight-extrabold);line-height:var(--font-line-height-tight);padding:0 var(--space-2xs) var(--space-md)}
+.sheet .btn{margin-top:var(--space-sm)}
+</style>
+</helmet>
+<div class="s {{fs}}">
+  <div class="bar back"><button class="ib" type="button" aria-label="뒤로"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><h1>설정</h1></div>
+  <div class="body">
+    <h2>가족과 보관</h2>
+    <div class="li"><span class="k">대상자 관리</span><span class="v">2명</span><span class="muted"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+    <div class="li"><span class="k">보관한 항목</span><span class="v">1개</span><span class="muted"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+    <h2>백업</h2>
+    <p class="note" style="padding:0 var(--space-2xs)">화면 잠금과 Google 백업이 켜져 있으면 복용 기록이 백업돼요.</p>
+    <h2>앱 정보</h2>
+    <div class="li"><span class="k">버전</span><span class="v">2.0.0</span></div>
+    <div class="li"><span class="k">개인정보처리방침</span><span class="muted"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+    <div class="li"><span class="k">의견 보내기<small>메일 앱이 열려요. 앱 버전·Android 버전·기기 모델만 채워요.</small></span><span class="muted"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4zM4 7l8 6 8-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+    <p class="note" style="padding:var(--space-sm) var(--space-2xs)">의료기기가 아니며 질병을 진단·치료·예방하지&nbsp;않아요.</p>
+  </div>
+
+  <div class="scrim" aria-hidden="true"></div>
+  <div class="sheet" role="dialog" aria-label="메일 앱을 열 수 없어요">
+    <p class="st">메일 앱을 열 수 없어요. 이 주소로 보내 주세요</p>
+    <div class="in" style="margin-bottom: var(--space-sm); overflow-wrap: anywhere">feedback@example.com</div>
+    <button class="btn ink" type="button">복사</button>
+    <button class="btn text" type="button">닫기</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"fontScale": {"editor": "enum", "options": ["100", "200"], "default": "100"}, "$preview": {"width": 360, "height": 800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { fs: (this.props.fontScale ?? '100') === '200' ? 'fs200' : '' };
+  }
+}
+</script>
+</body>
+</html>

@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -236,6 +237,7 @@ fun App(
     var peopleView by remember { mutableStateOf<PeopleView?>(null) }
     var peopleFailed by remember { mutableStateOf(false) }
     var peopleAttempts by remember { mutableIntStateOf(0) }
+    val personFormState = rememberSaveableStateHolder()
     // SCR-005 (TASK-022): closed in this activity, by [시작하기] or [건너뛰기]. It does not come back here even when saving
     // that failed or the database was not open yet; the next start shows it again then.
     var introClosed by rememberSaveable { mutableStateOf(false) }
@@ -309,6 +311,11 @@ fun App(
     }
 
     fun go(to: Route) {
+        val from = route
+        if (from is Route.Person && (to !is Route.HealthCard || to.from != from)) {
+            personFormState.removeState(from.key)
+        }
+        if (from == Route.People && to is Route.Person) personFormState.removeState(to.key)
         message = null
         cardEntrySeed = null
         route = to
@@ -410,6 +417,7 @@ fun App(
 
             Route.Home -> {
                 LaunchedEffect(refreshKey) { access = phone.reminderAccess() }
+                var cardRequested by rememberSaveable { mutableStateOf(false) }
                 HomeScreen(
                     state = when {
                         failed -> HomeState.Failed
@@ -428,6 +436,7 @@ fun App(
                             board?.baseDate?.let { today -> openHistory(Route.History(LocalDate(today.year, today.month, 1), null)) }
                         },
                         settings = { openSettings() },
+                        card = { if (!busy) cardRequested = true },
                         add = { go(Route.Item(null, from = current)) },
                         edit = { go(Route.Item(it.intakeId, from = current)) },
                         more = { go(Route.Judge(it.intakeId, it.scheduleVersionId, it.window.periodKey)) },
@@ -486,6 +495,21 @@ fun App(
                         openAccess = ::openAccess,
                     ),
                 )
+                val c = core
+                if (cardRequested && c != null) {
+                    HomeCardPicker(
+                        core = c,
+                        onOpen = { personId ->
+                            cardRequested = false
+                            go(Route.HealthCard(personId, from = current))
+                        },
+                        onDismiss = { cardRequested = false },
+                        onFailure = {
+                            cardRequested = false
+                            message = Labels.CARD_LOAD_FAILED
+                        },
+                    )
+                }
             }
 
             is Route.HealthCard -> key(current.key) {
@@ -1047,6 +1071,7 @@ fun App(
                         },
                         add = { go(Route.Person(null)) },
                         edit = { go(Route.Person(it.person.id)) },
+                        openArchivedCard = { if (!busy) go(Route.HealthCard(it.person.id, from = current)) },
                         restore = { row ->
                             write(failure = Labels.RESTORE_FAILED) { c ->
                                 val restored = c.people.restore(row.person.id) == PersonChange.Saved
@@ -1061,7 +1086,7 @@ fun App(
                 )
             }
 
-            is Route.Person -> key(current.key) {
+            is Route.Person -> personFormState.SaveableStateProvider(current.key) {
                 LaunchedEffect(core, peopleAttempts) { core?.let { readPeople(it) } }
                 val view = peopleView
                 val editing = current.personId?.let { id -> view?.active?.firstOrNull { it.person.id == id } }
@@ -1079,6 +1104,7 @@ fun App(
                             },
                             add = {},
                             edit = {},
+                            openArchivedCard = {},
                             restore = {},
                         ),
                     )
@@ -1093,6 +1119,7 @@ fun App(
                         view = view,
                         message = message,
                         onClose = { go(Route.People) },
+                        onOpenCard = { if (!busy) go(Route.HealthCard(it.person.id, from = current)) },
                         // The form stays until the write is over (widgets and reminders included), then the list shows it.
                         onSave = { name, color ->
                             write(failure = Labels.SAVE_FAILED) { c ->

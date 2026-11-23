@@ -10,6 +10,14 @@
 
 ## 2026-11-23
 
+### CI 앱 화면 시험의 Maven Central 429 줄이기
+
+- **목표**: 앱 화면 시험의 의존성 다운로드 실패를 줄이고 시험 범위와 판정 기준을 유지함.
+- **확인한 것**: [PR 실행 45021627405 2차](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45021627405/attempts/2)와 [main 실행 45055509494 1차](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45055509494/attempts/1)에서 Gradle이 앱 시험의 클래스패스를 구성하며 `nativeruntime-dist-compat:1.0.19`을 받다가 429를 만남. 앞 단계인 `:shared:jvmTest`는 이 의존성을 쓰지 않음. 두 실행의 Gradle 캐시는 [릴리즈 빌드 45011811099](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45011811099)가 먼저 저장했고, [같은 커밋의 CI 45011811086](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45011811086)는 같은 키를 선점당해 앱 시험 의존성을 저장하지 못함.
+- **한 일**: `actions/setup-java`의 Gradle 캐시 키에 `.github/workflows/ci.yml`을 추가해 앱 시험까지 돈 CI가 저장하게 함. `--rerun`은 매번 시험을 실제로 돌리는 옵션이라 유지함.
+- **확인하지 못한 것**: CI 전용 캐시를 처음 만드는 실행은 Maven Central 상태의 영향을 받음. Robolectric이 시험 중 따로 받는 Android SDK JAR의 다운로드는 이번 변경 범위 밖임.
+- **다음 행동**: PR에서 캐시 저장과 같은 키 복원, 두 실행의 시험 결과를 확인함.
+
 ### 노션 '최근 업데이트'에 11/22~23 작업의 최종본 한 행 (PR #53~#61)
 
 - **목표**: 2026-11-15 15:31 KST 동희님 지시("노션에는 한번에 최종본만 올리고")대로, 11/22~23 작업(Q11 답과 결정, 에뮬레이터 QA, 테스터 폰 자동 업데이트)을 노션에 한 번만 올림

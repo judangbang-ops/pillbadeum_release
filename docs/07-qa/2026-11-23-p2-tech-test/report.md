@@ -6,7 +6,8 @@
 - 환경 GitHub Actions의 Pixel 5 하드웨어 프로필, `google_apis` x86_64, API 32·34·36. 앱 디버그 변형에 시험용 화면과 FileProvider를 추가했고, 다른 앱의 역할은 별도 수신 APK로 시험했다. 카드와 메일에 가상 데이터만 사용했다.
 - 결과는 기술 시험에 적용된다. 정식 화면 배치, 화면 이동, 카드 저장, 실기기 동작은 TASK-062~065 및 TASK-068에서 확인한다.
 
-- 실행 근거 [기술 시험](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45134823500), [API 34 민감 미리보기 캡처](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45134082507), [API 36 민감 미리보기 재캡처](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45135220825). 아티팩트 `task056-api32`·`task056-api34`·`task056-api36`에 `observations.txt`, `task056-logcat.txt`, 캡처와 렌더 파일이 있다. 권한 덤프는 `task056-apks`에 있다.
+- 최종 실행 `e27cb92`의 APK·권한 검사와 API 32·34·36 작업이 모두 통과했다. 자동 판정은 API마다 43건 통과, 실패 0건이었다. 실행의 아티팩트 `task056-api32`·`task056-api34`·`task056-api36`에 `observations.txt`, `task056-logcat.txt`, 캡처와 렌더 파일이 있다. 권한 덤프는 `task056-apks`에 있다. [최종 실행](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45136012121).
+- 일부 캡처는 메뉴 전환과 복사 미리보기가 선명했던 앞선 실행에서 가져왔다. [내보내기·공유·입력 증거](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45134823500), [API 34 미리보기](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45134082507), [API 36 미리보기](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/45135220825).
 
 ## 1. PDF·PNG 내보내기
 
@@ -30,7 +31,7 @@
 ## 4. 화면 켜 두기·잠금 화면
 
 - **사실** — `FLAG_KEEP_SCREEN_ON`을 붙인 Activity가 백그라운드에 가면 화면이 정상적으로 꺼질 수 있다. `setShowWhenLocked`는 잠금 화면 위에 Activity를 표시하는 별도 동작이다. [Android 화면 켜 두기](https://developer.android.com/develop/background-work/background-tasks/awake/screen-on), [Android Activity](https://developer.android.com/reference/android/app/Activity#setShowWhenLocked(boolean)) (2026-11-23 열람).
-- **관찰** — API 32·34·36에서 화면 꺼짐을 30초로 설정했다. 보여 주기 화면을 62초간 그대로 두어도 `Awake`였고, 절전 후 다시 켰을 때 키가드에 카드가 보이지 않았다. 뒤로 가기로 진입 화면에 돌아간 뒤 `Asleep`으로 바뀌었다. 초기 실행의 API 34에서는 잠금 해제 직후 카드 복귀를 확인하지 못해 시험 화면을 다시 열고 뒤로 가기를 확인했다. [62초 뒤](evidence/api34-show-62s.png), [잠금 화면](evidence/api34-show-locked.png), [뒤로 가기 뒤](evidence/api34-show-back.png).
+- **관찰** — API 32·34·36에서 화면 꺼짐을 30초로 설정했다. 보여 주기 화면을 62초간 그대로 두어도 `Awake`였고, 절전 후 다시 켰을 때 잠금 화면에 카드가 보이지 않았다. 시험 PIN으로 풀면 같은 카드가 다시 보였다. 뒤로 가기로 진입 화면에 돌아가고 34초를 기다렸을 때는 `Asleep`이었다. 초기 API 34 실행에서는 잠금 해제 직후 카드 복귀를 확인하지 못했다. 최종 실행은 PIN 입력 전에 잠금 해제 화면이 나타날 시간을 확보해 통과했다. [62초 뒤](evidence/api34-show-62s.png), [잠금 화면](evidence/api34-show-locked.png), [잠금 해제 뒤](evidence/api34-show-unlocked.png), [뒤로 가기 뒤](evidence/api34-show-back.png).
 - **TASK-062 적용** — SCR-013이 앞에 보이는 동안에만 `FLAG_KEEP_SCREEN_ON`을 설정한다. 화면 종료와 백그라운드 이동에서 풀고, 다시 앞에 보일 때 상태에 맞춰 복구한다. 키가드 위에 표시하는 API와 매니페스트 속성은 사용하지 않는다.
 
 ## 5. 긴급 정보 메뉴, 바로 열기, 글자 수
@@ -38,7 +39,7 @@
 - **사실** — Google의 Pixel 도움말은 `위급 상황 정보 앱 → 내 정보 → 의료 정보 → 항목 선택`을 안내한다. 로그인 요청이 표시되는 경우가 있으며 글자 수 한계는 확인 안 됨. [Pixel 도움말](https://support.google.com/pixelphone/answer/7055029?hl=ko) (2026-11-23 열람).
 - **사실** — 삼성전자서비스의 Android 12·13·14 안내는 `설정 → 안전 및 긴급 → 의료정보`에서 건강 상태, 알레르기, 복용 중인 약 등을 나누어 입력하고 저장하는 경로를 보여 준다. 글자 수 한계와 의료정보 화면을 직접 여는 타사 앱용 공개 API는 확인 안 됨. Galaxy 실기기는 미시험. [삼성전자서비스](https://www.samsungsvc.co.kr/solution/39783) (2026-11-23 열람).
 - **사실** — 공개 Android SDK는 일반 설정을 여는 `Settings.ACTION_SETTINGS`를 제공한다. AOSP EmergencyInfo의 매니페스트에는 `android.settings.EDIT_EMERGENCY_INFO`와 `android.emergency.EDIT_MEDICAL_INFO`가 있다. 두 문자열에 대한 제조사 공통 지원은 공개 Settings 문서에서 확인 안 됨. [Android Settings](https://developer.android.com/reference/android/provider/Settings#ACTION_SETTINGS), [AOSP EmergencyInfo 매니페스트](https://android.googlesource.com/platform/packages/apps/EmergencyInfo/+/6b8e1aad/AndroidManifest.xml) (2026-11-23 열람).
-- **관찰** — API 32·34는 `Settings → Safety & emergency → Emergency information → Add information → Allergies`에서 가상 문자열 197자와 1,024자를 각각 붙여 넣었다. 두 길이 모두 마지막 문자까지 남았다. 이 칸의 최대값은 확인 안 됨. API 36은 같은 설정 메뉴에 `Medical information`을 표시했다. `Open Personal Safety`를 선택했을 때 앱 시작 화면이 나타났다. 초기 실행에서 글자 수는 확인 안 됨. `ACTION_SETTINGS`는 API 32·34·36에서 모두 열렸다. 시험한 AOSP 전용 인텐트 두 개는 API 32·34에서 열렸고 API 36에서 열리지 않았다. `android.settings.EMERGENCY_SETTINGS`는 세 이미지 모두에서 열리지 않았다. [API 34 메뉴](evidence/api34-emergency-settings.png), [API 34 입력란](evidence/api34-emergency-1024.png), [API 36 메뉴](evidence/api36-emergency-menu.png).
+- **관찰** — API 32·34는 `Settings → Safety & emergency → Emergency information → Add information → Allergies`에서 가상 문자열 197자와 1,024자를 각각 붙여 넣었다. 두 길이 모두 마지막 문자까지 남았다. 이 칸의 최대값은 확인 안 됨. API 36에서는 `Settings → Safety & emergency → Medical information`을 선택하면 Personal Safety의 시작 화면이 열렸다. 약관 동의 단계에서 시험을 마쳐 글자 수는 확인 안 됨. `ACTION_SETTINGS`는 API 32·34·36에서 모두 열렸다. 시험한 AOSP 전용 인텐트 두 개는 API 32·34에서 열렸고 API 36에서 열리지 않았다. `android.settings.EMERGENCY_SETTINGS`는 세 이미지 모두에서 열리지 않았다. [API 34 메뉴](evidence/api34-emergency-settings.png), [API 34 입력란](evidence/api34-emergency-1024.png), [API 36 메뉴](evidence/api36-emergency-menu.png), [API 36 시작 화면](evidence/api36-emergency-onboarding.png).
 - **TASK-063 적용** — 제조사에 따라 다른 메뉴 경로를 문구로 안내한다. 설정을 여는 기능이 필요하면 일반 설정의 공개 인텐트를 사용한다. 생성한 문장은 줄이지 않고 글자 수를 표시한다. 기종 공통의 글자 수 제한은 확인 안 됨으로 두고, 특정 칸에 전체 문장이 들어간다는 보장은 문구에 넣지 않는다.
 
 ## 6. 119안심콜

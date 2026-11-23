@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -367,42 +368,70 @@ internal fun Field(
     spokenLabel: String = label,
     labelStyle: TextStyle = Ui.type(15, Ui.SemiBold, lineHeight = 1.25f),
     gap: Dp = 6.dp,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    singleLine: Boolean = true,
+    counter: String? = null,
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(gap)) {
         FieldLabel(label, optional, labelStyle)
-        val interaction = remember { MutableInteractionSource() }
-        val focused by interaction.collectIsFocusedAsState()
-        BasicTextField(
+        FormInput(
             value = value,
-            onValueChange = onChange,
-            singleLine = true,
-            textStyle = Ui.type(16, lineHeight = 1.25f),
-            cursorBrush = SolidColor(Ui.Ink),
-            interactionSource = interaction,
-            modifier = inputModifier.fillMaxWidth().semantics { contentDescription = spokenLabel },
-            decorationBox = { inner ->
-                val (width, color) = when {
-                    error != null -> 2.dp to Ui.Danger
-                    focused -> 2.dp to Ui.Ink
-                    else -> 1.5.dp to Ui.LineStrong
-                }
-                Box(
-                    Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(Ui.ButtonShape).background(Ui.Surface)
-                        .border(width, color, Ui.ButtonShape).padding(horizontal = 16.dp, vertical = 8.dp),
-                    contentAlignment = Alignment.CenterStart,
-                ) {
-                    if (value.isEmpty() && placeholder.isNotEmpty()) {
-                        Words(placeholder, Ui.type(16, color = Ui.Muted, lineHeight = 1.25f), Modifier.hiddenFromTalkBack())
-                    }
-                    inner()
-                }
-            },
+            onChange = onChange,
+            spokenLabel = spokenLabel,
+            modifier = inputModifier.fillMaxWidth(),
+            placeholder = placeholder,
+            invalid = error != null,
+            keyboardOptions = keyboardOptions,
+            singleLine = singleLine,
         )
         error?.let {
             Words(it, Ui.type(14, Ui.SemiBold, Ui.Danger), Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         }
         note?.let { ItemFormNote(it) }
+        counter?.let { Words(it, Ui.type(14, color = Ui.Muted), Modifier.align(Alignment.End)) }
     }
+}
+
+@Composable
+internal fun FormInput(
+    value: String,
+    onChange: (String) -> Unit,
+    spokenLabel: String,
+    modifier: Modifier = Modifier,
+    placeholder: String = "",
+    invalid: Boolean = false,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    singleLine: Boolean = true,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    BasicTextField(
+        value = value,
+        onValueChange = onChange,
+        singleLine = singleLine,
+        keyboardOptions = keyboardOptions,
+        textStyle = Ui.type(16, lineHeight = 1.25f),
+        cursorBrush = SolidColor(Ui.Ink),
+        interactionSource = interaction,
+        modifier = modifier.semantics { contentDescription = spokenLabel },
+        decorationBox = { inner ->
+            val (width, color) = when {
+                invalid -> 2.dp to Ui.Danger
+                focused -> 2.dp to Ui.Ink
+                else -> 1.5.dp to Ui.LineStrong
+            }
+            Box(
+                Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(Ui.ButtonShape).background(Ui.Surface)
+                    .border(width, color, Ui.ButtonShape).padding(horizontal = 16.dp, vertical = 8.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                if (value.isEmpty() && placeholder.isNotEmpty()) {
+                    Words(placeholder, Ui.type(16, color = Ui.Muted, lineHeight = 1.25f), Modifier.hiddenFromTalkBack())
+                }
+                inner()
+            }
+        },
+    )
 }
 
 @Composable

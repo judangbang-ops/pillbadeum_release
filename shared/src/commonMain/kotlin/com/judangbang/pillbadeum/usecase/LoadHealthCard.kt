@@ -23,7 +23,7 @@ data class CardMedication(
     val slot: SlotLabel?,
     val hasMedicationName: Boolean,
 ) {
-    private val dose get() = listOfNotNull(name, quantity?.takeIf { it.isNotBlank() }).joinToString(" ")
+    internal val dose get() = listOfNotNull(name, quantity?.takeIf { it.isNotBlank() }).joinToString(" ")
     private val schedule get() = rule?.let { Labels.healthCardSchedule(it, slot) }
 
     val text: String get() {

@@ -304,7 +304,15 @@ internal fun Modifier.dashedBorder(width: Dp, color: Color, radius: Dp, dash: Dp
 
 /** A question before a change ("기록을 취소할까요?"), with `[아니요]` and [confirm]. */
 @Composable
-internal fun ConfirmDialog(title: String, body: String, confirm: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+internal fun ConfirmDialog(
+    title: String,
+    body: String,
+    confirm: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    cancel: String = "아니요",
+    stackButtons: Boolean = false,
+) {
     Dialog(onDismissRequest = onDismiss) {
         Column(
             // Scrolls when large text makes it taller than the window, so the buttons stay reachable.
@@ -313,9 +321,16 @@ internal fun ConfirmDialog(title: String, body: String, confirm: String, onConfi
         ) {
             Words(title, Ui.type(18, Ui.ExtraBold, lineHeight = 1.3f), heading = true)
             Words(body, Ui.type(16, color = Ui.Muted))
-            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                ActionButton("아니요", ButtonLook.LineSmall, onDismiss)
-                ActionButton(confirm, ButtonLook.InkSmall, onConfirm)
+            if (stackButtons) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ActionButton(cancel, ButtonLook.Line, onDismiss)
+                    ActionButton(confirm, ButtonLook.Ink, onConfirm)
+                }
+            } else {
+                Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+                    ActionButton(cancel, ButtonLook.LineSmall, onDismiss)
+                    ActionButton(confirm, ButtonLook.InkSmall, onConfirm)
+                }
             }
         }
     }

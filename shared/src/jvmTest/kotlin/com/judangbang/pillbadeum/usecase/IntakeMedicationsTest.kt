@@ -116,11 +116,11 @@ class IntakeMedicationsTest {
         val name = "가".repeat(49) + "🌕"
         val limit = IntakeMedicationDraft.MAX_NAME
         // A pasted name with spaces around it keeps every character that saving keeps.
-        assertEquals(" $name", " $name ".limitMedicationInput(limit))
-        assertEquals("  $name", "  ${name}다".limitMedicationInput(limit))
-        assertEquals(name, "${name}다".limitMedicationInput(limit))
-        assertEquals(" 가 나 ", " 가 나 ".limitMedicationInput(limit))
-        val id = create(draft().copy(medications = listOf(IntakeMedicationDraft(" $name ".limitMedicationInput(limit)))))
+        assertEquals(" $name", " $name ".limitCodePointInput(limit))
+        assertEquals("  $name", "  ${name}다".limitCodePointInput(limit))
+        assertEquals(name, "${name}다".limitCodePointInput(limit))
+        assertEquals(" 가 나 ", " 가 나 ".limitCodePointInput(limit))
+        val id = create(draft().copy(medications = listOf(IntakeMedicationDraft(" $name ".limitCodePointInput(limit)))))
         assertEquals(name, save.loadMedications(id).single().name)
     }
 

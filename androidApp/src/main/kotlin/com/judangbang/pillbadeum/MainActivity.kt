@@ -3,6 +3,7 @@ package com.judangbang.pillbadeum
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -10,6 +11,8 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import com.judangbang.pillbadeum.boundary.DayBoundaryAlarm
@@ -65,6 +68,7 @@ class MainActivity : ComponentActivity() {
                 refreshKey = resumeCount,
                 homeRequests = homeRequests,
                 backHandler = { enabled, onBack -> BackHandler(enabled, onBack) },
+                protectCardRecents = { visible -> ProtectCardRecents(visible) },
             )
         }
     }
@@ -94,5 +98,16 @@ class MainActivity : ComponentActivity() {
             Intent(context, MainActivity::class.java)
                 .putExtra(EXTRA_HOME, true)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+    }
+}
+
+/** SCR-011~015 (R 16): keep screenshots available while hiding the recent-apps preview. */
+@Composable
+internal fun ComponentActivity.ProtectCardRecents(visible: Boolean) {
+    if (visible && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        DisposableEffect(this) {
+            setRecentsScreenshotEnabled(false)
+            onDispose { setRecentsScreenshotEnabled(true) }
+        }
     }
 }

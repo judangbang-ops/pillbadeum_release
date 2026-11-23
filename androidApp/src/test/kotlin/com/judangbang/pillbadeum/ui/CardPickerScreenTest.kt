@@ -123,8 +123,9 @@ class CardPickerScreenTest {
         tap(Labels.HEALTH_CARD)
         waitForText(Labels.healthCardTitle("나"))
         text(pickerTitle).assertDoesNotExist()
-        waitForText(Labels.CARD_EMPTY)
-        text(Labels.CARD_EMPTY).assertIsDisplayed()
+        val emptyTitle = "아직 적은 내용이 없어요."
+        waitForText(emptyTitle)
+        text(emptyTitle).assertIsDisplayed()
         back()
         openPeople(active = 1)
         val line = archivedLine(mother)

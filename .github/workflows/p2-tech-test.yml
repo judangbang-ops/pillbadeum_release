@@ -1,0 +1,94 @@
+name: TASK-056 기술 시험
+
+on:
+  push:
+    branches: [p2/tech-test-code]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: 시험 APK 및 권한 대조
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c
+      - name: 앱과 수신 시험 APK 빌드
+        run: |
+          sdkmanager --install 'platforms;android-36' 'build-tools;36.0.0'
+          mkdir -p androidApp/src/debug/assets "$RUNNER_TEMP/apk"
+          font=https://raw.githubusercontent.com/google/fonts/16680f8688ffcd467d2eb2146a9ce0343404581d/ofl/gothica1
+          curl --fail --retry 4 --silent --show-error "$font/GothicA1-Regular.ttf" -o androidApp/src/debug/assets/GothicA1-Regular.ttf
+          curl --fail --retry 4 --silent --show-error "$font/OFL.txt" -o androidApp/src/debug/assets/OFL.txt
+          ./gradlew :androidApp:assembleDebug
+          cp androidApp/build/outputs/apk/debug/androidApp-debug.apk "$RUNNER_TEMP/apk/probe-no-queries.apk"
+          python3 -c 'from pathlib import Path; p = Path("androidApp/src/debug/AndroidManifest.xml"); s = p.read_text(); p.write_text(s.replace("    <application>", """    <queries>
+              <intent>
+                  <action android:name="android.intent.action.SENDTO" />
+                  <data android:scheme="mailto" />
+              </intent>
+          </queries>
+          <application>"""))'
+          ./gradlew :androidApp:assembleDebug
+          cp androidApp/build/outputs/apk/debug/androidApp-debug.apk "$RUNNER_TEMP/apk/probe-queries.apk"
+          bash scripts/task056/build-recipient.sh "$RUNNER_TEMP/apk"
+      - name: 기존 권한 기준과 비교
+        run: |
+          set -o pipefail
+          temp="$RUNNER_TEMP/apk"
+          tool="$ANDROID_HOME/build-tools/36.0.0/aapt2"
+          for variant in no-queries queries; do
+            "$tool" dump permissions "$temp/probe-$variant.apk" > "$temp/permissions-$variant.txt"
+            python3 .github/scripts/check_permissions.py "$temp/permissions-$variant.txt" androidApp/expected-permissions.txt "$variant" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
+      - uses: actions/upload-artifact@v6
+        with:
+          name: task056-apks
+          path: |
+            ${{ runner.temp }}/apk/probe-*.apk
+            ${{ runner.temp }}/apk/recipient.apk
+            ${{ runner.temp }}/apk/permissions-*.txt
+          if-no-files-found: error
+          retention-days: 7
+
+  emulator:
+    name: 시험 (API ${{ matrix.api }})
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [32, 34, 36]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v7
+        with:
+          name: task056-apks
+          path: ${{ runner.temp }}/apk
+      - uses: ./.github/actions/android-emulator
+        with:
+          api: ${{ matrix.api }}
+          cores: "4"
+      - name: PDF 확인 도구 설치
+        run: command -v pdfinfo || (sudo apt-get update && sudo apt-get install -y poppler-utils)
+      - name: 가상 데이터로 시험
+        run: |
+          python3 scripts/task056/probe.py --api "${{ matrix.api }}" --apk "$RUNNER_TEMP/apk" --out "$RUNNER_TEMP/task056"
+      - uses: actions/upload-artifact@v6
+        if: ${{ !cancelled() }}
+        with:
+          name: task056-api${{ matrix.api }}
+          path: ${{ runner.temp }}/task056
+          if-no-files-found: warn
+          retention-days: 30

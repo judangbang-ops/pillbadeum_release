@@ -25,7 +25,7 @@
 | [07 화면 목록](docs/05-ui/sitemap.yaml) · [08 화면 상태](docs/05-ui/screens.md) | 화면 SCR-001~010과 화면별 상태, 화면에서 정한 것 | 승인 (2026-11-13 01:04 KST) |
 | [09 목업](docs/09-mockup/README.md) | 2안 요일 약통 보드와 토큰([`design/base.tokens.json`](design/base.tokens.json)) | 확인 끝 (2026-11-12 19:11 KST). 글꼴만 2026-11-13에 기기 글꼴로 바꿈 |
 | [10 작업 분해](docs/08-wbs/wbs.md) | 작업 TASK-001~054, 담당, 릴리즈 단계 R0~R5와의 대응. 지금 프로토타입에서 Play 비공개 테스트까지 | 다음 묶음 계획 확인 (2026-11-13 01:04 KST) |
-| [개인정보처리방침](docs/release/privacy-policy.md) · [근거와 정할 것](docs/release/privacy-policy-basis.md) | Play와 앱 설정(SCR-009)에 걸 방침(TASK-035, REQ-063) | 공개 (2026-11-16, 시행일 같은 날). 앱 설정의 링크도 같은 날 (PR #42) |
+| [개인정보처리방침](docs/release/privacy-policy.md) · [근거와 정할 것](docs/release/privacy-policy-basis.md) | 공개 저장소에 게시하고 앱 설정(SCR-009)에서 여는 방침(TASK-035, REQ-063) | 첫 공개와 앱 설정의 링크는 2026-11-16(PR #41·#42). APK 배포를 반영한 판의 시행일은 방침 상단에 적음(PR #62). Play Console 등록은 보류(Q11 D) |
 | [Play '앱 콘텐츠' 답](docs/release/play-app-content.md) | 데이터 보안·건강 앱 신고·콘텐츠 등급·타겟층 등의 답과 도움말 근거(TASK-036, REQ-063) | 초안 (2026-11-15). 타겟 연령 18세 이상만 정함(2026-11-16). 계정 종류(Q11)는 Play 지원 답을 받은 뒤, 지원 문의 글은 0장 |
 | [스토어 등록정보](docs/release/store-listing.md) · [붙여 넣을 글](docs/release/listing/ko-KR/) | 앱 이름·간단한 설명·자세한 설명과 건강 정책 고지, 스크린샷 계획, 카테고리(TASK-037, REQ-064·REQ-087) | 초안 (2026-11-15). 앱 이름 필받음·카테고리 의료·연락 이메일 정함, 앱 아이콘 만듦(2026-11-16). 스크린샷·그래픽 이미지는 다음 PR, 입력은 TASK-038 |
 | [12 QA 시험 계획](docs/12-qa/test-plan.md) | 시험 사례 TC-001~088과 버그 BUG ID. 이전 QA 보고서는 [`docs/07-qa/`](docs/07-qa/) | 초안, 출시 판단 전 |

@@ -268,6 +268,23 @@ class HealthCardTest {
     }
 
     @Test
+    fun spec049_editTimeFailureRollsBackEntryWritesSingleDeleteAndRename() = runTest {
+        val person = person()
+        val allergy = add(person, CardEntryFields.Allergy("가상 원인"))
+        val entries = card(person).entries
+        val before = times(person)
+        sql("CREATE TRIGGER prevent_card_update BEFORE UPDATE ON health_card BEGIN SELECT RAISE(ABORT, 'fixture'); END")
+        fx.at("2026-11-23T08:00")
+        assertFailsWith<SQLiteException> { save.add(person, save.newEntryId(), CardEntryFields.Condition("가상 질환")) }
+        assertFailsWith<SQLiteException> { save.edit(person, allergy, CardEntryFields.Allergy("가상 새 원인")) }
+        assertFailsWith<SQLiteException> { delete.one(person, CardEntryKind.ALLERGY, allergy, confirmed = true) }
+        assertFailsWith<SQLiteException> { people.update(person, "가상 이름", PersonColors.DEFAULT) }
+        assertEquals(entries, card(person).entries)
+        assertEquals("가상 엄마", card(person).person.name)
+        assertEquals(before, times(person))
+    }
+
+    @Test
     fun spec049_ordersMedicinesKeepsDuplicateNamesAndFallsBackToIntakeName() = runTest {
         val person = person()
         medication(intake(person, "저녁약", SlotLabel.EVENING))
@@ -281,6 +298,17 @@ class HealthCardTest {
             listOf("가상정 10mg 1정 · 매일 아침", "가상정 10mg 1정 · 매일 저녁", "비타민 · 매일 (약 이름 미입력)"),
             card(person).medications.map { it.text },
         )
+    }
+
+    @Test
+    fun spec049_keepsSameNamedMedicinesOfOneIntakeAsSeparateRowsInBothFormats() = runTest {
+        val person = person()
+        val morning = intake(person, "아침약", SlotLabel.MORNING)
+        repeat(2) { medication(morning) }
+        val row = "가상정 10mg 1정 · 매일 아침"
+        assertEquals(listOf(row, row), card(person).medications.map { it.text })
+        val line = "가상정 10mg 1정 매일 아침"
+        assertEquals(listOf(EmergencyLine(EmergencySection.MEDICATION, "$line, $line")), emergency(person).lines)
     }
 
     @Test
@@ -440,6 +468,7 @@ class HealthCardTest {
 
     @Test
     fun spec054_archivedPersonIsExcludedFromPickerButCardSurvivesAndCanBeEdited() = runTest {
+        assertEquals(HealthCardSelection.None, load.selection())
         val me = person("나")
         fx.at("2026-11-20T08:01")
         val person = person()
@@ -585,6 +614,34 @@ class HealthCardTest {
             assertNull(times(id).staleNoticeClosedAt)
         }
         assertNull(card(neverCopied).staleNotice)
+    }
+
+    @Test
+    fun spec055_restoreDetectionRollsBackWhenReopeningNoticesFailsAndRetriesNextStart() = runTest {
+        val person = person()
+        add(person, CardEntryFields.Allergy("가상 원인"))
+        assertEquals(EmergencyCopyRecord.RECORDED, notice.recordCopy(person))
+        db.settingDao().upsert(SettingEntity(SettingKeys.DEVICE_ID, TEST_DEVICE_ID))
+        val keys = listOf(
+            SettingKeys.DEVICE_ID, SettingKeys.RESTORED_FROM_DEVICE_ID, SettingKeys.RESTORED_AT,
+            SettingKeys.RESTORE_NOTICE_PENDING, SettingKeys.RESTORE_NOTICE_LAST_RECORD_AT,
+        )
+        val settings = keys.associateWith { db.settingDao().get(it) }
+        val cardTimes = times(person)
+        val marker = FakeInstallMarker()
+        sql("CREATE TRIGGER prevent_card_update BEFORE UPDATE ON health_card BEGIN SELECT RAISE(ABORT, 'fixture'); END")
+        fx.at("2026-11-23T08:00")
+        assertFailsWith<SQLiteException> { CheckInstall(db, fx.clock, fx.ids, marker)() }
+        assertEquals(settings, keys.associateWith { db.settingDao().get(it) })
+        assertEquals(cardTimes, times(person))
+        assertNull(card(person).staleNotice)
+        sql("DROP TRIGGER prevent_card_update")
+        val retried = CheckInstall(db, fx.clock, fx.ids, marker)()
+        assertEquals(InstallState.Restored(TEST_DEVICE_ID), retried.state)
+        assertEquals(marker.value, retried.deviceId)
+        assertEquals(retried.deviceId, db.settingDao().get(SettingKeys.DEVICE_ID))
+        assertEquals(now().toString(), db.settingDao().get(SettingKeys.RESTORED_AT))
+        assertEquals(StaleCardNotice.RESTORED, card(person).staleNotice)
     }
 
     @Test

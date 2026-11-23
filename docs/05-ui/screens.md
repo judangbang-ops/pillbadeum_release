@@ -1,6 +1,7 @@
-# 화면 목록과 상태 (1차 릴리즈)
+# 화면 목록과 상태 (1차 릴리즈, 2차 첫 릴리즈)
 
-- 상태: **화면 정의 승인** (2026-11-13 01:04 KST, 동희님 "추천모두승인", 프로젝트 채팅. 질문은 2026-11-13 00:55 KST 프로젝트 스레드 '약봉이 1차 릴리즈 이어 가기'의 Claude 메시지 2번. 기록은 [6장](#6-승인-기록)). 07 화면 지도(1장)도 같은 답으로 확인 끝. 그 전: CORTHEX 08 다시 하기 초안 (2026-11-12, Claude). 화면 구성과 5장 7개는 2026-11-12 10:18 KST 동희님 범위 확정 그대로이고, 다시 하기에서는 흐름을 03의 FL ID로, 화면마다 보이는 04 명세(SPEC)를, 화면 글자를 01 용어(보관·완전 삭제 등)로 맞춤. 상태별 와이어프레임: TASK-044가 위젯 큰 글씨·잠금 화면·판정 고치기를 [states/](states/README.md)에 그림(2026-11-13, PR #19). 나머지는 화면 작업 PR마다 그림
+- 상태 (2차 첫 릴리즈): **07 화면 지도를 고침, 확인 질문 중** (2026-11-23 KST). [sitemap.yaml](sitemap.yaml)에 건강 카드 화면 SCR-011~015를 더하고 1장을 `draw_sitemap.py`로 다시 그림. 새 화면의 정의와 상태(2장)는 08에서 씀. 기록은 [6장](#6-승인-기록) 맨 아래
+- 상태 (1차): **화면 정의 승인** (2026-11-13 01:04 KST, 동희님 "추천모두승인", 프로젝트 채팅. 질문은 2026-11-13 00:55 KST 프로젝트 스레드 '약봉이 1차 릴리즈 이어 가기'의 Claude 메시지 2번. 기록은 [6장](#6-승인-기록)). 07 화면 지도(1장)도 같은 답으로 확인 끝. 그 전: CORTHEX 08 다시 하기 초안 (2026-11-12, Claude). 화면 구성과 5장 7개는 2026-11-12 10:18 KST 동희님 범위 확정 그대로이고, 다시 하기에서는 흐름을 03의 FL ID로, 화면마다 보이는 04 명세(SPEC)를, 화면 글자를 01 용어(보관·완전 삭제 등)로 맞춤. 상태별 와이어프레임: TASK-044가 위젯 큰 글씨·잠금 화면·판정 고치기를 [states/](states/README.md)에 그림(2026-11-13, PR #19). 나머지는 화면 작업 PR마다 그림
 - 기준: DidITake develop `7a800ac`의 [UI 초안](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/05-ui/README.md), [시안 v3](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/05-ui/ui-mockup-v3.html), [플로우](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/04-flow/flows.md), [기록 규칙](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/02-design/record-rules.md), 지금 코드(`App.kt`, `DidITakeWidget.kt`, `Labels.kt`)
 - 화면 목록의 원본은 [sitemap.yaml](sitemap.yaml)이고, 1장의 그림과 표는 그 파일에서 옮겨 그림. 요구는 [requirements.md](../01-planning/requirements.md)
 - 이 문서는 UI 초안을 대신하지 않음. UI 초안의 위젯·앱·알림 화면에 화면 ID와 상태를 붙이고, 1차 범위(결정 Q1)로 새로 생긴 화면을 더함. 화면이 따르는 기록 규칙은 원본 [기록 규칙](https://github.com/judangbang-ops/DidITake/blob/7a800ac/docs/02-design/record-rules.md)과 [기록 규칙 보충](../04-spec/record-rules-supplement.md)(규칙 ID `S-1`, `P-2` 등)임
@@ -29,6 +30,11 @@ flowchart TD
     SCR004 --> SCR006["SCR-006 항목 추가·수정<br/>app:/intake/:intakeId"]
     SCR004 --> SCR007["SCR-007 판정 고치기<br/>app:/judgment/:intakeId/:scheduleVersionId/:periodKey"]
     SCR004 --> SCR008["SCR-008 지난 기록<br/>app:/history"]
+    SCR004 --> SCR011["SCR-011 건강 카드<br/>app:/card/:personId"]
+    SCR011 --> SCR012["SCR-012 카드 칸 적기·고치기<br/>app:/card/:personId/entry/:kind/:entryId"]
+    SCR011 --> SCR013["SCR-013 보여 주기<br/>app:/card/:personId/show"]
+    SCR011 --> SCR014["SCR-014 응급 대비 문장<br/>app:/card/:personId/emergency"]
+    SCR011 --> SCR015["SCR-015 내보내기<br/>app:/card/:personId/export"]
     SCR004 --> SCR009["SCR-009 설정<br/>app:/settings"]
     SCR009 --> SCR010["SCR-010 대상자 관리<br/>app:/settings/people"]
     SCR001 -. "머리글 탭" .-> SCR004
@@ -36,6 +42,8 @@ flowchart TD
     SCR003 -. "본문 탭" .-> SCR004
     SCR006 -. "새 대상자" .-> SCR010
     SCR008 -. "판정 탭" .-> SCR007
+    SCR011 -. "지금 먹는 약 고치기 (복용 항목)" .-> SCR006
+    SCR010 -. "대상자의 건강 카드 (보관한 대상자도)" .-> SCR011
 ```
 
 | ID | 화면 | 경로 | 누가 보나 | 흐름 | 지금 코드 |
@@ -43,13 +51,18 @@ flowchart TD
 | SCR-001 | 홈 화면 위젯 | `widget:home` | 위젯을 놓은 기기 사용자 | FL-001, FL-002, FL-006, FL-009, FL-010 | 있음 (대상자 필터·넘칠 때 처리는 없음) |
 | SCR-002 | 　위젯 대상자 고르기 | `widget:configure` | 위젯을 놓거나 위젯 설정을 연 기기 사용자 | FL-001, FL-009 | 없음 |
 | SCR-003 | 반복 알림 | `notification:reminder` | 알림 권한을 허용한 기기 사용자. 잠금 화면에서는 약 이름을 숨김(기본) | FL-003, FL-009 | 없음 |
-| SCR-004 | 기록 (오늘·이번 주) | `app:/` | 기기 사용자 | FL-001, FL-004, FL-005, FL-006, FL-007, FL-009, FL-010 | 있음 (건너뜀·미래 시각 경고·권한 안내는 없음) |
+| SCR-004 | 기록 (오늘·이번 주) | `app:/` | 기기 사용자 | FL-001, FL-004, FL-005, FL-006, FL-007, FL-009, FL-010, FL-011, FL-012 | 있음 (건너뜀·미래 시각 경고·권한 안내는 없음) |
 | SCR-005 | 　첫 실행 안내 | `app:/welcome` | 처음 실행한 기기 사용자 | FL-001 | 없음 |
-| SCR-006 | 　항목 추가·수정 | `app:/intake/:intakeId` | 기기 사용자 | FL-001, FL-006, FL-007 | 있음 (알림 설정·권한 요청은 없음) |
+| SCR-006 | 　항목 추가·수정 | `app:/intake/:intakeId` | 기기 사용자 | FL-001, FL-006, FL-007, FL-011 | 있음 (알림 설정·권한 요청은 없음) |
 | SCR-007 | 　판정 고치기 | `app:/judgment/:intakeId/:scheduleVersionId/:periodKey` | 기기 사용자 | FL-004, FL-005 | 일부 (기록·취소만 첫 화면 버튼으로 있음) |
 | SCR-008 | 　지난 기록 | `app:/history` | 기기 사용자 | FL-005 | 없음 (첫 화면의 이번 주 칸만 있음) |
-| SCR-009 | 　설정 | `app:/settings` | 기기 사용자 | FL-006, FL-007, FL-008 | 없음 (첫 화면에 하루 시작·기준 시간대 표시만 있음) |
-| SCR-010 | 　　대상자 관리 | `app:/settings/people` | 기기 사용자 | FL-006 | 일부 (항목 화면에서 대상자 추가만 있음) |
+| SCR-011 | 　건강 카드 | `app:/card/:personId` | 기기 사용자 | FL-006, FL-011, FL-012, FL-013, FL-014 | 없음 (2차 첫 릴리즈에서 만듦) |
+| SCR-012 | 　　카드 칸 적기·고치기 | `app:/card/:personId/entry/:kind/:entryId` | 기기 사용자 | FL-011 | 없음 (2차 첫 릴리즈에서 만듦) |
+| SCR-013 | 　　보여 주기 | `app:/card/:personId/show` | 잠금을 푼 기기 사용자. 잠금 화면 위에는 띄우지 않음(REQ-107) | FL-012 | 없음 (2차 첫 릴리즈에서 만듦) |
+| SCR-014 | 　　응급 대비 문장 | `app:/card/:personId/emergency` | 기기 사용자 | FL-013 | 없음 (2차 첫 릴리즈에서 만듦) |
+| SCR-015 | 　　내보내기 | `app:/card/:personId/export` | 기기 사용자 | FL-014 | 없음 (2차 첫 릴리즈에서 만듦) |
+| SCR-009 | 　설정 | `app:/settings` | 기기 사용자 | FL-006, FL-007, FL-008, FL-015 | 없음 (첫 화면에 하루 시작·기준 시간대 표시만 있음) |
+| SCR-010 | 　　대상자 관리 | `app:/settings/people` | 기기 사용자 | FL-006, FL-011 | 일부 (항목 화면에서 대상자 추가만 있음) |
 <!-- sitemap:end -->
 
 그림과 표는 [sitemap.yaml](sitemap.yaml)에서 `.github/scripts/draw_sitemap.py`가 그림(2026-11-12 07 다시 하기). 흐름 열은 [03 흐름](../03-user-flow/README.md)의 FL ID이고, 들여 쓴 화면은 위 화면의 자식임. 시안의 플로우 5장(주 1회 늦은 투약 처리)은 1차에 화면이 없음(요구 4장 1번 확정: 기준일을 옮기지 않고 마지막 복용을 크게 보임).
@@ -661,3 +674,4 @@ flowchart TD
 - 2026-11-16 SCR-007 함수 이름을 코드에 맞춤 (Claude 제안. **정함**: 2026-11-16 10:05 KST 동희님이 '필받음 재구축 인계' 채팅에서 "추천대로 모두 승인". 질문은 2026-11-15 출시 준비 묶음 보고의 '정해 주실 것' 6번이고 추천은 '맞춤'): ① 동작 표의 [먹었어로 바꾸기]를 `ChangeJudgment`(그 창)에서 `RecordInWindow`(그 창, 바꿀 건너뜀을 `replacing`으로)로 ② 규칙의 함수 목록을 `RecordDose`·`RecordInWindow`·`VoidDose`로 하고 버튼마다 어느 함수인지 적음 ③ 맞추다 함께 찾은 것: 시계 경고의 [그대로 두기]·[기록 취소]는 `VoidDose`를 부르지 않고 `ResolveClockFlag`가 같은 규칙으로 무효와 경고 풀기를 한 트랜잭션에서 함. 결과 이름도 `NotActive`가 아니라 `NotFlagged`임. 동작은 셋 다 그대로임. 앱은 `ChangeJudgment`를 부르지 않고 jvm 시험만 부름([회귀 확인 보고서](../07-qa/2026-11-15-regression/report.md) 3장). 0장 '읽는 법'의 '출처' 줄은 08 승인 때 있던 함수를 적은 것이라 그대로 둠
 - 2026-11-16 TASK-045 앱 이름 (**정함**: 2026-11-16 10:09 KST 동희님이 '필받음 재구축 인계' 채팅에서 앱 이름 '필받음'): 앱 이름 상수(`Labels.APP_NAME`)와 런처·위젯 목록의 이름(`app_name`·`widget_label`)이 'DidITake'에서 '필받음'으로 바뀜. 화면에 보이는 곳은 위젯 머리글('필받음 · 11/16', SCR-001), SCR-005 1쪽 "필받음은 기록 도구예요."(09 Welcome1과 같아짐)와 2쪽 단계 "'위젯'에서 필받음 찾기", SCR-004·SCR-009의 "필받음을 찾아" 두 문장이고, 조사는 이름 끝 글자에 맞춰 붙음. 화면 구조는 그대로임. 같은 PR에서 런처 아이콘(캡슐과 체크)을 더함. 화면 정의 밖이라 이 장의 승인 대상은 아니고 Claude가 고름
 - 2026-11-16 BUG-006 고침 (Claude, 고침): 앱 화면 위의 상태 표시줄을 흰 바탕에 어두운 아이콘으로 함. Android 15 이상에서는 앱이 상태 표시줄 밑까지 그려져 흰 아이콘이 흰 화면에 묻혔음([시험 계획 6장](../12-qa/test-plan.md#6-버그) BUG-006). Android 14 이하에서는 회색 띠였던 것이 흰 띠가 되고, Android 8.1 이상은 아래 내비게이션 바도 흰 바탕에 어두운 버튼이 됨. SCR-002는 Android 15 이상에서만 어두운 아이콘이고 그 아래에서는 시스템이 그리는 어두운 띠 그대로임. 화면 내용은 그대로이고, 상태 표시줄은 화면 정의 밖이라 Claude가 정함
+- 2026-11-23 2차 첫 릴리즈 07 사이트맵 (Claude, 기능 변경. 확인 질문 07-1~07-5를 필받음 봇에게 보냄, 답은 아직 없음): 화면 지도에 SCR-011 건강 카드(SCR-004 아래)와 그 아래 SCR-012 카드 칸 적기·고치기, SCR-013 보여 주기, SCR-014 응급 대비 문장, SCR-015 내보내기를 더함. SCR-004·006·009·010의 흐름·요구·용어와 링크(SCR-010 → SCR-011, SCR-011 → SCR-006)를 고침. 1장은 `draw_sitemap.py`로 다시 그림. [변경 기록](../10-records/changes/2026-11-22-phase2-release1.md) 6장 '07 사이트맵'

@@ -183,7 +183,10 @@ public final class TechActivity extends Activity {
         clipboard.setPrimaryClip(clip);
         ClipData result = clipboard.getPrimaryClip();
         boolean matches = result != null && value.contentEquals(result.getItemAt(0).getText());
-        Log.i(TAG, "CLIP match=" + matches + " sensitive=" + (sensitive && Build.VERSION.SDK_INT >= 33)
+        PersistableBundle received = result == null ? null : result.getDescription().getExtras();
+        boolean sensitiveOnRead = Build.VERSION.SDK_INT >= 33 && received != null
+                && received.getBoolean(ClipDescription.EXTRA_IS_SENSITIVE);
+        Log.i(TAG, "CLIP match=" + matches + " sensitive=" + sensitiveOnRead
                 + " count=" + value.length());
         message.setText(Build.VERSION.SDK_INT >= 33 ? COPIED : "복사했어요. 긴급 정보에 붙여 넣어 주세요\n"
                 + "이 휴대폰에서는 복사한 글이 클립보드 미리보기에 보일 수 있어요");

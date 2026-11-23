@@ -111,11 +111,22 @@ class Probe:
         return False
 
     def clipboard(self):
+        setup = shell("settings", "get", "secure", "user_setup_complete")
+        overlay = shell("device_config", "get", "systemui", "clipboard_overlay_enabled", check=False)
+        self.log(f"(3) user_setup_complete={setup} clipboard_overlay_enabled={overlay}")
+        if setup != "1":
+            shell("settings", "put", "secure", "user_setup_complete", "1")
+            self.log("(3) completed emulator setup flag without a Google account")
         self.start("copy", cold=True)
         self.screen("clipboard-before")
         self.tap("민감한 내용 복사")
         time.sleep(.55)
         self.screen("clipboard-sensitive")
+        if self.api >= 33:
+            self.screen("clipboard-sensitive-follow-up")
+            clipboard_windows = [line.strip() for line in shell("dumpsys", "window", "windows").splitlines()
+                                 if "Clipboard" in line and ("Window #" in line or "mCurrentFocus=" in line)]
+            self.log(f"(3) clipboard windows after sensitive copy: {clipboard_windows}")
         sensitive = str(self.api >= 33).lower()
         self.expect(self.wait_log(f"CLIP match=true sensitive={sensitive}"), "(3) clipboard round trip")
         if self.api >= 33:
@@ -127,6 +138,7 @@ class Probe:
             self.tap("민감 표시 없이 복사")
             time.sleep(.55)
             self.screen("clipboard-public-control")
+            self.screen("clipboard-public-follow-up")
 
     def export(self):
         samples = [f"{font}-{short}.{suffix}" for font in ("gothic", "system")
@@ -246,11 +258,11 @@ class Probe:
         return self.open_edit_text()
 
     def open_edit_text(self):
-        field = self.find({"allergies", "medications", "medical conditions", "add information", "edit information"},
-                          swipes=2)
+        fields = {"allergies", "medications", "medical conditions", "medical notes"}
+        field = self.find(fields | {"add information", "edit information"}, swipes=2)
         if field is not None and field.get("text").casefold() in {"add information", "edit information"}:
             self.tap_node(field)
-            field = self.find({"allergies", "medications", "medical conditions"}, swipes=1)
+            field = self.find(fields, swipes=1)
         if field is None:
             self.log("(5) no editable medical field; length not measured")
             return None
@@ -259,7 +271,8 @@ class Probe:
         return self.edit_text()
 
     def edit_text(self):
-        return next((node for node in self.tree() if node.get("class") == "android.widget.EditText"), None)
+        return next((node for node in self.tree()
+                     if node.get("class", "").endswith(("EditText", "AutoCompleteTextView"))), None)
 
     def emergency(self):
         self.log("(5) installed emergency packages: " + ", ".join(
@@ -293,6 +306,12 @@ class Probe:
             shell("input", "keyevent", "KEYCODE_PASTE")
             method = "pasted"
             editor = self.edit_text()
+            if editor is not None and not re.fullmatch(r"A+Z?", editor.get("text", "")):
+                self.tap_node(editor, long=True)
+                paste = self.find({"paste", "paste as plain text"})
+                if paste is not None:
+                    self.tap_node(paste)
+                    editor = self.edit_text()
             if editor is not None and not re.fullmatch(r"A+Z?", editor.get("text", "")):
                 shell("input", "text", "A" * (length - 1) + "Z")
                 method = "typed (paste did not populate field)"

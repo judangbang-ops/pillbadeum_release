@@ -15,6 +15,8 @@ import kotlin.time.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.toLocalDateTime
 
+internal const val CARD_ENTRIES_PER_KIND = 20
+
 enum class CardField(val maxCharacters: Int? = 50) {
     NAME, SUBSTANCE, PROVIDER_NAME, DATE(null), NOTE(200), PLACE, REACTION(200), DEPARTMENT, DOCTOR, PHONE(20), RELATION,
 }
@@ -207,7 +209,7 @@ class SaveCardEntry(
         val existing = rows.firstOrNull { idOf(it) == id }
         if (create) {
             if (existing != null) return SaveCardEntryResult.Saved(id)
-            if (rows.size >= 20) return SaveCardEntryResult.LimitReached
+            if (rows.size >= CARD_ENTRIES_PER_KIND) return SaveCardEntryResult.LimitReached
             insert()
         } else {
             if (existing == null) return SaveCardEntryResult.Gone

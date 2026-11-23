@@ -117,10 +117,12 @@ class Probe:
         self.screen("clipboard-sensitive")
         sensitive = str(self.api >= 33).lower()
         self.expect(self.wait_log(f"CLIP match=true sensitive={sensitive}"), "(3) clipboard round trip")
-        self.expect(self.find({"이제 긴급 정보에 붙여 넣어 주세요", "복사했어요. 긴급 정보에 붙여 넣어 주세요\n이 휴대폰에서는 복사한 글이 클립보드 미리보기에 보일 수 있어요"}) is not None,
-                    "(3) app guidance visible")
         if self.api >= 33:
-            time.sleep(4)
+            time.sleep(6)
+        guidance = ("이제 긴급 정보에 붙여 넣어 주세요" if self.api >= 33 else
+                    "복사했어요. 긴급 정보에 붙여 넣어 주세요\n이 휴대폰에서는 복사한 글이 클립보드 미리보기에 보일 수 있어요")
+        self.expect(self.find({guidance}) is not None, "(3) app guidance visible")
+        if self.api >= 33:
             self.tap("민감 표시 없이 복사")
             time.sleep(.55)
             self.screen("clipboard-public-control")
@@ -188,7 +190,7 @@ class Probe:
         self.expect(shell("run-as", APP, "ls", "-1", EXPORT) == "", "(2) export cache empty after cold start")
 
     def mail(self):
-        candidates = shell("cmd", "package", "query-activities", "--brief", "-a", "android.intent.action.SENDTO",
+        candidates = shell("cmd", "package", "query-activities", "--components", "-a", "android.intent.action.SENDTO",
                            "-d", "mailto:test@example.invalid", check=False)
         for line in candidates.splitlines():
             match = re.fullmatch(r"([\w.]+)/[^\s]+", line.strip())
@@ -336,9 +338,7 @@ class Probe:
             path = self.apk / f"permissions-{variant}.txt"
             if path.exists():
                 self.log(f"(8) permissions {variant} " + path.read_text().strip().replace("\n", " | "))
-        self.clipboard()
-        self.mail()
-        for action in (self.export, self.share, self.emergency, self.mail_queries, self.show):
+        for action in (self.clipboard, self.mail, self.export, self.share, self.emergency, self.mail_queries, self.show):
             try:
                 action()
             except (RuntimeError, subprocess.SubprocessError, ValueError) as err:

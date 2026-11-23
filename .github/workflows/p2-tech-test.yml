@@ -23,7 +23,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@0723195856401067f7a2779048b490ace7a47d7c
       - name: 앱과 수신 시험 APK 빌드
         run: |
-          sdkmanager --install 'platforms;android-36' 'build-tools;36.0.0'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install 'platforms;android-36' 'build-tools;36.0.0'
           mkdir -p androidApp/src/debug/assets "$RUNNER_TEMP/apk"
           font=https://raw.githubusercontent.com/google/fonts/16680f8688ffcd467d2eb2146a9ce0343404581d/ofl/gothica1
           curl --fail --retry 4 --silent --show-error "$font/GothicA1-Regular.ttf" -o androidApp/src/debug/assets/GothicA1-Regular.ttf

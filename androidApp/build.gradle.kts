@@ -41,6 +41,7 @@ android {
         applicationId = "com.judangbang.pillbadeum"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         val appVersionCode = ciVersionCode ?: 1
         versionCode = appVersionCode
         // 테스터 폰의 Obtainium이 깔린 버전 이름과 GitHub 릴리즈 태그 v<versionName>을 비교하므로 빌드마다 다르게 함
@@ -107,4 +108,7 @@ dependencies {
     // 앱 화면 시험(AppScreenTest, TASK-015): Compose 시험 도구와, JVM에서 열리는 Android 내장 SQLite 드라이버
     testImplementation(libs.androidx.compose.ui.test.junit4)
     testImplementation(libs.androidx.sqlite.framework)
+    androidTestImplementation(libs.junit4)
+    androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation(libs.androidx.test.runner)
 }

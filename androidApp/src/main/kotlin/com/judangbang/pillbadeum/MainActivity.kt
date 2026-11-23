@@ -16,8 +16,10 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import com.judangbang.pillbadeum.boundary.DayBoundaryAlarm
+import com.judangbang.pillbadeum.export.AndroidCardExporter
 import com.judangbang.pillbadeum.ui.App
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -41,9 +43,36 @@ class MainActivity : ComponentActivity() {
         answered?.invoke()
     }
 
+    private var chooserClosed: CompletableDeferred<Unit>? = null
+    private val cardShareRequest = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        chooserClosed?.complete(Unit)
+    }
+
+    private suspend fun shareCard(intent: Intent) {
+        val closed = CompletableDeferred<Unit>()
+        chooserClosed = closed
+        try {
+            cardShareRequest.launch(intent)
+            closed.await()
+        } finally {
+            chooserClosed = null
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val container = container
+        val cardExporter = AndroidCardExporter(container.cardExports, ::shareCard)
+        container.appScope.launch {
+            // A failed cleanup is retried before creating an export. Never include cache paths in logs.
+            try {
+                container.cardExports.clearOnFirstScreen()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // The main screen still opens when the cache is unavailable.
+            }
+        }
         container.appScope.launch {
             // A database that cannot be opened shows SCR-004#error instead of closing the app.
             try {
@@ -69,6 +98,7 @@ class MainActivity : ComponentActivity() {
                 homeRequests = homeRequests,
                 backHandler = { enabled, onBack -> BackHandler(enabled, onBack) },
                 protectCardRecents = { visible -> ProtectCardRecents(visible) },
+                cardExporter = cardExporter,
             )
         }
     }

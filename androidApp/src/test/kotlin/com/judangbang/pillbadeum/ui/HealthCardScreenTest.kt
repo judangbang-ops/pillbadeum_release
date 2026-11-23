@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.NotificationManager
 import android.content.Intent
 import android.os.Bundle
+import android.net.Uri
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -13,6 +14,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
@@ -40,6 +42,7 @@ import com.judangbang.pillbadeum.data.SettingEntity
 import com.judangbang.pillbadeum.data.SettingKeys
 import com.judangbang.pillbadeum.domain.DoseSource
 import com.judangbang.pillbadeum.domain.SlotLabel
+import com.judangbang.pillbadeum.export.AndroidCardExporter
 import com.judangbang.pillbadeum.status.Labels
 import com.judangbang.pillbadeum.usecase.CardEntryFields
 import com.judangbang.pillbadeum.usecase.IntakeDraft
@@ -49,6 +52,7 @@ import com.judangbang.pillbadeum.usecase.PersonChange
 import com.judangbang.pillbadeum.usecase.RecordResult
 import com.judangbang.pillbadeum.usecase.SaveCardEntryResult
 import com.judangbang.pillbadeum.usecase.SaveIntakeResult
+import java.io.IOException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -534,6 +538,142 @@ class HealthCardScreenTest {
         assertEquals(listOf(false, true), controller.get().recentsEnabled)
     }
 
+    @Test
+    fun tc117_export_renders_single_a4_page_and_uses_card_order() = runBlocking {
+        val person = createPerson()
+        seedCard(person)
+        open(person)
+        tap("내보내기")
+        waitFor("파일 이름: pillbadeum-card-20261123.pdf (대상자 이름은 넣지 않아요)")
+        val page = exportPage(personName)
+        val lines = page.fetchSemanticsNode().config[SemanticsProperties.ContentDescription].single().lines()
+        assertEquals(personName, lines.first())
+        assertTrue(lines[1].startsWith(Labels.CARD_DISCLAIMER))
+        assertEquals("마지막으로 고친 날 2026-11-23 · 만든 날 2026-11-23", lines[2])
+        val sections = listOf("지금 먹는 약", "알레르기", "질환", "수술·시술", "의료기관·담당 의사", "보호자 연락처")
+        assertEquals(sections, lines.filter { it in sections })
+        assertEquals(595f / 842, bounds(page).width / bounds(page).height, 0.01f)
+        render("Export")
+        desc("닫기").performClick()
+        waitForCard()
+    }
+
+    @Test
+    fun tc117_export_renders_two_pages_with_repeated_header_at_100_and_200_percent() = runBlocking {
+        val person = createPerson()
+        seedCard(person)
+        repeat(10) { seedEntry(person, CardEntryFields.Condition("가상 질환 ${it + 1}")) }
+        open(person, height = 1080)
+        tap("내보내기")
+        waitFor("카드가 길어 2쪽이에요. 쪽마다 이름과 쪽 번호가 들어가요")
+        val first = exportPage("$personName · 1/2쪽")
+        val second = exportPage("$personName · 2/2쪽")
+        assertTrue(bounds(second).top > bounds(first).bottom)
+        assertTrue(second.fetchSemanticsNode().config[SemanticsProperties.ContentDescription].single().contains("보호자 연락처"))
+        render("ExportPages")
+        val firstSize = bounds(first).size
+        RuntimeEnvironment.setFontScale(2f)
+        controller.recreate()
+        waitFor("카드가 길어 2쪽이에요. 쪽마다 이름과 쪽 번호가 들어가요")
+        assertEquals(firstSize, bounds(first).size)
+        render("ExportPages200")
+        back()
+        waitForCard()
+    }
+
+    @Test
+    fun tc106_export_ignores_repeat_send_and_cancel_keeps_format_and_preview() = runBlocking {
+        val person = createPerson()
+        seedCard(person)
+        open(person)
+        val activity = controller.get()
+        tap("내보내기")
+        text("사진(PNG)").performClick()
+        waitFor("파일 이름: pillbadeum-card-20261123.png (대상자 이름은 넣지 않아요)")
+        val send = text("보내기")
+        val sendAction = send.fetchSemanticsNode().config[SemanticsActions.OnClick].action!!
+        compose.runOnIdle {
+            sendAction()
+            sendAction()
+        }
+        compose.waitUntil(10_000) { activity.shareIntents.size == 1 }
+        send.assertIsNotEnabled()
+        val chooser = activity.shareIntents.single()
+        assertEquals(Intent.ACTION_CHOOSER, chooser.action)
+        val share = checkNotNull(chooser.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java))
+        assertEquals(Intent.ACTION_SEND, share.action)
+        assertEquals("image/png", share.type)
+        val uri = share.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        assertEquals(uri, share.clipData?.getItemAt(0)?.uri)
+        assertEquals(Intent.FLAG_GRANT_READ_URI_PERMISSION, share.flags)
+        assertEquals("pillbadeum-card-20261123.png", uri?.lastPathSegment)
+        assertEquals(listOf(false), activity.recentsEnabled)
+
+        activity.cancelCardShare()
+        compose.waitUntil(10_000) { runCatching { send.assertIsEnabled() }.isSuccess }
+        exportPage(personName).assertIsDisplayed()
+        text("파일 이름: pillbadeum-card-20261123.png (대상자 이름은 넣지 않아요)").assertIsDisplayed()
+        desc("닫기").performClick()
+        waitForCard()
+    }
+
+    @Test
+    fun tc106_png_over_limit_is_disabled_and_pdf_remains_available() = runBlocking {
+        val person = createPerson()
+        for (index in 1..20) {
+            seedEntry(person, CardEntryFields.Allergy("가상 원인 $index"))
+            seedEntry(person, CardEntryFields.Condition("가상 질환 $index"))
+            seedEntry(person, CardEntryFields.Procedure("가상 수술 $index"))
+        }
+        open(person)
+        tap("내보내기")
+        text("사진(PNG)").performClick()
+        waitFor("사진이 너무 길어요. PDF로 보내 주세요")
+        text("보내기").assertIsNotEnabled()
+        assertTrue(controller.get().shareIntents.isEmpty())
+        text("PDF").performClick()
+        waitUntilGone("사진이 너무 길어요. PDF로 보내 주세요")
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("카드가 길어", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        text("보내기").assertIsEnabled()
+    }
+
+    @Test
+    fun tc117_export_write_error_allows_retry_and_resume_refreshes_the_preview() = runBlocking {
+        val person = createPerson()
+        seedCard(person)
+        open(person)
+        val activity = controller.get()
+        activity.failCardShare = true
+        tap("내보내기")
+        text("사진(PNG)").performClick()
+        waitFor("파일 이름: pillbadeum-card-20261123.png (대상자 이름은 넣지 않아요)")
+        val send = text("보내기")
+        send.performClick()
+        val error = "파일을 만들지 못했어요. 휴대폰 저장 공간을 확인해 주세요"
+        waitFor(error)
+        assertTrue(activity.shareIntents.isEmpty())
+        send.assertIsEnabled()
+        exportPage(personName).assertIsDisplayed()
+
+        activity.failCardShare = false
+        send.performClick()
+        compose.waitUntil(10_000) { activity.shareIntents.size == 1 }
+        activity.cancelCardShare()
+        waitUntilGone(error)
+        controller.pause()
+        seedEntry(person, CardEntryFields.ImplantedDevice("가상 기기"))
+        controller.resume()
+        val updated = desc("가상 기기", substring = true)
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithContentDescription("가상 기기", substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        updated.assertIsDisplayed()
+        text("파일 이름: pillbadeum-card-20261123.png (대상자 이름은 넣지 않아요)").assertIsDisplayed()
+    }
+
+    private fun exportPage(header: String) =
+        desc(header + "\n" + Labels.CARD_DISCLAIMER, substring = true)
+
     private fun renderProcedure(stacked: Boolean) = runBlocking {
         val person = createPerson()
         open(person, height = if (stacked) 820 else 800, scale = if (stacked) 2f else 1f)
@@ -662,7 +802,7 @@ class HealthCardScreenTest {
     }
 
     private fun text(value: String, substring: Boolean = false) = compose.onNodeWithText(value, substring = substring)
-    private fun desc(value: String) = compose.onNodeWithContentDescription(value)
+    private fun desc(value: String, substring: Boolean = false) = compose.onNodeWithContentDescription(value, substring = substring)
     private fun field(label: String) = compose.onNode(hasSetTextAction() and hasContentDescription(label))
     private fun bounds(node: SemanticsNodeInteraction): Rect = node.assertIsDisplayed().fetchSemanticsNode().boundsInRoot
     private fun tap(value: String) { text(value).performScrollTo().performClick() }
@@ -685,6 +825,9 @@ class HealthCardScreenTest {
 /** Installs the real App and Android privacy effect, opening the card without the TASK-061 entry point. */
 class CardTestActivity : ComponentActivity() {
     val recentsEnabled = mutableListOf<Boolean>()
+    val shareIntents = mutableListOf<Intent>()
+    var failCardShare = false
+    private var chooserResult = CompletableDeferred<Unit>()
     val firstOpenGate = CompletableDeferred<Unit>()
     private var resumeCount by mutableIntStateOf(0)
     private var attemptedOpen = false
@@ -693,6 +836,11 @@ class CardTestActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val container = (application as TestApp).container
         val phone = AndroidPhone(this) {}
+        val exporter = AndroidCardExporter(container.cardExports) { chooser ->
+            if (failCardShare) throw IOException("fixture: share unavailable")
+            shareIntents.add(chooser)
+            chooserResult.await()
+        }
         setContent {
             App(
                 open = {
@@ -709,6 +857,7 @@ class CardTestActivity : ComponentActivity() {
                 refreshKey = resumeCount,
                 initialHealthCardPersonId = intent.getStringExtra("person"),
                 protectCardRecents = { visible -> ProtectCardRecents(visible) },
+                cardExporter = exporter,
             )
         }
     }
@@ -716,6 +865,11 @@ class CardTestActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         resumeCount++
+    }
+
+    fun cancelCardShare() {
+        chooserResult.complete(Unit)
+        chooserResult = CompletableDeferred()
     }
 
     override fun setRecentsScreenshotEnabled(enabled: Boolean) {

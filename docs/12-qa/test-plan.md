@@ -12,6 +12,7 @@
 
 - **TC**: `TC-001`부터. TC-001~043은 같은 번호의 SPEC 한 줄씩, TC-044~053은 흐름 FL-001~010, TC-054~077은 비기능 요구, TC-078~087은 화면 하나의 모든 상태. TC-088은 04 고정(2026-11-13) 때 더한 SPEC-044(번호를 다시 쓰지 않으려고 끝에 붙임). TC-089는 2026-11-22에 더한 비기능 요구 REQ-096(테스터 폰 자동 업데이트)이고 3장 끝에 둠. 2차 첫 릴리즈(2026-11-23): TC-090~100은 SPEC-045~055 한 줄씩, TC-101·102는 2차에서 고친 SPEC-025·037, TC-103~107은 흐름 FL-011~015, TC-108~112는 2차 비기능 요구와 새 화면 접근성, TC-113~118은 2차 화면 상태. 각 장의 1차 줄 뒤에 둠. 설계 바꿈 T(2026-11-24): TC-119는 SPEC-003·023의 T-1(1장 끝), TC-120은 BUG-008의 SCR-006 회귀(4장 끝)
 - **방법**
+  - 2차 QA(TASK-068)는 [작업 분해](../08-wbs/wbs.md#19-2차-첫-릴리즈-건강-카드-p2-r1)의 Codex 작업자가 맡음. 아래 실기기 확인 목록은 사용자님 담당임
   - `jvm`: `./gradlew :shared:jvmTest`의 시험. CI가 PR마다 돌림
   - 앱 시험: `./gradlew :androidApp:testDebugUnitTest`의 Robolectric 시험(`WidgetRenderTest`, `AppScreenTest`, `WidgetPickTest`, 알림 흐름 `ReminderFlowTest` 등). Android 15의 뷰·Compose·글꼴로 위젯과 앱 화면을 그리고 PNG를 남김. 2026-11-13 `3de3b16`(PR #19)부터 CI가 PR마다 돌림. 그 전에 '로컬'이라 적은 결과는 그때 컨테이너에서 돌린 것. 런처·실기기·TalkBack 자체는 아님
   - 둘러보기: [`scripts/emulator/explore.py`](../../scripts/emulator/explore.py)가 Actions 에뮬레이터(API 34)에서 앱을 사람처럼 쓰고 단계마다 캡처함. 이 앱은 브라우저 화면이 없어 CORTHEX의 브라우저 대리인(ego lite·Aside) 대신 이것이 흐름을 걷는 몫을 함

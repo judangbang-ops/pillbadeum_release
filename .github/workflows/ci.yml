@@ -114,17 +114,11 @@ jobs:
         uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: ~/.m2/repository/org/robolectric/android-all-instrumented
-          key: ${{ runner.os }}-ci-robolectric-sdk-v2-${{ steps.robolectric-sdk-key.outputs.key }}
-
-      - name: Robolectric API 35 단독 캐시 복원
-        if: >-
-          ${{ !cancelled() && steps.robolectric-sdk-cache.outcome == 'success' &&
-            steps.robolectric-sdk-cache.outputs.cache-hit != 'true' &&
-            steps.robolectric-sdk-key.outputs.api35_key != '' }}
-        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
-        with:
-          path: ~/.m2/repository/org/robolectric/android-all-instrumented
-          key: ${{ runner.os }}-ci-robolectric-sdk-v2-${{ steps.robolectric-sdk-key.outputs.api35_key }}
+          key: ${{ runner.os }}-ci-robolectric-sdk-v3-${{ steps.robolectric-sdk-key.outputs.key }}
+          # 기존 캐시는 전체 SDK 조합, API 35 단독 순으로 찾고 아래에서 JAR를 검증함.
+          restore-keys: |
+            ${{ steps.robolectric-sdk-key.outputs.legacy_key != '' && format('{0}-ci-robolectric-sdk-v2-{1}', runner.os, steps.robolectric-sdk-key.outputs.legacy_key) || '' }}
+            ${{ steps.robolectric-sdk-key.outputs.api35_key != '' && format('{0}-ci-robolectric-sdk-v2-{1}', runner.os, steps.robolectric-sdk-key.outputs.api35_key) || '' }}
 
       - name: Robolectric Android SDK 검증 및 다운로드
         id: robolectric-sdk-prepare
@@ -162,14 +156,11 @@ jobs:
             echo 'ready=true' >> "$GITHUB_OUTPUT"
           fi
 
-      # 통합 브랜치 캐시는 후속 PR에서 복원할 수 있음. PR 캐시는 같은 PR에서만 복원할 수 있음.
+      # 통합 브랜치 수동 CI에서 저장하면 후속 PR에서도 읽을 수 있음. PR에서는 읽기만 함.
       - name: Robolectric Android SDK 캐시 저장
         if: >-
           ${{ !cancelled() && steps.robolectric-sdk-ready.outputs.ready == 'true' &&
-            (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release/p2-r1' ||
-              (github.event_name == 'pull_request' && github.base_ref == 'release/p2-r1' &&
-                steps.robolectric-sdk-key.outputs.required_jars != '0' &&
-                github.event.pull_request.head.repo.full_name == github.repository)) }}
+            (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release/p2-r1') }}
         uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: ~/.m2/repository/org/robolectric/android-all-instrumented

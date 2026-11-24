@@ -130,23 +130,29 @@ def main() -> None:
             prepare_sdk(sdk, *artifacts[sdk])
         return
 
-    key = f"{robolectric_version}-sdk-" + "_".join(map(str, sorted(sdk_numbers)))
-    if complex_selection or not sdk_numbers:
+    ordered_sdks = sorted(sdk_numbers)
+    key = f"{robolectric_version}-sdk-" + "_".join(map(str, ordered_sdks))
+    digest = hashlib.sha256()
+    if known_selection:
+        for sdk in ordered_sdks:
+            artifact_version, checksum = artifacts[sdk]
+            digest.update(f"{sdk}:{MAVEN_PATH}:{artifact_version}:{checksum}\n".encode())
+    else:
         # Ranges, constants and package settings can select SDKs without literal @Config values.
         # Include the test inputs and require a passing run before publishing this cache.
-        digest = hashlib.sha256()
         digest.update(f"{versions['android-minSdk']},{versions['android-targetSdk']}\n".encode())
         for path in test_files:
             if path.suffix in {".kt", ".java"} or path.name == "robolectric.properties":
                 digest.update(f"{path.relative_to(app_sources).as_posix()}\n".encode())
                 digest.update(hashlib.sha256(path.read_bytes()).digest())
-        key += f"-{digest.hexdigest()}"
 
-    print(f"key={key}")
+    print(f"key={key}-{digest.hexdigest()}")
     print(f"required_jars={len(sdk_numbers) if known_selection else 0}")
-    if known_selection and 35 in sdk_numbers and len(sdk_numbers) > 1:
-        # Reuse the existing main cache for API 35 when the full SDK set is new.
-        print(f"api35_key={robolectric_version}-sdk-35")
+    if known_selection:
+        # The prep step verifies each known JAR before using any restored v2 cache.
+        print(f"legacy_key={key}")
+        if 35 in sdk_numbers and len(sdk_numbers) > 1:
+            print(f"api35_key={robolectric_version}-sdk-35")
 
 
 if __name__ == "__main__":

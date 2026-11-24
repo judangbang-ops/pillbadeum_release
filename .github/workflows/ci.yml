@@ -104,7 +104,7 @@ jobs:
 
       # 앱 화면 시험: Robolectric이 Android 15의 Compose·뷰·글꼴로 앱 화면과 위젯을 메모리 DB 위에 그려 동작과
       # TalkBack이 읽는 값을 확인하고 PNG를 남김 (TASK-012 이후). 저장소가 공개로 바뀐 2026-11-13부터 PR마다 돌림.
-      # Gradle이 받는 nativeruntime-dist-compat와 별도로, Robolectric은 시험 중 Android SDK JAR를 ~/.m2에 받음.
+      # Gradle이 받는 nativeruntime-dist-compat와 별도로, Robolectric은 Android SDK JAR를 ~/.m2에서 읽음.
       - name: Robolectric Android SDK 캐시 키
         id: robolectric-sdk-key
         if: ${{ !cancelled() && steps.jvm-test.outcome != 'skipped' }}
@@ -117,7 +117,16 @@ jobs:
         uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: ~/.m2/repository/org/robolectric/android-all-instrumented
-          key: ${{ runner.os }}-ci-robolectric-sdk-v2-${{ steps.robolectric-sdk-key.outputs.key }}
+          key: ${{ runner.os }}-ci-robolectric-sdk-v3-${{ steps.robolectric-sdk-key.outputs.key }}
+          # 기존 캐시는 전체 SDK 조합, API 35 단독 순으로 찾고 아래에서 JAR를 검증함.
+          restore-keys: |
+            ${{ steps.robolectric-sdk-key.outputs.legacy_key != '' && format('{0}-ci-robolectric-sdk-v2-{1}', runner.os, steps.robolectric-sdk-key.outputs.legacy_key) || '' }}
+            ${{ steps.robolectric-sdk-key.outputs.api35_key != '' && format('{0}-ci-robolectric-sdk-v2-{1}', runner.os, steps.robolectric-sdk-key.outputs.api35_key) || '' }}
+
+      - name: Robolectric Android SDK 검증 및 다운로드
+        id: robolectric-sdk-prepare
+        if: ${{ !cancelled() && steps.robolectric-sdk-key.outcome == 'success' }}
+        run: python3 .github/scripts/robolectric_sdk_cache_key.py --prepare
 
       - name: 앱 화면 시험 (./gradlew :androidApp:testDebugUnitTest)
         id: app-test
@@ -126,7 +135,11 @@ jobs:
 
       - name: 내려받은 Robolectric Android SDK 확인
         id: robolectric-sdk-ready
-        if: ${{ !cancelled() && steps.app-test.outcome != 'skipped' && steps.robolectric-sdk-cache.outcome == 'success' && steps.robolectric-sdk-cache.outputs.cache-hit != 'true' }}
+        if: >-
+          ${{ !cancelled() && steps.app-test.outcome != 'skipped' &&
+            steps.robolectric-sdk-prepare.outcome == 'success' &&
+            steps.robolectric-sdk-cache.outcome == 'success' &&
+            steps.robolectric-sdk-cache.outputs.cache-hit != 'true' }}
         shell: bash
         env:
           APP_TEST_OUTCOME: ${{ steps.app-test.outcome }}
@@ -146,8 +159,11 @@ jobs:
             echo 'ready=true' >> "$GITHUB_OUTPUT"
           fi
 
+      # 통합 브랜치 수동 CI에서 저장하면 후속 PR에서도 읽을 수 있음. PR에서는 읽기만 함.
       - name: Robolectric Android SDK 캐시 저장
-        if: ${{ !cancelled() && github.ref == 'refs/heads/main' && steps.robolectric-sdk-ready.outputs.ready == 'true' }}
+        if: >-
+          ${{ !cancelled() && steps.robolectric-sdk-ready.outputs.ready == 'true' &&
+            (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/release/p2-r1') }}
         uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: ~/.m2/repository/org/robolectric/android-all-instrumented

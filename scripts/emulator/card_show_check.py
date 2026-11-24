@@ -9,7 +9,7 @@ from backup_restore_check import ACTIVITY, DATA, PKG, adb, dump_ui, launch_app, 
 from card_export_check import cancel_share, send_file
 from explore import ZONE, exact, phone_now, set_clock, tap_desc, tap_exact
 from release_check import save_ui
-from reminder_check import PIN, debug, doses, keyguard_showing, set_pin, unlock, wait_posted
+from reminder_check import PIN, debug, doses, keyguard_showing, notification_dump, set_pin, unlock, wait_posted
 from screens2_check import list_view, widget_page
 from screens_check import seek, to_home
 from widget_size_check import launcher_package
@@ -91,7 +91,8 @@ def check_privacy_render(report):
     posted = wait_posted(lambda items: any(PRIVACY_ITEM in n.title for n in doses(items)), 30)
     if not any(PRIVACY_ITEM in n.title for n in doses(posted)):
         raise RuntimeError("the synthetic item reminder was not posted")
-    assert_no_private_values("\n".join(f"{n.title}\n{n.text}\n{n.actions}" for n in posted), "notifications")
+    # Include fields the existing reminder parser does not expose, such as bigText and publicVersion.
+    assert_no_private_values(notification_dump(), "notification dump")
     report.note("TC-108 위젯과 알림에 시험 항목 이름이 표시됨. 카드·약 줄 시험 값이 각각 0건")
     return "홈 위젯 텍스트·접근성 설명과 게시한 알림 제목·본문·동작에서 카드·약 줄 없음"
 
@@ -168,6 +169,9 @@ def check_card_recents(report):
 
 def check_card_logs(report):
     since = f"{phone_now()}.000"
+    start_marker = "TC108-logcat-window-start"
+    end_marker = "TC108-logcat-window-end"
+    sh(f"log -t PillPrivacyCheck {start_marker}")
     open_privacy_card()
     open_condition_editor()
     privacy_debug("CARD_SAVE_FAULT", "save fault enabled=true", "--ez enabled true")
@@ -197,11 +201,14 @@ def check_card_logs(report):
         sh(f"run-as {PKG} rm -f {export_cache}")
     send_file()
     cancel_share()
+    sh(f"log -t PillPrivacyCheck {end_marker}")
     logs = adb("logcat", "-b", "all", "-d", "-T", since, "-v", "brief")
-    if not logs.strip():
-        raise RuntimeError("logcat has no lines in the exercised interval")
+    _, start, logs = logs.rpartition(start_marker)
+    logs, end, _ = logs.partition(end_marker)
+    if not start or not end:
+        raise RuntimeError("logcat did not retain both markers for the exercised interval")
     assert_no_private_values(logs, "logcat", (*PRIVATE_VALUES, PRIVACY_PERSON))
-    if re.search(r"card-exports[/\\]|content://[^\s]+\.card-export/|pillbadeum-card-\d{8}\.(pdf|png)", logs):
+    if re.search(r"\bcard-exports\b|content://[^\s]+\.card-export\b|pillbadeum-card-\d{8}\.(pdf|png)", logs):
         raise RuntimeError("logcat contains an export file path, URI or name")
     return "저장 실패, 복사 성공, 내보내기 쓰기 실패·공유 창 성공 구간에서 시험 값·파일 경로·URI·이름 0건"
 

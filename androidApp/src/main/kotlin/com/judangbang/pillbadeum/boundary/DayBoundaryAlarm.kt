@@ -61,7 +61,7 @@ class DayBoundaryReceiver : BroadcastReceiver() {
                     WidgetUpdater.updateAll(context)
                     DayBoundaryAlarm.scheduleNext(context)
                 } catch (e: Exception) {
-                    Log.e("DayBoundaryReceiver", "boundary refresh failed ($action)", e)
+                    Log.e("DayBoundaryReceiver", "boundary refresh failed ($action): ${e.javaClass.simpleName}")
                 }
                 if (action in COLLECT) Reminders.collect(context, alarmRang = false) else Reminders.afterWrite(context)
             } finally {

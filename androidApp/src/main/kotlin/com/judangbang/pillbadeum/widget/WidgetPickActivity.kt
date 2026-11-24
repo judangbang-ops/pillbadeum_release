@@ -67,7 +67,7 @@ class WidgetPickActivity : ComponentActivity() {
                 saving = true
                 scope.launch {
                     val saved = runCatching { WidgetChoices.write(applicationContext, glanceId, choice) }
-                        .onFailure { Log.e(TAG, "saving the widget's choice failed", it) }
+                        .onFailure { Log.e(TAG, "saving the widget's choice failed: ${it.javaClass.simpleName}") }
                         .isSuccess
                     if (!saved) {
                         state = PickState.Ready(options, error = Labels.PICK_SAVE_FAILED)
@@ -75,7 +75,7 @@ class WidgetPickActivity : ComponentActivity() {
                         return@launch
                     }
                     runCatching { DidITakeWidget().update(applicationContext, glanceId) }
-                        .onFailure { Log.e(TAG, "drawing the widget after its choice failed", it) }
+                        .onFailure { Log.e(TAG, "drawing the widget after its choice failed: ${it.javaClass.simpleName}") }
                     setResult(Activity.RESULT_OK, result)
                     finish()
                 }
@@ -87,7 +87,7 @@ class WidgetPickActivity : ComponentActivity() {
             }
             LaunchedEffect(Unit) {
                 val board = runCatching { container.statusBoard() }
-                    .onFailure { Log.e(TAG, "reading the people failed", it) }
+                    .onFailure { Log.e(TAG, "reading the people failed: ${it.javaClass.simpleName}") }
                     .getOrNull()
                 // Without the people only 전체 can be offered; it needs nothing from the database.
                 val options = board?.let(WidgetPick::options) ?: listOf(WidgetPick.everyoneOnly())

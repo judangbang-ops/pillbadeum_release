@@ -33,7 +33,7 @@ class ReminderReceiver : BroadcastReceiver() {
                     AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED -> Reminders.replan(context)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "reminder broadcast failed ($action)", e)
+                Log.e(TAG, "reminder broadcast failed ($action): ${e.javaClass.simpleName}")
             } finally {
                 pending.finish()
             }

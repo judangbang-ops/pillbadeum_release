@@ -539,7 +539,7 @@ class HealthCardScreenTest {
     }
 
     @Test
-    fun tc117_export_renders_single_a4_page_and_uses_card_order() = runBlocking {
+    fun tc117_export_renders_single_a4_page_and_uses_card_order(): Unit = runBlocking {
         val person = createPerson()
         seedCard(person)
         open(person)
@@ -559,7 +559,7 @@ class HealthCardScreenTest {
     }
 
     @Test
-    fun tc117_export_renders_two_pages_with_repeated_header_at_100_and_200_percent() = runBlocking {
+    fun tc117_export_renders_two_pages_with_repeated_header_at_100_and_200_percent(): Unit = runBlocking {
         val person = createPerson()
         seedCard(person)
         repeat(10) { seedEntry(person, CardEntryFields.Condition("가상 질환 ${it + 1}")) }
@@ -582,7 +582,7 @@ class HealthCardScreenTest {
     }
 
     @Test
-    fun tc106_export_ignores_repeat_send_and_cancel_keeps_format_and_preview() = runBlocking {
+    fun tc106_export_ignores_repeat_send_and_cancel_keeps_format_and_preview(): Unit = runBlocking {
         val person = createPerson()
         seedCard(person)
         open(person)
@@ -618,7 +618,7 @@ class HealthCardScreenTest {
     }
 
     @Test
-    fun tc106_png_over_limit_is_disabled_and_pdf_remains_available() = runBlocking {
+    fun tc106_png_over_limit_is_disabled_and_pdf_remains_available(): Unit = runBlocking {
         val person = createPerson()
         for (index in 1..20) {
             seedEntry(person, CardEntryFields.Allergy("가상 원인 $index"))
@@ -638,7 +638,7 @@ class HealthCardScreenTest {
     }
 
     @Test
-    fun tc117_export_write_error_allows_retry_and_resume_refreshes_the_preview() = runBlocking {
+    fun tc117_export_write_error_allows_retry_and_resume_refreshes_the_preview(): Unit = runBlocking {
         val person = createPerson()
         seedCard(person)
         open(person)

@@ -67,8 +67,11 @@ def prepare_sdk(sdk: int, artifact_version: str, checksum: str) -> None:
             )
             status, _, retry_summary = transfer.stdout.strip().partition(" ")
             retries, _, retry_after = retry_summary.partition(" ")
-            print(f"SDK {sdk}: HTTP {status}, retries: {retries}, Retry-After: {retry_after or '-'}", flush=True)
-            # curl can report an HTTP error even when its process exit status is zero.
+            print(
+                f"SDK {sdk}: HTTP {status}, retries: {retries or 'unknown'}, Retry-After: {retry_after or '-'}",
+                flush=True,
+            )
+            # Check HTTP 200 separately from curl's process exit status.
             if transfer.returncode != 0 or status != "200":
                 raise SystemExit(f"SDK {sdk}: download failed, HTTP {status} (curl exit {transfer.returncode})")
             if not matches_checksum(download, checksum):
@@ -121,7 +124,7 @@ def main() -> None:
     if args.prepare:
         if not known_selection:
             # Keep Robolectric's regular resolver for SDK selections we cannot prefetch safely.
-            print(f"Robolectric {robolectric_version}, SDKs {sorted(sdk_numbers)}: using its regular resolver")
+            print("::warning::SDK selection has no complete prefetch configuration. Using the Robolectric resolver.")
             return
         for sdk in sorted(sdk_numbers):
             prepare_sdk(sdk, *artifacts[sdk])

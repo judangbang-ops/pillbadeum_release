@@ -31,7 +31,8 @@ def check_card_show(report, steps):
 
 def check_lock_screen_overrides():
     root = Path(__file__).resolve().parents[2]
-    for scope in ("androidApp/src/main", "shared/src/androidMain", "shared/src/commonMain"):
+    # The emulator runs the debug APK, so its source set counts too.
+    for scope in ("androidApp/src/main", "androidApp/src/debug", "shared/src/androidMain", "shared/src/commonMain"):
         for path in (root / scope).rglob("*"):
             if path.suffix not in {".kt", ".java", ".xml"}:
                 continue
@@ -60,8 +61,9 @@ def check_screen_and_lock(report):
             sh(f"settings put {group} {key} {value}")
             if sh(f"settings get {group} {key}").strip() != value:
                 raise RuntimeError(f"test setting not applied: {key}")
-        set_pin()
+        # Cleared in finally even when set_pin raises after the PIN was set (clearing an unset PIN does nothing).
         pin_set = True
+        set_pin()
         report.note("TC-095 화면 꺼짐 30000ms, 충전 중 화면 켜 두기 끔, 잠금 지연 0ms")
         assert_card_contents()
         report.shot("tc095-card-show")

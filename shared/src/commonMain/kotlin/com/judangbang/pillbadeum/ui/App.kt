@@ -603,6 +603,8 @@ fun App(
                     } catch (_: Exception) {
                         null
                     }
+                    // Left meanwhile (닫기, a notification or the widget): the result must not take the user back here.
+                    if (route != current) return@LaunchedEffect
                     when {
                         summary == null -> {
                             go(current.back)

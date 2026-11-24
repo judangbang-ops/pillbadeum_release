@@ -32,6 +32,9 @@ Flow (clock set in Asia/Seoul; day 0 is the run's date; the clock only moves for
       (QA 11).
   13. The soft keyboard up over the item form: [저장] whole above it, tapped, and the item saved (QA 12).
   13a–b. Feedback (TC-098): the no-mail sheet and clipboard, then a single draft in the fixture app on two taps.
+  13c–d. Health card show (TC-095, TC-109, card_show_check.py): no lock-screen override in the app's source, then
+      62 s awake on the show screen with a 30 s timeout, no card over the PIN keyguard, the same summary after
+      unlocking, and asleep 34 s after Back.
   14. The app's data cleared (`pm clear`, what [저장공간 지우기] in the settings does) with the widget left on the home
       screen, then a tile it still draws tapped: no judgment row, and the widget drawn again as the empty widget
       (REQ-092, TC-009; not one of the 13, but TASK-034 owns it).

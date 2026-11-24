@@ -74,7 +74,9 @@ class ReminderSeedReceiver : BroadcastReceiver() {
                 throw e
             } catch (e: Exception) {
                 if (intent.action == ACTION_SEED_CARD_SHOW) {
-                    "card seed failed"
+                    // The exception class, and the failed step from seedCardShow's checks: no card text (REQ-106).
+                    val step = if (e is IllegalStateException) ": ${e.message}" else ""
+                    "card seed failed ${e.javaClass.simpleName}$step"
                 } else {
                     Log.e(TAG, "debug seed failed (${intent.action})", e)
                     "failed ${e.javaClass.simpleName}: ${e.message}"
@@ -119,9 +121,11 @@ class ReminderSeedReceiver : BroadcastReceiver() {
             slotLabel = SlotLabel.MORNING,
             medications = listOf(IntakeMedicationDraft("가상정 10mg", "1정")),
         )
-        check(core.saveIntake.create(intake) is SaveIntakeResult.Saved)
+        check(core.saveIntake.create(intake) is SaveIntakeResult.Saved) { "intake not saved" }
         val allergy = CardEntryFields.Allergy("가상 알레르기", "가상 반응")
-        check(core.saveCardEntry.add(person.id, core.saveCardEntry.newEntryId(), allergy) is SaveCardEntryResult.Saved)
+        check(core.saveCardEntry.add(person.id, core.saveCardEntry.newEntryId(), allergy) is SaveCardEntryResult.Saved) {
+            "allergy not saved"
+        }
         return "card seeded"
     }
 

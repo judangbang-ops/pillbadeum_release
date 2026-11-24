@@ -8,12 +8,14 @@ import android.app.TimePickerDialog
 import android.appwidget.AppWidgetManager
 import android.content.ActivityNotFoundException
 import android.content.ClipData
+import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.PersistableBundle
 import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
@@ -24,6 +26,7 @@ import com.judangbang.pillbadeum.boundary.DayBoundaryAlarm
 import com.judangbang.pillbadeum.reminder.ReminderAlarm
 import com.judangbang.pillbadeum.reminder.ReminderChannels
 import com.judangbang.pillbadeum.reminder.ReminderNotifications
+import com.judangbang.pillbadeum.status.Labels
 import com.judangbang.pillbadeum.ui.AccessSetting
 import com.judangbang.pillbadeum.ui.FEEDBACK_ADDRESS
 import com.judangbang.pillbadeum.ui.Phone
@@ -65,6 +68,29 @@ class AndroidPhone(
      */
     override val backupUnsupported: Boolean
         get() = Build.VERSION.SDK_INT < Build.VERSION_CODES.P
+
+    override val hasKnownEmergencySettings: Boolean
+        get() = Build.MANUFACTURER.equals("Samsung", ignoreCase = true) ||
+            Build.MANUFACTURER.equals("Google", ignoreCase = true)
+
+    override val showsClipboardPreview: Boolean
+        get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+
+    override fun copyEmergencyText(text: String): Boolean {
+        val clipboard = activity.getSystemService(ClipboardManager::class.java) ?: return false
+        val clip = ClipData.newPlainText(Labels.CARD_EMERGENCY, text)
+        if (showsClipboardPreview) {
+            clip.description.extras = PersistableBundle().apply {
+                putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
+            }
+        }
+        return try {
+            clipboard.setPrimaryClip(clip)
+            true
+        } catch (_: RuntimeException) {
+            false
+        }
+    }
 
     /**
      * `KeyguardManager.isDeviceSecure()`: true with a PIN, pattern or password (API 23, no permission). That is the lock

@@ -41,6 +41,7 @@ android {
         applicationId = "com.judangbang.pillbadeum"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
+        testInstrumentationRunner = "com.judangbang.pillbadeum.EmergencyClipboardDeviceTest"
         val appVersionCode = ciVersionCode ?: 1
         versionCode = appVersionCode
         // 테스터 폰의 Obtainium이 깔린 버전 이름과 GitHub 릴리즈 태그 v<versionName>을 비교하므로 빌드마다 다르게 함

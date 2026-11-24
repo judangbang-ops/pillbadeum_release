@@ -42,6 +42,15 @@ interface Phone {
     /** Android 8.x (API 26, 27): the app's backup rules skip the backup there on purpose (REQ-054, supplement B-3). */
     val backupUnsupported: Boolean
 
+    /** SCR-014 uses the verified Galaxy and Pixel menu paths on these manufacturers. */
+    val hasKnownEmergencySettings: Boolean get() = false
+
+    /** Android 13 and later show their own clipboard confirmation. */
+    val showsClipboardPreview: Boolean get() = false
+
+    /** Writes emergency text with the platform's sensitive flag when supported. */
+    fun copyEmergencyText(text: String): Boolean = false
+
     /** Whether a screen lock (PIN, pattern or password) is set, or null when it cannot be read (SPEC-035). */
     fun screenLock(): Boolean?
 

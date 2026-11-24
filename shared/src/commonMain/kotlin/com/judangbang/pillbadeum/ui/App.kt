@@ -138,6 +138,10 @@ internal sealed interface Route {
         override val key get() = "card-entry:${kind.name}:$entryId:$editing@${back.key}"
     }
 
+    data class Emergency(override val back: HealthCard) : HealthCardRoute {
+        override val key get() = "card-emergency@${back.key}"
+    }
+
     data class CardExport(override val back: HealthCard) : HealthCardRoute {
         override val key get() = "card-export@${back.key}"
     }
@@ -157,6 +161,7 @@ internal sealed interface Route {
                 val from = parse(key.substringAfter('@'))
                 val requested = key.substringBefore('@')
                 if (requested == "card-show" && from is HealthCard) return CardShow(from)
+                if (requested == "card-emergency" && from is HealthCard) return Emergency(from)
                 if (requested == "card-export" && from is HealthCard) return CardExport(from)
                 if (requested.startsWith("card-entry:") && from is HealthCard) {
                     val parts = requested.split(':')
@@ -236,6 +241,7 @@ fun App(
     }
     var cardEntrySeed by remember { mutableStateOf<CardEntry?>(null) }
     var cardShowSeed by remember { mutableStateOf<HealthCardSummary?>(null) }
+    var emergencySeed by remember { mutableStateOf<HealthCardSummary?>(null) }
     // Counts the reads, so a screen with data of its own (SCR-007, SCR-008) reads it again after every read of the board.
     var reads by remember { mutableIntStateOf(0) }
     // SCR-008 (TASK-019): the last month read, with the screen it was read for, and where its list was. Both stay while
@@ -336,6 +342,7 @@ fun App(
         message = null
         cardEntrySeed = null
         cardShowSeed = null
+        emergencySeed = null
         route = to
     }
 
@@ -563,7 +570,13 @@ fun App(
                                 cardShowSeed = summary
                             }
                         },
-                        onEmergency = {},
+                        onEmergency = {
+                            val summary = card
+                            if (summary != null && summary.canOpenEmergencyText()) {
+                                go(Route.Emergency(current))
+                                emergencySeed = summary
+                            }
+                        },
                         onExport = {
                             if (cardExporter != null && card?.canShowOrExport() == true) go(Route.CardExport(current))
                         },
@@ -638,6 +651,20 @@ fun App(
                 CardShowScreen(
                     card = card,
                     personName = people.find { it.id == current.back.personId }?.name,
+                    onClose = { go(current.back) },
+                )
+            }
+
+            is Route.Emergency -> key(current.key) {
+                EmergencyRoute(
+                    core = core,
+                    personId = current.back.personId,
+                    personName = people.find { it.id == current.back.personId }?.name,
+                    seed = emergencySeed,
+                    refreshKey = refreshKey,
+                    openFailed = core == null && failed,
+                    phone = phone,
+                    onRetryOpen = { failed = false; retries++ },
                     onClose = { go(current.back) },
                 )
             }

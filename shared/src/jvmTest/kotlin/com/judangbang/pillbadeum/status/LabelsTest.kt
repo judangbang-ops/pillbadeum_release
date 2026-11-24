@@ -348,6 +348,18 @@ class LabelsTest {
         assertEquals("을(를)", Labels.withObject(""))
     }
 
+    /** SCR-014 (TASK-063, R 01): the subject line takes 이 or 가 from the last letter, 이(가) when it cannot tell. */
+    @Test
+    fun the_emergency_subject_line_takes_the_particle_of_the_name() {
+        fun line(name: String, subject: String) = "${name}의 정보예요. $subject 쓰는 휴대폰의 긴급 정보에 넣어 주세요."
+        assertEquals(line("가상 엄마", "가상 엄마가"), Labels.emergencyPerson("가상 엄마"))
+        assertEquals(line("가상 동생", "가상 동생이"), Labels.emergencyPerson("가상 동생"))
+        assertEquals(line("나", "나가"), Labels.emergencyPerson("나"))
+        assertEquals(line("가상3", "가상3이"), Labels.emergencyPerson("가상3"))
+        assertEquals(line("가상2", "가상2가"), Labels.emergencyPerson("가상2"))
+        assertEquals(line("Sam", "Sam이(가)"), Labels.emergencyPerson("Sam"))
+    }
+
     /** SCR-005 (TASK-022): the record-tool note takes the app's name with its topic particle. */
     @Test
     fun the_intro_names_the_app_with_its_topic_particle() {

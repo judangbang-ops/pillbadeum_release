@@ -3,7 +3,10 @@ package com.judangbang.pillbadeum.ui
 import android.Manifest
 import android.app.NotificationManager
 import android.content.ActivityNotFoundException
+import android.content.ClipDescription
+import android.content.ClipboardManager
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -22,9 +25,11 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -33,6 +38,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTouchInput
 import androidx.core.content.FileProvider
 import androidx.test.core.app.ApplicationProvider
 import com.judangbang.pillbadeum.AndroidPhone
@@ -55,6 +61,7 @@ import com.judangbang.pillbadeum.usecase.PersonChange
 import com.judangbang.pillbadeum.usecase.RecordResult
 import com.judangbang.pillbadeum.usecase.SaveCardEntryResult
 import com.judangbang.pillbadeum.usecase.SaveIntakeResult
+import com.judangbang.pillbadeum.usecase.StaleCardNotice
 import java.io.File
 import java.io.IOException
 import kotlinx.coroutines.CompletableDeferred
@@ -79,6 +86,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowBuild
 
 /** SCR-011 and SCR-012 through the app router, with the Room database and a fixed Seoul clock. */
 @RunWith(RobolectricTestRunner::class)
@@ -96,6 +104,10 @@ class HealthCardScreenTest {
     private val procedure = CardEntryFields.Procedure("쓸개 수술", "2019")
     private val allergy = CardEntryFields.Allergy("페니실린 계열", "두드러기")
     private val medication = "가상정 10mg 1정 · 매일 아침"
+    private val emergencyNext = "이제 긴급 정보에 붙여 넣어 주세요."
+    private val emergencyLegacyNext = "복사했어요. 긴급 정보에 붙여 넣어 주세요. " +
+        "이 휴대폰에서는 복사한 글이 클립보드 미리보기에 보일 수 있어요."
+    private val emergencyRecopyHint = "$emergencyNext 휴대폰에 저장한 뒤 건강 카드로 돌아가 [다 넣었어요]를 눌러 주세요."
 
     @After
     fun finish() {
@@ -177,6 +189,168 @@ class HealthCardScreenTest {
     }
 
     @Test
+    fun tc116_emergency_renders_subject_text_count_and_copy_rows() = renderEmergency(scale = 1f)
+
+    @Test
+    fun tc116_emergency200_stacks_section_copy_buttons_below_the_text() = renderEmergency(scale = 2f)
+
+    @Test
+    fun tc116_emergency_copied_renders_one_hint_below_the_copied_row() = runBlocking {
+        val person = createPerson()
+        seedCard(person)
+        textCopyThenEdit(person)
+        ShadowBuild.setManufacturer("Google")
+        open(person, height = 1600)
+        openEmergency()
+        val button = desc("지금 먹는 약 복사")
+        button.performClick()
+        waitForEmergencyHint(emergencyRecopyHint)
+        assertTrue(bounds(text(emergencyRecopyHint)).top >= bounds(button).bottom)
+        text(Labels.CARD_NOTICE_ACKNOWLEDGED).assertDoesNotExist()
+        render("EmergencyCopied")
+    }
+
+    @Test
+    @Config(sdk = [32, 34])
+    fun tc096_copy_all_and_line_write_exact_clip_and_the_platform_sensitive_flag() = runBlocking {
+        val person = createPerson()
+        seedEntry(person, allergy)
+        createIntake(person, "가상 아침약", SlotLabel.MORNING)
+        seedEntry(person, CardEntryFields.Guardian("가상 딸", "010-0000-0000", "딸"))
+        val expected = emergencyText(person)
+        open(person, height = 1600)
+        openEmergency()
+        assertEquals(listOf("알레르기 복사", "지금 먹는 약 복사", "보호자 연락처 복사"),
+            compose.spokenTexts().filter { it.endsWith(" 복사") })
+        text(expected.text).performTouchInput { longClick() }
+        text("복사").assertDoesNotExist()
+        text("모두 선택").assertDoesNotExist()
+        assertFalse(clipboard().hasPrimaryClip())
+
+        val all = text("모두 복사")
+        all.performClick()
+        val next = if (Build.VERSION.SDK_INT >= 33) emergencyNext else emergencyLegacyNext
+        waitForEmergencyHint(next)
+        assertTrue(bounds(text(next)).top >= bounds(all).bottom)
+        assertTrue(bounds(text(next)).bottom < bounds(text("넣는 곳")).top)
+        assertClipboard(expected.text)
+        assertFreshCopyTimes(person)
+
+        app.clock.now = at("2026-11-23T10:00")
+        val line = desc("알레르기 복사")
+        line.performClick()
+        waitForEmergencyHint(next)
+        assertTrue(bounds(text(next)).top >= bounds(line).bottom)
+        assertClipboard("페니실린 계열(두드러기)")
+        assertFreshCopyTimes(person)
+
+        closeEmergency()
+        seedEntry(person, CardEntryFields.Condition("가상 질환"))
+        resumeCard()
+        waitForEmergencyHint(Labels.cardNotice(StaleCardNotice.CHANGED))
+    }
+
+    @Test
+    @Config(sdk = [34])
+    fun tc100_first_line_copy_and_edits_raise_notice_both_recopies_preserve_it_until_acknowledged() = runBlocking {
+        val person = createPerson()
+        seedEntry(person, allergy)
+        open(person, height = 1600)
+        openEmergency()
+        desc("알레르기 복사").performClick()
+        waitForEmergencyHint(emergencyNext)
+        assertFreshCopyTimes(person)
+
+        closeEmergency()
+        app.clock.now = at("2026-11-23T11:00")
+        seedEntry(person, CardEntryFields.Condition("가상 질환"))
+        resumeCard()
+        val acknowledgment = Labels.CARD_NOTICE_ACKNOWLEDGED
+        waitFor(acknowledgment)
+        val before = core.db.healthCardDao().findByPerson(person)
+        assertNotNull(before?.emergencyCopiedAt)
+        assertEquals(null, before?.staleNoticeClosedAt)
+
+        openEmergency()
+        text("모두 복사").performClick()
+        waitForEmergencyHint(emergencyRecopyHint)
+        assertTrue(bounds(text(emergencyRecopyHint)).bottom < bounds(text("넣는 곳")).top)
+        assertEquals(before, core.db.healthCardDao().findByPerson(person))
+        val line = desc("알레르기 복사")
+        line.performClick()
+        waitForEmergencyHint(emergencyRecopyHint)
+        assertTrue(bounds(text(emergencyRecopyHint)).top >= bounds(line).bottom)
+        assertEquals(before, core.db.healthCardDao().findByPerson(person))
+        text(acknowledgment).assertDoesNotExist()
+
+        closeEmergency()
+        text(acknowledgment).assertIsDisplayed().performClick()
+        waitUntilGone(acknowledgment)
+        assertNotNull(core.db.healthCardDao().findByPerson(person)?.staleNoticeClosedAt)
+    }
+
+    @Test
+    fun tc116_copy_failure_keeps_content_and_timestamps_and_moves_the_only_feedback() = runBlocking {
+        val person = core.people.add("가상 동생", PersonColors.PALETTE[1]).id
+        seedEntry(person, allergy)
+        val expected = emergencyText(person)
+        val before = core.db.healthCardDao().findByPerson(person)
+        ShadowBuild.setManufacturer("other")
+        open(person, name = "가상 동생", height = 1600, rejectClipboard = true)
+        openEmergency()
+        val subject = "가상 동생의 정보예요. 가상 동생이 쓰는 휴대폰의 긴급 정보에 넣어 주세요."
+        compose.onAllNodesWithText(subject)[0].assertIsDisplayed()
+        text("휴대폰 설정에서 '긴급 정보'나 '의료 정보'를 찾아 열어요.", substring = true).assertIsDisplayed()
+        text(expected.text).assertIsDisplayed()
+        val failed = "복사하지 못했어요. 다시 눌러 주세요"
+        text("모두 복사").performClick()
+        waitForEmergencyHint(failed)
+        val line = desc("알레르기 복사")
+        line.performClick()
+        waitForEmergencyHint(failed)
+        assertTrue(bounds(text(failed)).top >= bounds(line).bottom)
+        assertEquals(before, core.db.healthCardDao().findByPerson(person))
+    }
+
+    @Test
+    @Config(sdk = [32])
+    fun tc116_hint_under_the_last_row_scrolls_into_view() = runBlocking {
+        val person = createPerson()
+        seedEntry(person, allergy)
+        seedEntry(person, CardEntryFields.Guardian("가상 딸", "010-0000-0000", "딸"))
+        open(person, scale = 2f)
+        openEmergency()
+        // Scrolled just far enough to see the last [복사] at the bottom edge: its hint starts below the screen.
+        val last = desc("보호자 연락처 복사").performScrollTo()
+        last.performClick()
+        waitForEmergencyHint(emergencyLegacyNext)
+        val viewport = compose.onNode(hasScrollAction()).fetchSemanticsNode().boundsInRoot
+        compose.waitUntil(10_000) {
+            val hint = compose.onNodeWithText(emergencyLegacyNext).fetchSemanticsNode()
+            hint.positionInRoot.y + hint.size.height <= viewport.bottom + 1f
+        }
+        assertTrue(bounds(text(emergencyLegacyNext)).top >= bounds(last).bottom)
+    }
+
+    @Test
+    fun tc116_emergency_keeps_route_on_recreate_and_rebuilds_on_resume() = runBlocking {
+        val person = createPerson()
+        seedEntry(person, allergy)
+        val original = emergencyText(person)
+        open(person, height = 1600)
+        openEmergency()
+        controller.recreate()
+        waitFor(original.text)
+        text(original.text).assertIsDisplayed()
+        controller.pause().stop()
+        seedEntry(person, CardEntryFields.Condition("가상 질환"))
+        controller.restart().start().resume().visible()
+        waitFor(emergencyText(person).text)
+        text(original.text).assertDoesNotExist()
+        closeEmergency()
+    }
+
+    @Test
     fun tc113_card_load_failure_retries_and_resume_reloads_the_card(): Unit = runBlocking {
         val person = createPerson()
         val intent = Intent(app, CardTestActivity::class.java)
@@ -221,7 +395,8 @@ class HealthCardScreenTest {
         val changed = "카드가 바뀌었어요. 휴대폰 긴급 정보에 넣은 문장도 다시 넣어 주세요"
         text(changed).assertIsDisplayed()
         text("카드 모두 지우기").assertIsDisplayed()
-        compose.onAllNodesWithText("응급 대비 문장")[0].performClick()
+        openEmergency()
+        closeEmergency()
         assertEquals(null, core.db.healthCardDao().findByPerson(person)?.staleNoticeClosedAt)
         text(changed).assertIsDisplayed()
         render("CardRecopy")
@@ -565,6 +740,83 @@ class HealthCardScreenTest {
         render("Export")
         desc("닫기").performClick()
         waitForCard()
+    }
+
+    private fun renderEmergency(scale: Float) = runBlocking {
+        val person = createPerson()
+        seedCard(person)
+        ShadowBuild.setManufacturer("Samsung")
+        val stacked = scale > 1f
+        open(person, height = if (stacked) 3400 else 1600, scale = scale)
+        openEmergency()
+        val expected = emergencyText(person)
+        val subject = "${personName}의 정보예요. ${personName}가 쓰는 휴대폰의 긴급 정보에 넣어 주세요."
+        val subjectNodes = compose.onAllNodesWithText(subject)
+        assertEquals(2, subjectNodes.fetchSemanticsNodes().size)
+        assertTrue(bounds(subjectNodes[0]).bottom < bounds(text(expected.text)).top)
+        assertTrue(bounds(text(expected.text)).bottom <= bounds(text("${expected.characterCount}자")).top)
+        assertTrue(bounds(text("${expected.characterCount}자")).bottom <= bounds(text("모두 복사")).top)
+        assertTrue(bounds(text("모두 복사")).bottom < bounds(text("넣는 곳")).top)
+        assertTrue(bounds(text("넣는 곳")).bottom <= bounds(subjectNodes[1]).top)
+        text("Pixel은 위급 상황 정보 앱", substring = true).assertIsDisplayed()
+        text("붙여 넣은 뒤 저장해 주세요.", substring = true).assertIsDisplayed()
+        text("휴대폰 긴급 연락처에서 연락처를 골라", substring = true).assertIsDisplayed()
+        text("잠금 화면에 보이게 하려면", substring = true).assertIsDisplayed()
+        text("카드에서 지운 정보는 휴대폰 긴급 정보에서도 지워 주세요.").assertIsDisplayed()
+        assertTrue(bounds(text("앱은 대신 등록하지 않아요.")).bottom < bounds(text("칸별 복사")).top)
+        for (line in expected.lines) {
+            val title = Labels.emergencySection(line.section)
+            val body = bounds(text(line.text))
+            val button = bounds(desc("$title 복사"))
+            assertTrue(bounds(text(title)).bottom <= body.top)
+            if (stacked) assertTrue(button.top >= body.bottom) else assertTrue(button.left >= body.right)
+        }
+        desc("이식형 의료기기 복사").assertDoesNotExist()
+        render(if (stacked) "Emergency200" else "Emergency")
+    }
+
+    private fun emergencyText(person: String) = runBlocking {
+        checkNotNull(core.buildEmergencyText(checkNotNull(core.loadHealthCard(person))))
+    }
+
+    private fun openEmergency() {
+        compose.onAllNodesWithText(Labels.CARD_EMERGENCY)[0].performScrollTo().performClick()
+        waitFor("모두 복사")
+        waitFor("칸별 복사")
+    }
+
+    private fun closeEmergency() {
+        back()
+        waitForCard()
+    }
+
+    private fun resumeCard() {
+        controller.pause().resume()
+    }
+
+    private fun waitForEmergencyHint(value: String) {
+        waitFor(value)
+        assertEquals(1, compose.onAllNodesWithText(value).fetchSemanticsNodes().size)
+    }
+
+    private fun clipboard() = checkNotNull(controller.get().getSystemService(ClipboardManager::class.java))
+
+    private fun assertClipboard(expected: String) {
+        val clip = compose.runOnIdle { checkNotNull(clipboard().primaryClip) }
+        assertEquals(1, clip.itemCount)
+        assertEquals(expected, clip.getItemAt(0).text.toString())
+        assertEquals(Labels.CARD_EMERGENCY, clip.description.label.toString())
+        if (Build.VERSION.SDK_INT >= 33) {
+            assertTrue(clip.description.extras?.getBoolean(ClipDescription.EXTRA_IS_SENSITIVE) == true)
+        } else {
+            assertEquals(null, clip.description.extras)
+        }
+    }
+
+    private suspend fun assertFreshCopyTimes(person: String) {
+        val row = checkNotNull(core.db.healthCardDao().findByPerson(person))
+        assertEquals(app.clock.now().toEpochMilliseconds(), row.emergencyCopiedAt)
+        assertEquals(row.emergencyCopiedAt, row.staleNoticeClosedAt)
     }
 
     // Like the unrolled boards, these two captures include the footer. Native Compose metrics need a taller canvas.
@@ -1065,10 +1317,18 @@ class HealthCardScreenTest {
         return item
     }
 
-    private fun open(person: String, name: String = personName, height: Int = 800, scale: Float = 1f, waitForAdd: Boolean = true) {
+    private fun open(
+        person: String,
+        name: String = personName,
+        height: Int = 800,
+        scale: Float = 1f,
+        waitForAdd: Boolean = true,
+        rejectClipboard: Boolean = false,
+    ) {
         RuntimeEnvironment.setQualifiers("+h${height}dp")
         RuntimeEnvironment.setFontScale(scale)
         val intent = Intent(app, CardTestActivity::class.java).putExtra("person", person)
+            .putExtra("rejectClipboard", rejectClipboard)
         controller = Robolectric.buildActivity(CardTestActivity::class.java, intent).setup()
         waitFor(Labels.healthCardTitle(name))
         if (waitForAdd) waitForCardContent()
@@ -1109,7 +1369,10 @@ class CardTestActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val container = (application as TestApp).container
-        val phone = AndroidPhone(this) {}
+        val android = AndroidPhone(this) {}
+        val phone = if (intent.getBooleanExtra("rejectClipboard", false)) object : Phone by android {
+            override fun copyEmergencyText(text: String) = false
+        } else android
         // Draw the actual document. The CI emulator exercises file creation and the system Sharesheet.
         val exporter = object : CardExporter {
             override suspend fun prepare(card: HealthCardSummary, madeOn: LocalDate, format: CardExportFormat): CardExportPreview {

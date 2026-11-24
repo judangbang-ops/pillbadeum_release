@@ -142,6 +142,10 @@ internal sealed interface Route {
         override val key get() = "card-emergency@${back.key}"
     }
 
+    data class CardExport(override val back: HealthCard) : HealthCardRoute {
+        override val key get() = "card-export@${back.key}"
+    }
+
     /**
      * SCR-005, the first-run intro on its [page] (0 or 1, TASK-022). Back on the first page closes the app without
      * finishing the intro, so the next start shows it again (Claude's choice).
@@ -158,6 +162,7 @@ internal sealed interface Route {
                 val requested = key.substringBefore('@')
                 if (requested == "card-show" && from is HealthCard) return CardShow(from)
                 if (requested == "card-emergency" && from is HealthCard) return Emergency(from)
+                if (requested == "card-export" && from is HealthCard) return CardExport(from)
                 if (requested.startsWith("card-entry:") && from is HealthCard) {
                     val parts = requested.split(':')
                     val kind = CardEntryKind.entries.firstOrNull { it.name == parts.getOrNull(1) }
@@ -221,6 +226,7 @@ fun App(
     initialHealthCardPersonId: String? = null,
     protectCardRecents: @Composable (visible: Boolean) -> Unit = {},
     keepCardShowAwake: @Composable () -> Unit = {},
+    cardExporter: CardExporter? = null,
 ) {
     val scope = rememberCoroutineScope()
     var core by remember { mutableStateOf<DidITakeCore?>(null) }
@@ -571,7 +577,9 @@ fun App(
                                 emergencySeed = summary
                             }
                         },
-                        onExport = {},
+                        onExport = {
+                            if (cardExporter != null && card?.canShowOrExport() == true) go(Route.CardExport(current))
+                        },
                         onDismissNotice = {
                             write(Labels.CARD_NOTICE_ACTION_FAILED) { c ->
                                 c.healthCardNoticeActions.closeNotice(current.personId)
@@ -599,6 +607,18 @@ fun App(
                             }
                         },
                     ),
+                )
+            }
+
+            is Route.CardExport -> key(current.key) {
+                CardExportScreen(
+                    core = core,
+                    personId = current.back.personId,
+                    exporter = cardExporter,
+                    refreshKey = refreshKey,
+                    openFailed = core == null && failed,
+                    onRetryOpen = { failed = false; retries++ },
+                    onClose = { go(current.back) },
                 )
             }
 

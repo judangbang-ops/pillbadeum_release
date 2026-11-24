@@ -98,6 +98,7 @@ from explore import (
     tap_scrolled,
     tile,
 )
+from card_export_check import check_card_export
 from card_show_check import check_card_show
 from feedback_check import check_feedback
 from release_check import WIDGET_LABEL, go_home, place_widget, save_ui, screen_size
@@ -786,6 +787,8 @@ def run(r: Report, steps: ShotSteps) -> None:
 
     steps("14. 앱 데이터를 지운 뒤 남은 위젯 버튼 (REQ-092)",
           f"`pm clear` 뒤 위젯에 남은 칸을 누르면 판정 행 없음, 위젯이 칸 없이 '{EMPTY_WIDGET}'로 다시 그려짐", data_cleared)
+
+    check_card_export(r, steps)
 
     # 15. No crash (QA 1)
     def no_crash() -> str:

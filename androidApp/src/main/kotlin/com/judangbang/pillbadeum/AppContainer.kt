@@ -8,6 +8,7 @@ import com.judangbang.pillbadeum.boundary.DayBoundaryAlarm
 import com.judangbang.pillbadeum.data.DidITakeDatabase
 import com.judangbang.pillbadeum.data.buildDidITakeDatabase
 import com.judangbang.pillbadeum.data.didITakeDatabaseBuilder
+import com.judangbang.pillbadeum.export.CardExportStore
 import com.judangbang.pillbadeum.reminder.Reminders
 import com.judangbang.pillbadeum.restore.FileInstallMarker
 import com.judangbang.pillbadeum.restore.InstallMarker
@@ -75,6 +76,8 @@ class AppContainer(
     /** The install marker of the restore check; tests keep it in memory (Robolectric cannot flush a directory). */
     private val installMarker: () -> InstallMarker = { FileInstallMarker.of(context) },
 ) {
+    internal val cardExports by lazy { CardExportStore(context.applicationContext) }
+
     /** Process-wide scope for short best-effort work started from receivers. */
     val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 

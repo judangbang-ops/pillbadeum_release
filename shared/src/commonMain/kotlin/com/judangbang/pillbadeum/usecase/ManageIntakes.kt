@@ -48,6 +48,10 @@ data class IntakeDraft(
         reminder = reminder?.let { it.copy(start = LocalTime(it.start.hour, it.start.minute)) },
         medications = medications?.map { it.copy(name = it.name.trim(), quantity = it.quantity.trim()) },
     )
+
+    companion object {
+        const val MAX_NAME_CHARACTERS = 30
+    }
 }
 
 /** SCR-006#quiet: what quiet hours take from the reminder just saved, counted with [settings] (REQ-077, supplement N-4). */
@@ -64,6 +68,8 @@ sealed interface SaveIntakeResult {
     data class Invalid(val reason: String) : SaveIntakeResult {
         companion object {
             const val BLANK_NAME: String = "BLANK_NAME"
+            const val BLANK_ALIAS: String = "BLANK_ALIAS"
+            const val NAME_LIMIT: String = "NAME_LIMIT"
             const val UNKNOWN_PERSON: String = "UNKNOWN_PERSON"
             const val BLANK_MEDICATION: String = "BLANK_MEDICATION"
             const val MEDICATION_LIMIT: String = "MEDICATION_LIMIT"
@@ -98,7 +104,8 @@ class SaveIntake(
 
     suspend fun create(draft: IntakeDraft): SaveIntakeResult {
         val d = draft.normalized()
-        validateFields(d)?.let { return it }
+        validateNames(d.name, draft.widgetAlias)?.let { return it }
+        validateMedications(d)?.let { return it }
         if (d.medications.orEmpty().any { it.id != null }) {
             return SaveIntakeResult.Invalid(SaveIntakeResult.Invalid.UNKNOWN_MEDICATION_ROW)
         }
@@ -131,15 +138,24 @@ class SaveIntake(
     }
 
     suspend fun update(intakeId: String, draft: IntakeDraft): SaveIntakeResult {
-        val d = draft.normalized()
-        validateFields(d)?.let { return it }
+        val normalized = draft.normalized()
+        validateMedications(normalized)?.let { return it }
         return db.useWriterConnection { transactor ->
             transactor.immediateTransaction {
-                if (!activePerson(d.personId)) return@immediateTransaction SaveIntakeResult.Invalid(SaveIntakeResult.Invalid.UNKNOWN_PERSON)
-                val now = clock.now().toEpochMilliseconds()
                 val intakeDao = db.intakeDao()
                 val previous = intakeDao.findById(intakeId)?.takeIf { it.archivedAt == null }
                     ?: return@immediateTransaction SaveIntakeResult.Gone
+                // SPEC-023: only changed names are normalized and validated; legacy values stay intact.
+                val nameChanged = draft.name != previous.name
+                val aliasChanged = draft.widgetAlias != previous.widgetAlias
+                validateNames(normalized.name.takeIf { nameChanged }, draft.widgetAlias.takeIf { aliasChanged })
+                    ?.let { return@immediateTransaction it }
+                val d = normalized.copy(
+                    name = if (nameChanged) normalized.name else previous.name,
+                    widgetAlias = if (aliasChanged) normalized.widgetAlias else previous.widgetAlias,
+                )
+                if (!activePerson(d.personId)) return@immediateTransaction SaveIntakeResult.Invalid(SaveIntakeResult.Invalid.UNKNOWN_PERSON)
+                val now = clock.now().toEpochMilliseconds()
                 val existing = if (d.medications == null) emptyMap() else db.intakeMedicationDao().listByIntake(intakeId).associateBy { it.id }
                 val draftIds = d.medications.orEmpty().mapNotNull { it.id }
                 if (draftIds.size != draftIds.toSet().size || draftIds.any { it !in existing }) {
@@ -190,8 +206,19 @@ class SaveIntake(
         return quietNotice(choice.start, db.settingDao().loadWindowSettings(), settings)?.let { SavedQuiet(it, settings) }
     }
 
-    private fun validateFields(d: IntakeDraft): SaveIntakeResult.Invalid? {
-        if (d.name.isEmpty()) return SaveIntakeResult.Invalid(SaveIntakeResult.Invalid.BLANK_NAME)
+    private fun validateNames(name: String?, alias: String?): SaveIntakeResult.Invalid? {
+        val trimmedAlias = alias?.trim()
+        val reason = when {
+            name == "" -> SaveIntakeResult.Invalid.BLANK_NAME
+            trimmedAlias == "" && !alias.isNullOrEmpty() -> SaveIntakeResult.Invalid.BLANK_ALIAS
+            (name?.codePointCount() ?: 0) > IntakeDraft.MAX_NAME_CHARACTERS ||
+                (trimmedAlias?.codePointCount() ?: 0) > IntakeDraft.MAX_NAME_CHARACTERS -> SaveIntakeResult.Invalid.NAME_LIMIT
+            else -> return null
+        }
+        return SaveIntakeResult.Invalid(reason)
+    }
+
+    private fun validateMedications(d: IntakeDraft): SaveIntakeResult.Invalid? {
         val rows = d.medications.orEmpty()
         if (rows.any { it.name.isBlank() }) return SaveIntakeResult.Invalid(SaveIntakeResult.Invalid.BLANK_MEDICATION)
         if (rows.size > IntakeMedicationDraft.MAX_ROWS || rows.any { row ->

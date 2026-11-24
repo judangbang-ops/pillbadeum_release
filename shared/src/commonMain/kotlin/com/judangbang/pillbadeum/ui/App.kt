@@ -124,6 +124,11 @@ internal sealed interface Route {
         override val back get() = from
     }
 
+    /** SCR-013. Save the route, never the contents of the card. */
+    data class CardShow(override val back: HealthCard) : HealthCardRoute {
+        override val key get() = "card-show@${back.key}"
+    }
+
     data class CardEditor(
         val kind: CardEntryKind,
         val entryId: String,
@@ -151,6 +156,7 @@ internal sealed interface Route {
             if ('@' in key) {
                 val from = parse(key.substringAfter('@'))
                 val requested = key.substringBefore('@')
+                if (requested == "card-show" && from is HealthCard) return CardShow(from)
                 if (requested == "card-export" && from is HealthCard) return CardExport(from)
                 if (requested.startsWith("card-entry:") && from is HealthCard) {
                     val parts = requested.split(':')
@@ -201,6 +207,7 @@ internal sealed interface Route {
  * @param initialHealthCardPersonId starts directly at SCR-011 for app tests. The app itself opens the card from SCR-004's
  *   `[건강 카드]` and from SCR-010 (TASK-061).
  * @param protectCardRecents applies the platform's recents privacy setting while a health card screen is shown.
+ * @param keepCardShowAwake keeps the platform screen on while the SCR-013 summary is displayed in the foreground.
  */
 @Composable
 fun App(
@@ -213,6 +220,7 @@ fun App(
     backHandler: @Composable (enabled: Boolean, onBack: () -> Unit) -> Unit = { _, _ -> },
     initialHealthCardPersonId: String? = null,
     protectCardRecents: @Composable (visible: Boolean) -> Unit = {},
+    keepCardShowAwake: @Composable () -> Unit = {},
     cardExporter: CardExporter? = null,
 ) {
     val scope = rememberCoroutineScope()
@@ -227,6 +235,7 @@ fun App(
         mutableStateOf<Route>(initialHealthCardPersonId?.let { Route.HealthCard(it) } ?: Route.Home)
     }
     var cardEntrySeed by remember { mutableStateOf<CardEntry?>(null) }
+    var cardShowSeed by remember { mutableStateOf<HealthCardSummary?>(null) }
     // Counts the reads, so a screen with data of its own (SCR-007, SCR-008) reads it again after every read of the board.
     var reads by remember { mutableIntStateOf(0) }
     // SCR-008 (TASK-019): the last month read, with the screen it was read for, and where its list was. Both stay while
@@ -326,6 +335,7 @@ fun App(
         if (from == Route.People && to is Route.Person) personFormState.removeState(to.key)
         message = null
         cardEntrySeed = null
+        cardShowSeed = null
         route = to
     }
 
@@ -547,7 +557,12 @@ fun App(
                             cardFailed = false
                             if (core == null) { failed = false; retries++ } else attempts++
                         },
-                        onShow = {},
+                        onShow = {
+                            card?.takeIf { it.canShowOrExport() }?.let { summary ->
+                                go(Route.CardShow(current))
+                                cardShowSeed = summary
+                            }
+                        },
                         onEmergency = {},
                         onExport = {
                             if (cardExporter != null && card?.canShowOrExport() == true) go(Route.CardExport(current))
@@ -590,6 +605,39 @@ fun App(
                     refreshKey = refreshKey,
                     openFailed = core == null && failed,
                     onRetryOpen = { failed = false; retries++ },
+                    onClose = { go(current.back) },
+                )
+            }
+
+            is Route.CardShow -> key(current.key) {
+                var card by remember { mutableStateOf(cardShowSeed) }
+                val openedAt = remember { refreshKey.takeIf { cardShowSeed != null } }
+                LaunchedEffect(core, refreshKey, failed && core == null) {
+                    val c = core
+                    if (c == null && !failed) return@LaunchedEffect
+                    if (refreshKey == openedAt) return@LaunchedEffect
+                    val summary = try {
+                        c?.loadHealthCard(current.back.personId)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        null
+                    }
+                    // Left meanwhile (닫기, a notification or the widget): the result must not take the user back here.
+                    if (route != current) return@LaunchedEffect
+                    when {
+                        summary == null -> {
+                            go(current.back)
+                            message = Labels.CARD_LOAD_FAILED
+                        }
+                        !summary.canShowOrExport() -> go(current.back)
+                        else -> card = summary
+                    }
+                }
+                if (card != null) keepCardShowAwake()
+                CardShowScreen(
+                    card = card,
+                    personName = people.find { it.id == current.back.personId }?.name,
                     onClose = { go(current.back) },
                 )
             }

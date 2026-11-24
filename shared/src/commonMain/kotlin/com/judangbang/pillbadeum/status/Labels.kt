@@ -109,6 +109,7 @@ object Labels {
     const val CARD_MEDICATION_NAME_MISSING = "약 이름 미입력"
     const val CARD_ARCHIVED_MEDICATION_HINT = "약은 대상자를 되살린 뒤 복용 항목에서 고쳐요"
     const val CARD_DISCLAIMER = "사용자가 적은 내용이며 의료기관의 기록이 아니에요"
+    const val CARD_SHOW_DISCLAIMER = "$CARD_DISCLAIMER. 적지 않은 종류는 보이지 않아요(없다는 뜻이 아니에요)"
     const val CARD_LOAD_FAILED = "카드를 불러오지 못했어요"
     const val CARD_ADD = "+ 더하기"
     const val CARD_ENTRY_LIMIT = "20칸까지 적을 수 있어요"
@@ -498,6 +499,7 @@ object Labels {
 
     /** SCR-006#error: the name is empty (09 ItemFormError). */
     const val NAME_REQUIRED: String = "이름을 입력해 주세요"
+    const val INTAKE_NAME_LIMIT: String = "30자까지 적을 수 있어요"
 
     /** The mark on an app tile whose judgment has an open clock warning; the warning band above says more (SCR-004#future). */
     const val CLOCK_MARK: String = "! 시계 확인"

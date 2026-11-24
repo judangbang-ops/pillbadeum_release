@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -15,6 +16,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.judangbang.pillbadeum.boundary.DayBoundaryAlarm
 import com.judangbang.pillbadeum.ui.App
 import kotlin.coroutines.cancellation.CancellationException
@@ -69,6 +72,7 @@ class MainActivity : ComponentActivity() {
                 homeRequests = homeRequests,
                 backHandler = { enabled, onBack -> BackHandler(enabled, onBack) },
                 protectCardRecents = { visible -> ProtectCardRecents(visible) },
+                keepCardShowAwake = { KeepCardShowAwake() },
             )
         }
     }
@@ -108,6 +112,25 @@ internal fun ComponentActivity.ProtectCardRecents(visible: Boolean) {
         DisposableEffect(this) {
             setRecentsScreenshotEnabled(false)
             onDispose { setRecentsScreenshotEnabled(true) }
+        }
+    }
+}
+
+/** SCR-013: the card requests screen-on only while its activity is in the foreground. */
+@Composable
+internal fun ComponentActivity.KeepCardShowAwake() {
+    DisposableEffect(this) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> window.addFlags(FLAG_KEEP_SCREEN_ON)
+                Lifecycle.Event.ON_PAUSE -> window.clearFlags(FLAG_KEEP_SCREEN_ON)
+                else -> Unit
+            }
+        }
+        lifecycle.addObserver(observer)
+        onDispose {
+            lifecycle.removeObserver(observer)
+            window.clearFlags(FLAG_KEEP_SCREEN_ON)
         }
     }
 }

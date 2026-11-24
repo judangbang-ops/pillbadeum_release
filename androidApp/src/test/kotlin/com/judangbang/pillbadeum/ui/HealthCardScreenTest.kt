@@ -16,6 +16,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
@@ -40,6 +41,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ApplicationProvider
 import com.judangbang.pillbadeum.AndroidPhone
 import com.judangbang.pillbadeum.DidITakeCore
+import com.judangbang.pillbadeum.KeepCardShowAwake
 import com.judangbang.pillbadeum.ProtectCardRecents
 import com.judangbang.pillbadeum.TestApp
 import com.judangbang.pillbadeum.data.SettingEntity
@@ -786,6 +788,126 @@ class HealthCardScreenTest {
         assertEquals(row.emergencyCopiedAt, row.staleNoticeClosedAt)
     }
 
+    // Like the unrolled boards, these two captures include the footer. Native Compose metrics need a taller canvas.
+    @Test
+    fun tc115_card_show_renders_the_board() = renderCardShow("CardShow", height = 1050, scale = 1f)
+
+    @Test
+    fun tc115_card_show200_renders_the_board() = renderCardShow("CardShow200", height = 1940, scale = 2f)
+
+    @Test
+    fun tc115_card_show200_scrolls_to_the_date_on_a_short_screen(): Unit = runBlocking {
+        val person = createPerson()
+        seedCard(person)
+        val longNote = "가상 메모가 잘리지 않아요. ".repeat(4).trim()
+        seedEntry(person, CardEntryFields.ImplantedDevice("가상 의료기기", "2019", longNote))
+        open(person, height = 640, scale = 2f)
+        openCardShow()
+        text("가상 의료기기 (2019년) · $longNote").performScrollTo().assertIsDisplayed()
+        text("마지막으로 고친 날 2026-11-23").performScrollTo().assertIsDisplayed()
+        desc("닫기").performClick()
+        waitForCard()
+    }
+
+    @Test
+    fun tc115_empty_card_cannot_open_show_but_procedure_only_can(): Unit = runBlocking {
+        val person = createPerson()
+        open(person)
+        text(Labels.CARD_SHOW).assertDoesNotExist()
+        assertFalse(keepingScreenAwake())
+        controller.pause()
+        seedEntry(person, procedure)
+        controller.resume()
+        waitFor(Labels.CARD_SHOW)
+        openCardShow()
+        text("쓸개 수술 (2019년)").assertIsDisplayed()
+        text(Labels.CARD_MEDICATIONS).assertDoesNotExist()
+    }
+
+    @Test
+    fun tc095_card_show_only_keeps_the_screen_on_until_pause_or_back(): Unit = runBlocking {
+        val person = createPerson()
+        seedEntry(person, allergy)
+        open(person)
+        assertFalse(keepingScreenAwake())
+        openCardShow()
+        assertTrue(keepingScreenAwake())
+        assertEquals(listOf(false), controller.get().recentsEnabled)
+        assertEquals(0, controller.get().window.attributes.flags and WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
+
+        controller.pause()
+        assertFalse(keepingScreenAwake())
+        seedEntry(person, CardEntryFields.Allergy("가상 알레르기"))
+        controller.resume()
+        waitFor("가상 알레르기")
+        assertTrue(keepingScreenAwake())
+        back()
+        waitForCard()
+        assertFalse(keepingScreenAwake())
+        assertEquals(listOf(false), controller.get().recentsEnabled)
+    }
+
+    @Test
+    fun tc115_card_show_recreation_loads_the_same_person_and_uses_back(): Unit = runBlocking {
+        val person = createPerson()
+        seedEntry(person, allergy)
+        open(person)
+        openCardShow()
+        controller.recreate()
+        waitFor(Labels.CARD_SHOW_DISCLAIMER)
+        text(personName).assertIsDisplayed()
+        assertTrue(keepingScreenAwake())
+        back()
+        waitForCard()
+        assertFalse(keepingScreenAwake())
+    }
+
+    @Test
+    fun tc115_card_show_loading_and_read_failure_return_to_card(): Unit = runBlocking {
+        val person = createPerson()
+        seedEntry(person, allergy)
+        open(person)
+        openCardShow()
+        controller.get().intent.putExtra("failFirstOpen", true)
+        controller.recreate()
+        desc(Labels.LOADING).assertIsDisplayed()
+        text(Labels.CARD_SHOW_DISCLAIMER).assertDoesNotExist()
+        assertFalse(keepingScreenAwake())
+        controller.get().firstOpenGate.complete(Unit)
+        waitFor(Labels.CARD_LOAD_FAILED)
+        text(Labels.HEALTH_CARD).assertIsDisplayed()
+        assertFalse(keepingScreenAwake())
+    }
+
+    private fun renderCardShow(board: String, height: Int, scale: Float): Unit = runBlocking {
+        val person = createPerson()
+        seedCard(person)
+        open(person, height = height, scale = scale)
+        openCardShow()
+        val date = "마지막으로 고친 날 2026-11-23"
+        val types = listOf("지금 먹는 약", "알레르기", "질환", "수술·시술", "의료기관·담당 의사", "보호자 연락처")
+        val readingOrder = listOf(personName, Labels.CARD_SHOW_DISCLAIMER) + types + date
+        val tops = readingOrder.map { bounds(text(it)).top }
+        assertTrue(tops.zipWithNext().all { (earlier, later) -> earlier < later })
+        for (type in types) {
+            assertTrue(SemanticsProperties.Heading in text(type).fetchSemanticsNode().config)
+        }
+        assertTrue(bounds(desc("닫기")).right > bounds(text(personName)).right)
+        text("이식형 의료기기").assertDoesNotExist()
+        text(medication).assertIsDisplayed()
+        text("비타민 · 매일 (약 이름 미입력)").assertIsDisplayed()
+        assertEquals(1, compose.onAllNodes(hasClickAction()).fetchSemanticsNodes().size)
+        render(board)
+    }
+
+    private fun openCardShow() {
+        tap(Labels.CARD_SHOW)
+        waitFor(Labels.CARD_SHOW_DISCLAIMER)
+    }
+
+    private fun keepingScreenAwake() =
+        controller.get().window.attributes.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON != 0
+
     private fun renderProcedure(stacked: Boolean) = runBlocking {
         val person = createPerson()
         open(person, height = if (stacked) 820 else 800, scale = if (stacked) 2f else 1f)
@@ -972,6 +1094,7 @@ class CardTestActivity : ComponentActivity() {
                 refreshKey = resumeCount,
                 initialHealthCardPersonId = intent.getStringExtra("person"),
                 protectCardRecents = { visible -> ProtectCardRecents(visible) },
+                keepCardShowAwake = { KeepCardShowAwake() },
             )
         }
     }

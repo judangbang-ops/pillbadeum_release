@@ -1,0 +1,12 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="org.example.task065.fixture">
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="34" />
+    <application android:label="TASK-065 시험 수신 앱">
+        <activity android:name=".FeedbackReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.SENDTO" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="mailto" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

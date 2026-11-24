@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
@@ -153,10 +154,10 @@ internal fun TopBar(
 
 /** A text button of the bar (box.css `.tb`): `[지난 기록]`, `[설정]`. */
 @Composable
-internal fun BarButton(label: String, onClick: () -> Unit) {
+internal fun BarButton(label: String, onClick: () -> Unit, sidePadding: Dp = 12.dp) {
     Box(
-        Modifier.heightIn(min = 48.dp).clip(Ui.ButtonShape).clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 12.dp),
+        Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).clip(Ui.ButtonShape).clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = sidePadding),
         contentAlignment = Alignment.Center,
     ) {
         Words(label, Ui.type(15, Ui.SemiBold, lineHeight = 1.25f))

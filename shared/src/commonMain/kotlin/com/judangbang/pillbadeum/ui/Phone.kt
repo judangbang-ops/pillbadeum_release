@@ -57,6 +57,12 @@ interface Phone {
     /** Opens [url] in a browser; false when nothing can open it, and the app shows the address (SPEC-036). */
     fun openUrl(url: String): Boolean
 
+    /** Opens a feedback draft (SPEC-053). False when no mail app handles it. */
+    fun openFeedbackMail(): Boolean
+
+    /** Copies the public feedback address, with confirmation on Android versions that do not show one. */
+    fun copyFeedbackAddress()
+
     /**
      * Shows the system time picker at [initial], 24-hour and to the minute (SCR-009 rule: no rounding to hours or half
      * hours). [onPicked] gets the time chosen; nothing is called when the picker is cancelled.

@@ -28,10 +28,12 @@ public final class SaveCardFile extends Activity {
         layout.addView(status);
         Button read = new Button(this);
         read.setText("Read shared PDF");
+        read.setAllCaps(false);
         read.setOnClickListener(view -> inspect());
         layout.addView(read);
         Button save = new Button(this);
         save.setText("Save in Files");
+        save.setAllCaps(false);
         save.setOnClickListener(view -> save());
         layout.addView(save);
         setContentView(layout);

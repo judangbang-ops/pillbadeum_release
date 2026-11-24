@@ -565,7 +565,7 @@ class HealthCardScreenTest {
     fun tc117_export_renders_two_pages_with_repeated_header_at_100_and_200_percent(): Unit = runBlocking {
         val person = createPerson()
         seedCard(person)
-        repeat(10) { seedEntry(person, CardEntryFields.Condition("가상 질환 ${it + 1}")) }
+        repeat(4) { seedEntry(person, CardEntryFields.Condition("가상 질환 ${it + 1}")) }
         open(person, height = 1080)
         tap("내보내기")
         waitFor("카드가 길어 2쪽이에요. 쪽마다 이름과 쪽 번호가 들어가요")
@@ -577,7 +577,8 @@ class HealthCardScreenTest {
             assertTrue(header[1].startsWith(Labels.CARD_DISCLAIMER))
             assertEquals("마지막으로 고친 날 2026-11-23 · 만든 날 2026-11-23", header[2])
         }
-        assertTrue(second.fetchSemanticsNode().config[SemanticsProperties.ContentDescription].single().contains("보호자 연락처"))
+        val secondPageBody = second.fetchSemanticsNode().config[SemanticsProperties.ContentDescription].single().lines().drop(3)
+        assertEquals(listOf("보호자 연락처", "홍가상 (딸) 010-0000-0000"), secondPageBody)
         render("ExportPages")
         val firstSize = bounds(first).size
         RuntimeEnvironment.setFontScale(2f)
@@ -600,12 +601,10 @@ class HealthCardScreenTest {
         waitFor("파일 이름: pillbadeum-card-20261123.png (대상자 이름은 넣지 않아요)")
         val send = text("보내기")
         val sendAction = send.fetchSemanticsNode().config[SemanticsActions.OnClick].action!!
-        compose.runOnIdle {
-            sendAction()
-            sendAction()
-        }
-        compose.waitUntil(10_000) { activity.shareIntents.size == 1 }
+        send.performClick()
+        compose.waitUntil("The share chooser opens", 10_000) { activity.shareIntents.isNotEmpty() }
         send.assertIsNotEnabled()
+        compose.runOnIdle { sendAction() }
         val chooser = activity.shareIntents.single()
         assertEquals(Intent.ACTION_CHOOSER, chooser.action)
         val share = checkNotNull(chooser.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java))
@@ -617,8 +616,8 @@ class HealthCardScreenTest {
         assertEquals("pillbadeum-card-20261123.png", uri?.lastPathSegment)
         assertEquals(listOf(false), activity.recentsEnabled)
 
-        activity.cancelCardShare()
-        compose.waitUntil(10_000) { runCatching { send.assertIsEnabled() }.isSuccess }
+        compose.runOnIdle { activity.cancelCardShare() }
+        send.assertIsEnabled()
         exportPage(personName).assertIsDisplayed()
         text("파일 이름: pillbadeum-card-20261123.png (대상자 이름은 넣지 않아요)").assertIsDisplayed()
         desc("닫기").performClick()
@@ -630,10 +629,11 @@ class HealthCardScreenTest {
         val person = createPerson()
         for (index in 1..20) {
             seedEntry(person, CardEntryFields.Allergy("가상 원인 $index"))
-            seedEntry(person, CardEntryFields.Condition("가상 질환 $index"))
-            seedEntry(person, CardEntryFields.Procedure("가상 수술 $index"))
+            seedEntry(person, CardEntryFields.Condition("가상 질환 $index", note = "가상 메모입니다"))
+            seedEntry(person, CardEntryFields.Procedure("가상 수술 $index", place = "가상 의료기관"))
         }
-        open(person)
+        open(person, waitForAdd = false)
+        waitFor("내보내기")
         tap("내보내기")
         text("사진(PNG)").performClick()
         waitFor("사진이 너무 길어요. PDF로 보내 주세요")
@@ -823,13 +823,13 @@ class HealthCardScreenTest {
         return item
     }
 
-    private fun open(person: String, name: String = personName, height: Int = 800, scale: Float = 1f) {
+    private fun open(person: String, name: String = personName, height: Int = 800, scale: Float = 1f, waitForAdd: Boolean = true) {
         RuntimeEnvironment.setQualifiers("+h${height}dp")
         RuntimeEnvironment.setFontScale(scale)
         val intent = Intent(app, CardTestActivity::class.java).putExtra("person", person)
         controller = Robolectric.buildActivity(CardTestActivity::class.java, intent).setup()
         waitFor(Labels.healthCardTitle(name))
-        waitForCardContent()
+        if (waitForAdd) waitForCardContent()
     }
 
     private fun text(value: String, substring: Boolean = false) = compose.onNodeWithText(value, substring = substring)

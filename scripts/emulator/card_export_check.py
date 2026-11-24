@@ -103,8 +103,8 @@ def seed_rows(con):
         entry("condition", "name", name, 0, "가상 질환", "note", note)
     for index in range(20):
         entry("allergy", "substance", TALL, index, f"가상 알레르기 {index}")
-        entry("procedure_history", "name", TALL, index, f"가상 시술 {index}")
-        entry("condition", "name", TALL, index, f"가상 질환 {index}")
+        entry("procedure_history", "name", TALL, index, f"가상 시술 {index}", "place", "가상 의료기관")
+        entry("condition", "name", TALL, index, f"가상 질환 {index}", "note", "가상 메모입니다")
 
 
 def open_export(name):
@@ -152,7 +152,17 @@ def assert_pdf(pdf, pages):
     page_count = len(re.findall(rb"/Type\s*/Page\b", pdf))
     if page_count != pages or not pdf.startswith(b"%PDF"):
         raise RuntimeError(f"Expected {pages} PDF pages, found {page_count}")
-    if not re.search(rb"/FontName\s*/\S*(?:NotoSansCJK|NotoSansKR)", pdf) or not re.search(rb"/FontFile[23]\b", pdf):
+    objects = dict(re.findall(rb"(?ms)^(\d+) 0 obj\b(.*?)\nendobj", pdf))
+    descriptors = {
+        number for number, body in objects.items() if re.search(rb"/FontName\s*/\S*(?:NotoSansCJK|NotoSansKR)", body)
+    }
+    # Skia can embed Type 3 glyph programs in CharProcs instead of a whole font stream in the descriptor.
+    embedded = any(re.search(rb"/FontFile[23]?\b", objects[number]) for number in descriptors) or any(
+        b"/Subtype /Type3" in body and b"/CharProcs" in body
+        and any(b"/FontDescriptor " + number + b" 0 R" in body for number in descriptors)
+        for body in objects.values()
+    )
+    if not embedded:
         raise RuntimeError("The generated PDF has no embedded Hangul font")
     if len(re.findall(rb"/MediaBox\s*\[0 0 595 842\]", pdf)) != pages:
         raise RuntimeError("The generated PDF pages are not A4 portrait")
@@ -176,7 +186,7 @@ def check_card_export(report, steps):
                 if exact("PDF read=true writeDenied=true attempts=1") is None:
                     raise RuntimeError("The separate receiving app did not read the PDF with a read-only grant")
                 tap_exact("Save in Files")
-                save = seek(lambda node: node.text in ("Save", "저장"), "system Files Save")
+                save = seek(lambda node: node.text.casefold() in ("save", "저장"), "system Files Save")
                 tap(save)
                 if exact("PDF saved in Files", timeout=30) is None:
                     raise RuntimeError("The receiver did not write the PDF using system Files")

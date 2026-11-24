@@ -132,6 +132,8 @@ def snapshot_in_recents(report, launcher, label, expected_real):
         raise RuntimeError(f"{label}: Home did not replace the app window")
     assert_no_private_values("\n".join(f"{n.text}\n{n.desc}" for n in nodes), f"Home ({label})")
     sh("input keyevent KEYCODE_APP_SWITCH")
+    # The snapshot is already cached after Home. Let the launcher's Overview transition finish before capturing it.
+    time.sleep(1.5)
     end = time.monotonic() + 15
     while time.monotonic() < end:
         for snap_id, real in app_snapshots().items():

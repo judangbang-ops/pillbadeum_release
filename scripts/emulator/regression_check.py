@@ -739,7 +739,6 @@ def run(r: Report, steps: ShotSteps) -> None:
     steps("13. 키보드가 열린 채 저장 (QA 12)", "화면 키보드가 떠 있을 때 [저장]이 키보드 위에 다 보이고, 누르면 저장됨", keyboard)
     check_feedback(r, steps)
     check_card_show(r, steps)
-    check_card_privacy(r, steps)
 
     # 14. App data cleared, then a tile left on the widget tapped (REQ-092)
     def data_cleared() -> str:
@@ -790,6 +789,8 @@ def run(r: Report, steps: ShotSteps) -> None:
           f"`pm clear` 뒤 위젯에 남은 칸을 누르면 판정 행 없음, 위젯이 칸 없이 '{EMPTY_WIDGET}'로 다시 그려짐", data_cleared)
 
     check_card_export(r, steps)
+    # TC-108 scrolls the launcher widget and adds a person. Run it after regressions that rely on the earlier fixtures.
+    check_card_privacy(r, steps)
 
     # 15. No crash (QA 1)
     def no_crash() -> str:

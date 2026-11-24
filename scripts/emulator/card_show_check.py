@@ -99,7 +99,8 @@ def check_privacy_render(report):
 def open_privacy_card():
     to_home()
     tap_exact("건강 카드")
-    tap_desc(f"{PRIVACY_PERSON}의 건강 카드")
+    label = f"{PRIVACY_PERSON}의 건강 카드"
+    tap(seek(lambda n: n.desc == label, "synthetic person's card"))
     if exact(CARD_SHOW) is None:
         raise RuntimeError("the synthetic card did not open")
 

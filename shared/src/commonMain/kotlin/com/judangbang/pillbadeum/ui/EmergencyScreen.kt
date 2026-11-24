@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.DisableSelection
 import androidx.compose.foundation.verticalScroll
@@ -227,8 +229,15 @@ private fun EmergencyCopyRow(line: EmergencyLine, stacked: Boolean, enabled: Boo
     }
 }
 
+/**
+ * The hint goes under the pressed button. After copying a row at the bottom of the screen it would start below the
+ * visible part, and on Android 12 and earlier it is the only sign that the copy worked, so it scrolls into view.
+ */
 @Composable
 private fun CopyHint(text: String, modifier: Modifier = Modifier) {
+    val bringIntoView = remember { BringIntoViewRequester() }
+    LaunchedEffect(text) { bringIntoView.bringIntoView() }
     Words(text, Ui.type(14, Ui.SemiBold), modifier.padding(top = 8.dp)
+        .bringIntoViewRequester(bringIntoView)
         .semantics { liveRegion = LiveRegionMode.Polite })
 }

@@ -219,14 +219,18 @@ object Labels {
 
     fun emergencyCharacterCount(count: Int): String = "${count}자"
 
+    /**
+     * The subject line of SCR-014 (R 01) with the subject particle its last letter takes: `가상 엄마가`, `가상 동생이`,
+     * `가상3이`. A name that ends in another letter (`Sam`) gets both, `Sam이(가)`, like [withObject].
+     */
     fun emergencyPerson(name: String): String {
-        val last = name.lastOrNull()
-        val hasFinalConsonant = when (last) {
-            in '가'..'힣' -> (checkNotNull(last) - '가') % 28 != 0
-            in 'ᆨ'..'ᇂ', '0', '1', '3', '6', '7', '8' -> true
-            else -> false
+        val last = name.lastOrNull() ?: ' '
+        val particle = when (last) {
+            in '가'..'힣' -> if ((last - '가') % 28 == 0) "가" else "이"
+            in 'ᆨ'..'ᇂ', '0', '1', '3', '6', '7', '8' -> "이"
+            '2', '4', '5', '9' -> "가"
+            else -> "이(가)"
         }
-        val particle = if (hasFinalConsonant) "이" else "가"
         return "${name}의 정보예요. $name$particle 쓰는 휴대폰의 긴급 정보에 넣어 주세요."
     }
 

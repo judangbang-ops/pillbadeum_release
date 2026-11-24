@@ -23,6 +23,7 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -296,6 +297,26 @@ class HealthCardScreenTest {
         waitForEmergencyHint(failed)
         assertTrue(bounds(text(failed)).top >= bounds(line).bottom)
         assertEquals(before, core.db.healthCardDao().findByPerson(person))
+    }
+
+    @Test
+    @Config(sdk = [32])
+    fun tc116_hint_under_the_last_row_scrolls_into_view() = runBlocking {
+        val person = createPerson()
+        seedEntry(person, allergy)
+        seedEntry(person, CardEntryFields.Guardian("가상 딸", "010-0000-0000", "딸"))
+        open(person, scale = 2f)
+        openEmergency()
+        // Scrolled just far enough to see the last [복사] at the bottom edge: its hint starts below the screen.
+        val last = desc("보호자 연락처 복사").performScrollTo()
+        last.performClick()
+        waitForEmergencyHint(emergencyLegacyNext)
+        val viewport = compose.onNode(hasScrollAction()).fetchSemanticsNode().boundsInRoot
+        compose.waitUntil(10_000) {
+            val hint = compose.onNodeWithText(emergencyLegacyNext).fetchSemanticsNode()
+            hint.positionInRoot.y + hint.size.height <= viewport.bottom + 1f
+        }
+        assertTrue(bounds(text(emergencyLegacyNext)).top >= bounds(last).bottom)
     }
 
     @Test

@@ -721,7 +721,7 @@ class HealthCardScreenTest {
     }
 
     @Test
-    fun tc117_cancelled_preview_cannot_enable_send_for_a_new_date(): Unit = runBlocking {
+    fun tc117_cancelled_preview_cannot_enable_send_after_switching_formats(): Unit = runBlocking {
         val person = createPerson()
         seedCard(person)
         open(person)
@@ -732,9 +732,9 @@ class HealthCardScreenTest {
         val newStarted = CompletableDeferred<Unit>()
         val finishOld = CompletableDeferred<Unit>()
         val finishNew = CompletableDeferred<Unit>()
-        controller.get().beforeCardPrepare = { date ->
-            when (date.day) {
-                24 -> try {
+        controller.get().beforeCardPrepare = { format ->
+            when (format) {
+                CardExportFormat.PNG -> try {
                     withContext(Dispatchers.Default + NonCancellable) {
                         oldStarted.complete(Unit)
                         finishOld.await()
@@ -742,29 +742,26 @@ class HealthCardScreenTest {
                 } finally {
                     oldFinished.complete(Unit)
                 }
-                25 -> {
+                CardExportFormat.PDF -> {
                     newStarted.complete(Unit)
                     finishNew.await()
                 }
-                else -> Unit
             }
         }
 
         try {
-            controller.pause()
-            app.clock.now = at("2026-11-24T09:00")
-            controller.resume()
+            text("사진(PNG)").performClick()
+            waitFor("만드는 중…")
             compose.waitUntil(10_000) { oldStarted.isCompleted }
-            controller.pause()
-            app.clock.now = at("2026-11-25T09:00")
-            controller.resume()
+            text("PDF").performClick()
+            text("만드는 중…").assertIsDisplayed()
             compose.waitUntil(10_000) { newStarted.isCompleted }
             finishOld.complete(Unit)
             compose.waitUntil(10_000) { oldFinished.isCompleted }
             text("만드는 중…").assertIsDisplayed()
             text("보내기").assertIsNotEnabled()
             finishNew.complete(Unit)
-            waitFor("파일 이름: pillbadeum-card-20261125.pdf (대상자 이름은 넣지 않아요)")
+            waitFor("파일 이름: pillbadeum-card-20261123.pdf (대상자 이름은 넣지 않아요)")
             text("보내기").assertIsEnabled()
         } finally {
             finishOld.complete(Unit)
@@ -1103,7 +1100,7 @@ class CardTestActivity : ComponentActivity() {
     val recentsEnabled = mutableListOf<Boolean>()
     val sharedPreviews = mutableListOf<CardExportPreview>()
     var failCardShare = false
-    var beforeCardPrepare: suspend (LocalDate) -> Unit = {}
+    var beforeCardPrepare: suspend (CardExportFormat) -> Unit = {}
     private var chooserResult = CompletableDeferred<Unit>()
     val firstOpenGate = CompletableDeferred<Unit>()
     private var resumeCount by mutableIntStateOf(0)
@@ -1116,7 +1113,7 @@ class CardTestActivity : ComponentActivity() {
         // Draw the actual document. The CI emulator exercises file creation and the system Sharesheet.
         val exporter = object : CardExporter {
             override suspend fun prepare(card: HealthCardSummary, madeOn: LocalDate, format: CardExportFormat): CardExportPreview {
-                beforeCardPrepare(madeOn)
+                beforeCardPrepare(format)
                 return withContext(Dispatchers.Default) { CardDocument.prepare(card, madeOn, format) }
             }
 

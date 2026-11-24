@@ -536,11 +536,12 @@ class HealthCardScreenTest {
         assertEquals(listOf(false, true), controller.get().recentsEnabled)
     }
 
+    // Like the unrolled boards, these two captures include the footer. Native Compose metrics need a taller canvas.
     @Test
-    fun tc115_card_show_renders_the_board() = renderCardShow("CardShow", height = 915, scale = 1f)
+    fun tc115_card_show_renders_the_board() = renderCardShow("CardShow", height = 1050, scale = 1f)
 
     @Test
-    fun tc115_card_show200_renders_the_board() = renderCardShow("CardShow200", height = 1790, scale = 2f)
+    fun tc115_card_show200_renders_the_board() = renderCardShow("CardShow200", height = 1940, scale = 2f)
 
     @Test
     fun tc115_card_show200_scrolls_to_the_date_on_a_short_screen(): Unit = runBlocking {

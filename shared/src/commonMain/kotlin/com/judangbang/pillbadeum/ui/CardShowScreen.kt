@@ -13,10 +13,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import com.judangbang.pillbadeum.status.Labels
+import com.judangbang.pillbadeum.status.WidgetLayout
 import com.judangbang.pillbadeum.usecase.CardEntryFields
 import com.judangbang.pillbadeum.usecase.CardEntryKind
+import com.judangbang.pillbadeum.usecase.CardMedication
 import com.judangbang.pillbadeum.usecase.HealthCardSummary
 
 /** SCR-013, CardShow and CardShow200: a read-only summary with the close action above the scroll. */
@@ -35,7 +38,7 @@ internal fun CardShowScreen(card: HealthCardSummary?, personName: String?, onClo
         ) {
             (card?.person?.name ?: personName)?.let { name ->
                 Words(
-                    name, Ui.type(26, Ui.ExtraBold, lineHeight = 1.2f),
+                    name, Ui.type(26, Ui.ExtraBold, lineHeight = 1.25f),
                     Modifier.padding(start = 4.dp, end = 4.dp, bottom = 8.dp), heading = true,
                 )
             }
@@ -56,7 +59,7 @@ private fun CardShowBody(card: HealthCardSummary) {
     )
     if (card.medications.isNotEmpty()) {
         ShowSection(Labels.CARD_MEDICATIONS) {
-            card.medications.forEach { medication -> ShowLine(medication.text) }
+            card.medications.forEach { medication -> ShowMedication(medication) }
         }
     }
     val entries = card.entries.groupBy { it.fields.kind }
@@ -82,7 +85,7 @@ private fun ShowSection(title: String, lines: @Composable () -> Unit) {
         Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 12.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Words(title, Ui.type(18, Ui.ExtraBold, Ui.Muted, lineHeight = 1.2f), heading = true)
+        Words(title, Ui.type(18, Ui.ExtraBold, Ui.Muted, lineHeight = 1.25f), heading = true)
         lines()
     }
 }
@@ -90,6 +93,19 @@ private fun ShowSection(title: String, lines: @Composable () -> Unit) {
 @Composable
 private fun ShowLine(text: String) {
     Words(text, Ui.type(20, Ui.SemiBold))
+}
+
+@Composable
+private fun ShowMedication(medication: CardMedication) {
+    val text = medication.text
+    if (medication.hasMedicationName) {
+        ShowLine(text)
+    } else {
+        // CardShow200 keeps the end of the qualifier on one line. Keep the spoken text unchanged.
+        val tail = "${Labels.CARD_MEDICATION_NAME_MISSING.substringAfter(' ')})"
+        val layoutText = text.removeSuffix(tail) + tail.replace(' ', '\u00a0')
+        Words(AnnotatedString(WidgetLayout.keepWords(layoutText)), text, Ui.type(20, Ui.SemiBold))
+    }
 }
 
 @Composable

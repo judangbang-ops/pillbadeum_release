@@ -16,8 +16,9 @@
 - 기록을 받는 수신기(PRIVATE)가 병합 매니페스트에서 exported="false"가 아님 (REQ-081)
 - 앱 소스의 PendingIntent가 FLAG_IMMUTABLE 없이 만들어짐. 바꿀 수 있어야 하는 것은 MUTABLE_OK에 까닭과 함께 적고,
   인텐트가 이 앱의 클래스를 가리켜야 함 (REQ-081)
-- 앱 소스(androidApp/src/main, shared/src/commonMain·androidMain)의 로그 호출이 이름을 담을 수 있는 값을 글에 넣음
-  (REQ-058, 아래 NAME_WORDS). 이름이 아님을 확인한 값은 SAFE에 까닭과 함께 적음
+- 앱 소스(androidApp/src/main, shared/src/commonMain·androidMain)의 로그 호출이 이름, 기록, 건강 카드·약 줄,
+  클립보드 값이나 내보내기 파일을 담을 수 있음 (REQ-058·106)
+- 위젯·알림 데이터 경로에 카드·약 줄을 읽는 참조가 있음 (REQ-106), 카드 FileProvider가 비공개가 아님
 표준 라이브러리만 씀.
 """
 
@@ -74,21 +75,51 @@ FORBIDDEN = {
 NETWORK = ("com.squareup.okhttp3", "com.squareup.retrofit2", "io.ktor:ktor-client", "com.android.volley")
 
 SOURCES = ("androidApp/src/main", "shared/src/commonMain", "shared/src/androidMain")
-LOG_CALL = re.compile(r"\b(Log\.(?:v|d|i|w|e|wtf)|println|print|printStackTrace)\s*\(")
-# 이 낱말이 글 속 값의 이름에 들어 있으면 이름(항목·대상자)이나 기록을 담을 수 있다고 봄
-NAME_WORDS = {"name", "names", "nickname", "displayname", "label", "labels", "title", "person", "people", "intake",
-              "intakes", "item", "items", "content", "contents", "text", "body", "message", "record", "records",
-              "result", "notice", "notices", "dose", "doses", "board", "cell", "cells"}
-# 값의 끝이 이것이면 수·종류·번호만 남음
-SAFE_ENDINGS = (".size", ".count()", "::class.simpleName", ".id", ".action")
-# (파일 이름, 값) → 이름이 아닌 까닭. 코드가 바뀌어 값이 달라지면 다시 걸림
+LOG_LEVEL = r"v|d|i|w|e|wtf|log|println|tag"
+PRINT_CALL = r"println|print|printStackTrace"
+# TC-108: Android renderers and the common code that supplies their data. Keep this list in step with the call paths.
+RENDER_SOURCES = (
+    "androidApp/src/main/kotlin/com/judangbang/pillbadeum/widget",
+    "androidApp/src/main/kotlin/com/judangbang/pillbadeum/reminder",
+    "shared/src/commonMain/kotlin/com/judangbang/pillbadeum/status/StatusBoard.kt",
+    "shared/src/commonMain/kotlin/com/judangbang/pillbadeum/usecase/Reminders.kt",
+)
+CARD_READ = re.compile(
+    r"\b(?:loadHealthCard|buildEmergencyText|HealthCard(?:Entity|Summary|Dao)|LoadHealthCard|"
+    r"(?:healthCard|condition|procedureHistory|allergy|implantedDevice|careContact|intakeMedication|medication)Dao|"
+    r"(?:Intake)?Medication(?:Entity|Dao|Fields|Draft)|CardEntryFields|medications|qtyPerTake|"
+    r"(?:FROM|JOIN)\s+[`\"]?(?:health_card|condition|procedure_history|allergy|implanted_device|care_contact|"
+    r"intake_medication|medication))\b",
+    re.IGNORECASE,
+)
 PENDING = re.compile(r"\bPendingIntent\.(getBroadcast|getActivity|getActivities|getService|getForegroundService)\s*\(")
 # 파일 이름 → 바꿀 수 있는 PendingIntent가 필요한 까닭 (REQ-081). 인텐트는 이 앱의 클래스를 가리켜야 함
 MUTABLE_OK = {
     "WidgetPinnedReceiver.kt": "`requestPinAppWidget`의 성공 콜백. 런처가 새 위젯 번호(`EXTRA_APPWIDGET_ID`)를 더해야 해서 "
                                "바꿀 수 있어야 함. 인텐트는 내보내지 않은 `WidgetPinnedReceiver`를 가리킴",
 }
+# (파일 이름, 보간식) → 검토한 값과 근거. 새 동적 값은 명시적으로 검토해야 함.
 SAFE = {
+    ("WidgetPinnedReceiver.kt", "$appWidgetId"): "런처가 넣은 위젯 번호",
+    ("WidgetPinnedReceiver.kt", '${choice?.let { it::class.simpleName } ?: "no choice"}'): "위젯 선택 타입",
+    ("DidITakeWidget.kt", "${oldWidgetIds.joinToString()}"): "이전 위젯 번호 배열",
+    ("DidITakeWidget.kt", "${newWidgetIds.joinToString()}"): "복원한 위젯 번호 배열",
+    ("WidgetPickActivity.kt", "$appWidgetId"): "런처가 넣은 위젯 번호",
+    ("WidgetChoices.kt", "$filled"): "초기화한 위젯 수",
+    ("WidgetChoices.kt", "${state::class.simpleName}"): "설치 상태 타입",
+    ("DayBoundaryAlarm.kt", "$at"): "날짜 경계 알람 시각",
+    ("DayBoundaryAlarm.kt", "$action"): "방송 동작 식별자",
+    ("AppContainer.kt", "$restored"): "복원 여부",
+    ("AndroidPhone.kt", "${intent.action}"): "Android 동작 식별자",
+    ("Reminders.kt", "${notices.size}"): "숨긴 알림 수",
+    ("Reminders.kt", "${contents.size}"): "게시한 알림 수",
+    ("Reminders.kt", "${(wanted - listed).size}"): "시스템에 게시되지 않은 알림 수",
+    ("Reminders.kt", "$LIST_WAIT"): "게시 여부 확인 대기 시간",
+    ("ReminderAlarm.kt", "$delay"): "알람 재시도 대기 시간",
+    ("ReminderAlarm.kt", "${attempt + 1}"): "알람 재시도 횟수",
+    ("ReminderAlarm.kt", "$at"): "알람 시각",
+    ("ReminderAlarm.kt", "$WINDOW"): "정확하지 않은 알람의 시간 창",
+    ("ReminderReceiver.kt", "$action"): "방송 동작 식별자",
     ("Reminders.kt", "$name"): "단계 이름(`step`의 인자: replan 등). 항목·대상자 이름이 아님",
     ("Reminders.kt", "$result"): "이 분기의 `RecordResult`는 `Locked`(값 없음)나 `Error`(메시지에 항목 번호만, "
                                  "`RecordDose`·`JudgmentSupport`)",
@@ -190,24 +221,54 @@ def dependencies(listing: Path) -> list[str]:
 
 def skip_string(src: str, i: int) -> int:
     """src[i] is a '"'; returns the index just after the string literal."""
-    if src.startswith('"""', i):
-        return src.index('"""', i + 3) + 3
-    i += 1
-    while src[i] != '"':
-        if src[i] == "\\":
+    quote = '"""' if src.startswith('"""', i) else '"'
+    i += len(quote)
+    while not src.startswith(quote, i):
+        if quote == '"' and src[i] == "\\":
             i += 2
             continue
         if src.startswith("${", i):
             i = skip_template(src, i + 2)
             continue
         i += 1
-    return i + 1
+    i += len(quote)
+    if quote == '"""':
+        while i < len(src) and src[i] == '"':
+            i += 1
+    return i
+
+
+def skip_comment_or_char(src: str, i: int) -> int:
+    if src.startswith("//", i):
+        end = src.find("\n", i)
+        return len(src) if end == -1 else end
+    if src.startswith("/*", i):
+        depth, j = 1, i + 2
+        while depth:
+            if src.startswith("/*", j):
+                depth += 1
+                j += 2
+            elif src.startswith("*/", j):
+                depth -= 1
+                j += 2
+            else:
+                j += 1
+        return j
+    if src[i] == "'":
+        char = re.match(r"'(?:\\u[0-9a-fA-F]{4}|\\.|[^'\\\n])'", src[i:])
+        if char:
+            return i + char.end()
+    return i
 
 
 def skip_template(src: str, i: int) -> int:
     """src[i] is just after '${'; returns the index just after the matching '}'."""
     depth = 1
     while depth:
+        end = skip_comment_or_char(src, i)
+        if end != i:
+            i = end
+            continue
         c = src[i]
         if c == '"':
             i = skip_string(src, i)
@@ -218,6 +279,26 @@ def skip_template(src: str, i: int) -> int:
             depth -= 1
         i += 1
     return i
+
+
+def mask_kotlin(src: str, strings: bool = False) -> str:
+    """Blank comments and character literals, optionally also strings, preserving offsets."""
+    chars = list(src)
+    i = 0
+    while i < len(src):
+        if src[i] == '"':
+            end = skip_string(src, i)
+            if not strings:
+                i = end
+                continue
+        else:
+            end = skip_comment_or_char(src, i)
+        if end == i:
+            i += 1
+            continue
+        chars[i:end] = ["\n" if c == "\n" else " " for c in src[i:end]]
+        i = end
+    return "".join(chars)
 
 
 def call_args(src: str, open_paren: int) -> str:
@@ -267,9 +348,10 @@ def string_parts(args: str) -> tuple[list[str], list[str]]:
         end = skip_string(args, i)
         lit = args[i:end]
         literals.append(lit)
-        j = 1
-        while j < len(lit) - 1:
-            if lit[j] == "\\":
+        width = 3 if lit.startswith('"""') else 1
+        j = width
+        while j < len(lit) - width:
+            if width == 1 and lit[j] == "\\":
                 j += 2
                 continue
             if lit.startswith("${", j):
@@ -277,7 +359,7 @@ def string_parts(args: str) -> tuple[list[str], list[str]]:
                 values.append(lit[j:k])
                 j = k
                 continue
-            m = re.match(r"\$([A-Za-z_][A-Za-z0-9_]*)", lit[j:])
+            m = re.match(r"\$(?:[^\W\d]\w*|`[^`\n]+`)", lit[j:])
             if m:
                 values.append(m.group(0))
                 j += len(m.group(0))
@@ -287,67 +369,101 @@ def string_parts(args: str) -> tuple[list[str], list[str]]:
     return literals, values
 
 
-def judge(file: str, value: str) -> tuple[bool, str]:
-    """(may hold a name, why not)."""
-    if (file, value) in SAFE:
-        return False, SAFE[(file, value)]
-    inner = value[2:-1] if value.startswith("${") else value[1:]
-    if inner.endswith(SAFE_ENDINGS):
-        return False, "수·종류·번호"
-    # a class name or a fixed string inside the value is not a name
-    code = re.sub(r"::class(\.java)?\.simpleName", "", inner)
-    code = re.sub(r'"(?:[^"\\]|\\.)*"', "", code)
-    words = {w.lower() for w in re.findall(r"[A-Za-z]+", re.sub(r"([a-z])([A-Z])", r"\1 \2", code))}
-    hits = words & NAME_WORDS
-    return (True, "") if hits else (False, "")
+def log_arguments(src: str):
+    """Direct Kotlin/Android logger calls, including import aliases and Timber tag chains."""
+    src = mask_kotlin(src)
+    code = mask_kotlin(src, strings=True)
+    symbols = {"Log": "Log", "Timber": "Timber", **{name: name for name in PRINT_CALL.split("|")}}
+    imports = re.findall(
+        rf"(?m)^\s*import\s+(?:android\.util\.|timber\.log\.|kotlin\.io\.)"
+        rf"((?:Log|Timber)(?:\.(?:Companion|Forest))?(?:\.(?:{LOG_LEVEL}))?|{PRINT_CALL})"
+        r"(?:[ \t]+as[ \t]+(\w+))?[ \t]*$", code
+    )
+    for original, alias in imports:
+        original = original.replace(".Forest", "").replace(".Companion", "")
+        symbols[alias or original.rsplit(".", 1)[-1]] = original
+    names = "|".join(map(re.escape, symbols))
+    calls = re.compile(rf"\b({names})(?:\s*\.\s*(?:Forest|Companion))?(?:\s*\.\s*({LOG_LEVEL}))?\s*\(")
+    literal_tag = re.findall(r'(?m)\bconst val TAG\s*(?::\s*String\s*)?=\s*("[^"\n$]*")\s*$', src)
+    fixed_tag = len(literal_tag) == 1 and len(re.findall(r"\b(?:val|var)\s+TAG\b", code)) == 1
+    fixed_tag = fixed_tag and not re.search(r"[(,]\s*TAG\s*:", code)
+    for match in calls.finditer(code):
+        if re.search(r"\bfun\s*$", code[code.rfind("\n", 0, match.start()) + 1:match.start()]):
+            continue
+        original, method = symbols[match[1]], match[2]
+        if original in {"Log", "Timber"} and not method:
+            continue
+        call = f"{original}.{method}" if method else original
+        open_paren = match.end() - 1
+        raw_args = call_args(src, open_paren)
+        args = [re.sub(r"^\w+\s*=(?!=)\s*", "", arg) for arg in split_args(raw_args)]
+        line = code.count("\n", 0, match.start()) + 1
+        yield line, call, args, fixed_tag
+        if call == "Timber.tag":
+            end = open_paren + len(raw_args) + 2
+            chained = re.match(rf"\s*\.\s*({LOG_LEVEL})\s*\(", code[end:])
+            if chained:
+                args = call_args(src, end + chained.end() - 1)
+                yield line, f"Timber.{chained[1]}", split_args(args), fixed_tag
+
+
+def checked_log_value(file: str, arg: str, notes: list[str]) -> bool:
+    literals, values = string_parts(arg)
+    rest = arg
+    for literal in literals:
+        rest = rest.replace(literal, " ", 1)
+    if not literals or rest.strip(" +\t\n"):
+        return False
+    safe = True
+    for value in values:
+        why = SAFE.get((file, value))
+        if not why and re.fullmatch(r"\$\{\w+\.javaClass\.simpleName\}", value):
+            why = "예외 타입만 기록"
+        if why:
+            notes.append(f"`{value}`: {why}")
+        else:
+            safe = False
+    return safe
 
 
 def log_calls(root: Path):
     rows, bad = [], []
     for base in SOURCES:
         for path in sorted((root / base).rglob("*.kt")):
-            src = path.read_text(encoding="utf-8")
-            for m in LOG_CALL.finditer(src):
-                line = src.count("\n", 0, m.start()) + 1
-                call = m.group(1)
-                args = split_args(call_args(src, m.end() - 1))
-                # Log.x(tag, message[, throwable]); println(message); e.printStackTrace() prints a stack trace only
-                if call.startswith("Log."):
-                    message, throwable = (args[1] if len(args) > 1 else ""), len(args) > 2
-                elif call == "printStackTrace":
-                    message, throwable = "", True
-                else:
-                    message, throwable = (args[0] if args else ""), False
-                literals, values = string_parts(message)
-                rel = path.relative_to(root).as_posix()
+            rel = path.relative_to(root).as_posix()
+            for line, call, args, fixed_tag in log_arguments(path.read_text(encoding="utf-8")):
                 notes, flagged = [], []
-                for v in values:
-                    risky, why = judge(path.name, v)
-                    if risky:
-                        flagged.append(v)
-                    elif why:
-                        notes.append(f"`{v}`: {why}")
-                # the message is not a string literal (e.g. Log.i(TAG, text)): only SAFE lets it pass.
-                # A literal joined with values ("a" + x): the values are judged like those inside the literal
-                rest = message
-                for lit in literals:
-                    rest = rest.replace(lit, " ")
-                rest = re.sub(r"\s+", " ", rest.replace("+", " ")).strip()
-                if message and not literals:
-                    if (path.name, message) in SAFE:
-                        notes.append(f"`{message}`: {SAFE[(path.name, message)]}")
-                    else:
-                        flagged.append(message)
-                elif re.search(r"[A-Za-z_]", rest):
-                    risky, why = judge(path.name, "${" + rest + "}")
-                    if risky:
-                        flagged.append(rest)
-                    elif why:
-                        notes.append(f"`{rest}`: {why}")
+                if call == "Log.println" or call == "Timber.log":
+                    # Priority is an integer, not a printed value.
+                    args = args[1:]
+                if call.startswith("Log.") and args and args[0] == "TAG" and fixed_tag:
+                    args = args[1:]
+                throwable = call == "printStackTrace" or (call.startswith("Log.") and len(args) > 2)
+                for arg in args:
+                    if arg != "null" and not checked_log_value(path.name, arg, notes):
+                        flagged.append("검토하지 않은 동적 인자")
+                if call == "printStackTrace":
+                    flagged.append("예외 출력")
+                message = ", ".join(args)
+                values = string_parts(message)[1]
                 rows.append((rel, line, call, message, values, throwable, flagged, notes))
                 if flagged:
-                    bad.append(f"{rel}:{line} {flagged}")
+                    bad.append(f"{rel}:{line} ({call})")
     return rows, bad
+
+
+def renderer_card_reads(root: Path) -> tuple[int, list[str]]:
+    paths = []
+    for scope in RENDER_SOURCES:
+        path = root / scope
+        paths.extend(sorted(path.rglob("*.kt")) if path.is_dir() else [path])
+    bad = []
+    for path in paths:
+        src = path.read_text(encoding="utf-8")
+        for match in CARD_READ.finditer(src):
+            line = src.count("\n", 0, match.start()) + 1
+            bad.append(f"{path.relative_to(root).as_posix()}:{line} ({match.group()})")
+    return len(paths), bad
 
 
 def pending_intents(root: Path):
@@ -387,7 +503,7 @@ def main() -> int:
     sources = merger_sources(data / "manifest-merger-release-report.txt")
     package, perms, exported, own = manifest_facts(data / "merged-manifest-release.xml", sources)
 
-    out.append("### 개인정보 점검 (TASK-031)\n")
+    out.append("### 개인정보 점검 (TASK-031·066)\n")
     out.append(f"릴리즈 변형의 병합 매니페스트(패키지 `{package}`), 병합 보고서, `releaseRuntimeClasspath` 의존성, "
                f"앱 소스의 로그 호출과 PendingIntent를 봄.\n")
 
@@ -418,6 +534,14 @@ def main() -> int:
                 problems.append(f"exported 구성요소가 줄었음: {line}")
     else:
         problems.append(f"{expected_file.relative_to(root)}이 없음. 지금 목록:\n" + "\n".join(sorted(actual)))
+    card_provider = [flag for kind, name, flag in own
+                     if kind == "provider" and name == f"{package}.export.CardExportProvider"]
+    if card_provider != ["false"]:
+        problems.append("카드 FileProvider의 exported=false를 확인하지 못함")
+    else:
+        out.append("\n카드 FileProvider: `exported=false`.")
+    if any(name.endswith(".debug.ReminderSeedReceiver") for _, name, _ in own):
+        problems.append("릴리즈 매니페스트에 디버그 시험 수신기가 있음")
     out.append("")
 
     out.append("#### 앱의 구성요소와 PendingIntent (REQ-081)\n")
@@ -456,19 +580,27 @@ def main() -> int:
         problems.append("의존성 목록을 읽지 못함")
 
     rows, bad = log_calls(root)
-    out.append("#### 로그 호출 (REQ-058)\n")
-    out.append(f"{', '.join(f'`{s}`' for s in SOURCES)}의 로그 호출 {len(rows)}개. 글에 넣는 값이 이름(항목·대상자)이나 "
-               "기록을 담을 수 있으면 실패로 봄. 예외를 함께 남기는 호출은 '예외' 칸에 표시함.\n")
+    out.append("#### 로그 호출 (REQ-058·106)\n")
+    out.append(f"{', '.join(f'`{s}`' for s in SOURCES)}의 로그 호출 {len(rows)}개. 로그 인자에 이름, 기록, 카드·약 줄, "
+               "클립보드 값이나 내보내기 파일을 담을 수 있으면 실패로 판정함.\n")
     out.append("| 곳 | 호출 | 글 | 넣는 값 | 예외 | 판단 |")
     out.append("| --- | --- | --- | --- | --- | --- |")
     for rel, line, call, text, values, throwable, flagged, notes in rows:
-        verdict = ("**이름일 수 있음**: " + ", ".join(f"`{f}`" for f in flagged)) if flagged else "이름 없음"
+        verdict = "**개인정보 가능성**" if flagged else "점검 통과"
         if notes:
             verdict += " (" + "; ".join(notes) + ")"
-        out.append(f"| `{rel}:{line}` | `{call}` | `{esc(text)[:120]}` | "
-                   f"{esc(', '.join(f'`{v}`' for v in values)) or '-'} | {'있음' if throwable else '-'} | {esc(verdict)} |")
+        message = "-" if flagged else f"`{esc(text)[:120]}`"
+        value_list = "-" if flagged else esc(', '.join(f'`{v}`' for v in values)) or '-'
+        out.append(f"| `{rel}:{line}` | `{call}` | {message} | {value_list} | "
+                   f"{'있음' if throwable else '-'} | {esc(verdict)} |")
     for b in bad:
-        problems.append(f"로그에 이름이 들어갈 수 있음: {b}")
+        problems.append(f"로그에 개인정보가 들어갈 수 있음: {b}")
+    out.append("")
+
+    count, bad = renderer_card_reads(root)
+    out.append("#### 위젯·알림의 카드·약 줄 읽기 (REQ-106)\n")
+    out.append(f"Android 위젯·알림 소스와 공통 데이터 경로 {count}개 파일에서 카드·약 줄 DAO, 타입, 조회 참조를 검사함.")
+    problems.extend(f"위젯·알림 경로에 카드·약 줄 조회 가능성: {finding}" for finding in bad)
     out.append("")
 
     out.append("#### 결과\n")

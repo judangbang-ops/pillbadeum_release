@@ -156,7 +156,7 @@ class DidITakeWidget : GlanceAppWidget() {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.e(TAG, "widget model load failed", e)
+            Log.e(TAG, "widget model load failed: ${e.javaClass.simpleName}")
             null
         }
 

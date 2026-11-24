@@ -87,7 +87,7 @@ object ReminderAlarm {
                 return
             } catch (e: SecurityException) {
                 // Exact alarms were disallowed between the check and this call: an inexact alarm instead.
-                Log.w(TAG, "exact reminder alarm refused, setting an inexact one", e)
+                Log.w(TAG, "exact reminder alarm refused, setting an inexact one: ${e.javaClass.simpleName}")
             }
         }
         alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, main)

@@ -84,7 +84,7 @@ class MainActivity : ComponentActivity() {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.e(TAG, "day boundary alarm not set", e)
+                Log.e(TAG, "day boundary alarm not set: ${e.javaClass.simpleName}")
             }
         }
         val phone = AndroidPhone(this) { answered ->

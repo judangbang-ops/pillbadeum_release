@@ -47,7 +47,7 @@ object RescheduleReceiverKeeper {
             WorkManager.getInstance(context.applicationContext)
                 .enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.KEEP, request)
         } catch (e: Exception) {
-            Log.e(TAG, "could not enqueue the keep-alive work", e)
+            Log.e(TAG, "could not enqueue the keep-alive work: ${e.javaClass.simpleName}")
         }
     }
 }

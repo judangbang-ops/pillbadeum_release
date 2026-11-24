@@ -54,7 +54,7 @@ class DidITakeApplication : Application(), ContainerHolder {
         fontScale = newConfig.fontScale
         container.appScope.launch {
             runCatching { WidgetUpdater.updateAll(this@DidITakeApplication) }
-                .onFailure { Log.e("DidITakeApplication", "widget refresh after a font size change failed", it) }
+                .onFailure { Log.e("DidITakeApplication", "widget refresh after a font size change failed: ${it.javaClass.simpleName}") }
         }
     }
 }
@@ -101,7 +101,7 @@ class AppContainer(
     suspend fun core(): DidITakeCore = core ?: mutex.withLock {
         core ?: DidITakeCore.open(database, installMarker(), clock).also {
             runCatching { WidgetChoices.prepare(context, it.installState) }
-                .onFailure { e -> Log.e(TAG, "filling the choice of earlier widgets failed", e) }
+                .onFailure { e -> Log.e(TAG, "filling the choice of earlier widgets failed: ${e.javaClass.simpleName}") }
             core = it
             afterOpen(restored = it.installState is InstallState.Restored)
         }
@@ -126,7 +126,7 @@ class AppContainer(
                 }
                 DayBoundaryAlarm.scheduleNext(context)
             } catch (e: Exception) {
-                Log.e(TAG, "after-open work failed (restored=$restored)", e)
+                Log.e(TAG, "after-open work failed (restored=$restored): ${e.javaClass.simpleName}")
             }
             if (restored) Reminders.restored(context) else Reminders.replan(context)
         }

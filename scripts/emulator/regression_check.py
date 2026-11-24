@@ -99,7 +99,7 @@ from explore import (
     tile,
 )
 from card_export_check import check_card_export
-from card_show_check import check_card_show
+from card_show_check import check_card_privacy, check_card_show
 from feedback_check import check_feedback
 from release_check import WIDGET_LABEL, go_home, place_widget, save_ui, screen_size
 from reminder_check import BOUNDARY_ALARM, alarms, query
@@ -789,6 +789,8 @@ def run(r: Report, steps: ShotSteps) -> None:
           f"`pm clear` 뒤 위젯에 남은 칸을 누르면 판정 행 없음, 위젯이 칸 없이 '{EMPTY_WIDGET}'로 다시 그려짐", data_cleared)
 
     check_card_export(r, steps)
+    # TC-108 scrolls the launcher widget and adds a person. Run it after regressions that rely on the earlier fixtures.
+    check_card_privacy(r, steps)
 
     # 15. No crash (QA 1)
     def no_crash() -> str:

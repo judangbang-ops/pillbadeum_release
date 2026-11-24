@@ -54,6 +54,9 @@ jobs:
           set -o pipefail
           python3 .github/scripts/check_wording.py . | tee -a "$GITHUB_STEP_SUMMARY"
 
+      - name: 개인정보 점검 회귀 시험 (TASK-066)
+        run: python3 -B .github/scripts/test_check_privacy.py
+
   build:
     # 한 작업에서 테스트와 APK 빌드를 차례로 해 두 곳의 의존성을 한 캐시에 저장함.
     name: JVM 테스트 + 디버그·릴리즈 APK
@@ -286,9 +289,9 @@ jobs:
 
       # TASK-031 (REQ-057·058·059·090): 릴리즈 변형의 병합 매니페스트, 병합 보고서(권한·구성요소를 넣은 매니페스트),
       # 의존성 목록을 남기고, 다른 앱이 부를 수 있는 구성요소를 androidApp/expected-exported.txt와 비교하고,
-      # 앱 소스의 로그 호출에 이름이 들어가는지 봄. 자료와 보고는 아티팩트 privacy-release(7일)와 이 실행의 요약에 남음.
+      # 앱 로그와 위젯·알림 경로에서 개인정보 참조를 봄. 자료와 보고는 아티팩트 privacy-release(7일)와 이 실행 요약에 남음.
       # 사람이 읽는 QA 보고서는 docs/07-qa/2026-11-14-privacy/
-      - name: 개인정보 점검 (TASK-031)
+      - name: 개인정보 점검 (TASK-031·066)
         id: privacy
         if: ${{ !cancelled() && steps.release-apk.outcome == 'success' }}
         shell: bash

@@ -54,7 +54,7 @@ class AndroidPhone(
                 activity.packageManager.getPackageInfo(activity.packageName, 0)
             }
         } catch (e: PackageManager.NameNotFoundException) {
-            Log.w(TAG, "own package not found", e)
+            Log.w(TAG, "own package not found: ${e.javaClass.simpleName}")
             null
         }
     }
@@ -100,7 +100,7 @@ class AndroidPhone(
         try {
             activity.getSystemService(KeyguardManager::class.java)?.isDeviceSecure
         } catch (e: RuntimeException) {
-            Log.w(TAG, "screen lock state not readable", e)
+            Log.w(TAG, "screen lock state not readable: ${e.javaClass.simpleName}")
             null
         }
 
@@ -110,7 +110,7 @@ class AndroidPhone(
             activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
             true
         } catch (e: ActivityNotFoundException) {
-            Log.i(TAG, "no browser for the privacy policy", e)
+            Log.i(TAG, "no browser for the privacy policy: ${e.javaClass.simpleName}")
             false
         }
 
@@ -165,7 +165,7 @@ class AndroidPhone(
         return try {
             AppWidgetManager.getInstance(activity).isRequestPinAppWidgetSupported
         } catch (e: RuntimeException) {
-            Log.w(TAG, "widget pin support not readable", e)
+            Log.w(TAG, "widget pin support not readable: ${e.javaClass.simpleName}")
             false
         }
     }
@@ -182,7 +182,7 @@ class AndroidPhone(
         return try {
             AppWidgetManager.getInstance(activity).requestPinAppWidget(provider, null, WidgetPinnedReceiver.callback(activity))
         } catch (e: IllegalStateException) {
-            Log.w(TAG, "widget pin request refused", e)
+            Log.w(TAG, "widget pin request refused: ${e.javaClass.simpleName}")
             false
         }
     }
@@ -213,7 +213,7 @@ class AndroidPhone(
             request(onAnswered)
             true
         } catch (e: ActivityNotFoundException) {
-            Log.w(TAG, "no notification permission window", e)
+            Log.w(TAG, "no notification permission window: ${e.javaClass.simpleName}")
             false
         }
     }
@@ -263,10 +263,10 @@ class AndroidPhone(
             activity.startActivity(intent)
             true
         } catch (e: ActivityNotFoundException) {
-            Log.i(TAG, "no screen for ${intent.action}", e)
+            Log.i(TAG, "no screen for ${intent.action}: ${e.javaClass.simpleName}")
             false
         } catch (e: SecurityException) {
-            Log.w(TAG, "screen refused: ${intent.action}", e)
+            Log.w(TAG, "screen refused: ${intent.action}: ${e.javaClass.simpleName}")
             false
         }
 
@@ -274,7 +274,7 @@ class AndroidPhone(
         try {
             read()
         } catch (e: RuntimeException) {
-            Log.w(TAG, "reminder access not readable", e)
+            Log.w(TAG, "reminder access not readable: ${e.javaClass.simpleName}")
             fallback
         }
 

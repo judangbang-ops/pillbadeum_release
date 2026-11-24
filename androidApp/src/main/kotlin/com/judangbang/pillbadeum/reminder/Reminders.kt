@@ -212,7 +212,7 @@ object Reminders {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.e(TAG, "$name failed", e)
+            Log.e(TAG, "$name failed: ${e.javaClass.simpleName}")
             false
         }
 }

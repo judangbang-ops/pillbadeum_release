@@ -27,8 +27,11 @@ class PrivacyChecks(unittest.TestCase):
         self.assertEqual(len(failures), len(rows), [row[1] for row in rows if not row[6]])
 
     def test_card_exception_is_rejected_even_with_constant_message(self):
-        self.source(f"{privacy.SOURCES[0]}/CardExportStore.kt", 'Log.e(TAG, "writing failed", error)')
-        self.assertEqual(len(privacy.log_calls(self.root)[1]), 1)
+        self.source(f"{privacy.SOURCES[0]}/CardExportStore.kt", '''
+            Log.e(TAG, "writing failed", error)
+            Log.e(TAG, "writing failed: $e")
+        ''')
+        self.assertEqual(len(privacy.log_calls(self.root)[1]), 2)
 
     def test_fixed_messages_and_counts_are_allowed(self):
         self.source(f"{privacy.SOURCES[0]}/SafeFixture.kt", '''

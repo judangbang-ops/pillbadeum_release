@@ -11,7 +11,8 @@ from explore import ZONE, exact, phone_now, set_clock, tap_desc, tap_exact
 from release_check import save_ui
 from reminder_check import PIN, debug, doses, keyguard_showing, set_pin, unlock, wait_posted
 from screens2_check import list_view, widget_page
-from screens_check import size, to_home
+from screens_check import seek, to_home
+from widget_size_check import launcher_package
 
 PERSON = "가상 엄마"
 NOTICE = "사용자가 적은 내용이며 의료기관의 기록이 아니에요. 적지 않은 종류는 보이지 않아요(없다는 뜻이 아니에요)"
@@ -104,55 +105,62 @@ def open_privacy_card():
 
 
 def open_condition_editor():
-    width, height = size()
-    for _ in range(4):
-        row = next((n for n in dump_ui() if n.desc == "질환, 가상점검질환"), None)
-        if row is not None:
-            tap(row)
-            if exact("저장") is None:
-                raise RuntimeError("the condition editor did not open")
-            return
-        sh(f"input swipe {width // 2} {height * 4 // 5} {width // 2} {height // 3} 450")
-    raise RuntimeError("the synthetic condition row is missing")
+    tap(seek(lambda n: n.desc == "질환, 가상점검질환", "synthetic condition row"))
+    if exact("저장") is None:
+        raise RuntimeError("the condition editor did not open")
 
 
-def snapshot_in_recents(report, label, previous_id, expected_real):
+def app_snapshots():
+    dump = sh("dumpsys window -a")
+    candidates = re.findall(r"(?m)^\s*topApp=[^\n]*" + re.escape(PKG) + r"[^\n]*\n\s*snapshot=(.*)$", dump)
+    snapshots = {}
+    for snapshot in candidates:
+        snap_id = re.search(r"\bmId=(\d+)", snapshot)
+        real = re.search(r"\bmIsRealSnapshot=(true|false)", snapshot)
+        if snap_id and real:
+            snapshots[snap_id[1]] = real[1]
+    return snapshots
+
+
+def snapshot_in_recents(report, launcher, label, expected_real):
+    previous = app_snapshots()
     sh("input keyevent KEYCODE_HOME")
-    time.sleep(1)
+    nodes = dump_ui()
+    focused = sh("dumpsys window | grep mCurrentFocus")
+    if not nodes or launcher not in focused:
+        raise RuntimeError(f"{label}: Home did not replace the app window")
+    assert_no_private_values("\n".join(f"{n.text}\n{n.desc}" for n in nodes), f"Home ({label})")
     sh("input keyevent KEYCODE_APP_SWITCH")
     end = time.monotonic() + 15
     while time.monotonic() < end:
-        dump = sh("dumpsys window -a")
-        candidates = re.findall(r"(?m)^\s*topApp=[^\n]*" + re.escape(PKG) + r"[^\n]*\n\s*snapshot=(.*)$", dump)
-        for snapshot in candidates:
-            snap_id = re.search(r"\bmId=(\d+)", snapshot)
-            real = re.search(r"\bmIsRealSnapshot=(true|false)", snapshot)
-            if not snap_id or not real or snap_id[1] == previous_id:
+        for snap_id, real in app_snapshots().items():
+            if snap_id in previous:
                 continue
-            report.note(f"TC-108 {label} 최신 스냅샷 `mId={snap_id[1]}`, `mIsRealSnapshot={real[1]}`")
+            report.note(f"TC-108 {label} 최신 스냅샷 `mId={snap_id}`, `mIsRealSnapshot={real}`")
             report.shot(f"tc108-recents-{label}")
-            if (real[1] == "true") != expected_real:
-                raise RuntimeError(f"unexpected recents snapshot for {label}: {real[1]}")
+            if (real == "true") != expected_real:
+                raise RuntimeError(f"unexpected recents snapshot for {label}: {real}")
             sh(f"am start -n {ACTIVITY}")
-            return snap_id[1]
+            return
         time.sleep(0.5)
     raise RuntimeError(f"no fresh app snapshot for {label}")
 
 
 def check_card_recents(report):
+    launcher = launcher_package()
     to_home()
-    previous = snapshot_in_recents(report, "record-control", None, expected_real=True)
-    routes = (("011", open_privacy_card), ("012", open_condition_editor), ("013", lambda: tap_exact(CARD_SHOW)),
-              ("014", lambda: tap_exact("응급 대비 문장")), ("015", lambda: tap_exact("내보내기")))
-    for label, open_route in routes:
-        if label in {"012", "013", "014", "015"}:
-            open_privacy_card()
-        open_route()
-        expected = {"011": CARD_SHOW, "012": "저장", "013": NOTICE, "014": "모두 복사", "015": "보내기"}[label]
+    snapshot_in_recents(report, launcher, "record-control", expected_real=True)
+    routes = (("011", None, CARD_SHOW), ("012", open_condition_editor, "저장"),
+              ("013", lambda: tap_exact(CARD_SHOW), NOTICE), ("014", lambda: tap_exact("응급 대비 문장"), "모두 복사"),
+              ("015", lambda: tap_exact("내보내기"), "보내기"))
+    for label, open_route, expected in routes:
+        open_privacy_card()
+        if open_route is not None:
+            open_route()
         if exact(expected) is None:
             raise RuntimeError(f"missing UI on SCR-{label}")
-        previous = snapshot_in_recents(report, label, previous, expected_real=False)
-    return "기록 화면은 실제 스냅샷, SCR-011~015 다섯 화면 모두 테마 스냅샷"
+        snapshot_in_recents(report, launcher, label, expected_real=False)
+    return "홈에서 카드 시험 값 0건. 기록 화면은 실제 스냅샷, SCR-011~015 다섯 화면 모두 테마 스냅샷"
 
 
 def check_card_logs(report):

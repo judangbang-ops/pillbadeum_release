@@ -105,7 +105,7 @@ CARD_READ = re.compile(
 )
 CARD_LOG_SCOPES = {"CardExportStore.kt", "CardDocument.kt", "SaveCardEntry.kt", "DeleteCardEntries.kt",
                    "LoadHealthCard.kt", "BuildEmergencyText.kt", "CardExportScreen.kt", "EmergencyScreen.kt",
-                   "HealthCardScreen.kt", "CardEditScreen.kt"}
+                   "HealthCardScreen.kt", "CardEntryScreen.kt", "App.kt"}
 # 값의 끝이 이것이면 수·종류·번호만 남음
 SAFE_ENDINGS = (".size", ".count()", "::class.simpleName", ".id", ".action")
 # (파일 이름, 값) → 이름이 아닌 까닭. 코드가 바뀌어 값이 달라지면 다시 걸림
@@ -325,6 +325,8 @@ def judge(file: str, value: str) -> tuple[bool, str]:
     if inner.endswith(SAFE_ENDINGS) and not re.search(r"[+;,?:]", inner):
         return False, "수·종류·번호"
     words = set(re.findall(r"[A-Z]+(?=[A-Z][a-z]|\W|$)|[A-Z]?[a-z]+", code))
+    if file in CARD_LOG_SCOPES and words:
+        return True, ""
     return bool({word.lower() for word in words} & (NAME_WORDS | CARD_WORDS)), ""
 
 

@@ -41,6 +41,8 @@ import com.judangbang.pillbadeum.DidITakeCore
 import com.judangbang.pillbadeum.status.Labels
 import com.judangbang.pillbadeum.usecase.HealthCardSummary
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.toLocalDateTime
@@ -83,16 +85,18 @@ internal fun CardExportScreen(
     val scope = rememberCoroutineScope()
     var format by rememberSaveable { mutableStateOf(CardExportFormat.PDF) }
     var source by remember { mutableStateOf<Pair<HealthCardSummary, LocalDate>?>(null) }
-    var preview by remember { mutableStateOf<CardExportPreview?>(null) }
-    var preparing by remember { mutableStateOf(true) }
     var sending by remember { mutableStateOf(false) }
     var writing by remember { mutableStateOf(false) }
     var readFailed by remember { mutableStateOf(false) }
-    var writeFailed by remember { mutableStateOf(false) }
+    var refreshedAt by remember { mutableStateOf<Int?>(null) }
     var retry by remember { mutableIntStateOf(0) }
-    val shown = preview?.takeIf { it.format == format }
+    val requested = source
+    val preparation = remember(requested, format, retry, exporter) { mutableStateOf<Result<CardExportPreview>?>(null) }
+    var shareFailed by remember(requested, format, retry) { mutableStateOf(false) }
+    val shown = preparation.value?.getOrNull()
+    val writeFailed = preparation.value?.isFailure == true || shareFailed
 
-    LaunchedEffect(core, refreshKey, retry) {
+    LaunchedEffect(core, exporter, refreshKey, retry) {
         if (exporter == null) {
             onClose()
             return@LaunchedEffect
@@ -105,12 +109,14 @@ internal fun CardExportScreen(
                 return@LaunchedEffect
             }
             val madeOn = core.clock.now().toLocalDateTime(core.windowSettings().baseZone).date
-            val updated = card to madeOn
-            if (source != updated) {
-                preparing = true
-                source = updated
+            currentCoroutineContext().ensureActive()
+            val previous = source
+            // A chooser return resumes the activity. Changes to card UI metadata do not change the document.
+            if (previous == null || previous.second != madeOn || !previous.first.sameExportContent(card)) {
+                source = card to madeOn
             }
             readFailed = false
+            refreshedAt = refreshKey
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
@@ -118,25 +124,23 @@ internal fun CardExportScreen(
             readFailed = true
         }
     }
-    LaunchedEffect(source, format, retry) {
-        val (card, madeOn) = source ?: return@LaunchedEffect
+    LaunchedEffect(preparation) {
+        val (card, madeOn) = requested ?: return@LaunchedEffect
         val renderer = exporter ?: return@LaunchedEffect
-        preparing = true
-        writeFailed = false
+        // Each request owns its result. A cancelled renderer can finish after the next request starts.
         try {
-            preview = renderer.prepare(card, madeOn, format)
+            val preview = renderer.prepare(card, madeOn, format)
+            currentCoroutineContext().ensureActive()
+            preparation.value = Result.success(preview)
         } catch (e: CancellationException) {
             throw e
-        } catch (_: Exception) {
-            preview = null
-            writeFailed = true
-        } finally {
-            preparing = false
+        } catch (e: Exception) {
+            preparation.value = Result.failure(e)
         }
     }
 
     val failed = openFailed || readFailed
-    val loading = !failed && (preparing || source == null)
+    val loading = !failed && (requested == null || preparation.value == null)
     Column(Modifier.fillMaxSize()) {
         TopBar(Labels.CARD_EXPORT, navigation = { BarIconButton("닫기", close = true, onClick = onClose) })
         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -145,7 +149,6 @@ internal fun CardExportScreen(
                 formatEnabled = !sending,
                 onFormat = { option ->
                     if (!sending && option != format) {
-                        preparing = true
                         format = option
                     }
                 },
@@ -174,29 +177,31 @@ internal fun CardExportScreen(
             ActionButton(
                 "보내기",
                 ButtonLook.Ink,
-                enabled = !loading && !sending && !failed && (shown?.pages?.isNotEmpty() == true || writeFailed),
+                enabled = !loading && !sending && !failed && refreshedAt == refreshKey &&
+                    (shown?.pages?.isNotEmpty() == true || writeFailed),
                 onClick = {
-                    if (!sending && !preparing && exporter != null) {
+                    if (!sending && !failed && exporter != null && requested != null && source == requested &&
+                        refreshedAt == refreshKey && preparation.value != null
+                    ) {
                         if (shown == null) {
-                            preparing = true
                             retry++
                         } else if (shown.pages.isNotEmpty()) {
                             sending = true
                             writing = true
-                            writeFailed = false
+                            shareFailed = false
                             scope.launch {
                                 try {
-                                    val (card, madeOn) = checkNotNull(source)
+                                    val (card, madeOn) = requested
                                     val today = checkNotNull(core).let {
                                         it.clock.now().toLocalDateTime(it.windowSettings().baseZone).date
                                     }
                                     val current = if (madeOn == today) shown else exporter.prepare(card, today, format)
                                     exporter.share(current) { writing = false }
-                                    if (madeOn != today) source = card to today
+                                    if (source == requested && madeOn != today) source = card to today
                                 } catch (e: CancellationException) {
                                     throw e
                                 } catch (_: Exception) {
-                                    writeFailed = true
+                                    shareFailed = true
                                 } finally {
                                     writing = false
                                     sending = false
@@ -209,6 +214,10 @@ internal fun CardExportScreen(
         }
     }
 }
+
+private fun HealthCardSummary.sameExportContent(other: HealthCardSummary) =
+    person.name == other.person.name && lastEditedDate == other.lastEditedDate &&
+        entries == other.entries && medications == other.medications
 
 @Composable
 private fun ExportBody(

@@ -20,6 +20,8 @@ import com.judangbang.pillbadeum.usecase.CardEntryKind
 import com.judangbang.pillbadeum.usecase.HealthCardSummary
 import java.io.IOException
 import java.io.OutputStream
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.datetime.LocalDate
 
 internal const val A4_WIDTH = 595
@@ -47,13 +49,14 @@ internal class CardDocument private constructor(
     override val pages: List<DocumentPage>,
     override val notice: String?,
 ) : CardExportPreview {
-    fun writeTo(output: OutputStream) {
+    suspend fun writeTo(output: OutputStream) {
         require(pages.isNotEmpty())
         when (format) {
             CardExportFormat.PDF -> {
                 val pdf = PdfDocument()
                 try {
                     pages.forEachIndexed { index, paper ->
+                        currentCoroutineContext().ensureActive()
                         val page = pdf.startPage(PdfDocument.PageInfo.Builder(paper.width, paper.height, index + 1).create())
                         try {
                             paper.drawOn(page.canvas)
@@ -80,11 +83,11 @@ internal class CardDocument private constructor(
     }
 
     companion object {
-        fun prepare(card: HealthCardSummary, madeOn: LocalDate, format: CardExportFormat): CardDocument {
+        suspend fun prepare(card: HealthCardSummary, madeOn: LocalDate, format: CardExportFormat): CardDocument {
             require(card.canShowOrExport())
             val name = card.person.name
             val disclosure = paragraph(
-                "${Labels.CARD_DISCLAIMER}. 적지 않은 종류는 보이지 않아요(없다는 뜻이 아니에요)",
+                Labels.CARD_SHOW_DISCLAIMER,
                 captionPaint,
             )
             val dates = paragraph(
@@ -106,6 +109,7 @@ internal class CardDocument private constructor(
                         var headerHeight = baseHeight
                         var titles: List<DocumentRow>
                         while (true) {
+                            currentCoroutineContext().ensureActive()
                             titles = parts.indices.map { paragraph("$name · ${it + 1}/${parts.size}쪽", titlePaint) }
                             val needed = baseHeight - title.height + titles.maxOf { it.height }
                             if (needed <= headerHeight) break
@@ -233,19 +237,23 @@ private fun MutableList<DocumentRow>.addLines(text: String, paint: TextPaint) {
     for (line in 0 until layout.lineCount) add(DocumentRow(layout, line, line + 1))
 }
 
-private fun HealthCardSummary.rows(): List<DocumentRow> = buildList {
+private suspend fun HealthCardSummary.rows(): List<DocumentRow> = buildList {
     fun section(title: String) {
         add(DocumentRow(layout(title, headingPaint), sectionStart = true))
     }
     if (medications.isNotEmpty()) {
         section(Labels.CARD_MEDICATIONS)
-        medications.forEach { addLines(it.text, rowPaint) }
+        for (medication in medications) {
+            currentCoroutineContext().ensureActive()
+            addLines(medication.text, rowPaint)
+        }
     }
     val byKind = entries.groupBy { it.fields.kind }
     for (kind in CardEntryKind.entries) {
         val sectionEntries = byKind[kind] ?: continue
         section(Labels.cardEntryTitle(kind))
         for (entry in sectionEntries) {
+            currentCoroutineContext().ensureActive()
             when (val fields = entry.fields) {
                 is CardEntryFields.Allergy -> addLines(withDetail(fields.substance, fields.reaction?.let { "반응: $it" }), rowPaint)
                 is CardEntryFields.Condition -> {

@@ -2,6 +2,7 @@ package com.judangbang.pillbadeum.ui
 
 import android.Manifest
 import android.app.NotificationManager
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
 import android.view.WindowManager
@@ -54,10 +55,11 @@ import com.judangbang.pillbadeum.usecase.PersonChange
 import com.judangbang.pillbadeum.usecase.RecordResult
 import com.judangbang.pillbadeum.usecase.SaveCardEntryResult
 import com.judangbang.pillbadeum.usecase.SaveIntakeResult
-import java.io.IOException
 import java.io.File
+import java.io.IOException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
@@ -699,6 +701,111 @@ class HealthCardScreenTest {
     }
 
     @Test
+    fun tc117_cancelled_preview_cannot_enable_send_for_a_new_date(): Unit = runBlocking {
+        val person = createPerson()
+        seedCard(person)
+        open(person)
+        tap("내보내기")
+        waitFor("파일 이름: pillbadeum-card-20261123.pdf (대상자 이름은 넣지 않아요)")
+        val oldStarted = CompletableDeferred<Unit>()
+        val oldFinished = CompletableDeferred<Unit>()
+        val newStarted = CompletableDeferred<Unit>()
+        val finishOld = CompletableDeferred<Unit>()
+        val finishNew = CompletableDeferred<Unit>()
+        controller.get().beforeCardPrepare = { date ->
+            when (date.day) {
+                24 -> try {
+                    withContext(Dispatchers.Default + NonCancellable) {
+                        oldStarted.complete(Unit)
+                        finishOld.await()
+                    }
+                } finally {
+                    oldFinished.complete(Unit)
+                }
+                25 -> {
+                    newStarted.complete(Unit)
+                    finishNew.await()
+                }
+                else -> Unit
+            }
+        }
+
+        try {
+            controller.pause()
+            app.clock.now = at("2026-11-24T09:00")
+            controller.resume()
+            compose.waitUntil(10_000) { oldStarted.isCompleted }
+            controller.pause()
+            app.clock.now = at("2026-11-25T09:00")
+            controller.resume()
+            compose.waitUntil(10_000) { newStarted.isCompleted }
+            finishOld.complete(Unit)
+            compose.waitUntil(10_000) { oldFinished.isCompleted }
+            text("만드는 중…").assertIsDisplayed()
+            text("보내기").assertIsNotEnabled()
+            finishNew.complete(Unit)
+            waitFor("파일 이름: pillbadeum-card-20261125.pdf (대상자 이름은 넣지 않아요)")
+            text("보내기").assertIsEnabled()
+        } finally {
+            finishOld.complete(Unit)
+            finishNew.complete(Unit)
+        }
+    }
+
+    @Test
+    fun tc106_export_chooser_return_keeps_preview_when_only_notice_changes(): Unit = runBlocking {
+        val person = createPerson()
+        seedCard(person)
+        textCopyThenEdit(person)
+        assertNotNull(checkNotNull(core.loadHealthCard(person)).staleNotice)
+        open(person)
+        tap("내보내기")
+        waitFor("파일 이름: pillbadeum-card-20261123.pdf (대상자 이름은 넣지 않아요)")
+        val activity = controller.get()
+        val prepareAgain = CompletableDeferred<Unit>()
+        activity.beforeCardPrepare = { prepareAgain.await() }
+        val send = text("보내기")
+        try {
+            send.performClick()
+            compose.waitUntil(10_000) { activity.sharedPreviews.size == 1 }
+            controller.pause()
+            core.healthCardNoticeActions.closeNotice(person)
+            assertEquals(null, checkNotNull(core.loadHealthCard(person)).staleNotice)
+            activity.cancelCardShare()
+            controller.resume()
+            compose.waitUntil(10_000) {
+                SemanticsProperties.Disabled !in send.fetchSemanticsNode().config
+            }
+            exportPage(personName).assertIsDisplayed()
+            text("만드는 중…").assertDoesNotExist()
+        } finally {
+            prepareAgain.complete(Unit)
+        }
+    }
+
+    @Test
+    fun tc097_chooser_launch_failure_removes_unshared_file(): Unit = runBlocking {
+        val person = createPerson()
+        seedEntry(person, allergy)
+        val card = checkNotNull(core.loadHealthCard(person))
+        val document = CardDocument.prepare(card, LocalDate(2026, 11, 23), CardExportFormat.PNG)
+        val root = File(app.cacheDir, "card-exports")
+        val failure = ActivityNotFoundException()
+        val result = runCatching {
+            app.container.cardExports.share(document) { chooser, _ ->
+                assertEquals(Intent.ACTION_CHOOSER, chooser.action)
+                assertEquals(Intent.FLAG_GRANT_READ_URI_PERMISSION, chooser.flags)
+                assertEquals(1, chooser.clipData?.itemCount)
+                assertEquals(document.filename, chooser.clipData?.getItemAt(0)?.uri?.lastPathSegment)
+                assertTrue(root.walkTopDown().any { it.isFile && it.name == document.filename })
+                throw failure
+            }
+        }
+        assertEquals(failure, result.exceptionOrNull())
+        assertTrue(root.listFiles().orEmpty().isEmpty())
+    }
+
+    @Test
     fun tc097_provider_does_not_share_files_outside_its_cache_directory() {
         val authority = "${app.packageName}.card-export"
         val provider = checkNotNull(app.packageManager.resolveContentProvider(authority, 0))
@@ -976,6 +1083,7 @@ class CardTestActivity : ComponentActivity() {
     val recentsEnabled = mutableListOf<Boolean>()
     val sharedPreviews = mutableListOf<CardExportPreview>()
     var failCardShare = false
+    var beforeCardPrepare: suspend (LocalDate) -> Unit = {}
     private var chooserResult = CompletableDeferred<Unit>()
     val firstOpenGate = CompletableDeferred<Unit>()
     private var resumeCount by mutableIntStateOf(0)
@@ -987,8 +1095,10 @@ class CardTestActivity : ComponentActivity() {
         val phone = AndroidPhone(this) {}
         // Draw the actual document. The CI emulator exercises file creation and the system Sharesheet.
         val exporter = object : CardExporter {
-            override suspend fun prepare(card: HealthCardSummary, madeOn: LocalDate, format: CardExportFormat) =
-                withContext(Dispatchers.Default) { CardDocument.prepare(card, madeOn, format) }
+            override suspend fun prepare(card: HealthCardSummary, madeOn: LocalDate, format: CardExportFormat): CardExportPreview {
+                beforeCardPrepare(madeOn)
+                return withContext(Dispatchers.Default) { CardDocument.prepare(card, madeOn, format) }
+            }
 
             override suspend fun share(preview: CardExportPreview, onChooserOpening: () -> Unit) {
                 if (failCardShare) throw IOException("fixture: share unavailable")

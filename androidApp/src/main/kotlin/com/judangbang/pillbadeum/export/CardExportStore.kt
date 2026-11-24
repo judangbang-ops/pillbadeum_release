@@ -8,11 +8,17 @@ import com.judangbang.pillbadeum.ui.CardExportFormat
 import com.judangbang.pillbadeum.ui.CardExportPreview
 import com.judangbang.pillbadeum.ui.CardExporter
 import com.judangbang.pillbadeum.usecase.HealthCardSummary
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
+import java.nio.file.StandardOpenOption.CREATE_NEW
+import java.nio.file.StandardOpenOption.WRITE
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -30,26 +36,46 @@ internal class CardExportStore(private val context: Context) {
         mutex.withLock { clearOldFiles() }
     }
 
-    suspend fun createShareIntent(document: CardDocument): Intent = withContext(Dispatchers.IO) {
+    suspend fun share(document: CardDocument, openChooser: suspend (Intent, () -> Unit) -> Unit) {
         require(document.pages.isNotEmpty())
-        mutex.withLock {
-            // A fast tap can reach here before the MainActivity cleanup coroutine is scheduled.
-            clearOldFiles()
-            val directory = Files.createDirectory(Files.createDirectories(root).resolve(UUID.randomUUID().toString()))
-            var ready = false
-            try {
-                val file = directory.resolve(document.filename)
-                Files.newOutputStream(file).use(document::writeTo)
-                val uri = FileProvider.getUriForFile(context, "${context.packageName}.card-export", file.toFile())
-                val send = Intent(Intent.ACTION_SEND).apply {
-                    type = document.format.mimeType
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    clipData = ClipData.newUri(context.contentResolver, document.filename, uri)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        var unsharedDirectory: Path? = null
+        try {
+            val chooser = withContext(Dispatchers.IO) {
+                mutex.withLock {
+                    // A fast tap can reach here before the MainActivity cleanup coroutine is scheduled.
+                    clearOldFiles()
+                    val exportRoot = Files.createDirectories(root)
+                    check(Files.isDirectory(exportRoot, NOFOLLOW_LINKS))
+                    val directory = Files.createDirectory(exportRoot.resolve(UUID.randomUUID().toString()))
+                    unsharedDirectory = directory
+                    val file = directory.resolve(document.filename)
+                    Files.newOutputStream(file, CREATE_NEW, WRITE, NOFOLLOW_LINKS).use { document.writeTo(it) }
+                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.card-export", file.toFile())
+                    val send = Intent(Intent.ACTION_SEND).apply {
+                        type = document.format.mimeType
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        clipData = ClipData.newUri(context.contentResolver, document.filename, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    Intent.createChooser(send, null)
                 }
-                Intent.createChooser(send, null).also { ready = true }
-            } finally {
-                if (!ready) removeTree(directory)
+            }
+            currentCoroutineContext().ensureActive()
+            openChooser(chooser) { unsharedDirectory = null }
+        } catch (e: OutOfMemoryError) {
+            throw IOException("Insufficient memory for card export", e)
+        } finally {
+            // Launch may fail, or the screen may leave before the dispatcher hands back the intent.
+            unsharedDirectory?.let { directory ->
+                withContext(NonCancellable + Dispatchers.IO) {
+                    try {
+                        removeTree(directory)
+                    } catch (_: IOException) {
+                        // First-screen cleanup in the next process can retry. Do not log the path.
+                    } catch (_: java.io.UncheckedIOException) {
+                        // Files.walk may wrap a read failure while the stream is consumed.
+                    }
+                }
             }
         }
     }
@@ -70,14 +96,15 @@ internal class CardExportStore(private val context: Context) {
 
 internal class AndroidCardExporter(
     private val store: CardExportStore,
-    private val openChooser: suspend (Intent) -> Unit,
+    private val openChooser: suspend (Intent, () -> Unit) -> Unit,
 ) : CardExporter {
     override suspend fun prepare(card: HealthCardSummary, madeOn: LocalDate, format: CardExportFormat): CardExportPreview =
         withContext(Dispatchers.Default) { CardDocument.prepare(card, madeOn, format) }
 
     override suspend fun share(preview: CardExportPreview, onChooserOpening: () -> Unit) {
-        val chooser = store.createShareIntent(preview as CardDocument)
-        onChooserOpening()
-        openChooser(chooser)
+        store.share(preview as CardDocument) { chooser, onLaunched ->
+            onChooserOpening()
+            openChooser(chooser, onLaunched)
+        }
     }
 }

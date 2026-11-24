@@ -167,8 +167,15 @@ def send_file(extension="pdf"):
 
 def cancel_share():
     sh("input keyevent KEYCODE_BACK")
-    if exact("보내기") is None or exact("PDF") is None:
-        raise RuntimeError("Closing the Sharesheet did not return to the existing PDF preview")
+    def has_preview(nodes):
+        return (
+            any(node.text == "보내기" for node in nodes)
+            and any("사용자가 적은 내용이며 의료기관의 기록이 아니에요" in node.desc for node in nodes)
+            and all(node.text != "만드는 중…" for node in nodes)
+        )
+
+    if not has_preview(wait_screen(has_preview)):
+        raise RuntimeError("Closing the Sharesheet did not return to the existing document preview")
 
 
 def files_save_button(report):

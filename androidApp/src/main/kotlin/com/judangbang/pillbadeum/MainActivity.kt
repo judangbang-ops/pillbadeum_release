@@ -51,11 +51,12 @@ class MainActivity : ComponentActivity() {
         chooserClosed?.complete(Unit)
     }
 
-    private suspend fun shareCard(intent: Intent) {
+    private suspend fun shareCard(intent: Intent, onLaunched: () -> Unit) {
         val closed = CompletableDeferred<Unit>()
         chooserClosed = closed
         try {
             cardShareRequest.launch(intent)
+            onLaunched()
             closed.await()
         } finally {
             chooserClosed = null

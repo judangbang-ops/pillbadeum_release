@@ -812,7 +812,20 @@ function Step-AddItem {
         if ($null -ne $form) { $field = @($form.SelectNodes('//node') | Where-Object { $_.GetAttribute('class') -like '*EditText' }) | Select-Object -First 1 }
         if ($null -eq $field) { throw "이름 칸을 찾지 못했습니다. $done" }
         Invoke-TapNode $field
+        # API 36에서 첫 글자가 빠진 사례가 있어 이름 칸에 포커스가 잡힌 뒤 입력함.
+        $focusDeadline = (Get-Date).AddSeconds(15)
+        $nameField = $null
+        do {
+            $form = Get-UiDump 'work'
+            if ($null -ne $form) {
+                $nameField = $form.SelectSingleNode('(//node[contains(@class,"EditText")])[1][@focused="true"]')
+                if ($null -ne $nameField) { break }
+            }
+            Start-Sleep -Milliseconds 250
+        } while ((Get-Date) -lt $focusDeadline)
+        if ($null -eq $nameField) { throw "이름 칸에 포커스가 잡히지 않았습니다. $done" }
         Invoke-Shell "input text $itemName" | Out-Null
+        if ($null -eq (Wait-Node $itemName 10 -Exact)) { throw "이름 칸에 '$itemName'이 입력되지 않았습니다. $done" }
         # [저장]은 화면 아래 막대에 있어 키보드 위에 보임 (ItemScreen.kt)
         $save = Wait-Node $SaveButton 20 -Exact
         if ($null -eq $save) { throw "'$SaveButton' 버튼이 화면에 없습니다. $done" }

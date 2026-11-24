@@ -7,9 +7,12 @@ import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
+import android.view.InputDevice
+import android.view.MotionEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -57,9 +60,12 @@ class EmergencyClipboardDeviceTest : Instrumentation() {
                 verifyCopy(clipboard, expected, "all")
                 awaitPreviewDismissal()
 
-                val scroll = waitForNode("scroll") { it.isScrollable && it.packageName == targetContext.packageName }
-                check(scroll.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) { "Scroll to copy by section" }
-                click("알레르기 복사")
+                val lineLabel = "알레르기 복사"
+                if (findNode { it.hasAppLabel(lineLabel) } == null) {
+                    val scroll = waitForNode("scroll") { it.isScrollable && it.packageName == targetContext.packageName }
+                    check(scroll.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)) { "Scroll to copy by section" }
+                }
+                click(lineLabel)
                 verifyCopy(clipboard, ALLERGY, "line")
             } finally {
                 runOnMainSync { clipboard.clearPrimaryClip(); activity.finish() }
@@ -121,21 +127,38 @@ class EmergencyClipboardDeviceTest : Instrumentation() {
     }
 
     private fun click(label: String) {
-        val button = waitForNode(label) {
-            it.isClickable && (it.text?.toString() == label || it.contentDescription?.toString() == label)
+        val node = waitForNode(label) { it.hasAppLabel(label) }
+        val bounds = Rect().also(node::getBoundsInScreen)
+        check(!bounds.isEmpty) { "No visible bounds for $label" }
+        val downAt = SystemClock.uptimeMillis()
+        for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
+            val event = MotionEvent.obtain(downAt, SystemClock.uptimeMillis(), action,
+                bounds.exactCenterX(), bounds.exactCenterY(), 0)
+            try {
+                event.source = InputDevice.SOURCE_TOUCHSCREEN
+                check(uiAutomation.injectInputEvent(event, true)) { "Could not tap $label" }
+            } finally {
+                event.recycle()
+            }
         }
-        check(button.performAction(AccessibilityNodeInfo.ACTION_CLICK)) { "Could not tap $label" }
     }
 
     private fun waitForNode(label: String, matches: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo {
-        val until = SystemClock.uptimeMillis() + 6_000
+        val until = SystemClock.uptimeMillis() + 12_000
         do {
-            val found = uiAutomation.windows.firstNotNullOfOrNull { it.root?.findVisible(matches) }
-            if (found != null) return found
+            findNode(matches)?.let { return it }
             SystemClock.sleep(50)
         } while (SystemClock.uptimeMillis() < until)
         error("Missing $label")
     }
+
+    private fun findNode(matches: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo? =
+        uiAutomation.windows.firstNotNullOfOrNull { it.root?.findVisible(matches) }
+            ?: uiAutomation.rootInActiveWindow?.findVisible(matches)
+
+    private fun AccessibilityNodeInfo.hasAppLabel(label: String): Boolean =
+        packageName?.toString() == targetContext.packageName &&
+            (text?.toString() == label || contentDescription?.toString() == label)
 
     private fun AccessibilityNodeInfo.findVisible(matches: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo? {
         if (isVisibleToUser && matches(this)) return this

@@ -11,7 +11,7 @@ from pathlib import Path
 from backup_restore_check import ACTIVITY, DATA, DB, PKG, adb, launch_app, sh, tap
 from explore import exact, tap_exact
 from feedback_check import build_fixture
-from screens_check import seek, size, to_home
+from screens_check import seek, size, to_home, wait_screen
 
 FIXTURE = "org.example.task064.fixture"
 FIXTURE_LABEL = "Card export fixture"
@@ -108,8 +108,13 @@ def seed_rows(con):
 
 
 def open_export(name):
-    if chooser_in_front():
+    # A failed assertion in the previous case can leave a system or receiver activity on top.
+    for _ in range(3):
+        focus = foreground_activity()
+        if not any(activity in focus for activity in ("ChooserActivity", ".documentsui", FIXTURE)):
+            break
         sh("input keyevent KEYCODE_BACK")
+        time.sleep(0.5)
     to_home()
     tap_exact("건강 카드")
     label = f"{name}의 건강 카드"
@@ -124,10 +129,11 @@ def files_in_cache():
     return {path for path in found.splitlines() if path.startswith(f"{CACHE}/")}
 
 
-def chooser_in_front():
-    focus = sh("dumpsys window | grep mCurrentFocus; dumpsys activity activities | grep -E 'topResumedActivity|mResumedActivity'",
-               check=False)
-    return "ChooserActivity" in focus
+def foreground_activity():
+    return sh(
+        "dumpsys window | grep mCurrentFocus; dumpsys activity activities | grep -E 'topResumedActivity|mResumedActivity'",
+        check=False,
+    )
 
 
 def tap_share_target():
@@ -146,7 +152,7 @@ def send_file(extension="pdf"):
     before = files_in_cache()
     tap_exact("보내기")
     until = time.monotonic() + 15
-    while not chooser_in_front():
+    while "ChooserActivity" not in foreground_activity():
         if time.monotonic() >= until:
             raise RuntimeError("The system Sharesheet did not open")
         time.sleep(0.25)
@@ -163,6 +169,22 @@ def cancel_share():
     sh("input keyevent KEYCODE_BACK")
     if exact("보내기") is None or exact("PDF") is None:
         raise RuntimeError("Closing the Sharesheet did not return to the existing PDF preview")
+
+
+def files_save_button(report):
+    # DocumentsUI's fixed bottom button uses this ID in the Android compatibility tests.
+    def is_save(node):
+        return node.rid == "android:id/button1" or (
+            node.cls.endswith("Button") and node.text.casefold() in ("save", "저장")
+        )
+
+    nodes = wait_screen(lambda items: any(is_save(item) for item in items), timeout=20)
+    report.shot("tc097-system-files-save")
+    button = next((node for node in nodes if is_save(node)), None)
+    if button is None:
+        labels = [(node.rid, node.text) for node in nodes if node.rid or node.text]
+        raise RuntimeError(f"System Files did not expose its Save button: {labels[:24]}")
+    return button
 
 
 def pull_pdf(report, remote, case):
@@ -212,8 +234,7 @@ def check_card_export(report, steps):
                 if exact("PDF read=true writeDenied=true attempts=1") is None:
                     raise RuntimeError("The separate receiving app did not read the PDF with a read-only grant")
                 tap_exact("Save in Files")
-                save = seek(lambda node: node.text.casefold() in ("save", "저장"), "system Files Save")
-                tap(save)
+                tap(files_save_button(report))
                 if exact("PDF saved in Files", timeout=30) is None:
                     raise RuntimeError("The receiver did not write the PDF using system Files")
                 name = Path(path).name

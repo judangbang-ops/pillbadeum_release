@@ -31,6 +31,7 @@ Flow (clock set in Asia/Seoul; day 0 is the run's date; the clock only moves for
   12. Weekly tapped on a Friday; the Saturday still taken; the next Monday 05:00 `이번 주 미완료, 마지막 복용 …금요일`
       (QA 11).
   13. The soft keyboard up over the item form: [저장] whole above it, tapped, and the item saved (QA 12).
+  13a–b. Feedback (TC-098): the no-mail sheet and clipboard, then a single draft in the fixture app on two taps.
   14. The app's data cleared (`pm clear`, what [저장공간 지우기] in the settings does) with the widget left on the home
       screen, then a tile it still draws tapped: no judgment row, and the widget drawn again as the empty widget
       (REQ-092, TC-009; not one of the 13, but TASK-034 owns it).
@@ -94,6 +95,7 @@ from explore import (
     tap_scrolled,
     tile,
 )
+from feedback_check import check_feedback
 from release_check import WIDGET_LABEL, go_home, place_widget, save_ui, screen_size
 from reminder_check import BOUNDARY_ALARM, alarms, query
 from screens_check import ShotSteps, our_widget_ids, physical_density, to_home
@@ -730,6 +732,7 @@ def run(r: Report, steps: ShotSteps) -> None:
             sh("settings put secure show_ime_with_hard_keyboard 0", check=False)
 
     steps("13. 키보드가 열린 채 저장 (QA 12)", "화면 키보드가 떠 있을 때 [저장]이 키보드 위에 다 보이고, 누르면 저장됨", keyboard)
+    check_feedback(r, steps)
 
     # 14. App data cleared, then a tile left on the widget tapped (REQ-092)
     def data_cleared() -> str:

@@ -2,6 +2,7 @@ package com.judangbang.pillbadeum.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -18,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -25,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -61,6 +64,7 @@ internal class PeopleActions(
     val edit: (PersonRow) -> Unit,
     /** `[되살리기]` under `보관됨`, without a question (REQ-095, SPEC-044). */
     val restore: (PersonRow) -> Unit,
+    val openArchivedCard: (PersonRow) -> Unit,
 )
 
 /**
@@ -103,7 +107,11 @@ internal fun PeopleScreen(state: PeopleState, message: String?, actions: PeopleA
             if (view.archived.isNotEmpty()) {
                 SectionTitle("보관됨")
                 view.archived.forEachIndexed { index, row ->
-                    ArchivedLine(row, line = index < view.archived.lastIndex) { actions.restore(row) }
+                    ArchivedLine(
+                        row, line = index < view.archived.lastIndex,
+                        onOpenCard = { actions.openArchivedCard(row) },
+                        onRestore = { actions.restore(row) },
+                    )
                 }
             }
         }
@@ -123,6 +131,7 @@ internal fun PersonFormScreen(
     view: PeopleView,
     message: String?,
     onClose: () -> Unit,
+    onOpenCard: (PersonRow) -> Unit,
     onSave: (name: String, color: String) -> Unit,
     onArchive: (PersonRow) -> Unit,
 ) {
@@ -151,6 +160,12 @@ internal fun PersonFormScreen(
                 .padding(start = Ui.Side, end = Ui.Side, top = 4.dp, bottom = 8.dp),
         ) {
             message?.let { Band(it, Modifier.padding(bottom = 16.dp), live = true) }
+            if (editing != null) {
+                ActionButton(
+                    Labels.healthCardTitle(editing.person.name), ButtonLook.Line, { onOpenCard(editing) },
+                    Modifier.padding(bottom = 24.dp),
+                ) { HealthCardIcon() }
+            }
             Field(
                 label = "이름",
                 value = name,
@@ -196,7 +211,7 @@ internal fun PersonFormScreen(
 }
 
 /** A line of the list (box.css `.li`): at least 56 dp, with a subtle line under it unless it is the last of its group. */
-private fun Modifier.listLine(line: Boolean): Modifier = fillMaxWidth().heightIn(min = 56.dp).drawBehind {
+internal fun Modifier.listLine(line: Boolean): Modifier = fillMaxWidth().heightIn(min = 56.dp).drawBehind {
     if (line) {
         val w = 1.dp.toPx()
         drawLine(Ui.LineSubtle, Offset(0f, size.height - w / 2), Offset(size.width, size.height - w / 2), w)
@@ -226,14 +241,34 @@ private fun PersonLine(row: PersonRow, onClick: () -> Unit) {
  * under the name, where the name starts, so it stays on the screen (09 README 4.1, 200%).
  */
 @Composable
-private fun ArchivedLine(row: PersonRow, line: Boolean, onRestore: () -> Unit) {
+private fun ArchivedLine(row: PersonRow, line: Boolean, onOpenCard: () -> Unit, onRestore: () -> Unit) {
     val name = row.person.name
     val detail = Labels.personItems(row.items, archived = true)
-    Box(Modifier.listLine(line).padding(horizontal = 4.dp, vertical = 8.dp), contentAlignment = Alignment.CenterStart) {
+    val openLabel = "건강 카드 보기"
+    // The card and restore actions have separate accessibility targets. Taps on the lid or in the gaps also open the card.
+    // Keyed on Unit: a new lambda on each recomposition would restart the detector and drop a tap in progress.
+    val openCard by rememberUpdatedState(onOpenCard)
+    Box(
+        Modifier.listLine(line).pointerInput(Unit) { detectTapGestures { openCard() } }
+            .padding(horizontal = 4.dp, vertical = 8.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
         Layout(
             contents = listOf(
                 { Lid(row.person, off = true) },
-                { NameAndDetail(name, detail, Modifier.clearAndSetSemantics { contentDescription = "$name, $detail" }) },
+                {
+                    Column(
+                        Modifier.heightIn(min = 48.dp)
+                            .clickable(onClickLabel = openLabel, role = Role.Button, onClick = onOpenCard)
+                            .clearAndSetSemantics { contentDescription = "$name, $detail" },
+                    ) {
+                        NameAndDetail(name, detail)
+                        Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Words(openLabel, Ui.type(14, Ui.SemiBold), Modifier.weight(1f, fill = false))
+                            Chevron(0f)
+                        }
+                    }
+                },
                 {
                     ActionButton("되살리기", ButtonLook.LineSmall, onRestore, Modifier.semantics { contentDescription = "$name 되살리기" })
                 },
@@ -281,7 +316,7 @@ private fun NameAndDetail(name: String, detail: String, modifier: Modifier = Mod
 
 /** 09 `.lid`: 40 dp in the person's color with their first letter; grey with a muted letter while archived (`.lid.off`). */
 @Composable
-private fun Lid(person: PersonEntity, off: Boolean) {
+internal fun Lid(person: PersonEntity, off: Boolean) {
     Box(
         Modifier.size(40.dp).clip(Ui.ButtonShape).background(if (off) Ui.Skip else personLook(person.color).solid).hiddenFromTalkBack(),
         contentAlignment = Alignment.Center,

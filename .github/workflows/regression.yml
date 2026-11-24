@@ -33,6 +33,9 @@ on:
       - scripts/emulator/release_check.py
       - scripts/emulator/reminder_check.py
       - scripts/emulator/emulator_boot.py
+      # TC-098 확인(13a·13b)과 그 시험용 받는 앱. 출시 APK에는 들어가지 않음
+      - scripts/emulator/feedback_check.py
+      - scripts/emulator/feedback_fixture/**
       - .github/scripts/push_gate.py
       - .github/workflows/regression.yml
   workflow_dispatch:
@@ -90,6 +93,8 @@ jobs:
           scripts/emulator/release_check.py
           scripts/emulator/reminder_check.py
           scripts/emulator/emulator_boot.py
+          scripts/emulator/feedback_check.py
+          scripts/emulator/feedback_fixture/
           .github/scripts/push_gate.py
           .github/workflows/regression.yml
 

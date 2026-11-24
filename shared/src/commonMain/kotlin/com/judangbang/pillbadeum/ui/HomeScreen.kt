@@ -55,6 +55,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -97,7 +98,13 @@ internal class HomeActions(
     val cancelClock: (ClockWarning) -> Unit,
     /** `[설정 열기]` and `[허용하기]` of SCR-004#permission: the system settings screen (SPEC-028, SPEC-029). */
     val openAccess: (AccessSetting) -> Unit,
+    val card: (() -> Unit)? = null,
 )
+
+private val HomeBarButtonPadding = 8.dp
+private const val HOME_TITLE = "기록"
+private const val HISTORY_TITLE = "지난 기록"
+private const val SETTINGS_TITLE = "설정"
 
 /**
  * SCR-004 기록 (오늘·이번 주), drawn as 09 BoxHome, HomeEmpty and HomeRestored. [zone] is the phone's zone, where
@@ -110,25 +117,43 @@ internal fun HomeScreen(state: HomeState, message: String?, zone: TimeZone, acti
     var askVoid by rememberSaveable { mutableStateOf<String?>(null) }
     var askClock by rememberSaveable { mutableStateOf<String?>(null) }
 
-    Column(Modifier.fillMaxSize()) {
-        TopBar("기록") {
-            if (state is HomeState.Ready) {
-                BarButton("지난 기록", actions.history)
-                BarButton("설정", actions.settings)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val card = actions.card
+        val textMeasurer = rememberTextMeasurer()
+        val titleStyle = Ui.type(22, Ui.ExtraBold, lineHeight = 1.25f)
+        val buttonStyle = Ui.type(15, Ui.SemiBold, lineHeight = 1.25f)
+        val showCardInBar = state is HomeState.Ready && card != null && with(LocalDensity.current) {
+            val actionsWidth = listOf(Labels.HEALTH_CARD, HISTORY_TITLE, SETTINGS_TITLE).sumOf { label ->
+                val labelWidth = textMeasurer.measure(WidgetLayout.keepWords(label), buttonStyle).size.width
+                maxOf(48.dp.roundToPx(), labelWidth + 2 * HomeBarButtonPadding.roundToPx())
             }
+            val titleWidth = textMeasurer.measure(HOME_TITLE, titleStyle).size.width
+            // TopBar has 20dp + 8dp of padding and three 4dp gaps here.
+            actionsWidth + titleWidth + 20.dp.roundToPx() + 8.dp.roundToPx() + 3 * 4.dp.roundToPx() <= maxWidth.roundToPx()
         }
-        when (state) {
-            HomeState.Loading -> Words(Labels.LOADING, Ui.type(16, color = Ui.Muted), Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
-            HomeState.Failed -> FailedBody(actions.retry)
-            is HomeState.Ready -> ReadyBody(
-                board = state.board,
-                message = message,
-                zone = zone,
-                access = access,
-                actions = actions,
-                onAskVoid = { askVoid = it.intakeId },
-                onAskClock = { askClock = it.judgment.id },
-            )
+        Column(Modifier.fillMaxSize()) {
+            TopBar(HOME_TITLE) {
+                if (state is HomeState.Ready) {
+                    if (showCardInBar) BarButton(Labels.HEALTH_CARD, card, HomeBarButtonPadding)
+                    val padding = if (card == null) 12.dp else HomeBarButtonPadding
+                    BarButton(HISTORY_TITLE, actions.history, padding)
+                    BarButton(SETTINGS_TITLE, actions.settings, padding)
+                }
+            }
+            when (state) {
+                HomeState.Loading -> Words(Labels.LOADING, Ui.type(16, color = Ui.Muted), Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+                HomeState.Failed -> FailedBody(actions.retry)
+                is HomeState.Ready -> ReadyBody(
+                    board = state.board,
+                    message = message,
+                    zone = zone,
+                    access = access,
+                    actions = actions,
+                    cardBelowDate = card.takeUnless { showCardInBar },
+                    onAskVoid = { askVoid = it.intakeId },
+                    onAskClock = { askClock = it.judgment.id },
+                )
+            }
         }
     }
 
@@ -191,6 +216,7 @@ private fun ReadyBody(
     zone: TimeZone,
     access: ReminderAccess?,
     actions: HomeActions,
+    cardBelowDate: (() -> Unit)?,
     onAskVoid: (IntakeStatus) -> Unit,
     onAskClock: (ClockWarning) -> Unit,
 ) {
@@ -239,6 +265,11 @@ private fun ReadyBody(
                 }
             }
             Hero(board, Modifier.padding(top = if (bands) 20.dp else 0.dp))
+            if (cardBelowDate != null) {
+                ActionButton(Labels.HEALTH_CARD, ButtonLook.Line, cardBelowDate, Modifier.padding(top = 12.dp)) {
+                    HealthCardIcon()
+                }
+            }
             message?.let { Band(it, Modifier.padding(top = 12.dp), live = true) }
 
             if (board.items.isEmpty()) {

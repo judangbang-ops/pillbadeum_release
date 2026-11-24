@@ -10,10 +10,10 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.core.app.ApplicationProvider
@@ -84,6 +84,9 @@ class ItemNameScreenTest {
         name.performTextReplacement(limitedName)
         name.performTextInput("나")
         name.assert(hasText(limitedName))
+        name.performSemanticsAction(SemanticsActions.SetSelection) { it(1, 1, true) }
+        name.performTextInput("나")
+        name.assert(hasText(limitedName))
         // Change the text within the limit to clear the first notice before testing the alias.
         name.performTextReplacement(limitedName.dropLast(2))
         name.performTextReplacement(limitedName)
@@ -132,8 +135,8 @@ class ItemNameScreenTest {
             saved.intakeId
         }
         open()
-        compose.onAllNodesWithText(oldName).onFirst().assertIsDisplayed()
-        editItem()
+        tile(oldName).performScrollTo().assertIsDisplayed().performClick()
+        waitForText("항목 이름")
         name.assert(hasText(oldName))
         alias.assert(hasText(oldAlias))
         assertEquals(2, compose.onAllNodesWithText("40/30").fetchSemanticsNodes().size)
@@ -144,15 +147,23 @@ class ItemNameScreenTest {
         assertEquals(oldName, runBlocking { core.db.intakeDao().findById(id)?.name })
         assertEquals(oldAlias, runBlocking { core.db.intakeDao().findById(id)?.widgetAlias })
         assertTrue(runBlocking { core.loadStatusBoard().items.single().rule is ScheduleRule.Weekly })
-        compose.onAllNodesWithText(oldName).onFirst().assertIsDisplayed()
-
-        editItem()
+        tile(oldName).performScrollTo().assertIsDisplayed().performClick()
+        waitForText("항목 이름")
         name.performTextReplacement(oldName.dropLast(1))
         name.assert(hasText(oldName.take(30)))
         text(Labels.INTAKE_NAME_LIMIT).assertIsDisplayed()
         saveItem()
         assertEquals(oldName.take(30), runBlocking { core.db.intakeDao().findById(id)?.name })
         assertEquals(oldAlias, runBlocking { core.db.intakeDao().findById(id)?.widgetAlias })
+
+        tile(oldName.take(30)).performScrollTo().performClick()
+        waitForText("항목 이름")
+        alias.performScrollTo().performTextReplacement(oldAlias.dropLast(1))
+        alias.assert(hasText(oldAlias.take(30)))
+        text(Labels.INTAKE_NAME_LIMIT).performScrollTo().assertIsDisplayed()
+        saveItem()
+        assertEquals(oldName.take(30), runBlocking { core.db.intakeDao().findById(id)?.name })
+        assertEquals(oldAlias.take(30), runBlocking { core.db.intakeDao().findById(id)?.widgetAlias })
     }
 
     private fun field(label: String) = compose.onNode(hasSetTextAction() and hasContentDescription(label))
@@ -174,12 +185,10 @@ class ItemNameScreenTest {
         waitForText("항목 이름")
     }
 
-    private fun editItem() {
+    private fun tile(name: String) =
         compose.onNode(SemanticsMatcher("opens 항목 수정") {
             it.config.getOrNull(SemanticsActions.OnClick)?.label == "항목 수정"
-        }).performClick()
-        waitForText("항목 이름")
-    }
+        } and hasContentDescription(name, substring = true))
 
     private fun saveItem() {
         text("저장").performClick()

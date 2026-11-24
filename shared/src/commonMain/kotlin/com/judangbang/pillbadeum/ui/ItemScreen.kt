@@ -385,15 +385,20 @@ private fun IntakeNameField(
     error: String? = null,
 ) {
     val limit = IntakeDraft.MAX_NAME_CHARACTERS
-    val count = value.trim().codePointCount()
+    val current = value.trim()
+    val count = current.codePointCount()
     var clipped by rememberSaveable { mutableStateOf(false) }
     Field(
         label = label,
         value = value,
         onChange = { input ->
-            val limited = input.limitCodePointInput(limit)
-            clipped = limited.trim() != input.trim()
-            onChange(limited)
+            val next = input.trim()
+            val nextCount = next.codePointCount()
+            clipped = nextCount > limit
+            // A single keystroke at the limit must not push the final character out of the field.
+            val singleInsertionAtLimit = count == limit && nextCount == limit + 1 &&
+                current.commonPrefixWith(next).length + current.commonSuffixWith(next).length >= current.length
+            if (!singleInsertionAtLimit) onChange(input.limitCodePointInput(limit))
         },
         placeholder = placeholder,
         optional = optional,

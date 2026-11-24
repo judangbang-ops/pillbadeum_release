@@ -72,6 +72,12 @@ interface CardExporter {
     suspend fun share(preview: CardExportPreview, onChooserOpening: () -> Unit)
 }
 
+class CardExportNameTooLong : Exception()
+
+class CardExportWriteFailure(cause: Throwable) : Exception(cause)
+
+private const val NAME_TOO_LONG = "이름이 너무 길어요. 대상자 이름을 줄여 주세요"
+
 @Composable
 internal fun CardExportScreen(
     core: DidITakeCore?,
@@ -91,10 +97,12 @@ internal fun CardExportScreen(
     var refreshedAt by remember { mutableStateOf<Int?>(null) }
     var retry by remember { mutableIntStateOf(0) }
     val requested = source
-    val preparation = remember(requested, format, retry, exporter) { mutableStateOf<Result<CardExportPreview>?>(null) }
-    var shareFailed by remember(requested, format, retry) { mutableStateOf(false) }
+    val requestedFormat = format
+    val preparation = remember(requested, requestedFormat, retry, exporter) { mutableStateOf<Result<CardExportPreview>?>(null) }
+    var shareError by remember(requested, requestedFormat, retry) { mutableStateOf<String?>(null) }
     val shown = preparation.value?.getOrNull()
-    val writeFailed = preparation.value?.isFailure == true || shareFailed
+    val prepareError = preparation.value?.exceptionOrNull()
+    val nameTooLong = prepareError is CardExportNameTooLong
 
     LaunchedEffect(core, exporter, refreshKey, retry) {
         if (exporter == null) {
@@ -129,7 +137,7 @@ internal fun CardExportScreen(
         val renderer = exporter ?: return@LaunchedEffect
         // Each request owns its result. A cancelled renderer can finish after the next request starts.
         try {
-            val preview = renderer.prepare(card, madeOn, format)
+            val preview = renderer.prepare(card, madeOn, requestedFormat)
             currentCoroutineContext().ensureActive()
             preparation.value = Result.success(preview)
         } catch (e: CancellationException) {
@@ -139,7 +147,7 @@ internal fun CardExportScreen(
         }
     }
 
-    val failed = openFailed || readFailed
+    val failed = openFailed || readFailed || (prepareError != null && !nameTooLong)
     val loading = !failed && (requested == null || preparation.value == null)
     Column(Modifier.fillMaxSize()) {
         TopBar(Labels.CARD_EXPORT, navigation = { BarIconButton("닫기", close = true, onClick = onClose) })
@@ -170,42 +178,42 @@ internal fun CardExportScreen(
             Modifier.fillMaxWidth().padding(horizontal = Ui.Side, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (writeFailed) {
-                Band("파일을 만들지 못했어요. 휴대폰 저장 공간을 확인해 주세요", live = true)
+            (if (nameTooLong) NAME_TOO_LONG else shareError)?.let { error ->
+                Band(error, live = true)
             }
             Words("앱이 직접 보내지 않아요. 고른 앱이 보내요", Ui.type(14, color = Ui.Muted, center = true), Modifier.fillMaxWidth())
             ActionButton(
                 "보내기",
                 ButtonLook.Ink,
-                enabled = !loading && !sending && !failed && refreshedAt == refreshKey &&
-                    (shown?.pages?.isNotEmpty() == true || writeFailed),
+                enabled = !sending && !failed && refreshedAt == refreshKey && shown?.pages?.isNotEmpty() == true,
                 onClick = {
                     if (!sending && !failed && exporter != null && requested != null && source == requested &&
-                        refreshedAt == refreshKey && preparation.value != null
+                        refreshedAt == refreshKey && format == requestedFormat && shown != null && shown.pages.isNotEmpty()
                     ) {
-                        if (shown == null) {
-                            retry++
-                        } else if (shown.pages.isNotEmpty()) {
-                            sending = true
-                            writing = true
-                            shareFailed = false
-                            scope.launch {
-                                try {
-                                    val (card, madeOn) = requested
-                                    val today = checkNotNull(core).let {
-                                        it.clock.now().toLocalDateTime(it.windowSettings().baseZone).date
-                                    }
-                                    val current = if (madeOn == today) shown else exporter.prepare(card, today, format)
-                                    exporter.share(current) { writing = false }
-                                    if (source == requested && madeOn != today) source = card to today
-                                } catch (e: CancellationException) {
-                                    throw e
-                                } catch (_: Exception) {
-                                    shareFailed = true
-                                } finally {
-                                    writing = false
-                                    sending = false
+                        sending = true
+                        writing = true
+                        shareError = null
+                        scope.launch {
+                            try {
+                                val (card, madeOn) = requested
+                                val today = checkNotNull(core).let {
+                                    it.clock.now().toLocalDateTime(it.windowSettings().baseZone).date
                                 }
+                                if (source != requested || refreshedAt != refreshKey) return@launch
+                                val current = if (madeOn == today) shown else exporter.prepare(card, today, requestedFormat)
+                                if (current.pages.isNotEmpty()) exporter.share(current) { writing = false }
+                                if (source == requested && madeOn != today) source = card to today
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: CardExportNameTooLong) {
+                                preparation.value = Result.failure(e)
+                            } catch (_: CardExportWriteFailure) {
+                                shareError = "파일을 만들지 못했어요. 휴대폰 저장 공간을 확인해 주세요"
+                            } catch (_: Exception) {
+                                shareError = "공유를 준비하지 못했어요. 다시 시도해 주세요"
+                            } finally {
+                                writing = false
+                                sending = false
                             }
                         }
                     }

@@ -667,6 +667,26 @@ class HealthCardScreenTest {
     }
 
     @Test
+    fun tc117_export_disables_both_formats_when_the_name_cannot_fit(): Unit = runBlocking {
+        setToday()
+        val name = "가상".repeat(500)
+        val person = core.people.add(name, PersonColors.PALETTE[1]).id
+        seedEntry(person, allergy)
+        open(person, name = name, height = 3800)
+        tap("내보내기")
+        val nameError = "이름이 너무 길어요. 대상자 이름을 줄여 주세요"
+        waitFor(nameError)
+        text("보내기").assertIsNotEnabled()
+
+        text("사진(PNG)").performClick()
+        waitFor(nameError)
+        text("보내기").assertIsNotEnabled()
+        text("사진이 너무 길어요. PDF로 보내 주세요").assertDoesNotExist()
+        text("파일을 만들지 못했어요. 휴대폰 저장 공간을 확인해 주세요").assertDoesNotExist()
+        assertTrue(controller.get().sharedPreviews.isEmpty())
+    }
+
+    @Test
     fun tc117_export_write_error_allows_retry_and_resume_refreshes_the_preview(): Unit = runBlocking {
         val person = createPerson()
         seedCard(person)
@@ -1101,7 +1121,7 @@ class CardTestActivity : ComponentActivity() {
             }
 
             override suspend fun share(preview: CardExportPreview, onChooserOpening: () -> Unit) {
-                if (failCardShare) throw IOException("fixture: share unavailable")
+                if (failCardShare) throw CardExportWriteFailure(IOException("fixture: storage unavailable"))
                 onChooserOpening()
                 sharedPreviews.add(preview)
                 chooserResult.await()

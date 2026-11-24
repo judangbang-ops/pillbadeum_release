@@ -13,6 +13,7 @@ import android.text.TextPaint
 import androidx.compose.ui.graphics.nativeCanvas
 import com.judangbang.pillbadeum.status.Labels
 import com.judangbang.pillbadeum.ui.CardExportFormat
+import com.judangbang.pillbadeum.ui.CardExportNameTooLong
 import com.judangbang.pillbadeum.ui.CardExportPage
 import com.judangbang.pillbadeum.ui.CardExportPreview
 import com.judangbang.pillbadeum.usecase.CardEntryFields
@@ -122,6 +123,11 @@ internal class CardDocument private constructor(
                     }
                 }
                 CardExportFormat.PNG -> {
+                    // The name and first section must fit before the general PNG height limit applies.
+                    val firstSectionHeight = rows[0].height + rows[1].height
+                    if (baseHeight + firstSectionHeight + MARGIN > MAX_PNG_HEIGHT / PNG_SCALE) {
+                        throw CardExportNameTooLong()
+                    }
                     val height = maxOf(A4_HEIGHT, baseHeight + rows.sumOf { it.height } + MARGIN)
                     when {
                         height > MAX_PNG_HEIGHT / PNG_SCALE -> emptyList<DocumentPage>() to "사진이 너무 길어요. PDF로 보내 주세요"
@@ -180,7 +186,7 @@ private fun paginate(rows: List<DocumentRow>, top: Int, bottom: Int): List<List<
     var used = 0
     rows.forEachIndexed { index, row ->
         val needed = row.height + if (row.sectionStart) rows[index + 1].height else 0
-        check(needed <= capacity)
+        if (needed > capacity) throw CardExportNameTooLong()
         if (used + needed > capacity) {
             pages.add(page)
             page = mutableListOf()

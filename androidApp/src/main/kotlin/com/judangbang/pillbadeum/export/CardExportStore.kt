@@ -6,9 +6,11 @@ import android.content.Intent
 import androidx.core.content.FileProvider
 import com.judangbang.pillbadeum.ui.CardExportFormat
 import com.judangbang.pillbadeum.ui.CardExportPreview
+import com.judangbang.pillbadeum.ui.CardExportWriteFailure
 import com.judangbang.pillbadeum.ui.CardExporter
 import com.judangbang.pillbadeum.usecase.HealthCardSummary
 import java.io.IOException
+import java.io.UncheckedIOException
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
@@ -43,13 +45,20 @@ internal class CardExportStore(private val context: Context) {
             val chooser = withContext(Dispatchers.IO) {
                 mutex.withLock {
                     // A fast tap can reach here before the MainActivity cleanup coroutine is scheduled.
-                    clearOldFiles()
-                    val exportRoot = Files.createDirectories(root)
-                    check(Files.isDirectory(exportRoot, NOFOLLOW_LINKS))
-                    val directory = Files.createDirectory(exportRoot.resolve(UUID.randomUUID().toString()))
-                    unsharedDirectory = directory
-                    val file = directory.resolve(document.filename)
-                    Files.newOutputStream(file, CREATE_NEW, WRITE, NOFOLLOW_LINKS).use { document.writeTo(it) }
+                    val file = try {
+                        clearOldFiles()
+                        val exportRoot = Files.createDirectories(root)
+                        if (!Files.isDirectory(exportRoot, NOFOLLOW_LINKS)) throw IOException("Invalid export cache directory")
+                        val directory = Files.createDirectory(exportRoot.resolve(UUID.randomUUID().toString()))
+                        unsharedDirectory = directory
+                        directory.resolve(document.filename).also { path ->
+                            Files.newOutputStream(path, CREATE_NEW, WRITE, NOFOLLOW_LINKS).use { document.writeTo(it) }
+                        }
+                    } catch (e: IOException) {
+                        throw CardExportWriteFailure(e)
+                    } catch (e: UncheckedIOException) {
+                        throw CardExportWriteFailure(e)
+                    }
                     val uri = FileProvider.getUriForFile(context, "${context.packageName}.card-export", file.toFile())
                     val send = Intent(Intent.ACTION_SEND).apply {
                         type = document.format.mimeType
@@ -63,7 +72,7 @@ internal class CardExportStore(private val context: Context) {
             currentCoroutineContext().ensureActive()
             openChooser(chooser) { unsharedDirectory = null }
         } catch (e: OutOfMemoryError) {
-            throw IOException("Insufficient memory for card export", e)
+            throw IllegalStateException("Insufficient memory for card export", e)
         } finally {
             // Launch may fail, or the screen may leave before the dispatcher hands back the intent.
             unsharedDirectory?.let { directory ->
@@ -72,7 +81,7 @@ internal class CardExportStore(private val context: Context) {
                         removeTree(directory)
                     } catch (_: IOException) {
                         // First-screen cleanup in the next process can retry. Do not log the path.
-                    } catch (_: java.io.UncheckedIOException) {
+                    } catch (_: UncheckedIOException) {
                         // Files.walk may wrap a read failure while the stream is consumed.
                     }
                 }
@@ -99,7 +108,13 @@ internal class AndroidCardExporter(
     private val openChooser: suspend (Intent, () -> Unit) -> Unit,
 ) : CardExporter {
     override suspend fun prepare(card: HealthCardSummary, madeOn: LocalDate, format: CardExportFormat): CardExportPreview =
-        withContext(Dispatchers.Default) { CardDocument.prepare(card, madeOn, format) }
+        withContext(Dispatchers.Default) {
+            try {
+                CardDocument.prepare(card, madeOn, format)
+            } catch (e: OutOfMemoryError) {
+                throw IllegalStateException("Insufficient memory for card preview", e)
+            }
+        }
 
     override suspend fun share(preview: CardExportPreview, onChooserOpening: () -> Unit) {
         store.share(preview as CardDocument) { chooser, onLaunched ->

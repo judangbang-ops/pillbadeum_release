@@ -99,7 +99,7 @@ from explore import (
     tile,
 )
 from card_export_check import check_card_export
-from card_show_check import check_card_show
+from card_show_check import check_card_privacy, check_card_show
 from feedback_check import check_feedback
 from release_check import WIDGET_LABEL, go_home, place_widget, save_ui, screen_size
 from reminder_check import BOUNDARY_ALARM, alarms, query
@@ -739,6 +739,7 @@ def run(r: Report, steps: ShotSteps) -> None:
     steps("13. 키보드가 열린 채 저장 (QA 12)", "화면 키보드가 떠 있을 때 [저장]이 키보드 위에 다 보이고, 누르면 저장됨", keyboard)
     check_feedback(r, steps)
     check_card_show(r, steps)
+    check_card_privacy(r, steps)
 
     # 14. App data cleared, then a tile left on the widget tapped (REQ-092)
     def data_cleared() -> str:

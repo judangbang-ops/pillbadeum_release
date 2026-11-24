@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import androidx.room3.useWriterConnection
 import com.judangbang.pillbadeum.DidITakeCore
 import com.judangbang.pillbadeum.container
 import com.judangbang.pillbadeum.data.ScheduleParams
@@ -60,6 +61,7 @@ import kotlinx.datetime.toInstant
  *   SCR-008 (`[먹은 시각 고르기]` at that time, or `[건너뜀]`; supplement P-1~P-4). The store screenshots
  *   (`scripts/emulator/store_shots.py`, TASK-037) fill a month of history with it. Result data: `recorded <count>`.
  * - `SEED_CARD_SHOW`: fixed synthetic person, medication and allergy for TC-095 and TC-109. Result data: `card seeded`.
+ * - `SEED_CARD_PRIVACY`, `CARD_SECURE_DELETE` and `CARD_SAVE_FAULT`: TC-108 fixtures and probes on the debug emulator.
  *
  * The commands are in the scripts (an XML or KDoc comment cannot hold every character of them).
  */
@@ -67,13 +69,16 @@ class ReminderSeedReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
         context.container.appScope.launch {
+            val privacyProbe = intent.action in setOf(ACTION_SEED_CARD_PRIVACY, ACTION_CARD_SECURE_DELETE, ACTION_CARD_SAVE_FAULT)
             val result = try {
                 handle(context, intent)
             } catch (e: CancellationException) {
                 pending.finish()
                 throw e
             } catch (e: Exception) {
-                if (intent.action == ACTION_SEED_CARD_SHOW) {
+                if (privacyProbe) {
+                    "privacy probe failed ${e.javaClass.simpleName}"
+                } else if (intent.action == ACTION_SEED_CARD_SHOW) {
                     // The exception class, and the failed step from seedCardShow's checks: no card text (REQ-106).
                     val step = if (e is IllegalStateException) ": ${e.message}" else ""
                     "card seed failed ${e.javaClass.simpleName}$step"
@@ -82,7 +87,7 @@ class ReminderSeedReceiver : BroadcastReceiver() {
                     "failed ${e.javaClass.simpleName}: ${e.message}"
                 }
             }
-            Log.i(TAG, result)
+            if (!privacyProbe) Log.i(TAG, result)
             pending.resultData = result
             pending.finish()
         }
@@ -107,10 +112,57 @@ class ReminderSeedReceiver : BroadcastReceiver() {
             ACTION_SETTINGS -> settings(core, intent)
             ACTION_RECORD -> record(core, intent)
             ACTION_SEED_CARD_SHOW -> seedCardShow(core)
+            ACTION_SEED_CARD_PRIVACY -> seedCardPrivacy(core)
+            ACTION_CARD_SECURE_DELETE -> return core.db.useWriterConnection { writer ->
+                val setting = writer.usePrepared("PRAGMA main.secure_delete") { stmt ->
+                    check(stmt.step())
+                    stmt.getLong(0)
+                }
+                val sqlite = writer.usePrepared("SELECT sqlite_version()") { stmt ->
+                    check(stmt.step())
+                    stmt.getText(0)
+                }
+                "secure_delete=$setting sqlite=$sqlite"
+            }
+            ACTION_CARD_SAVE_FAULT -> return core.db.useWriterConnection { writer ->
+                val enabled = intent.getBooleanExtra("enabled", false)
+                val sql = if (enabled) {
+                    """CREATE TEMP TRIGGER tc108_save_fault BEFORE UPDATE ON main.condition
+                       BEGIN SELECT RAISE(ABORT, 'TC-108 save fault'); END"""
+                } else {
+                    "DROP TRIGGER IF EXISTS temp.tc108_save_fault"
+                }
+                writer.usePrepared(sql) { it.step() }
+                "save fault enabled=$enabled"
+            }
             else -> return "unknown action ${intent.action}"
         }
         context.container.afterWrite()
         return result
+    }
+
+    private suspend fun seedCardPrivacy(core: DidITakeCore): String {
+        val person = core.people.add("가상 보호대상", PersonColors.PALETTE[0])
+        val intake = IntakeDraft(
+            personId = person.id,
+            name = "PrivacyItem",
+            slotLabel = SlotLabel.MORNING,
+            medications = listOf(IntakeMedicationDraft("가상점검정 10mg", "27정")),
+        )
+        val saved = core.saveIntake.create(intake) as SaveIntakeResult.Saved
+        check(core.reminders.saveRule(saved.intakeId, enabled = true, start = LocalTime(8, 0)) is SaveReminderResult.Saved)
+        val entries = listOf(
+            CardEntryFields.Allergy("가상점검알레르기", "가상점검반응"),
+            CardEntryFields.Condition("가상점검질환"),
+            CardEntryFields.Procedure("가상점검시술"),
+            CardEntryFields.ImplantedDevice("가상점검기기"),
+            CardEntryFields.CareProvider("가상점검병원", doctor = "가상점검의사"),
+            CardEntryFields.Guardian("가상점검보호자", "010-0000-0708"),
+        )
+        for (fields in entries) {
+            check(core.saveCardEntry.add(person.id, core.saveCardEntry.newEntryId(), fields) is SaveCardEntryResult.Saved)
+        }
+        return "privacy card seeded"
     }
 
     private suspend fun seedCardShow(core: DidITakeCore): String {
@@ -228,5 +280,8 @@ class ReminderSeedReceiver : BroadcastReceiver() {
         const val ACTION_SETTINGS = "com.judangbang.pillbadeum.debug.SETTINGS"
         const val ACTION_RECORD = "com.judangbang.pillbadeum.debug.RECORD"
         const val ACTION_SEED_CARD_SHOW = "com.judangbang.pillbadeum.debug.SEED_CARD_SHOW"
+        const val ACTION_SEED_CARD_PRIVACY = "com.judangbang.pillbadeum.debug.SEED_CARD_PRIVACY"
+        const val ACTION_CARD_SECURE_DELETE = "com.judangbang.pillbadeum.debug.CARD_SECURE_DELETE"
+        const val ACTION_CARD_SAVE_FAULT = "com.judangbang.pillbadeum.debug.CARD_SAVE_FAULT"
     }
 }

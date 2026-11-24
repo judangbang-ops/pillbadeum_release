@@ -2,19 +2,26 @@
 
 import re
 import time
+from datetime import datetime
 from pathlib import Path
 
-from backup_restore_check import PKG, dump_ui, launch_app, sh
-from explore import tap_desc, tap_exact
+from backup_restore_check import ACTIVITY, DATA, PKG, adb, dump_ui, launch_app, sh, tap
+from card_export_check import cancel_share, send_file
+from explore import ZONE, exact, phone_now, set_clock, tap_desc, tap_exact
 from release_check import save_ui
-from reminder_check import PIN, debug, keyguard_showing, set_pin, unlock
-from screens_check import to_home
+from reminder_check import PIN, debug, doses, keyguard_showing, set_pin, unlock, wait_posted
+from screens2_check import list_view, widget_page
+from screens_check import size, to_home
 
 PERSON = "가상 엄마"
 NOTICE = "사용자가 적은 내용이며 의료기관의 기록이 아니에요. 적지 않은 종류는 보이지 않아요(없다는 뜻이 아니에요)"
 MEDICATION = "가상정 10mg 1정 · 매일 아침"
 ALLERGY = "가상 알레르기 (반응: 가상 반응)"
 CARD_SHOW = "보여 주기"
+PRIVACY_PERSON = "가상 보호대상"
+PRIVACY_ITEM = "PrivacyItem"
+PRIVATE_VALUES = ("가상점검정 10mg", "27정", "가상점검알레르기", "가상점검반응", "가상점검질환",
+                  "가상점검시술", "가상점검기기", "가상점검병원", "가상점검의사", "가상점검보호자", "010-0000-0708")
 LOCK_SCREEN_OVERRIDES = re.compile(
     r"\b(?:setShowWhenLocked|setTurnScreenOn|requestDismissKeyguard|"
     r"FLAG_SHOW_WHEN_LOCKED|FLAG_DISMISS_KEYGUARD|FLAG_TURN_SCREEN_ON)\b"
@@ -27,6 +34,165 @@ def check_card_show(report, steps):
           check_lock_screen_overrides)
     steps("TC-095·109 보여 주기 화면과 기기 잠금", "62초 켜짐, 잠금 화면에 카드 없음, 잠금 해제와 뒤로 가기 뒤 30초 설정 복구",
           lambda: check_screen_and_lock(report))
+
+
+def check_card_privacy(report, steps):
+    steps("TC-108 SQLite 보안 삭제", "앱 Room의 SQLite 쓰기 연결에서 secure_delete=1", lambda: check_secure_delete(report))
+    steps("TC-108 위젯·알림", "가상 항목을 렌더하고 카드와 약 줄은 표시하지 않음", lambda: check_privacy_render(report))
+    steps("TC-108 최근 앱", "기록 화면은 실제 스냅샷, SCR-011~015는 테마 스냅샷", lambda: check_card_recents(report))
+    steps("TC-108 실패 경로 로그", "저장·내보내기 실패를 유도하고 복사·공유를 거쳐 logcat을 확인함",
+          lambda: check_card_logs(report))
+
+
+def privacy_debug(action, expected, extra=""):
+    return debug(f"{PKG}.debug.{action}", extra, expected)
+
+
+def check_secure_delete(report):
+    result = privacy_debug("CARD_SECURE_DELETE", "secure_delete=")
+    report.note(f"TC-108 앱 Room 쓰기 연결 `PRAGMA main.secure_delete`: `{result}`")
+    if not result.startswith("secure_delete=1 "):
+        raise RuntimeError(f"Room writer returned {result}")
+    return result
+
+
+def assert_no_private_values(text, surface, values=PRIVATE_VALUES):
+    text = text.replace("\u2060", "")
+    hits = [i + 1 for i, value in enumerate(values) if value in text]
+    if hits:
+        raise RuntimeError(f"{surface} contains private fixture values at indexes {hits}")
+
+
+def check_privacy_render(report):
+    today = datetime.fromtimestamp(phone_now(), ZONE)
+    set_clock(today.replace(hour=7, minute=57, second=0, microsecond=0))
+    privacy_debug("SEED_CARD_PRIVACY", "privacy card seeded")
+    sh("input keyevent KEYCODE_HOME")
+    nodes = widget_page(lambda nodes: list_view(nodes) is not None, 30)
+    for _ in range(5):
+        assert_no_private_values("\n".join(f"{n.text}\n{n.desc}" for n in nodes), "widget")
+        if any(PRIVACY_ITEM in n.text or PRIVACY_ITEM in n.desc for n in nodes):
+            break
+        widget_list = list_view(nodes)
+        if widget_list is None:
+            raise RuntimeError("the widget list is missing")
+        x, _ = widget_list.center
+        _, top, _, bottom = widget_list.bounds
+        sh(f"input swipe {x} {bottom - 12} {x} {top + 12} 400")
+        nodes = dump_ui()
+    else:
+        raise RuntimeError("the synthetic item is missing from the widget")
+    save_ui(report, "tc108-widget")
+
+    sh(f"pm grant {PKG} android.permission.POST_NOTIFICATIONS")
+    set_clock(today.replace(hour=8, minute=1, second=0, microsecond=0))
+    sh(f"am broadcast -n {PKG}/.reminder.ReminderReceiver -a {PKG}.action.REMINDER_ALARM")
+    posted = wait_posted(lambda items: any(PRIVACY_ITEM in n.title for n in doses(items)), 30)
+    if not any(PRIVACY_ITEM in n.title for n in doses(posted)):
+        raise RuntimeError("the synthetic item reminder was not posted")
+    assert_no_private_values("\n".join(f"{n.title}\n{n.text}\n{n.actions}" for n in posted), "notifications")
+    report.note("TC-108 위젯과 알림에 시험 항목 이름이 표시됨. 카드·약 줄 시험 값이 각각 0건")
+    return "홈 위젯 텍스트·접근성 설명과 게시한 알림 제목·본문·동작에서 카드·약 줄 없음"
+
+
+def open_privacy_card():
+    to_home()
+    tap_exact("건강 카드")
+    tap_desc(f"{PRIVACY_PERSON}의 건강 카드")
+    if exact(CARD_SHOW) is None:
+        raise RuntimeError("the synthetic card did not open")
+
+
+def open_condition_editor():
+    width, height = size()
+    for _ in range(4):
+        row = next((n for n in dump_ui() if n.desc == "질환, 가상점검질환"), None)
+        if row is not None:
+            tap(row)
+            if exact("저장") is None:
+                raise RuntimeError("the condition editor did not open")
+            return
+        sh(f"input swipe {width // 2} {height * 4 // 5} {width // 2} {height // 3} 450")
+    raise RuntimeError("the synthetic condition row is missing")
+
+
+def snapshot_in_recents(report, label, previous_id, expected_real):
+    sh("input keyevent KEYCODE_HOME")
+    time.sleep(1)
+    sh("input keyevent KEYCODE_APP_SWITCH")
+    end = time.monotonic() + 15
+    while time.monotonic() < end:
+        dump = sh("dumpsys window -a")
+        candidates = re.findall(r"(?m)^\s*topApp=[^\n]*" + re.escape(PKG) + r"[^\n]*\n\s*snapshot=(.*)$", dump)
+        for snapshot in candidates:
+            snap_id = re.search(r"\bmId=(\d+)", snapshot)
+            real = re.search(r"\bmIsRealSnapshot=(true|false)", snapshot)
+            if not snap_id or not real or snap_id[1] == previous_id:
+                continue
+            report.note(f"TC-108 {label} 최신 스냅샷 `mId={snap_id[1]}`, `mIsRealSnapshot={real[1]}`")
+            report.shot(f"tc108-recents-{label}")
+            if (real[1] == "true") != expected_real:
+                raise RuntimeError(f"unexpected recents snapshot for {label}: {real[1]}")
+            sh(f"am start -n {ACTIVITY}")
+            return snap_id[1]
+        time.sleep(0.5)
+    raise RuntimeError(f"no fresh app snapshot for {label}")
+
+
+def check_card_recents(report):
+    to_home()
+    previous = snapshot_in_recents(report, "record-control", None, expected_real=True)
+    routes = (("011", open_privacy_card), ("012", open_condition_editor), ("013", lambda: tap_exact(CARD_SHOW)),
+              ("014", lambda: tap_exact("응급 대비 문장")), ("015", lambda: tap_exact("내보내기")))
+    for label, open_route in routes:
+        if label in {"012", "013", "014", "015"}:
+            open_privacy_card()
+        open_route()
+        expected = {"011": CARD_SHOW, "012": "저장", "013": NOTICE, "014": "모두 복사", "015": "보내기"}[label]
+        if exact(expected) is None:
+            raise RuntimeError(f"missing UI on SCR-{label}")
+        previous = snapshot_in_recents(report, label, previous, expected_real=False)
+    return "기록 화면은 실제 스냅샷, SCR-011~015 다섯 화면 모두 테마 스냅샷"
+
+
+def check_card_logs(report):
+    since = f"{phone_now()}.000"
+    open_privacy_card()
+    open_condition_editor()
+    privacy_debug("CARD_SAVE_FAULT", "save fault enabled=true", "--ez enabled true")
+    try:
+        tap_exact("저장")
+        if exact("저장하지 못했어요. 다시 눌러 주세요") is None:
+            raise RuntimeError("the forced SQLite write failure did not reach the editor")
+        report.shot("tc108-save-failure")
+    finally:
+        privacy_debug("CARD_SAVE_FAULT", "save fault enabled=false")
+
+    open_privacy_card()
+    tap_exact("응급 대비 문장")
+    tap_exact("모두 복사")
+    if exact("이제 긴급 정보에 붙여 넣어 주세요.") is None:
+        raise RuntimeError("the clipboard success indication is missing")
+    open_privacy_card()
+    tap_exact("내보내기")
+    export_cache = f"{DATA}/cache/card-exports"
+    sh(f"run-as {PKG} touch {export_cache}")
+    try:
+        tap_exact("보내기")
+        if exact("파일을 만들지 못했어요. 휴대폰 저장 공간을 확인해 주세요") is None:
+            raise RuntimeError("the blocked export cache did not cause a write failure")
+        report.shot("tc108-export-failure")
+    finally:
+        sh(f"run-as {PKG} rm -f {export_cache}")
+    send_file()
+    cancel_share()
+    logs = adb("logcat", "-b", "all", "-d", "-T", since, "-v", "brief")
+    if not logs.strip():
+        raise RuntimeError("logcat has no lines in the exercised interval")
+    assert_no_private_values(logs, "logcat", (*PRIVATE_VALUES, PRIVACY_PERSON))
+    if re.search(r"card-exports[/\\]|content://[^\s]+\.card-export/|pillbadeum-card-\d{8}\.(pdf|png)", logs):
+        raise RuntimeError("logcat contains an export file path, URI or name")
+    return "저장 실패, 복사 성공, 내보내기 쓰기 실패·공유 창 성공 구간에서 시험 값·파일 경로·URI·이름 0건"
 
 
 def check_lock_screen_overrides():

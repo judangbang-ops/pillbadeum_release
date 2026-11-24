@@ -16,8 +16,9 @@
 - 기록을 받는 수신기(PRIVATE)가 병합 매니페스트에서 exported="false"가 아님 (REQ-081)
 - 앱 소스의 PendingIntent가 FLAG_IMMUTABLE 없이 만들어짐. 바꿀 수 있어야 하는 것은 MUTABLE_OK에 까닭과 함께 적고,
   인텐트가 이 앱의 클래스를 가리켜야 함 (REQ-081)
-- 앱 소스(androidApp/src/main, shared/src/commonMain·androidMain)의 로그 호출이 이름을 담을 수 있는 값을 글에 넣음
-  (REQ-058, 아래 NAME_WORDS). 이름이 아님을 확인한 값은 SAFE에 까닭과 함께 적음
+- 앱 소스(androidApp/src/main, shared/src/commonMain·androidMain)의 로그 호출이 이름, 기록, 건강 카드·약 줄,
+  클립보드 값이나 내보내기 파일을 담을 수 있음 (REQ-058·106)
+- 위젯·알림 데이터 경로에 카드·약 줄을 읽는 참조가 있음 (REQ-106), 카드 FileProvider가 비공개가 아님
 표준 라이브러리만 씀.
 """
 
@@ -74,11 +75,37 @@ FORBIDDEN = {
 NETWORK = ("com.squareup.okhttp3", "com.squareup.retrofit2", "io.ktor:ktor-client", "com.android.volley")
 
 SOURCES = ("androidApp/src/main", "shared/src/commonMain", "shared/src/androidMain")
-LOG_CALL = re.compile(r"\b(Log\.(?:v|d|i|w|e|wtf)|println|print|printStackTrace)\s*\(")
+LOG_CALL = re.compile(r"\b(Log\.(?:v|d|i|w|e|wtf|println)|println|print|printStackTrace)\s*\(")
 # 이 낱말이 글 속 값의 이름에 들어 있으면 이름(항목·대상자)이나 기록을 담을 수 있다고 봄
 NAME_WORDS = {"name", "names", "nickname", "displayname", "label", "labels", "title", "person", "people", "intake",
               "intakes", "item", "items", "content", "contents", "text", "body", "message", "record", "records",
               "result", "notice", "notices", "dose", "doses", "board", "cell", "cells"}
+CARD_WORDS = {
+    "card", "cards", "medication", "medications", "medicine", "medicines", "drug", "drugs", "qty", "quantity",
+    "condition", "conditions", "diagnosis", "diagnosed", "procedure", "procedures", "performed", "surgery",
+    "allergy", "allergies", "allergen", "substance", "reaction", "implant", "implanted", "hospital", "clinic",
+    "provider", "doctor", "physician", "department", "contact", "contacts", "guardian", "phone", "relation",
+    "emergency", "clipboard", "clip", "export", "document", "filename", "file", "path", "uri", "entry",
+    "entries", "fields", "note", "place",
+}
+# TC-108: Android renderers and the common code that supplies their data. Keep this list in step with the call paths.
+RENDER_SOURCES = (
+    "androidApp/src/main/kotlin/com/judangbang/pillbadeum/widget",
+    "androidApp/src/main/kotlin/com/judangbang/pillbadeum/reminder",
+    "shared/src/commonMain/kotlin/com/judangbang/pillbadeum/status/StatusBoard.kt",
+    "shared/src/commonMain/kotlin/com/judangbang/pillbadeum/usecase/Reminders.kt",
+)
+CARD_READ = re.compile(
+    r"\b(?:loadHealthCard|buildEmergencyText|HealthCard(?:Entity|Summary|Dao)|LoadHealthCard|"
+    r"(?:healthCard|condition|procedureHistory|allergy|implantedDevice|careContact|intakeMedication|medication)Dao|"
+    r"(?:Intake)?Medication(?:Entity|Dao|Fields|Draft)|CardEntryFields|medications|qtyPerTake|"
+    r"(?:FROM|JOIN)\s+[`\"]?(?:health_card|condition|procedure_history|allergy|implanted_device|care_contact|"
+    r"intake_medication|medication))\b",
+    re.IGNORECASE,
+)
+CARD_LOG_SCOPES = {"CardExportStore.kt", "CardDocument.kt", "SaveCardEntry.kt", "DeleteCardEntries.kt",
+                   "LoadHealthCard.kt", "BuildEmergencyText.kt", "CardExportScreen.kt", "EmergencyScreen.kt",
+                   "HealthCardScreen.kt", "CardEditScreen.kt"}
 # 값의 끝이 이것이면 수·종류·번호만 남음
 SAFE_ENDINGS = (".size", ".count()", "::class.simpleName", ".id", ".action")
 # (파일 이름, 값) → 이름이 아닌 까닭. 코드가 바뀌어 값이 달라지면 다시 걸림
@@ -288,18 +315,17 @@ def string_parts(args: str) -> tuple[list[str], list[str]]:
 
 
 def judge(file: str, value: str) -> tuple[bool, str]:
-    """(may hold a name, why not)."""
+    """(may hold private data, reason if explicitly safe)."""
     if (file, value) in SAFE:
         return False, SAFE[(file, value)]
     inner = value[2:-1] if value.startswith("${") else value[1:]
-    if inner.endswith(SAFE_ENDINGS):
-        return False, "수·종류·번호"
     # a class name or a fixed string inside the value is not a name
     code = re.sub(r"::class(\.java)?\.simpleName", "", inner)
     code = re.sub(r'"(?:[^"\\]|\\.)*"', "", code)
-    words = {w.lower() for w in re.findall(r"[A-Za-z]+", re.sub(r"([a-z])([A-Z])", r"\1 \2", code))}
-    hits = words & NAME_WORDS
-    return (True, "") if hits else (False, "")
+    if inner.endswith(SAFE_ENDINGS) and not re.search(r"[+;,?:]", inner):
+        return False, "수·종류·번호"
+    words = set(re.findall(r"[A-Z]+(?=[A-Z][a-z]|\W|$)|[A-Z]?[a-z]+", code))
+    return bool({word.lower() for word in words} & (NAME_WORDS | CARD_WORDS)), ""
 
 
 def log_calls(root: Path):
@@ -313,7 +339,10 @@ def log_calls(root: Path):
                 args = split_args(call_args(src, m.end() - 1))
                 # Log.x(tag, message[, throwable]); println(message); e.printStackTrace() prints a stack trace only
                 if call.startswith("Log."):
-                    message, throwable = (args[1] if len(args) > 1 else ""), len(args) > 2
+                    offset = int(call == "Log.println")
+                    payloads = args[offset:]
+                    message = payloads[1] if len(payloads) > 1 else ""
+                    throwable = len(payloads) > 2 or (len(payloads) == 2 and not string_parts(message)[0])
                 elif call == "printStackTrace":
                     message, throwable = "", True
                 else:
@@ -332,7 +361,7 @@ def log_calls(root: Path):
                 rest = message
                 for lit in literals:
                     rest = rest.replace(lit, " ")
-                rest = re.sub(r"\s+", " ", rest.replace("+", " ")).strip()
+                rest = re.sub(r"\s+", " ", rest).strip(" +")
                 if message and not literals:
                     if (path.name, message) in SAFE:
                         notes.append(f"`{message}`: {SAFE[(path.name, message)]}")
@@ -344,10 +373,35 @@ def log_calls(root: Path):
                         flagged.append(rest)
                     elif why:
                         notes.append(f"`{rest}`: {why}")
+                if call.startswith("Log.") and payloads:
+                    tag = payloads[0]
+                    if tag != "TAG":
+                        tag_literals, tag_values = string_parts(tag)
+                        if (not tag_literals or tag != tag_literals[0] or tag_values):
+                            flagged.append(f"tag={tag}")
+                    if len(payloads) > 2 and judge(path.name, "${" + payloads[2] + "}")[0]:
+                        flagged.append("동적 예외 인자")
+                # Card-specific paths can print sensitive exception messages even with a fixed log string.
+                if path.name in CARD_LOG_SCOPES and throwable:
+                    flagged.append("카드 경로의 예외 출력")
                 rows.append((rel, line, call, message, values, throwable, flagged, notes))
                 if flagged:
-                    bad.append(f"{rel}:{line} {flagged}")
+                    bad.append(f"{rel}:{line} ({call})")
     return rows, bad
+
+
+def renderer_card_reads(root: Path) -> tuple[int, list[str]]:
+    paths = []
+    for scope in RENDER_SOURCES:
+        path = root / scope
+        paths.extend(sorted(path.rglob("*.kt")) if path.is_dir() else [path])
+    bad = []
+    for path in paths:
+        src = path.read_text(encoding="utf-8")
+        for match in CARD_READ.finditer(src):
+            line = src.count("\n", 0, match.start()) + 1
+            bad.append(f"{path.relative_to(root).as_posix()}:{line} ({match.group()})")
+    return len(paths), bad
 
 
 def pending_intents(root: Path):
@@ -387,7 +441,7 @@ def main() -> int:
     sources = merger_sources(data / "manifest-merger-release-report.txt")
     package, perms, exported, own = manifest_facts(data / "merged-manifest-release.xml", sources)
 
-    out.append("### 개인정보 점검 (TASK-031)\n")
+    out.append("### 개인정보 점검 (TASK-031·066)\n")
     out.append(f"릴리즈 변형의 병합 매니페스트(패키지 `{package}`), 병합 보고서, `releaseRuntimeClasspath` 의존성, "
                f"앱 소스의 로그 호출과 PendingIntent를 봄.\n")
 
@@ -418,6 +472,12 @@ def main() -> int:
                 problems.append(f"exported 구성요소가 줄었음: {line}")
     else:
         problems.append(f"{expected_file.relative_to(root)}이 없음. 지금 목록:\n" + "\n".join(sorted(actual)))
+    card_provider = [flag for kind, name, flag in own
+                     if kind == "provider" and name == f"{package}.export.CardExportProvider"]
+    if card_provider != ["false"]:
+        problems.append("카드 FileProvider의 exported=false를 확인하지 못함")
+    else:
+        out.append("\n카드 FileProvider: `exported=false`.")
     out.append("")
 
     out.append("#### 앱의 구성요소와 PendingIntent (REQ-081)\n")
@@ -456,19 +516,27 @@ def main() -> int:
         problems.append("의존성 목록을 읽지 못함")
 
     rows, bad = log_calls(root)
-    out.append("#### 로그 호출 (REQ-058)\n")
-    out.append(f"{', '.join(f'`{s}`' for s in SOURCES)}의 로그 호출 {len(rows)}개. 글에 넣는 값이 이름(항목·대상자)이나 "
-               "기록을 담을 수 있으면 실패로 봄. 예외를 함께 남기는 호출은 '예외' 칸에 표시함.\n")
+    out.append("#### 로그 호출 (REQ-058·106)\n")
+    out.append(f"{', '.join(f'`{s}`' for s in SOURCES)}의 로그 호출 {len(rows)}개. 로그 인자에 이름, 기록, 카드·약 줄, "
+               "클립보드 값이나 내보내기 파일을 담을 수 있으면 실패로 판정함.\n")
     out.append("| 곳 | 호출 | 글 | 넣는 값 | 예외 | 판단 |")
     out.append("| --- | --- | --- | --- | --- | --- |")
     for rel, line, call, text, values, throwable, flagged, notes in rows:
-        verdict = ("**이름일 수 있음**: " + ", ".join(f"`{f}`" for f in flagged)) if flagged else "이름 없음"
+        verdict = "**개인정보 가능성**" if flagged else "점검 통과"
         if notes:
             verdict += " (" + "; ".join(notes) + ")"
-        out.append(f"| `{rel}:{line}` | `{call}` | `{esc(text)[:120]}` | "
-                   f"{esc(', '.join(f'`{v}`' for v in values)) or '-'} | {'있음' if throwable else '-'} | {esc(verdict)} |")
+        message = "-" if flagged else f"`{esc(text)[:120]}`"
+        value_list = "-" if flagged else esc(', '.join(f'`{v}`' for v in values)) or '-'
+        out.append(f"| `{rel}:{line}` | `{call}` | {message} | {value_list} | "
+                   f"{'있음' if throwable else '-'} | {esc(verdict)} |")
     for b in bad:
-        problems.append(f"로그에 이름이 들어갈 수 있음: {b}")
+        problems.append(f"로그에 개인정보가 들어갈 수 있음: {b}")
+    out.append("")
+
+    count, bad = renderer_card_reads(root)
+    out.append("#### 위젯·알림의 카드·약 줄 읽기 (REQ-106)\n")
+    out.append(f"Android 위젯·알림 소스와 공통 데이터 경로 {count}개 파일에서 카드·약 줄 DAO, 타입, 조회 참조를 검사함.")
+    problems.extend(f"위젯·알림 경로에 카드·약 줄 조회 가능성: {finding}" for finding in bad)
     out.append("")
 
     out.append("#### 결과\n")

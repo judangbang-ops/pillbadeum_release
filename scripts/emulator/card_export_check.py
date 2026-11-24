@@ -11,7 +11,7 @@ from pathlib import Path
 from backup_restore_check import ACTIVITY, DATA, DB, PKG, adb, launch_app, sh, tap
 from explore import exact, tap_exact
 from feedback_check import build_fixture
-from screens_check import seek, to_home
+from screens_check import seek, size, to_home
 
 FIXTURE = "org.example.task064.fixture"
 FIXTURE_LABEL = "Card export fixture"
@@ -108,6 +108,8 @@ def seed_rows(con):
 
 
 def open_export(name):
+    if chooser_in_front():
+        sh("input keyevent KEYCODE_BACK")
     to_home()
     tap_exact("건강 카드")
     label = f"{name}의 건강 카드"
@@ -122,11 +124,32 @@ def files_in_cache():
     return {path for path in found.splitlines() if path.startswith(f"{CACHE}/")}
 
 
+def chooser_in_front():
+    focus = sh("dumpsys window | grep mCurrentFocus; dumpsys activity activities | grep -E 'topResumedActivity|mResumedActivity'",
+               check=False)
+    return "ChooserActivity" in focus
+
+
+def tap_share_target():
+    width, height = size()
+    for attempt in range(3):
+        if (target := exact(FIXTURE_LABEL, timeout=2)) is not None:
+            tap(target)
+            return
+        if attempt < 2:
+            # Android 14 initially hides the full list of apps below the Sharesheet fold.
+            sh(f"input swipe {width // 2} {height * 3 // 4} {width // 2} {height // 4} 400")
+    raise RuntimeError("The receiving app was not visible after expanding the system Sharesheet")
+
+
 def send_file(extension="pdf"):
     before = files_in_cache()
     tap_exact("보내기")
-    if exact(FIXTURE_LABEL, timeout=30) is None:
-        raise RuntimeError("The system Sharesheet did not list the disposable receiver")
+    until = time.monotonic() + 15
+    while not chooser_in_front():
+        if time.monotonic() >= until:
+            raise RuntimeError("The system Sharesheet did not open")
+        time.sleep(0.25)
     added = files_in_cache() - before
     if len(added) != 1:
         raise RuntimeError(f"Expected a single new file but got {len(added)}")
@@ -182,7 +205,10 @@ def check_card_export(report, steps):
                 cancel_share()
                 report.shot("tc106-export-share-cancelled")
                 path = send_file()
-                tap_exact(FIXTURE_LABEL)
+                generated = pull_pdf(report, path, "first-person")
+                assert_pdf(generated, 1)
+                first.update(path=path, pdf=generated)
+                tap_share_target()
                 if exact("PDF read=true writeDenied=true attempts=1") is None:
                     raise RuntimeError("The separate receiving app did not read the PDF with a read-only grant")
                 tap_exact("Save in Files")
@@ -192,8 +218,8 @@ def check_card_export(report, steps):
                     raise RuntimeError("The receiver did not write the PDF using system Files")
                 name = Path(path).name
                 downloaded = pull_pdf(report, f"/sdcard/Download/{name}", "saved-in-files")
-                assert_pdf(downloaded, 1)
-                first.update(path=path, pdf=downloaded)
+                if downloaded != generated:
+                    raise RuntimeError("The system Files copy differs from the original export")
                 sh("input keyevent KEYCODE_BACK")
                 return "공유 취소 뒤 미리보기 유지. 별도 앱에 읽기만 허용됐고 시스템 파일 앱에서 한 쪽 PDF 저장"
 
@@ -214,14 +240,20 @@ def check_card_export(report, steps):
             steps("14b. TC-097 같은 날 서로 다른 대상자", "URI에 대응하는 첫 파일의 경로와 내용 유지", separate_paths)
 
             def pagination():
+                problems = []
                 for name, pages, case in ((ONE, 1, "boundary-one"), (TWO, 2, "boundary-two"), (LONG, 3, "single-long-entry")):
                     open_export(name)
-                    if pages > 1 and exact(f"카드가 길어 {pages}쪽이에요. 쪽마다 이름과 쪽 번호가 들어가요") is None:
-                        raise RuntimeError(f"Expected a {pages}-page preview for {case}")
+                    if pages > 1 and exact(f"카드가 길어 {pages}쪽이에요. 쪽마다 이름과 쪽 번호가 들어가요", timeout=2) is None:
+                        problems.append(f"{case}: expected a {pages}-page preview")
                     path = send_file()
-                    assert_pdf(pull_pdf(report, path, case), pages)
+                    try:
+                        assert_pdf(pull_pdf(report, path, case), pages)
+                    except RuntimeError as failure:
+                        problems.append(f"{case}: {failure}")
                     cancel_share()
                     report.shot(f"tc097-{case}")
+                if problems:
+                    raise RuntimeError("; ".join(problems))
                 return "한 줄 차이인 고정 데이터의 PDF 1쪽·2쪽, 긴 칸 하나의 PDF 3쪽"
 
             steps("14c. TC-097 페이지 경계와 긴 칸", "한 줄 차이로 1쪽·2쪽, 한 칸이 길면 이어짐", pagination)
@@ -255,7 +287,7 @@ def check_card_export(report, steps):
             def cold_start():
                 open_export(SHORT)
                 path = send_file()
-                tap_exact(FIXTURE_LABEL)
+                tap_share_target()
                 if exact("PDF read=true writeDenied=true attempts=1") is None:
                     raise RuntimeError("The separate receiver did not read the PDF before the process stopped")
                 pid = sh(f"pidof {PKG}").strip()

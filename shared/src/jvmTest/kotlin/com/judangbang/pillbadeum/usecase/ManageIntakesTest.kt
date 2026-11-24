@@ -7,6 +7,8 @@ import com.judangbang.pillbadeum.domain.ScheduleType
 import com.judangbang.pillbadeum.domain.SlotLabel
 import com.judangbang.pillbadeum.status.DayState
 import com.judangbang.pillbadeum.status.LoadStatusBoard
+import com.judangbang.pillbadeum.status.ReminderLabels
+import com.judangbang.pillbadeum.status.WidgetModel
 import com.judangbang.pillbadeum.testing.DbFixture
 import com.judangbang.pillbadeum.testing.TEST_DEVICE_ID
 import com.judangbang.pillbadeum.testing.seoul
@@ -22,6 +24,7 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
 
 class ManageIntakesTest {
     private val fx = DbFixture()
@@ -56,11 +59,11 @@ class ManageIntakesTest {
     @Test
     fun create_writes_intake_and_first_schedule_version() = runTest {
         val saved = assertIs<SaveIntakeResult.Saved>(
-            saveIntake.create(IntakeDraft(me(), "  아침약 ", widgetAlias = " ", slotLabel = SlotLabel.MORNING)),
+            saveIntake.create(IntakeDraft(me(), "  아침약 ", widgetAlias = "", slotLabel = SlotLabel.MORNING)),
         )
         val intake = fx.db.intakeDao().findById(saved.intakeId)!!
         assertEquals("아침약", intake.name)
-        assertNull(intake.widgetAlias, "blank alias is stored as null")
+        assertNull(intake.widgetAlias, "empty alias is stored as null")
         assertEquals(SlotLabel.MORNING, intake.slotLabel)
         assertEquals(TEST_DEVICE_ID, intake.deviceId)
         assertTrue(Regex("^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$").matches(intake.id))
@@ -101,6 +104,68 @@ class ManageIntakesTest {
             saveIntake.create(IntakeDraft("no-such-person", "아침약")),
         )
         assertTrue(fx.db.intakeDao().listActive().isEmpty())
+    }
+
+    @Test
+    fun tc119_create_accepts_30_code_points_after_trimming() = runTest {
+        val name = "가".repeat(29) + "💊"
+        val alias = "별".repeat(29) + "💊"
+        val draft = IntakeDraft(me(), "  $name  ", widgetAlias = "\t$alias ")
+        val id = assertIs<SaveIntakeResult.Saved>(saveIntake.create(draft)).intakeId
+        val row = assertNotNull(fx.db.intakeDao().findById(id))
+        assertEquals(name, row.name)
+        assertEquals(alias, row.widgetAlias)
+    }
+
+    @Test
+    fun tc119_create_and_update_reject_invalid_names_without_writing() = runTest {
+        val draft = IntakeDraft(me(), "가상 항목", widgetAlias = "가상 별칭")
+        val id = assertIs<SaveIntakeResult.Saved>(saveIntake.create(draft)).intakeId
+        val before = fx.db.intakeDao().findById(id)
+        val long = "가".repeat(30) + "💊"
+        val badDrafts = listOf(
+            draft.copy(name = long) to SaveIntakeResult.Invalid.NAME_LIMIT,
+            draft.copy(widgetAlias = long) to SaveIntakeResult.Invalid.NAME_LIMIT,
+            draft.copy(name = " \t ") to SaveIntakeResult.Invalid.BLANK_NAME,
+            draft.copy(widgetAlias = " \t ") to SaveIntakeResult.Invalid.BLANK_ALIAS,
+        )
+        for ((input, reason) in badDrafts) {
+            assertEquals(SaveIntakeResult.Invalid(reason), saveIntake.create(input))
+            assertEquals(SaveIntakeResult.Invalid(reason), saveIntake.update(id, input))
+        }
+        assertEquals(before, fx.db.intakeDao().listActive().single())
+    }
+
+    @Test
+    fun tc119_update_preserves_each_unchanged_legacy_name_and_uses_it_for_display() = runTest {
+        val person = me()
+        val id = assertIs<SaveIntakeResult.Saved>(saveIntake.create(IntakeDraft(person, "가상 항목"))).intakeId
+        val oldName = "가".repeat(40)
+        val oldAlias = "별".repeat(40)
+        fx.db.intakeDao().updateDetails(id, person, oldName, oldAlias, null, 0L)
+        val draft = IntakeDraft(person, oldName, widgetAlias = oldAlias, rule = ScheduleRule.Weekly(DayOfWeek.MONDAY))
+
+        assertIs<SaveIntakeResult.Saved>(saveIntake.update(id, draft))
+        val status = board()
+        assertEquals(oldName, status.items.single().name)
+        assertEquals(oldAlias, WidgetModel.from(status, TimeZone.of("Asia/Seoul")).buttons.single().title)
+        assertEquals("$oldAlias 먹어~!", ReminderLabels.title(status.items.single()))
+
+        assertEquals(
+            SaveIntakeResult.Invalid(SaveIntakeResult.Invalid.NAME_LIMIT),
+            saveIntake.update(id, draft.copy(widgetAlias = oldAlias.dropLast(1))),
+        )
+        val shorterAlias = draft.copy(widgetAlias = "별".repeat(30))
+        val shorterName = draft.copy(name = "가".repeat(30))
+        for (edited in listOf(shorterAlias, shorterName)) {
+            assertIs<SaveIntakeResult.Saved>(saveIntake.update(id, draft))
+            assertIs<SaveIntakeResult.Saved>(saveIntake.update(id, edited))
+            val row = assertNotNull(fx.db.intakeDao().findById(id))
+            assertEquals(edited.name, row.name)
+            assertEquals(edited.widgetAlias, row.widgetAlias)
+            // Restore the old row directly for the other independent edit.
+            fx.db.intakeDao().updateDetails(id, person, oldName, oldAlias, null, 0L)
+        }
     }
 
     @Test

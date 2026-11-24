@@ -320,8 +320,13 @@ def check_card_export(report, steps):
                 tap_exact("Read shared PDF")
                 if exact("PDF read=true writeDenied=true attempts=2") is None or path not in files_in_cache():
                     raise RuntimeError("Opening the file provider alone removed the previous export")
+                provider_pid = sh(f"pidof {PKG}").strip()
+                if not provider_pid.isdecimal() or provider_pid == pid:
+                    raise RuntimeError("The file read did not start a new provider process")
                 report.shot("tc097-provider-cold-read")
-                sh(f"am start -n {ACTIVITY}")
+                # NEW_TASK | CLEAR_TASK discards the remaining receiver task so Android creates MainActivity.
+                # It does not force-stop the process that the provider just started.
+                sh(f"am start -W -f 0x10008000 -n {ACTIVITY}")
                 if exact("지난 기록", timeout=20) is None:
                     raise RuntimeError("The app did not reopen after the provider-only read")
                 until = time.monotonic() + 5

@@ -14,14 +14,18 @@ import com.judangbang.pillbadeum.domain.ScheduleSpan
 import com.judangbang.pillbadeum.domain.SlotLabel
 import com.judangbang.pillbadeum.domain.cellHolding
 import com.judangbang.pillbadeum.status.JudgeLoad
+import com.judangbang.pillbadeum.usecase.CardEntryFields
 import com.judangbang.pillbadeum.usecase.IntakeDraft
+import com.judangbang.pillbadeum.usecase.IntakeMedicationDraft
 import com.judangbang.pillbadeum.usecase.PersonChange
 import com.judangbang.pillbadeum.usecase.PersonColors
+import com.judangbang.pillbadeum.usecase.SaveCardEntryResult
 import com.judangbang.pillbadeum.usecase.SaveIntakeResult
 import com.judangbang.pillbadeum.usecase.SaveReminderResult
 import com.judangbang.pillbadeum.usecase.SaveReminderSettingsResult
 import com.judangbang.pillbadeum.usecase.WindowWriteResult
 import kotlin.time.Duration.Companion.minutes
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Instant
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DayOfWeek
@@ -55,6 +59,7 @@ import kotlinx.datetime.toInstant
  *   judgment into the cell of that item holding that local time (base zone), the way SCR-007 records a past day from
  *   SCR-008 (`[먹은 시각 고르기]` at that time, or `[건너뜀]`; supplement P-1~P-4). The store screenshots
  *   (`scripts/emulator/store_shots.py`, TASK-037) fill a month of history with it. Result data: `recorded <count>`.
+ * - `SEED_CARD_SHOW`: fixed synthetic person, medication and allergy for TC-095 and TC-109. Result data: `card seeded`.
  *
  * The commands are in the scripts (an XML or KDoc comment cannot hold every character of them).
  */
@@ -64,9 +69,16 @@ class ReminderSeedReceiver : BroadcastReceiver() {
         context.container.appScope.launch {
             val result = try {
                 handle(context, intent)
+            } catch (e: CancellationException) {
+                pending.finish()
+                throw e
             } catch (e: Exception) {
-                Log.e(TAG, "debug seed failed (${intent.action})", e)
-                "failed ${e.javaClass.simpleName}: ${e.message}"
+                if (intent.action == ACTION_SEED_CARD_SHOW) {
+                    "card seed failed"
+                } else {
+                    Log.e(TAG, "debug seed failed (${intent.action})", e)
+                    "failed ${e.javaClass.simpleName}: ${e.message}"
+                }
             }
             Log.i(TAG, result)
             pending.resultData = result
@@ -92,10 +104,25 @@ class ReminderSeedReceiver : BroadcastReceiver() {
             }
             ACTION_SETTINGS -> settings(core, intent)
             ACTION_RECORD -> record(core, intent)
+            ACTION_SEED_CARD_SHOW -> seedCardShow(core)
             else -> return "unknown action ${intent.action}"
         }
         context.container.afterWrite()
         return result
+    }
+
+    private suspend fun seedCardShow(core: DidITakeCore): String {
+        val person = core.people.add("가상 엄마", PersonColors.PALETTE[0])
+        val intake = IntakeDraft(
+            personId = person.id,
+            name = "가상 아침약",
+            slotLabel = SlotLabel.MORNING,
+            medications = listOf(IntakeMedicationDraft("가상정 10mg", "1정")),
+        )
+        check(core.saveIntake.create(intake) is SaveIntakeResult.Saved)
+        val allergy = CardEntryFields.Allergy("가상 알레르기", "가상 반응")
+        check(core.saveCardEntry.add(person.id, core.saveCardEntry.newEntryId(), allergy) is SaveCardEntryResult.Saved)
+        return "card seeded"
     }
 
     private suspend fun seed(core: DidITakeCore, intent: Intent): String {
@@ -196,5 +223,6 @@ class ReminderSeedReceiver : BroadcastReceiver() {
         const val ACTION_ARCHIVE_PERSON = "com.judangbang.pillbadeum.debug.ARCHIVE_PERSON"
         const val ACTION_SETTINGS = "com.judangbang.pillbadeum.debug.SETTINGS"
         const val ACTION_RECORD = "com.judangbang.pillbadeum.debug.RECORD"
+        const val ACTION_SEED_CARD_SHOW = "com.judangbang.pillbadeum.debug.SEED_CARD_SHOW"
     }
 }

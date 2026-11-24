@@ -19,12 +19,14 @@ COMPONENT = f"{FIXTURE}/.FeedbackReceiver"
 TAG = "TASK065Fixture"
 
 
-def build_fixture(out: Path) -> Path:
+def build_fixture(
+    out: Path, source_name: str = "feedback_fixture", activity: str = "org.example.task065.fixture.FeedbackReceiver"
+) -> Path:
     sdk = Path(os.environ.get("ANDROID_HOME") or os.environ["ANDROID_SDK_ROOT"])
     android_jar = sdk / "platforms/android-36/android.jar"
     tools = sdk / "build-tools/36.0.0"
-    source = Path(__file__).with_name("feedback_fixture")
-    unsigned, aligned, signed = (out / name for name in ("unsigned.apk", "aligned.apk", "feedback-test.apk"))
+    source = Path(__file__).with_name(source_name)
+    unsigned, aligned, signed = (out / name for name in ("unsigned.apk", "aligned.apk", "fixture.apk"))
     key = out / "fixture.p12"
 
     def run(*args):
@@ -36,9 +38,9 @@ def build_fixture(out: Path) -> Path:
         run(str(tools / name), *args)
 
     run("javac", "--release", "11", "-encoding", "UTF-8", "-classpath", android_jar,
-        "-d", out, source / "FeedbackReceiver.java")
+        "-d", out, source / (activity.rsplit(".", 1)[-1] + ".java"))
     tool("d8", "--min-api", "26", "--lib", android_jar, "--output", out,
-         out / "org/example/task065/fixture/FeedbackReceiver.class")
+         out / (activity.replace(".", "/") + ".class"))
     tool("aapt2", "link", "-I", android_jar, "--manifest", source / "AndroidManifest.xml", "-o", unsigned)
     with ZipFile(unsigned, "a") as archive:
         archive.write(out / "classes.dex", "classes.dex")

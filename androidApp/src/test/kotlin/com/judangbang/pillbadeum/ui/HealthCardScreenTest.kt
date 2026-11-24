@@ -33,6 +33,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextReplacement
+import androidx.core.content.FileProvider
 import androidx.test.core.app.ApplicationProvider
 import com.judangbang.pillbadeum.AndroidPhone
 import com.judangbang.pillbadeum.DidITakeCore
@@ -53,12 +54,14 @@ import com.judangbang.pillbadeum.usecase.RecordResult
 import com.judangbang.pillbadeum.usecase.SaveCardEntryResult
 import com.judangbang.pillbadeum.usecase.SaveIntakeResult
 import java.io.IOException
+import java.io.File
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -569,6 +572,11 @@ class HealthCardScreenTest {
         val first = exportPage("$personName · 1/2쪽")
         val second = exportPage("$personName · 2/2쪽")
         assertTrue(bounds(second).top > bounds(first).bottom)
+        for (page in listOf(first, second)) {
+            val header = page.fetchSemanticsNode().config[SemanticsProperties.ContentDescription].single().lines()
+            assertTrue(header[1].startsWith(Labels.CARD_DISCLAIMER))
+            assertEquals("마지막으로 고친 날 2026-11-23 · 만든 날 2026-11-23", header[2])
+        }
         assertTrue(second.fetchSemanticsNode().config[SemanticsProperties.ContentDescription].single().contains("보호자 연락처"))
         render("ExportPages")
         val firstSize = bounds(first).size
@@ -669,6 +677,22 @@ class HealthCardScreenTest {
         }
         updated.assertIsDisplayed()
         text("파일 이름: pillbadeum-card-20261123.png (대상자 이름은 넣지 않아요)").assertIsDisplayed()
+    }
+
+    @Test
+    fun tc097_provider_does_not_share_files_outside_its_cache_directory() {
+        val authority = "${app.packageName}.card-export"
+        val provider = checkNotNull(app.packageManager.resolveContentProvider(authority, 0))
+        assertFalse(provider.exported)
+        assertTrue(provider.grantUriPermissions)
+        val unrelated = File.createTempFile("fixture", ".pdf", app.cacheDir)
+        try {
+            assertThrows(IllegalArgumentException::class.java) {
+                FileProvider.getUriForFile(app, authority, unrelated)
+            }
+        } finally {
+            unrelated.delete()
+        }
     }
 
     private fun exportPage(header: String) =

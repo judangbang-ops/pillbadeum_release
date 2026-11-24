@@ -4,7 +4,6 @@ import android.Manifest
 import android.app.NotificationManager
 import android.content.Intent
 import android.os.Bundle
-import android.net.Uri
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -43,9 +42,10 @@ import com.judangbang.pillbadeum.data.SettingEntity
 import com.judangbang.pillbadeum.data.SettingKeys
 import com.judangbang.pillbadeum.domain.DoseSource
 import com.judangbang.pillbadeum.domain.SlotLabel
-import com.judangbang.pillbadeum.export.AndroidCardExporter
+import com.judangbang.pillbadeum.export.CardDocument
 import com.judangbang.pillbadeum.status.Labels
 import com.judangbang.pillbadeum.usecase.CardEntryFields
+import com.judangbang.pillbadeum.usecase.HealthCardSummary
 import com.judangbang.pillbadeum.usecase.IntakeDraft
 import com.judangbang.pillbadeum.usecase.IntakeMedicationDraft
 import com.judangbang.pillbadeum.usecase.PersonColors
@@ -56,7 +56,10 @@ import com.judangbang.pillbadeum.usecase.SaveIntakeResult
 import java.io.IOException
 import java.io.File
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
+import kotlinx.datetime.LocalDate
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -601,19 +604,13 @@ class HealthCardScreenTest {
         waitFor("파일 이름: pillbadeum-card-20261123.png (대상자 이름은 넣지 않아요)")
         val send = text("보내기")
         val sendAction = send.fetchSemanticsNode().config[SemanticsActions.OnClick].action!!
-        send.performClick()
-        compose.waitUntil("The share chooser opens", 10_000) { activity.shareIntents.isNotEmpty() }
+        send.assertIsEnabled().performClick()
+        compose.waitUntil("The share chooser opens", 10_000) { activity.sharedPreviews.isNotEmpty() }
         send.assertIsNotEnabled()
         compose.runOnIdle { sendAction() }
-        val chooser = activity.shareIntents.single()
-        assertEquals(Intent.ACTION_CHOOSER, chooser.action)
-        val share = checkNotNull(chooser.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java))
-        assertEquals(Intent.ACTION_SEND, share.action)
-        assertEquals("image/png", share.type)
-        val uri = share.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
-        assertEquals(uri, share.clipData?.getItemAt(0)?.uri)
-        assertEquals(Intent.FLAG_GRANT_READ_URI_PERMISSION, share.flags)
-        assertEquals("pillbadeum-card-20261123.png", uri?.lastPathSegment)
+        val shared = activity.sharedPreviews.single()
+        assertEquals(CardExportFormat.PNG, shared.format)
+        assertEquals("pillbadeum-card-20261123.png", shared.filename)
         assertEquals(listOf(false), activity.recentsEnabled)
 
         compose.runOnIdle { activity.cancelCardShare() }
@@ -638,7 +635,7 @@ class HealthCardScreenTest {
         text("사진(PNG)").performClick()
         waitFor("사진이 너무 길어요. PDF로 보내 주세요")
         text("보내기").assertIsNotEnabled()
-        assertTrue(controller.get().shareIntents.isEmpty())
+        assertTrue(controller.get().sharedPreviews.isEmpty())
         text("PDF").performClick()
         waitUntilGone("사진이 너무 길어요. PDF로 보내 주세요")
         compose.waitUntil(10_000) { compose.onAllNodesWithText("카드가 길어", substring = true).fetchSemanticsNodes().isNotEmpty() }
@@ -659,13 +656,13 @@ class HealthCardScreenTest {
         send.performClick()
         val error = "파일을 만들지 못했어요. 휴대폰 저장 공간을 확인해 주세요"
         waitFor(error)
-        assertTrue(activity.shareIntents.isEmpty())
+        assertTrue(activity.sharedPreviews.isEmpty())
         send.assertIsEnabled()
         exportPage(personName).assertIsDisplayed()
 
         activity.failCardShare = false
         send.performClick()
-        compose.waitUntil(10_000) { activity.shareIntents.size == 1 }
+        compose.waitUntil(10_000) { activity.sharedPreviews.size == 1 }
         activity.cancelCardShare()
         waitUntilGone(error)
         controller.pause()
@@ -856,7 +853,7 @@ class HealthCardScreenTest {
 /** Installs the real App and Android privacy effect, opening the card without the TASK-061 entry point. */
 class CardTestActivity : ComponentActivity() {
     val recentsEnabled = mutableListOf<Boolean>()
-    val shareIntents = mutableListOf<Intent>()
+    val sharedPreviews = mutableListOf<CardExportPreview>()
     var failCardShare = false
     private var chooserResult = CompletableDeferred<Unit>()
     val firstOpenGate = CompletableDeferred<Unit>()
@@ -867,10 +864,17 @@ class CardTestActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val container = (application as TestApp).container
         val phone = AndroidPhone(this) {}
-        val exporter = AndroidCardExporter(container.cardExports) { chooser ->
-            if (failCardShare) throw IOException("fixture: share unavailable")
-            shareIntents.add(chooser)
-            chooserResult.await()
+        // Draw the actual document. The CI emulator exercises file creation and the system Sharesheet.
+        val exporter = object : CardExporter {
+            override suspend fun prepare(card: HealthCardSummary, madeOn: LocalDate, format: CardExportFormat) =
+                withContext(Dispatchers.Default) { CardDocument.prepare(card, madeOn, format) }
+
+            override suspend fun share(preview: CardExportPreview, onChooserOpening: () -> Unit) {
+                if (failCardShare) throw IOException("fixture: share unavailable")
+                onChooserOpening()
+                sharedPreviews.add(preview)
+                chooserResult.await()
+            }
         }
         setContent {
             App(

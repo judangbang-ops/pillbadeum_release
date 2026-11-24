@@ -498,6 +498,7 @@ object Labels {
 
     /** SCR-006#error: the name is empty (09 ItemFormError). */
     const val NAME_REQUIRED: String = "이름을 입력해 주세요"
+    const val INTAKE_NAME_LIMIT: String = "30자까지 적을 수 있어요"
 
     /** The mark on an app tile whose judgment has an open clock warning; the warning band above says more (SCR-004#future). */
     const val CLOCK_MARK: String = "! 시계 확인"

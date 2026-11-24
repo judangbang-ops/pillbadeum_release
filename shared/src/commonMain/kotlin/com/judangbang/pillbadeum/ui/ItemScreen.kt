@@ -21,11 +21,14 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,6 +47,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -70,6 +74,8 @@ import com.judangbang.pillbadeum.usecase.IntakeDraft
 import com.judangbang.pillbadeum.usecase.IntakeMedicationDraft
 import com.judangbang.pillbadeum.usecase.PersonColors
 import com.judangbang.pillbadeum.usecase.ReminderChoice
+import com.judangbang.pillbadeum.usecase.codePointCount
+import com.judangbang.pillbadeum.usecase.limitCodePointInput
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
 
@@ -125,6 +131,7 @@ internal fun ItemScreen(
     var medicationToFocus by remember { mutableStateOf<Int?>(null) }
     var confirmArchive by rememberSaveable { mutableStateOf(false) }
     var reminderOn by rememberSaveable { mutableStateOf(editing?.reminder?.enabled ?: false) }
+    var revealReminderStart by remember { mutableStateOf(false) }
     // `HH:MM` picked by hand; null follows the slot's default.
     var startPicked by rememberSaveable {
         mutableStateOf(editing?.let { e -> e.reminder?.start?.takeIf { it != defaultReminderStart(e.slotLabel) } }?.toString())
@@ -139,14 +146,14 @@ internal fun ItemScreen(
 
     fun save() {
         val pid = chosen?.id ?: return
-        nameError = name.isBlank()
+        nameError = name != editing?.name && name.isBlank()
         medicationErrors = medicationRows.filter { it.draft.name.isBlank() }.map { it.key }.toIntArray()
         if (nameError || medicationErrors.isNotEmpty()) return
         onSave(
             IntakeDraft(
                 personId = pid,
                 name = name,
-                widgetAlias = alias,
+                widgetAlias = if (alias == editing?.widgetAlias) alias else alias.takeUnless(String::isBlank),
                 rule = rule,
                 slotLabel = slot,
                 reminder = ReminderChoice(reminderOn, start),
@@ -168,14 +175,14 @@ internal fun ItemScreen(
                     .padding(start = Ui.Side, end = Ui.Side, top = 4.dp, bottom = 8.dp),
             ) {
                 message?.let { Band(it, Modifier.padding(bottom = 16.dp), live = true) }
-                Field(
+                IntakeNameField(
                     label = "항목 이름",
                     value = name,
                     onChange = { name = it; nameError = false },
                     placeholder = "예: 아침약",
                     error = if (nameError) Labels.NAME_REQUIRED else null,
                 )
-                Field(
+                IntakeNameField(
                     label = "위젯·알림에 보일 이름",
                     optional = true,
                     value = alias,
@@ -260,10 +267,12 @@ internal fun ItemScreen(
                 )
                 ReminderPart(
                     on = reminderOn,
+                    revealStart = revealReminderStart,
                     note = if (weekly) Labels.reminderWeekly(anchor) else null,
                     start = start,
                     notificationsOff = access?.notifications == false,
                     onSwitch = { on ->
+                        revealReminderStart = on
                         reminderOn = on
                         if (on) reminders.switchedOn()
                     },
@@ -306,6 +315,7 @@ internal fun ItemScreen(
 @Composable
 private fun ReminderPart(
     on: Boolean,
+    revealStart: Boolean,
     note: String?,
     start: LocalTime,
     notificationsOff: Boolean,
@@ -316,7 +326,17 @@ private fun ReminderPart(
     Column(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
         SwitchRow(Labels.REMINDER_SWITCH, note, on, line = !on, onChange = onSwitch)
         if (on) {
-            Box(Modifier.row().padding(horizontal = 4.dp, vertical = 8.dp), contentAlignment = Alignment.CenterStart) {
+            val requester = remember { BringIntoViewRequester() }
+            var placed by remember { mutableStateOf(false) }
+            if (revealStart && placed) {
+                LaunchedEffect(requester) { requester.bringIntoView() }
+            }
+            // BUG-008: reveal the whole row, including the label when EndOrBelow stacks the button.
+            Box(
+                Modifier.row().bringIntoViewRequester(requester).onPlaced { placed = true }
+                    .padding(horizontal = 4.dp, vertical = 8.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
                 EndOrBelow(
                     start = { Words(Labels.REMINDER_START, Ui.type(16, lineHeight = 1.25f), Modifier.hiddenFromTalkBack()) },
                     end = {
@@ -353,6 +373,37 @@ internal fun ItemFormNote(text: String, modifier: Modifier = Modifier) {
     Words(text, Ui.type(14, color = Ui.Muted), modifier.padding(top = 2.dp))
 }
 
+/** SPEC-003/023: enforce the limit only on input changes, so an existing long value can still be displayed and saved. */
+@Composable
+private fun IntakeNameField(
+    label: String,
+    value: String,
+    onChange: (String) -> Unit,
+    placeholder: String,
+    optional: Boolean = false,
+    note: String? = null,
+    error: String? = null,
+) {
+    val limit = IntakeDraft.MAX_NAME_CHARACTERS
+    val count = value.trim().codePointCount()
+    var clipped by rememberSaveable { mutableStateOf(false) }
+    Field(
+        label = label,
+        value = value,
+        onChange = { input ->
+            val limited = input.limitCodePointInput(limit)
+            clipped = limited.trim() != input.trim()
+            onChange(limited)
+        },
+        placeholder = placeholder,
+        optional = optional,
+        note = note,
+        error = error,
+        limitNote = Labels.INTAKE_NAME_LIMIT.takeIf { clipped },
+        counter = "$count/$limit".takeIf { count * 10 >= limit * 9 },
+    )
+}
+
 /** A text field (box.css `.in`): 1.5 dp border, 2 dp ink while focused, 2 dp danger with [error] under it. */
 @Composable
 internal fun Field(
@@ -371,6 +422,7 @@ internal fun Field(
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     singleLine: Boolean = true,
     counter: String? = null,
+    limitNote: String? = null,
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(gap)) {
         FieldLabel(label, optional, labelStyle)
@@ -387,6 +439,7 @@ internal fun Field(
         error?.let {
             Words(it, Ui.type(14, Ui.SemiBold, Ui.Danger), Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         }
+        limitNote?.let { ItemFormNote(it) }
         note?.let { ItemFormNote(it) }
         counter?.let { Words(it, Ui.type(14, color = Ui.Muted), Modifier.align(Alignment.End)) }
     }

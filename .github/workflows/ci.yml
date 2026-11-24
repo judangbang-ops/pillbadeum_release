@@ -116,6 +116,16 @@ jobs:
           path: ~/.m2/repository/org/robolectric/android-all-instrumented
           key: ${{ runner.os }}-ci-robolectric-sdk-v2-${{ steps.robolectric-sdk-key.outputs.key }}
 
+      - name: Robolectric API 35 단독 캐시 복원
+        if: >-
+          ${{ !cancelled() && steps.robolectric-sdk-cache.outcome == 'success' &&
+            steps.robolectric-sdk-cache.outputs.cache-hit != 'true' &&
+            steps.robolectric-sdk-key.outputs.api35_key != '' }}
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ~/.m2/repository/org/robolectric/android-all-instrumented
+          key: ${{ runner.os }}-ci-robolectric-sdk-v2-${{ steps.robolectric-sdk-key.outputs.api35_key }}
+
       - name: Robolectric Android SDK 검증 및 다운로드
         id: robolectric-sdk-prepare
         if: ${{ !cancelled() && steps.robolectric-sdk-key.outcome == 'success' }}

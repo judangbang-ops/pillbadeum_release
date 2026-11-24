@@ -54,16 +54,23 @@ def prepare_sdk(sdk: int, artifact_version: str, checksum: str) -> None:
         print(f"SDK {sdk}: downloading {url} with retries enabled", flush=True)
         with tempfile.TemporaryDirectory(dir=directory) as staging:
             download = Path(staging) / jar_name
-            subprocess.run(
+            transfer = subprocess.run(
                 [
-                    "curl", "--fail", "--silent", "--show-error",
-                    "--retry", "5", "--retry-all-errors", "--retry-max-time", "240",
+                    "curl", "--disable", "--fail", "--no-progress-meter",
+                    "--retry", "5", "--retry-all-errors", "--retry-max-time", "600",
                     "--connect-timeout", "20", "--max-time", "120",
                     "--output", str(download),
-                    "--write-out", "HTTP %{http_code}, retries: %{num_retries}\n", url,
+                    "--write-out", "%{http_code} %{num_retries} %header{retry-after}", url,
                 ],
-                check=True,
+                stdout=subprocess.PIPE,
+                text=True,
             )
+            status, _, retry_summary = transfer.stdout.strip().partition(" ")
+            retries, _, retry_after = retry_summary.partition(" ")
+            print(f"SDK {sdk}: HTTP {status}, retries: {retries}, Retry-After: {retry_after or '-'}", flush=True)
+            # curl can report an HTTP error even when its process exit status is zero.
+            if transfer.returncode != 0 or status != "200":
+                raise SystemExit(f"SDK {sdk}: download failed, HTTP {status} (curl exit {transfer.returncode})")
             if not matches_checksum(download, checksum):
                 raise SystemExit(f"SDK {sdk}: SHA-512 mismatch for {jar_name}")
             download.replace(jar)
@@ -110,8 +117,9 @@ def main() -> None:
 
     robolectric_version = versions["robolectric"]
     artifacts = SDK_ARTIFACTS.get(robolectric_version, {})
+    known_selection = bool(sdk_numbers) and not complex_selection and sdk_numbers.issubset(artifacts)
     if args.prepare:
-        if complex_selection or not sdk_numbers or not sdk_numbers.issubset(artifacts):
+        if not known_selection:
             # Keep Robolectric's regular resolver for SDK selections we cannot prefetch safely.
             print(f"Robolectric {robolectric_version}, SDKs {sorted(sdk_numbers)}: using its regular resolver")
             return
@@ -132,7 +140,10 @@ def main() -> None:
         key += f"-{digest.hexdigest()}"
 
     print(f"key={key}")
-    print(f"required_jars={len(sdk_numbers) if not complex_selection and sdk_numbers.issubset(artifacts) else 0}")
+    print(f"required_jars={len(sdk_numbers) if known_selection else 0}")
+    if known_selection and 35 in sdk_numbers and len(sdk_numbers) > 1:
+        # Reuse the existing main cache for API 35 when the full SDK set is new.
+        print(f"api35_key={robolectric_version}-sdk-35")
 
 
 if __name__ == "__main__":

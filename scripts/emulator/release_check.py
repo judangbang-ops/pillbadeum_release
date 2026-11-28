@@ -596,7 +596,9 @@ def run_flow(apk: Path, next_apk: Path, r: Report) -> None:
     # Disposable-emulator investigation only: 12 independently recorded backup/reinstall cycles.
     # Stop on first loss so that later cycles cannot hide a missing record.
     for iteration in range(1, 2):
-        launch_app()
+        # Preserve the original first-cycle state: do not relaunch the app after the widget tap.
+        if iteration > 1:
+            launch_app()
         before = read_state()
         previous_id = before.settings.get("device_id")
         before_ok = r.check(f"cycle {iteration:02d} before backup", "one record and matching install marker",

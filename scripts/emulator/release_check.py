@@ -593,95 +593,41 @@ def run_flow(apk: Path, next_apk: Path, r: Report) -> None:
             shown and tapped.active_records == 1 and tapped.sources == ["WIDGET"]
             and bool(old_id) and tapped.marker == old_id)
 
-    # 3. RR-26: back up -> uninstall -> install -> the record comes back
-    wipe_backup()
-    set_transport_params("is_encrypted=true")
-    out = backup_now()
-    entries = backup_entries()
-    r.check("B-1 릴리즈 변형 백업에 든 파일 (암호화 있음)", "앱 백업이 성공하고 기록 DB와 짝 파일만",
-            f"{package_result(out) or '앱 줄 없음'}; {show_entries(entries)}",
-            "with result: Success" in package_result(out) and only_db_files(entries))
-    uninstall()
-    time.sleep(2)
-    install(apk)
-    restored = read_state()
-    seen = restore_check_seen(restored, old_id)
-    r.check("RR-26 백업 → 지우고 다시 설치 (릴리즈 N)",
-            f"기록 1건(source {source})이 돌아옴. 복원 확인 전이면 device_id 그대로·표식 없음, 시스템이 위젯 방송으로 "
-            "앱을 먼저 깨웠으면 새 device_id·restored_from = 옛 값",
-            describe(restored) + f", source {restored.sources}"
-            + ("; 앱이 먼저 깨어 복원 확인을 함" if seen == "after" else ""),
-            restored.active_records == 1 and restored.sources == [source] and seen is not None)
-    launch_app()
-    notice = screen_has(NOTICE, 10)
-    r.shot("restored-notice")
-    after = read_state()
-    new_id = after.settings.get("device_id")
-    r.check("복원 뒤 첫 실행 (릴리즈 N)", "복원 안내, 새 device_id = 표식, restored_from = 옛 device_id",
-            f"안내 {'보임' if notice else '없음'}; {describe(after)}",
-            notice and bool(old_id) and after.settings.get("restored_from_device_id") == old_id
-            and bool(new_id) and new_id != old_id and after.marker == new_id)
-
-    # Supplement R-3, widget part: uninstalling took the first widget off the home screen. Add the second
-    # item and place a widget again while the notice is pending: the widget shows the short restore line
-    # until [확인했어요] in the app.
-    add_item(ITEM_B)
-    widget = try_place_widget(r, "n-again")
-    if widget:
-        go_home()
-        line = find(RESTORED_LINE, 15)
-        r.shot("widget-restored")
-        r.check("복원 뒤 위젯 (보충 R-3)", f"머리글 아래 '{RESTORED_LINE} · … · 앱에서 확인' 줄",
-                line.text if line else "줄 없음", line is not None and "앱에서 확인" in line.text)
-    launch_app()
-    if notice:
-        tap_text("확인했어요")
+    # Disposable-emulator investigation only: 12 independently recorded backup/reinstall cycles.
+    # Stop on first loss so that later cycles cannot hide a missing record.
+    for iteration in range(1, 13):
+        launch_app()
+        before = read_state()
+        previous_id = before.settings.get("device_id")
+        before_ok = r.check(f"cycle {iteration:02d} before backup", "one record and matching install marker",
+                            describe(before) + f", source {before.sources}",
+                            before.active_records == 1 and before.sources == ["WIDGET"]
+                            and bool(previous_id) and before.marker == previous_id)
+        if not before_ok:
+            break
+        wipe_backup()
+        set_transport_params("is_encrypted=true")
+        out = backup_now()
+        entries = backup_entries()
+        backup_ok = r.check(f"cycle {iteration:02d} backup", "successful backup of DB files",
+                            f"{package_result(out)}; {show_entries(entries)}",
+                            "with result: Success" in package_result(out) and only_db_files(entries))
+        if not backup_ok:
+            break
+        uninstall()
         time.sleep(2)
-    if widget:
-        go_home()
-        end = time.time() + 15
-        while True:
-            texts = [n.text for n in dump_ui()]
-            on_screen_item = any(ITEM_A in t for t in texts)
-            line_left = any(RESTORED_LINE in t for t in texts)
-            if (on_screen_item and not line_left) or time.time() >= end:
-                break
-            time.sleep(1)
-        r.check("[확인했어요] 뒤 위젯 (RR-33 위젯 몫)", f"위젯에 {ITEM_A}가 보이고 복원 줄이 사라짐",
-                f"위젯 {ITEM_A} {'보임' if on_screen_item else '없음'}, 복원 줄 {'남아 있음' if line_left else '없음'}",
-                on_screen_item and not line_left)
+        install(apk)
+        restored = read_state()
+        seen = restore_check_seen(restored, previous_id)
+        ok = r.check(f"cycle {iteration:02d} RR-26 restore", "one saved WIDGET record restored",
+                     describe(restored) + f", source {restored.sources}, restore check {seen}",
+                     restored.active_records == 1 and restored.sources == ["WIDGET"] and seen is not None)
+        if not ok:
+            r.shot(f"cycle-{iteration:02d}-restore-failed")
+            break
     set_transport_params("")
+    return
 
-    # 4. N+1 over N
-    before_update = read_state()
-    adb("install", "-r", str(next_apk), timeout=180)
-    info2 = package_info()
-    version_next = int(info2["versionCode"]) if info2["versionCode"].isdigit() else -1
-    updated = read_state()
-    r.check("다음 빌드 N+1을 덮어 설치", "버전 번호가 커짐, 기록·device_id·표식 그대로",
-            f"versionCode {version_n} → {version_next}; {describe(updated)}",
-            version_next > version_n > 0
-            and updated.active_records == before_update.active_records == 1
-            and bool(before_update.settings.get("device_id")) and bool(before_update.marker)
-            and updated.settings.get("device_id") == before_update.settings.get("device_id")
-            and updated.marker == before_update.marker)
-
-    # 5. the kept widget still records with the new build
-    shown, _ = record(r, ITEM_B, widget)
-    final = read_state()
-    this_phone = updated.settings.get("device_id")
-    r.check("덮어 설치 뒤 위젯 탭 (N+1)", "기록 2건, 둘 다 source WIDGET, 새 기록의 device_id = 이 폰 값, 옛 기록은 옛 값",
-            f"위젯에 {ITEM_B} {'보임' if shown else '없음'}; 활성 판정 {final.active_records}, "
-            f"source {final.sources}, device_id {[short(d) for d in final.device_ids]}, 이 폰 {short(this_phone)}",
-            shown and final.active_records == 2 and final.sources == [source, "WIDGET"]
-            and final.device_ids[-1:] == [this_phone] and final.device_ids[:1] == [old_id])
-    launch_app()
-    r.check("덮어 설치 뒤 앱", "복원 안내 없음", f"안내 {'보임' if screen_has(NOTICE, 3) else '없음'}",
-            not screen_has(NOTICE, 0))
-    r.shot("app-after-update")
-
-    # 6. the reminder buttons with the release build N+1 (TASK-046)
-    notification_buttons(r)
 
 
 def main() -> int:

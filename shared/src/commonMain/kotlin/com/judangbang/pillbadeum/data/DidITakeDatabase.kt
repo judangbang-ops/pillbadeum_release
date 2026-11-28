@@ -23,9 +23,15 @@ import kotlinx.coroutines.IO
         ReminderRuleEntity::class,
         ReminderSnoozeEntity::class,
         ClockFlagEntity::class,
+        HealthCardEntity::class,
+        ConditionEntity::class,
+        ProcedureHistoryEntity::class,
+        AllergyEntity::class,
+        ImplantedDeviceEntity::class,
+        CareContactEntity::class,
     ],
     // Every version bump adds a Migration in Migrations.kt and a test in MigrationTest (REQ-072).
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 @ConstructedBy(DidITakeDatabaseConstructor::class)
@@ -38,6 +44,14 @@ abstract class DidITakeDatabase : RoomDatabase() {
     abstract fun intakePurgeDao(): IntakePurgeDao
     abstract fun clockFlagDao(): ClockFlagDao
     abstract fun reminderDao(): ReminderDao
+    abstract fun medicationDao(): MedicationDao
+    abstract fun intakeMedicationDao(): IntakeMedicationDao
+    abstract fun healthCardDao(): HealthCardDao
+    abstract fun conditionDao(): ConditionDao
+    abstract fun procedureHistoryDao(): ProcedureHistoryDao
+    abstract fun allergyDao(): AllergyDao
+    abstract fun implantedDeviceDao(): ImplantedDeviceDao
+    abstract fun careContactDao(): CareContactDao
 
     companion object {
         const val FILE_NAME: String = "diditake.db"

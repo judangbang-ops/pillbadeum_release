@@ -401,20 +401,13 @@ def add_reminder_item(name: str) -> str:
     """App home > [항목 추가] > name > [알림 받기] on > [저장], as a person makes an item with reminders (TASK-023).
     The daily item keeps the form's time of day, whose first reminder is 08:00 (supplement N-3). Notifications are
     already allowed, so the switch asks nothing. Returns how the form reads the first reminder (`첫 알림 시각, 8시`)."""
-    from explore import tap_scrolled, type_into  # explore imports this file (module note)
+    from explore import tap_scrolled, type_item_name  # explore imports this file (module note)
 
     launch_app()
     tap_scrolled("항목 추가")
-    type_into("약 이름", name)
+    type_item_name(name)
     tap(seek_node(lambda n: n.desc == REMINDER_SWITCH, f"[{REMINDER_SWITCH}] of {name}"))
-    start = None
-    end = time.time() + 10
-    while start is None and time.time() < end:
-        start = next((n for n in dump_ui() if n.desc.startswith(f"{REMINDER_START}, ")), None)
-        if start is None:
-            time.sleep(1)
-    if start is None:
-        raise RuntimeError(f"no '{REMINDER_START}' after [{REMINDER_SWITCH}] of {name}")
+    start = seek_node(lambda n: n.desc.startswith(f"{REMINDER_START}, "), f"[{REMINDER_START}] of {name}")
     save = find_exact("저장", 10)
     if save is None:
         raise RuntimeError(f"no [저장] on the form of {name}")

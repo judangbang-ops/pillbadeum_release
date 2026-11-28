@@ -1,14 +1,12 @@
--- 필받음 1차 데이터베이스 (CORTHEX 05 ERD)
+-- 필받음 2차 첫 릴리즈 데이터베이스 (CORTHEX 05 ERD)
 --
--- 원본: Room이 내보낸 스키마 shared/schemas/com.judangbang.pillbadeum.data.DidITakeDatabase/2.json
---       (엔터티는 shared/src/commonMain/kotlin/com/judangbang/pillbadeum/data/Entities.kt).
+-- 원본: Room이 내보낸 스키마 shared/schemas/com.judangbang.pillbadeum.data.DidITakeDatabase/3.json
+--       (엔터티는 shared/src/commonMain/kotlin/com/judangbang/pillbadeum/data/의 Entities.kt와 HealthCardEntities.kt).
 -- 이 파일은 그 JSON의 CREATE 문을 한 글자도 바꾸지 않고 옮기고 표마다 TBL 번호와 주석을 붙인 것.
 -- .github/scripts/check_docs.py가 두 쪽이 같은지 봄. 스키마를 바꾸면 엔터티 → Room 내보내기 → 이 파일 순서로 고침.
 -- SQLite. 시각은 모두 UTC 밀리초 INTEGER, id는 UUID TEXT. created_at·updated_at·version·device_id는 행마다 둠(2차 동기화 대비).
--- 이주(migration): Migrations.kt의 MIGRATION_1_2, 시험은 shared/src/jvmTest/.../data/MigrationTest.kt.
--- 새 설치는 Room이 이 스키마(2.json)를 바로 만듦. 1 → 2 이주 뒤 스키마가 2.json과 같은지는 MigrationTest가 확인.
--- 2차 첫 릴리즈의 스키마 3(건강 카드 표 여섯, 약 줄)은 docs/05-erd/README.md 8장의 설계. Room 3.json이 생기는 개발 작업에서
---   이 파일에 그 CREATE 문과 TBL-012~017 주석을 옮김. 그 전까지 이 파일의 CREATE 문은 2.json 그대로.
+-- 이주: Migrations.kt의 MIGRATION_1_2와 MIGRATION_2_3. 시험은 shared/src/jvmTest/.../data/MigrationTest.kt.
+-- 새 설치는 Room이 스키마 3을 바로 만듦. 기존 대상자의 카드 시각을 채우는 규칙은 docs/05-erd/README.md 8.5절.
 --
 -- without a table: TERM-001 (계정 없음), TERM-006 (창: 주기·창 설정으로 계산), TERM-007 (dose_record.period_key),
 --   TERM-009·TERM-010 (dose_record.kind 값), TERM-011 (미완료: 활성 판정이 없는 창, 계산), TERM-013 (늦은 입력: taken_at),
@@ -16,9 +14,7 @@
 --   TERM-025 (위젯: Android 위젯과 Glance 상태 파일), TERM-026 (고른 대상자: 위젯마다 Glance 상태에 둘 것, 백업 제외, 아직 없음),
 --   TERM-027 (기기 표식: noBackupFilesDir의 install_marker 파일), TERM-028 (복원: 사건), TERM-029 (복원 안내: setting restore_notice_*),
 --   TERM-031 (빠짐: 계산),
---   TERM-032·TERM-035·TERM-036·TERM-037·TERM-038·TERM-039·TERM-040 (건강 카드와 칸: 스키마 3의 health_card·condition·procedure_history·allergy·
---     implanted_device·care_contact, docs/05-erd/README.md 8장. Room 3.json을 만드는 작업에서 표 주석으로 옮기고 이 줄에서 뺌),
---   TERM-041 (카드 요약: 읽기 모델, 계산), TERM-042 (응급 대비 문장: 계산, 복사 시각은 스키마 3의 health_card),
+--   TERM-041 (카드 요약: 읽기 모델, 계산), TERM-042 (응급 대비 문장: 계산, 복사 시각은 health_card),
 --   TERM-043 (내보내기 파일: 앱 캐시 파일, 백업 밖), TERM-044 (의견 보내기: 메일 앱에 맡김)
 
 
@@ -94,3 +90,40 @@ CREATE INDEX IF NOT EXISTS `ix_intake_medication_medication` ON `intake_medicati
 --   2차: 약 용량의 버전. 1차 앱은 읽지도 쓰지도 않음(빈 표).
 CREATE TABLE IF NOT EXISTS `dose_version` (`id` TEXT NOT NULL, `medication_id` TEXT NOT NULL, `dose_text` TEXT NOT NULL, `effective_from` INTEGER NOT NULL, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `version` INTEGER NOT NULL, `device_id` TEXT NOT NULL, `archived_at` INTEGER, PRIMARY KEY(`id`), FOREIGN KEY(`medication_id`) REFERENCES `medication`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION );
 CREATE INDEX IF NOT EXISTS `ix_dose_version_medication_from` ON `dose_version` (`medication_id`, `effective_from`);
+
+-- TBL-012 health_card (CTX-006) ← SPEC-045, SPEC-046, SPEC-047, SPEC-048, SPEC-049, SPEC-051, SPEC-054, SPEC-055 | terms: TERM-032
+--   대상자 한 명의 건강 카드에 딸린 시각. 칸은 종류마다 아래 표 다섯에 둠.
+--   edited_at: 카드 고친 시각(SPEC-049). 마지막으로 고친 날짜(REQ-103)가 읽고, 낡은 문장 안내(REQ-110)는 문구를 고를 때만 읽음.
+--   emergency_copied_at: 안내가 없을 때 응급 대비 문장을 복사한 때(SPEC-051). 안내가 보이는 동안의 복사는 쓰지 않음.
+--   stale_notice_closed_at: 낡은 문장 안내를 닫은 상태(SPEC-055). 있으면 닫힘, 비면 emergency_copied_at이 있을 때 안내가 보임(ERD 8.4 4).
+--   rule (CTX-006, DB가 막음): 대상자 하나에 카드 하나 = PRIMARY KEY person_id.
+--   rule (코드): 행은 edited_at이나 복사 시각을 처음 쓸 때 만듦(edited_at은 그때). 카드를 모두 지워도(SPEC-047) 이 행은 남김. 행이 없으면 빈 카드.
+CREATE TABLE IF NOT EXISTS `health_card` (`person_id` TEXT NOT NULL, `edited_at` INTEGER NOT NULL, `emergency_copied_at` INTEGER, `stale_notice_closed_at` INTEGER, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `version` INTEGER NOT NULL, `device_id` TEXT NOT NULL, PRIMARY KEY(`person_id`), FOREIGN KEY(`person_id`) REFERENCES `person`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION );
+
+-- TBL-013 condition (CTX-006) ← SPEC-045, SPEC-046, SPEC-047, SPEC-049 | terms: TERM-035
+--   질환 칸 하나. name은 꼭 적고 나머지는 비워도 됨(SPEC-045). diagnosed_on은 아는 만큼의 날짜(8.4 1).
+--   code_system·code: 질병 분류 코드 자리, 2차 첫 릴리즈는 늘 비움. source: 적은 곳, 2차 첫 릴리즈는 늘 USER.
+CREATE TABLE IF NOT EXISTS `condition` (`id` TEXT NOT NULL, `person_id` TEXT NOT NULL, `name` TEXT NOT NULL, `diagnosed_on` TEXT, `note` TEXT, `code_system` TEXT, `code` TEXT, `source` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `version` INTEGER NOT NULL, `device_id` TEXT NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`person_id`) REFERENCES `person`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION );
+CREATE INDEX IF NOT EXISTS `ix_condition_person` ON `condition` (`person_id`);
+
+-- TBL-014 procedure_history (CTX-006) ← SPEC-045, SPEC-046, SPEC-047, SPEC-049 | terms: TERM-036
+--   수술·시술 칸 하나. name은 꼭 적음. performed_on은 아는 만큼의 날짜, place는 받은 의료기관. code_system·code·source는 TBL-013과 같음.
+CREATE TABLE IF NOT EXISTS `procedure_history` (`id` TEXT NOT NULL, `person_id` TEXT NOT NULL, `name` TEXT NOT NULL, `performed_on` TEXT, `place` TEXT, `code_system` TEXT, `code` TEXT, `source` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `version` INTEGER NOT NULL, `device_id` TEXT NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`person_id`) REFERENCES `person`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION );
+CREATE INDEX IF NOT EXISTS `ix_procedure_history_person` ON `procedure_history` (`person_id`);
+
+-- TBL-015 allergy (CTX-006) ← SPEC-045, SPEC-046, SPEC-047, SPEC-049 | terms: TERM-037
+--   알레르기 칸 하나. substance(원인)는 꼭 적고 reaction(반응)은 비워도 됨. code_system·code·source는 TBL-013과 같음.
+CREATE TABLE IF NOT EXISTS `allergy` (`id` TEXT NOT NULL, `person_id` TEXT NOT NULL, `substance` TEXT NOT NULL, `reaction` TEXT, `code_system` TEXT, `code` TEXT, `source` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `version` INTEGER NOT NULL, `device_id` TEXT NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`person_id`) REFERENCES `person`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION );
+CREATE INDEX IF NOT EXISTS `ix_allergy_person` ON `allergy` (`person_id`);
+
+-- TBL-016 implanted_device (CTX-006) ← SPEC-045, SPEC-046, SPEC-047, SPEC-049 | terms: TERM-038
+--   이식형 의료기기 칸 하나. name은 꼭 적음. implanted_on은 넣은 때(아는 만큼의 날짜). code_system·code·source는 TBL-013과 같음.
+CREATE TABLE IF NOT EXISTS `implanted_device` (`id` TEXT NOT NULL, `person_id` TEXT NOT NULL, `name` TEXT NOT NULL, `implanted_on` TEXT, `note` TEXT, `code_system` TEXT, `code` TEXT, `source` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `version` INTEGER NOT NULL, `device_id` TEXT NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`person_id`) REFERENCES `person`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION );
+CREATE INDEX IF NOT EXISTS `ix_implanted_device_person` ON `implanted_device` (`person_id`);
+
+-- TBL-017 care_contact (CTX-006) ← SPEC-045, SPEC-046, SPEC-047, SPEC-049 | terms: TERM-039, TERM-040
+--   의료기관·담당 의사 칸(kind CARE_PROVIDER) 또는 보호자 연락처 칸(kind GUARDIAN) 하나. name은 기관 이름이나 보호자 이름이고 꼭 적음.
+--   CARE_PROVIDER는 department(진료과)·doctor(담당 의사)·phone, GUARDIAN은 relation(관계)·phone을 씀. 쓰지 않는 열은 비움.
+--   rule (코드): GUARDIAN은 phone도 꼭 적음(SPEC-045). phone은 적은 글 그대로이고 형식을 따지지 않음.
+CREATE TABLE IF NOT EXISTS `care_contact` (`id` TEXT NOT NULL, `person_id` TEXT NOT NULL, `kind` TEXT NOT NULL, `name` TEXT NOT NULL, `department` TEXT, `doctor` TEXT, `relation` TEXT, `phone` TEXT, `source` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `version` INTEGER NOT NULL, `device_id` TEXT NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`person_id`) REFERENCES `person`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION );
+CREATE INDEX IF NOT EXISTS `ix_care_contact_person_kind` ON `care_contact` (`person_id`, `kind`);

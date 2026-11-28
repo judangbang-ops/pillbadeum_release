@@ -2,6 +2,7 @@ package com.judangbang.pillbadeum.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -17,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -32,10 +34,15 @@ import com.judangbang.pillbadeum.status.PeopleView
 import com.judangbang.pillbadeum.status.SettingsView
 import com.judangbang.pillbadeum.status.StatusBoard
 import com.judangbang.pillbadeum.status.showsPeople
+import com.judangbang.pillbadeum.usecase.CardEntry
+import com.judangbang.pillbadeum.usecase.CardEntryKind
 import com.judangbang.pillbadeum.usecase.ClockFlagResult
 import com.judangbang.pillbadeum.usecase.DeleteIntakeResult
+import com.judangbang.pillbadeum.usecase.IntakeMedicationDraft
 import com.judangbang.pillbadeum.usecase.PersonChange
 import com.judangbang.pillbadeum.usecase.RecordResult
+import com.judangbang.pillbadeum.usecase.HealthCardSummary
+import com.judangbang.pillbadeum.usecase.SaveCardEntryResult
 import com.judangbang.pillbadeum.usecase.SaveIntakeResult
 import com.judangbang.pillbadeum.usecase.SaveReminderSettingsResult
 import com.judangbang.pillbadeum.usecase.SaveSettingsResult
@@ -55,7 +62,8 @@ import kotlinx.datetime.TimeZone
 /**
  * The app's screens, one at a time (07 sitemap). [key] is what is saved when the screen is recreated (BUG-003).
  * [back] is where system back goes (REQ-094, SPEC-021): every screen to the first, the people screen to settings and its
- * person form to the people screen (TASK-021), SCR-007 opened from SCR-008 back to that month (TASK-019), the intro's
+ * person form to the people screen (TASK-021), SCR-007 opened from SCR-008 back to that month (TASK-019), SCR-011 back to
+ * the screen that opened it: the first screen, the people screen or the person form (SPEC-054, TASK-061), the intro's
  * second page to its first (TASK-022), and null on the first screen and on the intro's first page, where back closes the
  * app.
  */
@@ -70,9 +78,9 @@ internal sealed interface Route {
     }
 
     /** SCR-006; [intakeId] null adds a new item. */
-    data class Item(val intakeId: String?) : Route {
-        override val key get() = "item:${intakeId ?: ""}"
-        override val back: Route get() = Home
+    data class Item(val intakeId: String?, val from: Route = Home) : Route {
+        override val key get() = "item:${intakeId ?: ""}" + if (from == Home) "" else "@${from.key}"
+        override val back: Route get() = from
     }
 
     /**
@@ -108,6 +116,36 @@ internal sealed interface Route {
         override val back: Route get() = People
     }
 
+    /** SCR-011~015 suppress the Android recent-apps snapshot while visible. */
+    sealed interface HealthCardRoute : Route
+
+    data class HealthCard(val personId: String, val from: Route = Home) : HealthCardRoute {
+        override val key get() = "card:$personId" + if (from == Home) "" else "@${from.key}"
+        override val back get() = from
+    }
+
+    /** SCR-013. Save the route, never the contents of the card. */
+    data class CardShow(override val back: HealthCard) : HealthCardRoute {
+        override val key get() = "card-show@${back.key}"
+    }
+
+    data class CardEditor(
+        val kind: CardEntryKind,
+        val entryId: String,
+        val editing: Boolean,
+        override val back: HealthCard,
+    ) : HealthCardRoute {
+        override val key get() = "card-entry:${kind.name}:$entryId:$editing@${back.key}"
+    }
+
+    data class Emergency(override val back: HealthCard) : HealthCardRoute {
+        override val key get() = "card-emergency@${back.key}"
+    }
+
+    data class CardExport(override val back: HealthCard) : HealthCardRoute {
+        override val key get() = "card-export@${back.key}"
+    }
+
     /**
      * SCR-005, the first-run intro on its [page] (0 or 1, TASK-022). Back on the first page closes the app without
      * finishing the intro, so the next start shows it again (Claude's choice).
@@ -120,9 +158,22 @@ internal sealed interface Route {
     companion object {
         fun parse(key: String): Route {
             if ('@' in key) {
-                val from = parse(key.substringAfter('@')) as? History
-                return when (val route = parse(key.substringBefore('@'))) {
-                    is Judge -> route.copy(from = from)
+                val from = parse(key.substringAfter('@'))
+                val requested = key.substringBefore('@')
+                if (requested == "card-show" && from is HealthCard) return CardShow(from)
+                if (requested == "card-emergency" && from is HealthCard) return Emergency(from)
+                if (requested == "card-export" && from is HealthCard) return CardExport(from)
+                if (requested.startsWith("card-entry:") && from is HealthCard) {
+                    val parts = requested.split(':')
+                    val kind = CardEntryKind.entries.firstOrNull { it.name == parts.getOrNull(1) }
+                    val id = parts.getOrNull(2)?.takeIf(String::isNotEmpty)
+                    val editing = parts.getOrNull(3)?.toBooleanStrictOrNull()
+                    return if (kind != null && id != null && editing != null) CardEditor(kind, id, editing, from) else from
+                }
+                return when (val route = parse(requested)) {
+                    is Item -> route.copy(from = from)
+                    is Judge -> route.copy(from = from as? History)
+                    is HealthCard -> route.copy(from = from)
                     else -> route
                 }
             }
@@ -136,6 +187,7 @@ internal sealed interface Route {
                 "settings" -> Settings
                 "people" -> People
                 "person" -> Person(parts.getOrNull(1)?.takeIf { it.isNotEmpty() })
+                "card" -> parts.getOrNull(1)?.takeIf(String::isNotEmpty)?.let { HealthCard(it) } ?: Home
                 "welcome" -> Welcome((parts.getOrNull(1)?.toIntOrNull() ?: 0).coerceIn(0, WELCOME_PAGES - 1))
                 else -> Home
             }
@@ -157,6 +209,10 @@ internal sealed interface Route {
  * @param homeRequests bump to show the first screen (a notification or the widget opened the app, R3 memo); the intro
  *   stays until it is finished.
  * @param backHandler the platform's system back: called with whether back stays in the app, and what it does.
+ * @param initialHealthCardPersonId starts directly at SCR-011 for app tests. The app itself opens the card from SCR-004's
+ *   `[건강 카드]` and from SCR-010 (TASK-061).
+ * @param protectCardRecents applies the platform's recents privacy setting while a health card screen is shown.
+ * @param keepCardShowAwake keeps the platform screen on while the SCR-013 summary is displayed in the foreground.
  */
 @Composable
 fun App(
@@ -167,6 +223,10 @@ fun App(
     refreshKey: Int = 0,
     homeRequests: Int = 0,
     backHandler: @Composable (enabled: Boolean, onBack: () -> Unit) -> Unit = { _, _ -> },
+    initialHealthCardPersonId: String? = null,
+    protectCardRecents: @Composable (visible: Boolean) -> Unit = {},
+    keepCardShowAwake: @Composable () -> Unit = {},
+    cardExporter: CardExporter? = null,
 ) {
     val scope = rememberCoroutineScope()
     var core by remember { mutableStateOf<DidITakeCore?>(null) }
@@ -176,7 +236,12 @@ fun App(
     var retries by remember { mutableIntStateOf(0) }
     var message by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
-    var route by rememberSaveable(stateSaver = Route.Saver) { mutableStateOf<Route>(Route.Home) }
+    var route by rememberSaveable(stateSaver = Route.Saver) {
+        mutableStateOf<Route>(initialHealthCardPersonId?.let { Route.HealthCard(it) } ?: Route.Home)
+    }
+    var cardEntrySeed by remember { mutableStateOf<CardEntry?>(null) }
+    var cardShowSeed by remember { mutableStateOf<HealthCardSummary?>(null) }
+    var emergencySeed by remember { mutableStateOf<HealthCardSummary?>(null) }
     // Counts the reads, so a screen with data of its own (SCR-007, SCR-008) reads it again after every read of the board.
     var reads by remember { mutableIntStateOf(0) }
     // SCR-008 (TASK-019): the last month read, with the screen it was read for, and where its list was. Both stay while
@@ -195,6 +260,7 @@ fun App(
     var peopleView by remember { mutableStateOf<PeopleView?>(null) }
     var peopleFailed by remember { mutableStateOf(false) }
     var peopleAttempts by remember { mutableIntStateOf(0) }
+    val personFormState = rememberSaveableStateHolder()
     // SCR-005 (TASK-022): closed in this activity, by [시작하기] or [건너뛰기]. It does not come back here even when saving
     // that failed or the database was not open yet; the next start shows it again then.
     var introClosed by rememberSaveable { mutableStateOf(false) }
@@ -268,7 +334,15 @@ fun App(
     }
 
     fun go(to: Route) {
+        val from = route
+        if (from is Route.Person && (to !is Route.HealthCard || to.from != from)) {
+            personFormState.removeState(from.key)
+        }
+        if (from == Route.People && to is Route.Person) personFormState.removeState(to.key)
         message = null
+        cardEntrySeed = null
+        cardShowSeed = null
+        emergencySeed = null
         route = to
     }
 
@@ -351,6 +425,7 @@ fun App(
         reloadOrFail()
     }
     backHandler(route.back != null) { route.back?.let(::go) }
+    protectCardRecents(route is Route.HealthCardRoute)
 
     Box(Modifier.fillMaxSize().background(Ui.Surface).safeDrawingPadding().imePadding()) {
         when (val current = route) {
@@ -367,6 +442,7 @@ fun App(
 
             Route.Home -> {
                 LaunchedEffect(refreshKey) { access = phone.reminderAccess() }
+                var cardRequested by rememberSaveable { mutableStateOf(false) }
                 HomeScreen(
                     state = when {
                         failed -> HomeState.Failed
@@ -385,8 +461,9 @@ fun App(
                             board?.baseDate?.let { today -> openHistory(Route.History(LocalDate(today.year, today.month, 1), null)) }
                         },
                         settings = { openSettings() },
-                        add = { go(Route.Item(null)) },
-                        edit = { go(Route.Item(it.intakeId)) },
+                        card = { if (!busy) cardRequested = true },
+                        add = { go(Route.Item(null, from = current)) },
+                        edit = { go(Route.Item(it.intakeId, from = current)) },
                         more = { go(Route.Judge(it.intakeId, it.scheduleVersionId, it.window.periodKey)) },
                         record = { item ->
                             write { c ->
@@ -443,6 +520,224 @@ fun App(
                         openAccess = ::openAccess,
                     ),
                 )
+                val c = core
+                if (cardRequested && c != null) {
+                    HomeCardPicker(
+                        core = c,
+                        onOpen = { personId ->
+                            cardRequested = false
+                            go(Route.HealthCard(personId, from = current))
+                        },
+                        onDismiss = { cardRequested = false },
+                        onFailure = {
+                            cardRequested = false
+                            message = Labels.CARD_LOAD_FAILED
+                        },
+                    )
+                }
+            }
+
+            is Route.HealthCard -> key(current.key) {
+                var card by remember { mutableStateOf<HealthCardSummary?>(null) }
+                var cardFailed by remember { mutableStateOf(false) }
+                var attempts by remember { mutableIntStateOf(0) }
+                LaunchedEffect(core, reads, attempts) {
+                    val c = core ?: return@LaunchedEffect
+                    try {
+                        card = c.loadHealthCard(current.personId)
+                        cardFailed = card == null
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        cardFailed = true
+                    }
+                }
+                HealthCardScreen(
+                    card = card,
+                    personName = people.find { it.id == current.personId }?.name,
+                    failed = cardFailed || (core == null && failed),
+                    busy = busy,
+                    message = message,
+                    actions = HealthCardActions(
+                        onClose = { go(current.back) },
+                        onRetry = {
+                            cardFailed = false
+                            if (core == null) { failed = false; retries++ } else attempts++
+                        },
+                        onShow = {
+                            card?.takeIf { it.canShowOrExport() }?.let { summary ->
+                                go(Route.CardShow(current))
+                                cardShowSeed = summary
+                            }
+                        },
+                        onEmergency = {
+                            val summary = card
+                            if (summary != null && summary.canOpenEmergencyText()) {
+                                go(Route.Emergency(current))
+                                emergencySeed = summary
+                            }
+                        },
+                        onExport = {
+                            if (cardExporter != null && card?.canShowOrExport() == true) go(Route.CardExport(current))
+                        },
+                        onDismissNotice = {
+                            write(Labels.CARD_NOTICE_ACTION_FAILED) { c ->
+                                c.healthCardNoticeActions.closeNotice(current.personId)
+                                message = null
+                                attempts++
+                            }
+                        },
+                        onAdd = { kind ->
+                            core?.let { go(Route.CardEditor(kind, it.saveCardEntry.newEntryId(), editing = false, back = current)) }
+                        },
+                        onEdit = { entry ->
+                            go(Route.CardEditor(entry.fields.kind, entry.id, editing = true, back = current))
+                            cardEntrySeed = entry
+                        },
+                        onItem = { intakeId -> go(Route.Item(intakeId, from = current)) },
+                        onDelete = { entry ->
+                            write(Labels.CARD_DELETE_FAILED) { c ->
+                                if (entry == null) {
+                                    c.deleteCardEntries.all(current.personId, confirmed = true)
+                                } else {
+                                    c.deleteCardEntries.one(current.personId, entry.fields.kind, entry.id, confirmed = true)
+                                }
+                                message = null
+                                attempts++
+                            }
+                        },
+                    ),
+                )
+            }
+
+            is Route.CardExport -> key(current.key) {
+                CardExportScreen(
+                    core = core,
+                    personId = current.back.personId,
+                    exporter = cardExporter,
+                    refreshKey = refreshKey,
+                    openFailed = core == null && failed,
+                    onRetryOpen = { failed = false; retries++ },
+                    onClose = { go(current.back) },
+                )
+            }
+
+            is Route.CardShow -> key(current.key) {
+                var card by remember { mutableStateOf(cardShowSeed) }
+                val openedAt = remember { refreshKey.takeIf { cardShowSeed != null } }
+                LaunchedEffect(core, refreshKey, failed && core == null) {
+                    val c = core
+                    if (c == null && !failed) return@LaunchedEffect
+                    if (refreshKey == openedAt) return@LaunchedEffect
+                    val summary = try {
+                        c?.loadHealthCard(current.back.personId)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        null
+                    }
+                    // Left meanwhile (닫기, a notification or the widget): the result must not take the user back here.
+                    if (route != current) return@LaunchedEffect
+                    when {
+                        summary == null -> {
+                            go(current.back)
+                            message = Labels.CARD_LOAD_FAILED
+                        }
+                        !summary.canShowOrExport() -> go(current.back)
+                        else -> card = summary
+                    }
+                }
+                if (card != null) keepCardShowAwake()
+                CardShowScreen(
+                    card = card,
+                    personName = people.find { it.id == current.back.personId }?.name,
+                    onClose = { go(current.back) },
+                )
+            }
+
+            is Route.Emergency -> key(current.key) {
+                EmergencyRoute(
+                    core = core,
+                    personId = current.back.personId,
+                    personName = people.find { it.id == current.back.personId }?.name,
+                    seed = emergencySeed,
+                    refreshKey = refreshKey,
+                    openFailed = core == null && failed,
+                    phone = phone,
+                    onRetryOpen = { failed = false; retries++ },
+                    onClose = { go(current.back) },
+                )
+            }
+
+            is Route.CardEditor -> key(current.key) {
+                var entry by remember { mutableStateOf(cardEntrySeed?.takeIf { it.id == current.entryId }) }
+                var entryFailed by remember { mutableStateOf(false) }
+                var attempts by remember { mutableIntStateOf(0) }
+                var invalid by remember { mutableStateOf<SaveCardEntryResult.Invalid?>(null) }
+                fun gone() {
+                    go(current.back)
+                    message = Labels.CARD_ENTRY_GONE
+                }
+                LaunchedEffect(core, attempts) {
+                    val c = core ?: return@LaunchedEffect
+                    if (!current.editing || entry != null) return@LaunchedEffect
+                    try {
+                        entry = c.loadHealthCard(current.back.personId)?.entries?.find {
+                            it.id == current.entryId && it.fields.kind == current.kind
+                        }
+                        if (entry == null) gone()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        entryFailed = true
+                    }
+                }
+                val waiting = core == null || (current.editing && entry == null)
+                if (waiting || entryFailed) {
+                    Column(Modifier.fillMaxSize()) {
+                        TopBar(
+                            cardEditorTitle(current.kind, current.editing),
+                            navigation = { BarIconButton("닫기", true) { go(current.back) } },
+                        )
+                        Column(Modifier.padding(horizontal = Ui.Side, vertical = 8.dp)) {
+                            if (entryFailed || (core == null && failed)) {
+                                CardReadFailed {
+                                    entryFailed = false
+                                    if (core == null) { failed = false; retries++ } else attempts++
+                                }
+                            } else CardLoading(sections = 3)
+                        }
+                    }
+                } else {
+                    CardEntryScreen(
+                        kind = current.kind,
+                        initial = entry?.fields,
+                        busy = busy,
+                        message = message,
+                        invalid = invalid,
+                        onChange = { field -> if (invalid?.field == field) invalid = null },
+                        onClose = { go(current.back) },
+                        onSave = { fields ->
+                            write(Labels.CARD_SAVE_FAILED) { c ->
+                                val result = if (current.editing) {
+                                    c.saveCardEntry.edit(current.back.personId, current.entryId, fields)
+                                } else {
+                                    c.saveCardEntry.add(current.back.personId, current.entryId, fields)
+                                }
+                                if (route == current) {
+                                    message = null
+                                    invalid = null
+                                    when (result) {
+                                        is SaveCardEntryResult.Saved -> go(current.back)
+                                        is SaveCardEntryResult.Invalid -> invalid = result
+                                        SaveCardEntryResult.LimitReached -> message = Labels.CARD_ENTRY_LIMIT
+                                        SaveCardEntryResult.Gone -> gone()
+                                    }
+                                }
+                            }
+                        },
+                    )
+                }
             }
 
             is Route.Item -> key(current.key) {
@@ -452,18 +747,51 @@ fun App(
                 var asking by remember { mutableStateOf(false) }
                 // SCR-006#quiet (REQ-077): what quiet hours take from the reminder just saved, said before going back.
                 var quiet by rememberSaveable { mutableStateOf<String?>(null) }
+                var medications by remember {
+                    mutableStateOf<List<IntakeMedicationDraft>?>(if (current.intakeId == null) emptyList() else null)
+                }
+                var medicationReadFailed by remember { mutableStateOf(false) }
+                var medicationAttempts by remember { mutableStateOf(0) }
+                var checkedOpening by remember { mutableStateOf(current.from !is Route.HealthCard) }
+                LaunchedEffect(core, medicationAttempts) {
+                    val id = current.intakeId ?: return@LaunchedEffect
+                    val c = core ?: return@LaunchedEffect
+                    try {
+                        if (!checkedOpening) {
+                            reload()
+                            checkedOpening = true
+                        }
+                        medications = c.saveIntake.loadMedications(id)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        medicationReadFailed = true
+                    }
+                }
                 val loaded = board
                 val editing = current.intakeId?.let { id -> loaded?.items?.firstOrNull { it.intakeId == id } }
+                val savedMedications = medications
                 when {
+                    // First, so an opening that cannot read the database still offers [다시 시도] (PR #71 review).
                     loaded == null && failed -> HomeScreen(HomeState.Failed, null, zone, homeOnlyRetry { failed = false; retries++ })
+                    !checkedOpening && !medicationReadFailed -> Loading()
                     loaded == null -> Loading()
-                    current.intakeId != null && editing == null -> LaunchedEffect(current) {
+                    checkedOpening && current.intakeId != null && editing == null -> LaunchedEffect(current) {
                         // SCR-006#gone: archived or deleted meanwhile.
-                        go(Route.Home)
+                        go(current.back)
                         message = Labels.GONE
                     }
+                    medicationReadFailed -> HomeScreen(
+                        HomeState.Failed, null, zone,
+                        homeOnlyRetry {
+                            medicationReadFailed = false
+                            medicationAttempts++
+                        },
+                    )
+                    savedMedications == null -> Loading()
                     else -> ItemScreen(
                         editing = editing,
+                        savedMedications = savedMedications,
                         people = people,
                         message = message,
                         access = access.takeUnless { asking },
@@ -486,8 +814,10 @@ fun App(
                                 afterWrite()
                             }
                         },
-                        onClose = { go(Route.Home) },
-                        onSave = { draft ->
+                        onClose = { go(current.back) },
+                        onSave = saveItem@ { draft ->
+                            // A queued activation from a form already left must not save it again.
+                            if (route !== current || quiet != null) return@saveItem
                             write(failure = "저장하지 못했어요. 다시 눌러 주세요") { c ->
                                 val id = current.intakeId
                                 val result = if (id == null) c.saveIntake.create(draft) else c.saveIntake.update(id, draft)
@@ -495,7 +825,7 @@ fun App(
                                     is SaveIntakeResult.Saved -> {
                                         val saved = result.quiet
                                         if (saved == null) {
-                                            go(Route.Home)
+                                            go(current.back)
                                         } else {
                                             message = null
                                             quiet = Labels.itemQuiet(saved.notice, saved.settings)
@@ -504,10 +834,11 @@ fun App(
                                     }
                                     is SaveIntakeResult.Invalid -> message = when (result.reason) {
                                         SaveIntakeResult.Invalid.BLANK_NAME -> Labels.NAME_REQUIRED
-                                        else -> "누구 약인지 다시 골라 주세요"
+                                        SaveIntakeResult.Invalid.UNKNOWN_PERSON -> "누구 약인지 다시 골라 주세요"
+                                        else -> Labels.SAVE_FAILED
                                     }
                                     SaveIntakeResult.Gone -> {
-                                        go(Route.Home)
+                                        go(current.back)
                                         message = Labels.GONE
                                         afterWrite()
                                     }
@@ -517,7 +848,7 @@ fun App(
                         onArchive = { item ->
                             write(failure = "보관하지 못했어요. 다시 눌러 주세요") { c ->
                                 c.archiveIntake(item.intakeId)
-                                go(Route.Home)
+                                go(current.back)
                                 message = "${Labels.withObject(item.name)} 보관했어요. 지난 기록은 남아요"
                                 afterWrite()
                             }
@@ -525,10 +856,10 @@ fun App(
                     )
                 }
                 quiet?.let { text ->
-                    // Saved already: `[확인]`, back or a tap outside all go to the first screen (screens.md SCR-006#quiet).
+                    // Saved already: `[확인]`, back or a tap outside all return to the opener (SCR-006#quiet).
                     NoticeDialog(Labels.ITEM_SAVED, text) {
                         quiet = null
-                        go(Route.Home)
+                        go(current.back)
                     }
                 }
             }
@@ -813,6 +1144,8 @@ fun App(
                             }
                         },
                         openPrivacy = { url -> message = if (phone.openUrl(url)) null else Labels.noBrowser(url) },
+                        openFeedbackMail = phone::openFeedbackMail,
+                        copyFeedbackAddress = phone::copyFeedbackAddress,
                         openAccess = ::openAccess,
                     ),
                 )
@@ -839,6 +1172,7 @@ fun App(
                         },
                         add = { go(Route.Person(null)) },
                         edit = { go(Route.Person(it.person.id)) },
+                        openArchivedCard = { if (!busy) go(Route.HealthCard(it.person.id, from = current)) },
                         restore = { row ->
                             write(failure = Labels.RESTORE_FAILED) { c ->
                                 val restored = c.people.restore(row.person.id) == PersonChange.Saved
@@ -853,7 +1187,7 @@ fun App(
                 )
             }
 
-            is Route.Person -> key(current.key) {
+            is Route.Person -> personFormState.SaveableStateProvider(current.key) {
                 LaunchedEffect(core, peopleAttempts) { core?.let { readPeople(it) } }
                 val view = peopleView
                 val editing = current.personId?.let { id -> view?.active?.firstOrNull { it.person.id == id } }
@@ -871,6 +1205,7 @@ fun App(
                             },
                             add = {},
                             edit = {},
+                            openArchivedCard = {},
                             restore = {},
                         ),
                     )
@@ -885,6 +1220,7 @@ fun App(
                         view = view,
                         message = message,
                         onClose = { go(Route.People) },
+                        onOpenCard = { if (!busy) go(Route.HealthCard(it.person.id, from = current)) },
                         // The form stays until the write is over (widgets and reminders included), then the list shows it.
                         onSave = { name, color ->
                             write(failure = Labels.SAVE_FAILED) { c ->

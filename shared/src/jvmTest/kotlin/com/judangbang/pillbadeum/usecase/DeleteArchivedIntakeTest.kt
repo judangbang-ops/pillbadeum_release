@@ -3,6 +3,7 @@ package com.judangbang.pillbadeum.usecase
 import androidx.room3.executeSQL
 import androidx.room3.useWriterConnection
 import com.judangbang.pillbadeum.testing.DbFixture
+import com.judangbang.pillbadeum.testing.TEST_DEVICE_ID
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -14,7 +15,7 @@ import kotlinx.coroutines.test.runTest
 /** Permanent delete of an archived intake (TASK-010, REQ-015). */
 class DeleteArchivedIntakeTest {
     private val fx = DbFixture()
-    private val delete = DeleteArchivedIntake(fx.db)
+    private val delete = DeleteArchivedIntake(fx.db, fx.clock)
     private val archive = ArchiveIntake(fx.db, fx.clock)
 
     @AfterTest
@@ -64,5 +65,29 @@ class DeleteArchivedIntakeTest {
         fx.at("2026-11-11T09:00")
         assertEquals(RecordResult.Gone, fx.record(intake, renderedKey = "2026-11-11"))
         assertEquals(DeleteIntakeResult.Gone, delete(intake))
+    }
+
+    @Test
+    fun tc101_permanent_delete_purges_three_judgments_and_two_medications_and_stamps_the_card() = runTest {
+        val person = ManagePeople(fx.db, fx.clock, fx.ids, TEST_DEVICE_ID).ensureDefault().single()
+        val save = SaveIntake(fx.db, fx.clock, fx.ids, TEST_DEVICE_ID)
+        val draft = IntakeDraft(person.id, "아침약", medications = listOf(IntakeMedicationDraft("예시정"), IntakeMedicationDraft("가상정")))
+        val intake = assertIs<SaveIntakeResult.Saved>(save.create(draft)).intakeId
+        for (day in 11..13) {
+            fx.at("2026-11-${day}T08:10")
+            assertIs<RecordResult.Recorded>(fx.record(intake, renderedKey = "2026-11-$day"))
+        }
+        assertEquals(3, fx.history(intake).size)
+        val medIds = fx.db.intakeMedicationDao().listByIntake(intake).map { it.medicationId }
+        assertEquals(2, medIds.size)
+        assertTrue(archive(intake))
+
+        fx.at("2026-11-13T08:20")
+        assertEquals(DeleteIntakeResult.Deleted, delete(intake))
+        assertNull(fx.db.intakeDao().findById(intake))
+        assertTrue(fx.history(intake).isEmpty())
+        assertTrue(fx.db.intakeMedicationDao().listByIntake(intake).isEmpty())
+        for (id in medIds) assertNull(fx.db.medicationDao().findById(id))
+        assertEquals(fx.clock.now().toEpochMilliseconds(), fx.db.healthCardDao().findByPerson(person.id)?.editedAt)
     }
 }

@@ -110,7 +110,7 @@ class ShownRemindersTest {
         val a = item()
         val shown = shownAt0800()
         assertTrue(ArchiveIntake(fx.db, fx.clock)(a))
-        assertIs<DeleteIntakeResult.Deleted>(DeleteArchivedIntake(fx.db)(a))
+        assertIs<DeleteIntakeResult.Deleted>(DeleteArchivedIntake(fx.db, fx.clock)(a))
 
         val unknown = ShownReminder("no-such-item", "2026-11-11")
         assertEquals(listOf(a, "no-such-item"), cleared(shown + unknown))

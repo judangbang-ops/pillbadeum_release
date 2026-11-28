@@ -32,14 +32,14 @@ class WidgetPinnedReceiver : BroadcastReceiver() {
                     throw e
                 } catch (e: Exception) {
                     // Without a choice the widget shows everyone with one person, and asks to be set up from two on.
-                    Log.e(TAG, "giving the widget placed from the intro its choice failed", e)
+                    Log.e(TAG, "giving the widget placed from the intro its choice failed: ${e.javaClass.simpleName}")
                 }
                 try {
                     WidgetPickActivity.glanceIdOf(app, appWidgetId)?.let { DidITakeWidget().update(app, it) }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    Log.e(TAG, "drawing the widget placed from the intro failed", e)
+                    Log.e(TAG, "drawing the widget placed from the intro failed: ${e.javaClass.simpleName}")
                 }
             } finally {
                 pending.finish()

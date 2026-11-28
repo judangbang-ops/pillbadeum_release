@@ -7,19 +7,28 @@ import android.app.KeyguardManager
 import android.app.TimePickerDialog
 import android.appwidget.AppWidgetManager
 import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipDescription
+import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.PersistableBundle
 import android.os.PowerManager
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
+import android.widget.Toast
+import androidx.core.content.pm.PackageInfoCompat
 import com.judangbang.pillbadeum.boundary.DayBoundaryAlarm
 import com.judangbang.pillbadeum.reminder.ReminderAlarm
 import com.judangbang.pillbadeum.reminder.ReminderChannels
 import com.judangbang.pillbadeum.reminder.ReminderNotifications
+import com.judangbang.pillbadeum.status.Labels
 import com.judangbang.pillbadeum.ui.AccessSetting
+import com.judangbang.pillbadeum.ui.FEEDBACK_ADDRESS
 import com.judangbang.pillbadeum.ui.Phone
 import com.judangbang.pillbadeum.ui.ReminderAccess
 import com.judangbang.pillbadeum.widget.DidITakeWidgetReceiver
@@ -36,20 +45,22 @@ class AndroidPhone(
     private val activity: Activity,
     private val requestNotifications: ((onAnswered: () -> Unit) -> Unit)? = null,
 ) : Phone {
-    override val appVersion: String by lazy {
+    private val packageInfo by lazy {
         try {
-            val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 activity.packageManager.getPackageInfo(activity.packageName, PackageManager.PackageInfoFlags.of(0))
             } else {
                 @Suppress("DEPRECATION")
                 activity.packageManager.getPackageInfo(activity.packageName, 0)
             }
-            info.versionName.orEmpty()
         } catch (e: PackageManager.NameNotFoundException) {
-            Log.w(TAG, "own package not found", e)
-            ""
+            Log.w(TAG, "own package not found: ${e.javaClass.simpleName}")
+            null
         }
     }
+    override val appVersion: String get() = packageInfo?.versionName.orEmpty()
+
+    private var lastMailLaunch: Long? = null
 
     /**
      * Android 8.x: `backup_rules.xml` gives `<include>` a `requireFlags` that 8.x cannot parse, so the whole backup is
@@ -57,6 +68,29 @@ class AndroidPhone(
      */
     override val backupUnsupported: Boolean
         get() = Build.VERSION.SDK_INT < Build.VERSION_CODES.P
+
+    override val hasKnownEmergencySettings: Boolean
+        get() = Build.MANUFACTURER.equals("Samsung", ignoreCase = true) ||
+            Build.MANUFACTURER.equals("Google", ignoreCase = true)
+
+    override val showsClipboardPreview: Boolean
+        get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+
+    override fun copyEmergencyText(text: String): Boolean {
+        val clipboard = activity.getSystemService(ClipboardManager::class.java) ?: return false
+        val clip = ClipData.newPlainText(Labels.CARD_EMERGENCY, text)
+        if (showsClipboardPreview) {
+            clip.description.extras = PersistableBundle().apply {
+                putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
+            }
+        }
+        return try {
+            clipboard.setPrimaryClip(clip)
+            true
+        } catch (_: RuntimeException) {
+            false
+        }
+    }
 
     /**
      * `KeyguardManager.isDeviceSecure()`: true with a PIN, pattern or password (API 23, no permission). That is the lock
@@ -66,7 +100,7 @@ class AndroidPhone(
         try {
             activity.getSystemService(KeyguardManager::class.java)?.isDeviceSecure
         } catch (e: RuntimeException) {
-            Log.w(TAG, "screen lock state not readable", e)
+            Log.w(TAG, "screen lock state not readable: ${e.javaClass.simpleName}")
             null
         }
 
@@ -76,9 +110,45 @@ class AndroidPhone(
             activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
             true
         } catch (e: ActivityNotFoundException) {
-            Log.i(TAG, "no browser for the privacy policy", e)
+            Log.i(TAG, "no browser for the privacy policy: ${e.javaClass.simpleName}")
             false
         }
+
+    override fun openFeedbackMail(): Boolean {
+        val now = SystemClock.elapsedRealtime()
+        // A second tap can reach this activity before the mail window takes focus (SPEC-053).
+        if (lastMailLaunch?.let { now - it < MAIL_REPEAT_WINDOW_MS } == true) return true
+        // "-" as the version row of the settings shows, should the own package not be read.
+        val buildNumber = packageInfo?.let(PackageInfoCompat::getLongVersionCode)?.toString() ?: "-"
+        val body = "앱 버전: ${appVersion.ifBlank { "-" }} ($buildNumber)\n" +
+            "Android 버전: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})\n" +
+            "기기 모델: ${Build.MANUFACTURER} ${Build.MODEL}"
+        // `ACTION_SEND` with its documented extras, and a `SENDTO mailto:` selector so that only mail apps take it. The
+        // extras are documented for SEND only; with SENDTO, Gmail was reported to leave the body empty. Each value goes
+        // in one place only, so no app can fill the body twice. No MIME type: the selector is matched with the main
+        // intent's type, and the mail apps' `mailto` filters have none.
+        val draft = Intent(Intent.ACTION_SEND)
+            .putExtra(Intent.EXTRA_EMAIL, arrayOf(FEEDBACK_ADDRESS))
+            .putExtra(Intent.EXTRA_SUBJECT, "[필받음] 의견")
+            .putExtra(Intent.EXTRA_TEXT, body)
+        draft.selector = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:"))
+        // Start directly, since Android's package visibility can hide an installed mail handler from lookups.
+        return try {
+            activity.startActivity(draft)
+            lastMailLaunch = now
+            true
+        } catch (_: ActivityNotFoundException) {
+            false
+        }
+    }
+
+    override fun copyFeedbackAddress() {
+        val clipboard = activity.getSystemService(ClipboardManager::class.java) ?: return
+        clipboard.setPrimaryClip(ClipData.newPlainText("이메일 주소", FEEDBACK_ADDRESS))
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            Toast.makeText(activity, "주소를 복사했어요", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     /** The platform's `TimePickerDialog`, 24-hour (SCR-009 rule). */
     override fun pickTime(initial: LocalTime, onPicked: (LocalTime) -> Unit) {
@@ -95,7 +165,7 @@ class AndroidPhone(
         return try {
             AppWidgetManager.getInstance(activity).isRequestPinAppWidgetSupported
         } catch (e: RuntimeException) {
-            Log.w(TAG, "widget pin support not readable", e)
+            Log.w(TAG, "widget pin support not readable: ${e.javaClass.simpleName}")
             false
         }
     }
@@ -112,7 +182,7 @@ class AndroidPhone(
         return try {
             AppWidgetManager.getInstance(activity).requestPinAppWidget(provider, null, WidgetPinnedReceiver.callback(activity))
         } catch (e: IllegalStateException) {
-            Log.w(TAG, "widget pin request refused", e)
+            Log.w(TAG, "widget pin request refused: ${e.javaClass.simpleName}")
             false
         }
     }
@@ -143,7 +213,7 @@ class AndroidPhone(
             request(onAnswered)
             true
         } catch (e: ActivityNotFoundException) {
-            Log.w(TAG, "no notification permission window", e)
+            Log.w(TAG, "no notification permission window: ${e.javaClass.simpleName}")
             false
         }
     }
@@ -193,10 +263,10 @@ class AndroidPhone(
             activity.startActivity(intent)
             true
         } catch (e: ActivityNotFoundException) {
-            Log.i(TAG, "no screen for ${intent.action}", e)
+            Log.i(TAG, "no screen for ${intent.action}: ${e.javaClass.simpleName}")
             false
         } catch (e: SecurityException) {
-            Log.w(TAG, "screen refused: ${intent.action}", e)
+            Log.w(TAG, "screen refused: ${intent.action}: ${e.javaClass.simpleName}")
             false
         }
 
@@ -204,11 +274,12 @@ class AndroidPhone(
         try {
             read()
         } catch (e: RuntimeException) {
-            Log.w(TAG, "reminder access not readable", e)
+            Log.w(TAG, "reminder access not readable: ${e.javaClass.simpleName}")
             fallback
         }
 
     private companion object {
         const val TAG = "AndroidPhone"
+        const val MAIL_REPEAT_WINDOW_MS = 1_000L
     }
 }

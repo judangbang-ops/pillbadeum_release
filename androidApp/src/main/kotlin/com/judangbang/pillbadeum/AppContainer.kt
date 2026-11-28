@@ -8,6 +8,7 @@ import com.judangbang.pillbadeum.boundary.DayBoundaryAlarm
 import com.judangbang.pillbadeum.data.DidITakeDatabase
 import com.judangbang.pillbadeum.data.buildDidITakeDatabase
 import com.judangbang.pillbadeum.data.didITakeDatabaseBuilder
+import com.judangbang.pillbadeum.export.CardExportStore
 import com.judangbang.pillbadeum.reminder.Reminders
 import com.judangbang.pillbadeum.restore.FileInstallMarker
 import com.judangbang.pillbadeum.restore.InstallMarker
@@ -53,7 +54,7 @@ class DidITakeApplication : Application(), ContainerHolder {
         fontScale = newConfig.fontScale
         container.appScope.launch {
             runCatching { WidgetUpdater.updateAll(this@DidITakeApplication) }
-                .onFailure { Log.e("DidITakeApplication", "widget refresh after a font size change failed", it) }
+                .onFailure { Log.e("DidITakeApplication", "widget refresh after a font size change failed: ${it.javaClass.simpleName}") }
         }
     }
 }
@@ -75,6 +76,8 @@ class AppContainer(
     /** The install marker of the restore check; tests keep it in memory (Robolectric cannot flush a directory). */
     private val installMarker: () -> InstallMarker = { FileInstallMarker.of(context) },
 ) {
+    internal val cardExports by lazy { CardExportStore(context.applicationContext) }
+
     /** Process-wide scope for short best-effort work started from receivers. */
     val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -98,7 +101,7 @@ class AppContainer(
     suspend fun core(): DidITakeCore = core ?: mutex.withLock {
         core ?: DidITakeCore.open(database, installMarker(), clock).also {
             runCatching { WidgetChoices.prepare(context, it.installState) }
-                .onFailure { e -> Log.e(TAG, "filling the choice of earlier widgets failed", e) }
+                .onFailure { e -> Log.e(TAG, "filling the choice of earlier widgets failed: ${e.javaClass.simpleName}") }
             core = it
             afterOpen(restored = it.installState is InstallState.Restored)
         }
@@ -123,7 +126,7 @@ class AppContainer(
                 }
                 DayBoundaryAlarm.scheduleNext(context)
             } catch (e: Exception) {
-                Log.e(TAG, "after-open work failed (restored=$restored)", e)
+                Log.e(TAG, "after-open work failed (restored=$restored): ${e.javaClass.simpleName}")
             }
             if (restored) Reminders.restored(context) else Reminders.replan(context)
         }

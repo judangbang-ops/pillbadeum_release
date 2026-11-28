@@ -1,5 +1,7 @@
 package com.judangbang.pillbadeum.testing
 
+import androidx.sqlite.SQLiteDriver
+import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import com.judangbang.pillbadeum.data.DidITakeDatabase
 import com.judangbang.pillbadeum.data.DoseRecordEntity
 import com.judangbang.pillbadeum.data.IntakeEntity
@@ -44,10 +46,14 @@ object ZeroRandom : Random() {
 const val TEST_DEVICE_ID: String = "test-device"
 
 /** In-memory database plus the use cases wired the way the app wires them (no DI framework). */
-class DbFixture(start: Instant = seoul("2026-11-11T08:00"), ids: UuidV7? = null) : AutoCloseable {
+class DbFixture(
+    start: Instant = seoul("2026-11-11T08:00"),
+    ids: UuidV7? = null,
+    driver: SQLiteDriver = BundledSQLiteDriver(),
+) : AutoCloseable {
     val clock = TestClock(start)
     val ids: UuidV7 = ids ?: UuidV7(clock, Random(seed = 7))
-    val db: DidITakeDatabase = buildDidITakeDatabase(inMemoryDidITakeDatabaseBuilder(), Dispatchers.IO)
+    val db: DidITakeDatabase = buildDidITakeDatabase(inMemoryDidITakeDatabaseBuilder(), Dispatchers.IO, driver)
 
     val recordDose = RecordDose(db, clock, this.ids, TEST_DEVICE_ID)
     val voidDose = VoidDose(db, clock)

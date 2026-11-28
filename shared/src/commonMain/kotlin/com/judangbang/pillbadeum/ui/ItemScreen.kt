@@ -21,10 +21,14 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +47,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -50,6 +55,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
@@ -65,8 +71,11 @@ import com.judangbang.pillbadeum.status.Labels
 import com.judangbang.pillbadeum.status.WidgetLayout
 import com.judangbang.pillbadeum.status.showsPeople
 import com.judangbang.pillbadeum.usecase.IntakeDraft
+import com.judangbang.pillbadeum.usecase.IntakeMedicationDraft
 import com.judangbang.pillbadeum.usecase.PersonColors
 import com.judangbang.pillbadeum.usecase.ReminderChoice
+import com.judangbang.pillbadeum.usecase.codePointCount
+import com.judangbang.pillbadeum.usecase.limitCodePointInput
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
 
@@ -92,6 +101,7 @@ internal class ItemReminderActions(
 @Composable
 internal fun ItemScreen(
     editing: IntakeStatus?,
+    savedMedications: List<IntakeMedicationDraft>,
     people: List<PersonEntity>,
     message: String?,
     access: ReminderAccess?,
@@ -113,8 +123,15 @@ internal fun ItemScreen(
     // The first color nobody has yet, as 09 PersonAdd draws it (TASK-021).
     var newPersonColor by rememberSaveable { mutableStateOf(PersonColors.leastUsed(people.map { it.color })) }
     var nameError by rememberSaveable { mutableStateOf(false) }
+    var medicationRows by rememberSaveable(stateSaver = MedicationRowsSaver) {
+        mutableStateOf(savedMedications.mapIndexed { index, row -> MedicationFormRow(index, row) })
+    }
+    var nextMedicationKey by rememberSaveable { mutableStateOf(savedMedications.size) }
+    var medicationErrors by rememberSaveable { mutableStateOf(intArrayOf()) }
+    var medicationToFocus by remember { mutableStateOf<Int?>(null) }
     var confirmArchive by rememberSaveable { mutableStateOf(false) }
     var reminderOn by rememberSaveable { mutableStateOf(editing?.reminder?.enabled ?: false) }
+    var revealReminderStart by remember { mutableStateOf(false) }
     // `HH:MM` picked by hand; null follows the slot's default.
     var startPicked by rememberSaveable {
         mutableStateOf(editing?.let { e -> e.reminder?.start?.takeIf { it != defaultReminderStart(e.slotLabel) } }?.toString())
@@ -122,30 +139,32 @@ internal fun ItemScreen(
 
     val anchor = DayOfWeek.entries.first { it.name == anchorName }
     val slot = SlotLabel.entries.firstOrNull { it.name == slotName }
+    val rule = if (weekly) ScheduleRule.Weekly(anchor) else ScheduleRule.Daily
     val start = startPicked?.let(LocalTime::parse) ?: defaultReminderStart(if (weekly) null else slot)
     // The chosen person, or the first one while none is chosen (or the chosen one was archived meanwhile).
     val chosen = people.firstOrNull { it.id == personId } ?: people.firstOrNull()
 
     fun save() {
         val pid = chosen?.id ?: return
-        if (name.isBlank()) {
-            nameError = true
-            return
-        }
+        nameError = name != editing?.name && name.isBlank()
+        medicationErrors = medicationRows.filter { it.draft.name.isBlank() }.map { it.key }.toIntArray()
+        if (nameError || medicationErrors.isNotEmpty()) return
         onSave(
             IntakeDraft(
                 personId = pid,
                 name = name,
-                widgetAlias = alias,
-                rule = if (weekly) ScheduleRule.Weekly(anchor) else ScheduleRule.Daily,
+                widgetAlias = if (alias == editing?.widgetAlias) alias else alias.takeUnless(String::isBlank),
+                rule = rule,
                 slotLabel = slot,
                 reminder = ReminderChoice(reminderOn, start),
+                medications = medicationRows.map { it.draft },
             ),
         )
     }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val largeText = HomeLayout.columns(maxWidth.value, with(LocalDensity.current) { 14.sp.toDp().value }) == 1
+        val stackMedications = largeText || maxWidth < 320.dp
         Column(Modifier.fillMaxSize()) {
             TopBar(
                 if (editing == null) "항목 추가" else "항목 수정",
@@ -156,20 +175,20 @@ internal fun ItemScreen(
                     .padding(start = Ui.Side, end = Ui.Side, top = 4.dp, bottom = 8.dp),
             ) {
                 message?.let { Band(it, Modifier.padding(bottom = 16.dp), live = true) }
-                Field(
-                    label = "약 이름",
+                IntakeNameField(
+                    label = "항목 이름",
                     value = name,
                     onChange = { name = it; nameError = false },
-                    placeholder = "예: 혈압약",
+                    placeholder = "예: 아침약",
                     error = if (nameError) Labels.NAME_REQUIRED else null,
                 )
-                Field(
+                IntakeNameField(
                     label = "위젯·알림에 보일 이름",
                     optional = true,
                     value = alias,
                     onChange = { alias = it },
                     placeholder = "예: 아침 약",
-                    note = "홈 화면에서 약 이름을 가리고 싶을 때 써요.",
+                    note = "홈 화면에서 항목 이름을 가리고 싶을 때 써요.",
                 )
 
                 // With one active person the field folds to [+ 가족 추가] alone (REQ-018, TASK-015).
@@ -208,7 +227,9 @@ internal fun ItemScreen(
                     PickGrid(listOf(false, true), columns = 2) { isWeekly, modifier ->
                         PickCell(if (isWeekly) "주 1회" else "매일", weekly == isWeekly, modifier) { weekly = isWeekly }
                     }
-                    if (editing != null) Note("주기를 바꾸면 지금부터 새 일정이 적용돼요. 이번 창의 기록은 그대로 인정돼요.")
+                    if (editing != null && editing.rule != rule) {
+                        ItemFormNote("주기를 바꾸면 지금부터 새 일정이 적용돼요. 이번 창의 기록은 그대로 인정돼요.")
+                    }
                 }
                 if (weekly) {
                     Group("무슨 요일에?") {
@@ -216,7 +237,7 @@ internal fun ItemScreen(
                             PickCell(Labels.weekday(day), day == anchor, modifier) { anchorName = day.name }
                         }
                         val last = DayOfWeek.entries[(anchor.ordinal + 6) % 7]
-                        Note("${Labels.weekdayName(anchor)}부터 ${Labels.weekdayName(last)} 사이에 한 번 먹으면 완료예요.")
+                        ItemFormNote("${Labels.weekdayName(anchor)}부터 ${Labels.weekdayName(last)} 사이에 한 번 먹으면 완료예요.")
                     }
                 } else {
                     Group("언제 먹나요?") {
@@ -225,12 +246,33 @@ internal fun ItemScreen(
                         }
                     }
                 }
+                MedicationPart(
+                    rows = medicationRows,
+                    largeText = stackMedications,
+                    errors = medicationErrors,
+                    focusKey = medicationToFocus,
+                    onFocused = { medicationToFocus = null },
+                    onChange = { key, draft ->
+                        medicationRows = medicationRows.map { if (it.key == key) it.copy(draft = draft) else it }
+                        if (draft.name.isNotBlank()) medicationErrors = medicationErrors.filterNot { it == key }.toIntArray()
+                    },
+                    onRemove = { key -> medicationRows = medicationRows.filterNot { it.key == key } },
+                    onAdd = {
+                        if (medicationRows.size < IntakeMedicationDraft.MAX_ROWS) {
+                            val key = nextMedicationKey++
+                            medicationRows = medicationRows + MedicationFormRow(key, IntakeMedicationDraft())
+                            medicationToFocus = key
+                        }
+                    },
+                )
                 ReminderPart(
                     on = reminderOn,
+                    revealStart = revealReminderStart,
                     note = if (weekly) Labels.reminderWeekly(anchor) else null,
                     start = start,
                     notificationsOff = access?.notifications == false,
                     onSwitch = { on ->
+                        revealReminderStart = on
                         reminderOn = on
                         if (on) reminders.switchedOn()
                     },
@@ -240,7 +282,7 @@ internal fun ItemScreen(
                 if (editing != null) {
                     // [보관], not [항목 삭제]: archiving keeps the records (REQ-014, TERM-018, SCR-006).
                     ActionButton("보관", ButtonLook.Danger, { confirmArchive = true })
-                    Note("보관해도 지난 기록은 지워지지 않아요.", Modifier.padding(horizontal = 4.dp))
+                    ItemFormNote("보관해도 지난 기록은 지워지지 않아요.", Modifier.padding(horizontal = 4.dp))
                 }
             }
             // `.foot.line`: [저장] stays above the keyboard and the list.
@@ -273,6 +315,7 @@ internal fun ItemScreen(
 @Composable
 private fun ReminderPart(
     on: Boolean,
+    revealStart: Boolean,
     note: String?,
     start: LocalTime,
     notificationsOff: Boolean,
@@ -283,7 +326,17 @@ private fun ReminderPart(
     Column(Modifier.fillMaxWidth().padding(bottom = 16.dp)) {
         SwitchRow(Labels.REMINDER_SWITCH, note, on, line = !on, onChange = onSwitch)
         if (on) {
-            Box(Modifier.row().padding(horizontal = 4.dp, vertical = 8.dp), contentAlignment = Alignment.CenterStart) {
+            val requester = remember { BringIntoViewRequester() }
+            var placed by remember { mutableStateOf(false) }
+            if (revealStart && placed) {
+                LaunchedEffect(requester) { requester.bringIntoView() }
+            }
+            // BUG-008: reveal the whole row, including the label when EndOrBelow stacks the button.
+            Box(
+                Modifier.row().bringIntoViewRequester(requester).onPlaced { placed = true }
+                    .padding(horizontal = 4.dp, vertical = 8.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
                 EndOrBelow(
                     start = { Words(Labels.REMINDER_START, Ui.type(16, lineHeight = 1.25f), Modifier.hiddenFromTalkBack()) },
                     end = {
@@ -296,7 +349,7 @@ private fun ReminderPart(
                     },
                 )
             }
-            Note(Labels.REMINDER_ELSEWHERE, Modifier.padding(top = 6.dp))
+            ItemFormNote(Labels.REMINDER_ELSEWHERE, Modifier.padding(top = 6.dp))
             if (notificationsOff) {
                 Band(Labels.ITEM_NOTIFICATIONS_OFF, Modifier.padding(top = 12.dp), live = true) {
                     ActionButton(Labels.OPEN_SETTINGS, ButtonLook.LineSmall, onOpenSettings)
@@ -316,8 +369,44 @@ private fun Group(label: String?, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun Note(text: String, modifier: Modifier = Modifier) {
+internal fun ItemFormNote(text: String, modifier: Modifier = Modifier) {
     Words(text, Ui.type(14, color = Ui.Muted), modifier.padding(top = 2.dp))
+}
+
+/** SPEC-003/023: enforce the limit only on input changes, so an existing long value can still be displayed and saved. */
+@Composable
+private fun IntakeNameField(
+    label: String,
+    value: String,
+    onChange: (String) -> Unit,
+    placeholder: String,
+    optional: Boolean = false,
+    note: String? = null,
+    error: String? = null,
+) {
+    val limit = IntakeDraft.MAX_NAME_CHARACTERS
+    val current = value.trim()
+    val count = current.codePointCount()
+    var clipped by rememberSaveable { mutableStateOf(false) }
+    Field(
+        label = label,
+        value = value,
+        onChange = { input ->
+            val next = input.trim()
+            val nextCount = next.codePointCount()
+            clipped = nextCount > limit
+            // A single keystroke at the limit must not push the final character out of the field.
+            val singleInsertionAtLimit = count == limit && nextCount == limit + 1 &&
+                current.commonPrefixWith(next).length + current.commonSuffixWith(next).length >= current.length
+            if (!singleInsertionAtLimit) onChange(input.limitCodePointInput(limit))
+        },
+        placeholder = placeholder,
+        optional = optional,
+        note = note,
+        error = error,
+        limitNote = Labels.INTAKE_NAME_LIMIT.takeIf { clipped },
+        counter = "$count/$limit".takeIf { count * 10 >= limit * 9 },
+    )
 }
 
 /** A text field (box.css `.in`): 1.5 dp border, 2 dp ink while focused, 2 dp danger with [error] under it. */
@@ -330,50 +419,92 @@ internal fun Field(
     optional: Boolean = false,
     note: String? = null,
     error: String? = null,
+    modifier: Modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+    inputModifier: Modifier = Modifier,
+    spokenLabel: String = label,
+    labelStyle: TextStyle = Ui.type(15, Ui.SemiBold, lineHeight = 1.25f),
+    gap: Dp = 6.dp,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    singleLine: Boolean = true,
+    counter: String? = null,
+    limitNote: String? = null,
 ) {
-    Column(Modifier.fillMaxWidth().padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (optional) {
-            Words(
-                buildAnnotatedString {
-                    append(WidgetLayout.keepWords(label))
-                    withStyle(SpanStyle(fontWeight = FontWeight.Normal, color = Ui.Muted)) { append(" (선택)") }
-                },
-                plain = "$label (선택)",
-                style = Ui.type(15, Ui.SemiBold, lineHeight = 1.25f),
-            )
-        } else {
-            Words(label, Ui.type(15, Ui.SemiBold, lineHeight = 1.25f))
-        }
-        val interaction = remember { MutableInteractionSource() }
-        val focused by interaction.collectIsFocusedAsState()
-        BasicTextField(
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(gap)) {
+        FieldLabel(label, optional, labelStyle)
+        FormInput(
             value = value,
-            onValueChange = onChange,
-            singleLine = true,
-            textStyle = Ui.type(16, lineHeight = 1.25f),
-            cursorBrush = SolidColor(Ui.Ink),
-            interactionSource = interaction,
-            modifier = Modifier.fillMaxWidth().semantics { contentDescription = label },
-            decorationBox = { inner ->
-                val (width, color) = when {
-                    error != null -> 2.dp to Ui.Danger
-                    focused -> 2.dp to Ui.Ink
-                    else -> 1.5.dp to Ui.LineStrong
-                }
-                Box(
-                    Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(Ui.ButtonShape).background(Ui.Surface)
-                        .border(width, color, Ui.ButtonShape).padding(horizontal = 16.dp, vertical = 8.dp),
-                    contentAlignment = Alignment.CenterStart,
-                ) {
-                    if (value.isEmpty()) Words(placeholder, Ui.type(16, color = Ui.Muted, lineHeight = 1.25f), Modifier.hiddenFromTalkBack())
-                    inner()
-                }
-            },
+            onChange = onChange,
+            spokenLabel = spokenLabel,
+            modifier = inputModifier.fillMaxWidth(),
+            placeholder = placeholder,
+            invalid = error != null,
+            keyboardOptions = keyboardOptions,
+            singleLine = singleLine,
         )
         error?.let {
             Words(it, Ui.type(14, Ui.SemiBold, Ui.Danger), Modifier.semantics { liveRegion = LiveRegionMode.Polite })
         }
-        note?.let { Note(it) }
+        limitNote?.let { ItemFormNote(it) }
+        note?.let { ItemFormNote(it) }
+        counter?.let { Words(it, Ui.type(14, color = Ui.Muted), Modifier.align(Alignment.End)) }
+    }
+}
+
+@Composable
+internal fun FormInput(
+    value: String,
+    onChange: (String) -> Unit,
+    spokenLabel: String,
+    modifier: Modifier = Modifier,
+    placeholder: String = "",
+    invalid: Boolean = false,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    singleLine: Boolean = true,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val focused by interaction.collectIsFocusedAsState()
+    BasicTextField(
+        value = value,
+        onValueChange = onChange,
+        singleLine = singleLine,
+        keyboardOptions = keyboardOptions,
+        textStyle = Ui.type(16, lineHeight = 1.25f),
+        cursorBrush = SolidColor(Ui.Ink),
+        interactionSource = interaction,
+        modifier = modifier.semantics { contentDescription = spokenLabel },
+        decorationBox = { inner ->
+            val (width, color) = when {
+                invalid -> 2.dp to Ui.Danger
+                focused -> 2.dp to Ui.Ink
+                else -> 1.5.dp to Ui.LineStrong
+            }
+            Box(
+                Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(Ui.ButtonShape).background(Ui.Surface)
+                    .border(width, color, Ui.ButtonShape).padding(horizontal = 16.dp, vertical = 8.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                if (value.isEmpty() && placeholder.isNotEmpty()) {
+                    Words(placeholder, Ui.type(16, color = Ui.Muted, lineHeight = 1.25f), Modifier.hiddenFromTalkBack())
+                }
+                inner()
+            }
+        },
+    )
+}
+
+@Composable
+internal fun FieldLabel(label: String, optional: Boolean, style: TextStyle = Ui.type(15, Ui.SemiBold, lineHeight = 1.25f)) {
+    if (optional) {
+        Words(
+            buildAnnotatedString {
+                append(WidgetLayout.keepWords(label))
+                withStyle(SpanStyle(fontWeight = FontWeight.Normal, color = Ui.Muted)) { append(" (선택)") }
+            },
+            plain = "$label (선택)",
+            style = style,
+        )
+    } else {
+        Words(label, style)
     }
 }
 
@@ -448,7 +579,7 @@ private fun PersonAdd(
         PickGrid(PersonColors.PALETTE.withIndex().toList(), columns = 3) { (index, hex), modifier ->
             Swatch(Labels.COLOR_NAMES[index], personLook(hex).solid, hex == color, modifier) { onColor(hex) }
         }
-        Note(Labels.ONE_PHONE)
+        ItemFormNote(Labels.ONE_PHONE)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
             ActionButton("취소", ButtonLook.LineSmall, onCancel)
             ActionButton("추가", ButtonLook.InkSmall, onAdd)

@@ -113,6 +113,8 @@ internal class SettingsActions(
     val delete: (ArchivedItem) -> Unit,
     /** The privacy policy in a browser (SPEC-036). */
     val openPrivacy: (String) -> Unit,
+    val openFeedbackMail: () -> Boolean,
+    val copyFeedbackAddress: () -> Unit,
     /** `[설정 열기]` and `[허용하기]` of `알림이 오지 않을 때`: the system settings screen (SPEC-028, SPEC-029, SPEC-030). */
     val openAccess: (AccessSetting) -> Unit,
 )
@@ -174,6 +176,7 @@ private object Open {
 private fun SettingsBody(view: SettingsView?, phone: PhoneState, privacyUrl: String, now: () -> Instant, actions: SettingsActions) {
     var open by rememberSaveable { mutableStateOf<String?>(null) }
     var archivedOpen by rememberSaveable { mutableStateOf(false) }
+    var noMail by rememberSaveable { mutableStateOf(false) }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
@@ -237,12 +240,15 @@ private fun SettingsBody(view: SettingsView?, phone: PhoneState, privacyUrl: Str
         SectionTitle("앱 정보")
         ValueRow("버전", phone.appVersion.ifBlank { "-" }, onClick = null)
         LinkRow("개인정보처리방침") { actions.openPrivacy(privacyUrl) }
+        FeedbackRow { if (!noMail && !actions.openFeedbackMail()) noMail = true }
         Words(
             Labels.SETTINGS_MEDICAL,
             Ui.type(14, color = Ui.Muted),
             Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
         )
     }
+
+    if (noMail) NoMailSheet(onCopy = actions.copyFeedbackAddress, onClose = { noMail = false })
 
     if (view == null) return
     val shown = open ?: return

@@ -90,7 +90,8 @@ ENTRIES = {
     '의료기관·담당 의사': [('가상내과의원', '내과 · 담당 의사 이가상 · 02-000-0000')],
     '보호자 연락처': [('홍가상', '딸 · 010-0000-0000')],
 }
-MEDS = [('가상정 10mg 1정', '매일 아침'), ('보기정 500mg 반 알', '매일 아침'), ('가상정 10mg 1정', '매일 저녁'), ('비타민', '매일')]
+# 설계 바꿈 R 06(2026-11-23 '바꿈 승인'): 약 줄이 없는 항목은 "항목 이름 · 주기 시간대 (약 이름 미입력)"
+MEDS = [('가상정 10mg 1정', '매일 아침'), ('보기정 500mg 반 알', '매일 아침'), ('가상정 10mg 1정', '매일 저녁'), ('비타민', '매일 (약 이름 미입력)')]
 
 
 def kind_block(name, ex, entries, with_del=True):
@@ -149,7 +150,7 @@ def card_body():
   <div class="body">
     <p class="arch note" style="display: {{arch}}">보관한 대상자예요. 카드는 그대로 쓸 수 있어요.</p>
     <div class="band" style="display: {{recopy}}; margin-bottom: var(--space-md)">카드가 바뀌었어요. 휴대폰 긴급 정보에 넣은 문장도 다시 넣어 주세요.
-      <div class="bb"><button class="btn ink sm" type="button">응급 대비 문장</button><button class="btn line sm" type="button">닫기</button></div></div>
+      <div class="bb"><button class="btn ink sm" type="button">응급 대비 문장</button><button class="btn line sm" type="button">다 넣었어요</button></div></div>
     <div class="acts">
       <button class="btn ink" type="button">보여 주기</button>
       <div class="two"><button class="btn line" type="button">응급 대비 문장</button><button class="btn line" type="button">내보내기</button></div>
@@ -171,8 +172,9 @@ CARD_LOGIC = state_logic({'arch': (['archived'], 'block'), 'recopy': (['recopy']
                           'medEdit': (['normal', 'recopy'], 'block'), 'chev': (['normal', 'recopy'], 'flex')})
 cb = card_body()
 board('Card', 'SCR-011 건강 카드', cb, css=CARD_CSS, h=1610, props={**FSP, **CARD_STATES}, logic=CARD_LOGIC)
-board('Card200', 'SCR-011 건강 카드 · 글자 200%', cb, css=CARD_CSS, h=3150,
+board('Card200', 'SCR-011 건강 카드 · 글자 200%', cb, css=CARD_CSS, h=3210,
       props={**FSP, "fontScale": {**FSP["fontScale"], "default": "200"}, **CARD_STATES}, logic=CARD_LOGIC)
+# 개발 중 설계 바꿈 S-2(2026-11-23 '바꿈 승인'): 안내의 [닫기]를 [다 넣었어요]로 부름(요약이 빈 문구의 [닫기]는 그대로, 그 문구는 보드에 없음).
 board('CardRecopy', 'SCR-011 건강 카드 · 낡은 문장 안내', cb, css=CARD_CSS, h=1740,
       props={**FSP, **{"state": {**CARD_STATES["state"], "default": "recopy"}}}, logic=CARD_LOGIC)
 board('CardArchived', 'SCR-011 건강 카드 · 보관한 대상자', cb, css=CARD_CSS, h=1630,
@@ -232,19 +234,23 @@ board('CardEntryError', 'SCR-012 카드 칸 적기 · 보호자 연락처 · 전
 </div>''')
 
 # ------------------------------------------------------------------ SCR-013 보여 주기
-SHOW = [('지금 먹는 약', [f'{a} · {b}' for a, b in MEDS]),
+NOBR = lambda t: f'<span style="white-space:nowrap">{t}</span>'  # 줄 끝에 짧은 낱말 하나만 남지 않게
+SHOW = [('지금 먹는 약', [f'{a} · {b}'.replace('이름 미입력)', NOBR('이름 미입력)')) for a, b in MEDS]),
         ('알레르기', ['페니실린 계열 (반응: 두드러기)']),
         ('질환', ['고혈압 (2015년)', '골다공증 (2023년 3월)']),
         ('수술·시술', ['쓸개 수술 (2019년)']),
         ('의료기관·담당 의사', ['가상내과의원 (내과)<span class="sub">담당 의사 이가상 · 02-000-0000</span>']),
         ('보호자 연락처', ['홍가상 (딸) 010-0000-0000'])]
+# 설계 바꿈 R 06: 고지 문구는 이름 바로 아래(전에는 맨 아래). 마지막으로 고친 날은 맨 아래 그대로
+DISC = '사용자가 적은 내용이며 의료기관의 기록이 아니에요. 적지 않은 종류는 보이지 않아요(없다는 뜻이 아니에요)'
 SHOW_BODY = ('''
 <div class="s {{fs}}">
   <div class="bar"><span class="sp"></span><button class="ib" type="button" aria-label="닫기">@CLOSE@</button></div>
   <div class="body">
     <p class="who">엄마</p>
+    <p class="disc">''' + DISC + '''</p>
 ''' + ''.join(f'<section class="sk"><h3>{t}</h3>' + ''.join(f'<p class="it">{i}</p>' for i in items) + '</section>\n' for t, items in SHOW) + '''
-    <div class="fine"><p>마지막으로 고친 날 2026-11-23</p><p>사용자가 적은 내용이며 의료기관의 기록이 아니에요</p></div>
+    <div class="fine"><p>마지막으로 고친 날 2026-11-23</p></div>
   </div>
 </div>''')
 SHOW_CSS = '''
@@ -255,57 +261,114 @@ SHOW_CSS = '''
 .it{font-size:var(--font-size-title-md);font-weight:var(--font-weight-semibold);line-height:var(--font-line-height-normal)}
 .it+.it{margin-top:var(--space-xs)!important}
 .it .sub{display:block;font-size:var(--font-size-title-sm);font-weight:var(--font-weight-regular)}
+.disc{margin:0 var(--space-2xs) var(--space-lg)!important;font-size:var(--font-size-body);font-weight:var(--font-weight-semibold);line-height:var(--font-line-height-normal);color:var(--color-ink-muted)}
 .fine{border-top:var(--border-thin) solid var(--color-line-strong);padding:var(--space-md) var(--space-2xs) var(--space-xl);font-size:var(--font-size-body);line-height:var(--font-line-height-normal);color:var(--color-ink-muted)}
 '''
-board('CardShow', 'SCR-013 보여 주기', SHOW_BODY, css=SHOW_CSS, h=880)
-board('CardShow200', 'SCR-013 보여 주기 · 글자 200%', SHOW_BODY, css=SHOW_CSS, h=1650,
+board('CardShow', 'SCR-013 보여 주기', SHOW_BODY, css=SHOW_CSS, h=915)
+board('CardShow200', 'SCR-013 보여 주기 · 글자 200%', SHOW_BODY, css=SHOW_CSS, h=1790,
       props={"fontScale": {**FSP["fontScale"], "default": "200"}})
 
 # ------------------------------------------------------------------ SCR-014 응급 대비 문장
+# 개발 중 설계 바꿈 S-1(2026-11-23 '바꿈 승인'): 문장과 [모두 복사] 아래에 넣는 곳 안내, 그 아래 '칸별 복사'의 종류별 줄과 [복사].
+# 줄의 글은 문장의 그 부분 그대로이고(종류 이름·대상자 이름·끝 문구 없음), 적은 칸이 없는 종류(이 예에서는 이식형 의료기기)는 줄이 없음.
+# 119안심콜 문장은 10 확인 10-4대로 앱에 넣지 않아 보드에도 없음(설계 바꿈 R 10으로 요구·흐름·명세의 글도 맞춤).
+# 설계 바꿈 R(2026-11-23 '바꿈 승인'): 맨 위 대상자 줄(R 01), 넣는 곳 안내에 저장·긴급 연락처·잠금 화면(R 09)과 지운 정보(R 02),
+# 고를 수 없는 문장(R 07), 안내 줄 글(R 19). 갤럭시·Pixel이 아닌 기기의 일반 안내는 보드에 없음(screens.md SCR-014).
 SENT = ('엄마. 알레르기: 페니실린 계열(두드러기). 지금 먹는 약: 가상정 10mg 1정 매일 아침, 보기정 500mg 반 알 매일 아침, '
-        '가상정 10mg 1정 매일 저녁, 비타민 매일. 질환: 고혈압, 골다공증. 보호자: 홍가상(딸) 010-0000-0000. '
+        '가상정 10mg 1정 매일 저녁, 비타민 매일 (약 이름 미입력). 질환: 고혈압, 골다공증. 보호자: 홍가상(딸) 010-0000-0000. '
         '의료기관: 가상내과의원 내과 02-000-0000. 필받음 건강 카드, 2026-11-23 고침.')
-EM_LOGIC = ("class Component extends DCLogic {\n  renderVals() {\n    const c = (this.props.state ?? 'normal') === 'copied';\n"
-            "    return { fs: (this.props.fontScale ?? '100') === '200' ? 'fs200' : '', copied: c ? 'block' : 'none' };\n  }\n}")
-EM_PROPS = {**FSP, "state": {"editor": "enum", "options": ["normal", "copied"], "default": "normal"}}
+# (줄 제목, 문장 안의 이름, 줄의 글). 순서는 SPEC-051: 알레르기 → 지금 먹는 약 → 질환 → 이식형 의료기기 → 보호자 연락처 → 의료기관
+EM_LINES = [('알레르기', '알레르기', '페니실린 계열(두드러기)'),
+            ('지금 먹는 약', '지금 먹는 약', '가상정 10mg 1정 매일 아침, 보기정 500mg 반 알 매일 아침, 가상정 10mg 1정 매일 저녁, 비타민 매일 (약 이름 미입력)'),
+            ('질환', '질환', '고혈압, 골다공증'),
+            ('보호자 연락처', '보호자', '홍가상(딸) 010-0000-0000'),
+            ('의료기관', '의료기관', '가상내과의원 내과 02-000-0000')]
+for _t, _in_sent, _text in EM_LINES:  # 두 복사가 같은 내용을 넣음
+    assert f'{_in_sent}: {_text}.' in SENT, _in_sent
+EM_LINE_COPIED = '지금 먹는 약'  # EmergencyCopied: 이 줄의 [복사]를 누른 뒤
+OK = '이제 긴급 정보에 붙여 넣어 주세요.'  # SCR-014#copied, Android 13 이상
+# 설계 바꿈 S-2: 카드의 낡은 문장 안내가 보이는 동안 줄을 복사하면 안내 줄 끝에 더함(줄 복사는 안내를 지우지 않음)
+# 설계 바꿈 R 02·19: [모두 복사]도 안내를 지우지 않고, 두 복사 모두 이 글을 더함. 글은 "휴대폰에 저장한 뒤 건강 카드로 돌아가 …"
+S2 = '휴대폰에 저장한 뒤 건강 카드로 돌아가 [다 넣었어요]를 눌러 주세요.'
+S2_HTML = S2.replace('[다 넣었어요]를', '<span style="white-space:nowrap">[다 넣었어요]를</span>')  # 버튼 이름은 줄을 나누지 않음
+
+
+def nowrap_nums(s):
+    return re.sub(r'(\d[\d-]*\d)', r'<span style="white-space:nowrap">\1</span>', s)
+
+
+def em_line(title, text):
+    ok = (f'\n      <p class="ok" style="display: {{{{line}}}}">{OK}</p>'
+          f'\n      <p class="ok" style="display: {{{{linerecopy}}}}">{OK} {S2_HTML}</p>') if title == EM_LINE_COPIED else ''
+    return (f'    <section class="ln"><h3>{title}</h3><p class="lt">{nowrap_nums(text)}</p>\n'
+            f'      <button class="btn line sm" type="button" aria-label="{title} 복사">복사</button>{ok}</section>\n')
+
+
+EM_LOGIC = ("class Component extends DCLogic {\n  renderVals() {\n    const st = this.props.state ?? 'normal';\n"
+            "    return { fs: (this.props.fontScale ?? '100') === '200' ? 'fs200' : '',\n"
+            "      copied: st === 'copied' ? 'block' : 'none', allrecopy: st === 'allrecopy' ? 'block' : 'none', line: st === 'line' ? 'block' : 'none',\n"
+            "      linerecopy: st === 'linerecopy' ? 'block' : 'none' };\n  }\n}")
+EM_PROPS = {**FSP, "state": {"editor": "enum", "options": ["normal", "copied", "allrecopy", "line", "linerecopy"], "default": "normal"}}
+# 설계 바꿈 R 01(2026-11-23 '바꿈 승인'): 맨 위와 넣는 곳 안내에 대상자를 밝히는 줄. '엄마'는 받침이 없어 '가'
+WHO = '엄마의 정보예요. 엄마가 쓰는 휴대폰의 긴급 정보에 ' + NOBR('넣어 주세요.')
 EM_BODY = '''
 <div class="s {{fs}}">
   <div class="bar back"><button class="ib" type="button" aria-label="닫기">@CLOSE@</button><h1>응급 대비 문장</h1></div>
   <div class="body">
+    <p class="whoem">''' + WHO + '''</p>
     <p class="ex">휴대폰 긴급 정보에 붙여 넣을 짧은 글이에요.</p>
-    <div class="txt">''' + re.sub(r'(\d[\d-]*\d)', r'<span style="white-space:nowrap">\1</span>', SENT) + '''</div>
+    <div class="txt">''' + nowrap_nums(SENT) + '''</div>
     <p class="cnt">''' + f'{len(SENT)}자' + '''</p>
-    <button class="btn ink" type="button">복사</button>
-    <p class="ok" style="display: {{copied}}">이제 긴급 정보에 붙여 넣어 주세요.</p>
+    <button class="btn ink" type="button">모두 복사</button>
+    <p class="ok" style="display: {{copied}}">''' + OK + '''</p>
+    <p class="ok" style="display: {{allrecopy}}">''' + OK + ' ' + S2_HTML + '''</p>
     <h2>넣는 곳</h2>
-    <p class="sm" style="padding:0 var(--space-2xs)">휴대폰 설정의 긴급 정보에서 의료 정보에 붙여 넣어 주세요. 119안심콜에 등록할 때도 쓸 수 있어요.</p>
-    <p class="note" style="padding:var(--space-xs) var(--space-2xs) var(--space-xl)">앱은 대신 등록하지 않아요.</p>
-  </div>
+    <p class="sm" style="padding:0 var(--space-2xs)">''' + WHO + '''</p>
+    <p class="sm" style="padding:var(--space-xs) var(--space-2xs) 0">갤럭시는 설정 → 안전 및 긴급 → 의료정보, Pixel은 위급 상황 정보 앱 → 내 정보 → 의료 정보에서 열어요. 칸마다 맞는 줄을 복사해 붙여 넣어 주세요. 붙여 넣은 뒤 저장해 주세요. 보호자는 휴대폰 긴급 연락처에서 연락처를 골라 따로 더해 주세요. 잠금 화면에 보이게 하려면 휴대폰 설정에서 ''' + NOBR('켜 주세요.') + '''</p>
+    <p class="sm" style="padding:var(--space-xs) var(--space-2xs) 0">카드에서 지운 정보는 휴대폰 긴급 정보에서도 지워 주세요.</p>
+    <p class="note" style="padding:var(--space-xs) var(--space-2xs) 0">앱은 대신 등록하지 않아요.</p>
+    <h2>칸별 복사</h2>
+''' + ''.join(em_line(t, x) for t, _s, x in EM_LINES) + '''  </div>
 </div>'''
 EM_CSS = '''
+.whoem{margin:0 var(--space-2xs) var(--space-sm)!important;font-size:var(--font-size-body);font-weight:var(--font-weight-extrabold);line-height:var(--font-line-height-normal)}
+/* 문장 글은 고를 수 없음(설계 바꿈 R 07). 앱에서는 SelectionContainer를 쓰지 않음 */
+.txt{user-select:none}
 .ex{margin:0 var(--space-2xs) var(--space-md)!important;font-size:var(--font-size-body-sm);line-height:var(--font-line-height-normal);color:var(--color-ink-muted)}
 .txt{background:var(--color-surface-sunken);border-radius:var(--radius-tile);padding:var(--space-lg);line-height:var(--font-line-height-normal);font-size:var(--font-size-body)}
 .cnt{text-align:right;padding:var(--space-xs) var(--space-2xs) var(--space-md);font-size:var(--font-size-body-sm);color:var(--color-ink-muted)}
 .ok{margin-top:var(--space-sm)!important;padding:0 var(--space-2xs);font-size:var(--font-size-body-sm);font-weight:var(--font-weight-semibold);line-height:var(--font-line-height-normal)}
+/* 종류별 줄: 제목과 글은 왼쪽, [복사]는 오른쪽. 글자 200%에서는 제목 → 글 → [복사]로 쌓음 */
+.ln{display:grid;grid-template-columns:1fr auto;grid-template-areas:"t b" "x b" "o o";column-gap:var(--space-md);align-items:center;
+  padding:var(--space-md) var(--space-2xs);border-top:var(--border-thin) solid var(--color-line-subtle)}
+.ln:last-child{margin-bottom:var(--space-xl);border-bottom:var(--border-thin) solid var(--color-line-subtle)}
+.ln h3{grid-area:t;margin:0;font-size:var(--font-size-label);font-weight:var(--font-weight-extrabold);line-height:var(--font-line-height-tight)}
+.ln .lt{grid-area:x;margin-top:var(--space-2xs)!important;line-height:var(--font-line-height-normal)}
+.ln .btn{grid-area:b}
+.ln .ok{grid-area:o;padding:0}
+.fs200 .ln{grid-template-columns:1fr;grid-template-areas:"t" "x" "b" "o"}
+.fs200 .ln .btn{justify-self:start;margin-top:var(--space-sm)}
 '''
-board('Emergency', 'SCR-014 응급 대비 문장', EM_BODY, css=EM_CSS, h=800, props=EM_PROPS, logic=EM_LOGIC)
-board('EmergencyCopied', 'SCR-014 응급 대비 문장 · 복사한 뒤 (Android 13 이상)', EM_BODY, css=EM_CSS, h=800,
-      props={**EM_PROPS, "state": {**EM_PROPS["state"], "default": "copied"}}, logic=EM_LOGIC)
+board('Emergency', 'SCR-014 응급 대비 문장', EM_BODY, css=EM_CSS, h=1225, props=EM_PROPS, logic=EM_LOGIC)
+# EmergencyCopied: 설계 바꿈 S-2부터 카드의 낡은 문장 안내가 보일 때 '지금 먹는 약' 줄을 복사한 뒤(state 'linerecopy').
+# 안내가 없을 때의 줄 복사 뒤는 state 'line', [모두 복사] 뒤는 'copied'.
+board('EmergencyCopied', 'SCR-014 응급 대비 문장 · 카드 안내가 보일 때 칸별 복사한 뒤 (Android 13 이상)', EM_BODY, css=EM_CSS, h=1270,
+      props={**EM_PROPS, "state": {**EM_PROPS["state"], "default": "linerecopy"}}, logic=EM_LOGIC)
+board('Emergency200', 'SCR-014 응급 대비 문장 · 글자 200%', EM_BODY, css=EM_CSS, h=2800,
+      props={**EM_PROPS, "fontScale": {**FSP["fontScale"], "default": "200"}}, logic=EM_LOGIC)
 
 # ------------------------------------------------------------------ SCR-015 내보내기
-# SPEC-052: 한 쪽을 넘치면 쪽마다 대상자 이름·만든 날짜·쪽 번호. 2쪽 예(`pages`)는 보호자 연락처가 2쪽으로 넘어간 모양
+# SPEC-052: 한 쪽을 넘치면 쪽마다 대상자 이름·쪽 번호·문구·두 날짜(설계 바꿈 R 06). 2쪽 예(`pages`)는 보호자 연락처가 2쪽으로 넘어간 모양
 # (PR #57 리뷰에서 다시 그림, 2026-11-23). 한 쪽(`normal`)은 모든 종류와 두 날짜·문구가 한 쪽에 듦.
 def mini(rows):
     return ''.join(f'<b>{t}</b>' + ''.join(f'<i>{i}</i>' for i in items) for t, items in rows)
 
 
-FINE = '마지막으로 고친 날 2026-11-23 · 만든 날 2026-11-23<br>사용자가 적은 내용이며 의료기관의 기록이 아니에요'
-PAPER = ('<div class="paper"><p class="pn">엄마<span style="display: {{pagesIn}}"> · 1/2쪽</span></p>' + mini(SHOW[:-1]) +
-         '<div style="display: {{one}}">' + mini(SHOW[-1:]) + '</div>'
-         '<p class="pf" style="display: {{one}}">' + FINE + '</p>'
-         '<p class="pf" style="display: {{pages}}">만든 날 2026-11-23</p></div>'
-         '<div class="paper p2nd" style="display: {{pages}}"><p class="pn">엄마 · 2/2쪽</p>' + mini(SHOW[-1:]) +
-         '<p class="pf">' + FINE + '</p></div>')
+# 설계 바꿈 R 06·13(2026-11-23 '바꿈 승인'): 쪽마다 위쪽에 이름·쪽 번호, 이름 아래 문구, 두 날짜. 맨 아래 줄은 없앰
+HEAD = ('<p class="pd">' + DISC + '</p><p class="pd">마지막으로 고친 날 2026-11-23 · 만든 날 2026-11-23</p>')
+PAPER = ('<div class="paper"><p class="pn">엄마<span style="display: {{pagesIn}}"> · 1/2쪽</span></p>' + HEAD + mini(SHOW[:-1]) +
+         '<div style="display: {{one}}">' + mini(SHOW[-1:]) + '</div></div>'
+         '<div class="paper p2nd" style="display: {{pages}}"><p class="pn">엄마 · 2/2쪽</p>' + HEAD + mini(SHOW[-1:]) + '</div>')
 EX_LOGIC = ("class Component extends DCLogic {\n  renderVals() {\n    const p = (this.props.state ?? 'normal') === 'pages';\n"
             "    return { fs: (this.props.fontScale ?? '100') === '200' ? 'fs200' : '', pages: p ? 'block' : 'none', "
             "pagesIn: p ? 'inline' : 'none', one: p ? 'none' : 'block' };\n  }\n}")
@@ -329,7 +392,7 @@ EX_CSS = '''
 .paper b{display:block;margin-top:5px;font-size:7px;font-weight:var(--font-weight-extrabold);color:var(--color-ink-muted);border-top:var(--border-thin) solid var(--color-ink-default);padding-top:3px}
 .paper i{display:block;font-style:normal;font-size:8px;font-weight:var(--font-weight-semibold)}
 .paper i .sub{display:block;font-weight:var(--font-weight-regular)}
-.paper .pf{margin-top:8px!important;font-size:6px;color:var(--color-ink-muted)}
+.paper .pd{font-size:6px;color:var(--color-ink-muted);line-height:1.35}
 '''
 board('Export', 'SCR-015 내보내기', EX_BODY, css=EX_CSS, h=800, props=EX_PROPS, logic=EX_LOGIC)
 board('ExportPages', 'SCR-015 내보내기 · 2쪽', EX_BODY, css=EX_CSS, h=1030,
@@ -383,6 +446,23 @@ pick_body = home_body.rstrip()
 assert pick_body.endswith('</div>')
 pick_body = pick_body[:-len('</div>')] + pick_sheet
 board('HomeCardPick', 'SCR-004 기록 · 건강 카드 대상자 고르기', pick_body, css=HOME_CSS + SHEET_CSS)
+# 설계 바꿈 R 04(2026-11-23 '바꿈 승인'): 이름이 같은 대상자는 이름 아래에 항목 이름 줄, 창 아래에 이름을 바꾸라는 안내.
+# 같은 색인 가장 헷갈리는 경우를 그림. 항목 줄은 보관하지 않은 항목 가운데 기록 화면 순서의 첫 항목과 나머지 수
+same_sheet = '''
+  <div class="scrim" aria-hidden="true"></div>
+  <div class="sheet" role="dialog" aria-label="누구의 건강 카드를 볼까요?">
+    <p class="st">누구의 건강 카드를 볼까요?</p>
+    <div class="li p1"><span class="lid" aria-hidden="true">나</span><span class="k">나의 건강 카드</span><span class="muted">@CHEV@</span></div>
+    <div class="li p2"><span class="lid" aria-hidden="true">엄</span><span class="k">엄마의 건강 카드<small>항목: 아침약 외 1</small></span><span class="muted">@CHEV@</span></div>
+    <div class="li p2"><span class="lid" aria-hidden="true">엄</span><span class="k">엄마의 건강 카드<small>항목: 혈압약</small></span><span class="muted">@CHEV@</span></div>
+    <p class="note" style="padding:var(--space-sm) var(--space-2xs) 0">이름이 같은 대상자가 있어요. 대상자 관리에서 이름을 바꾸면 헷갈리지 않아요.</p>
+    <button class="btn text" type="button">닫기</button>
+  </div>
+</div>'''
+board('HomeCardPickSame', 'SCR-004 기록 · 건강 카드 대상자 고르기 · 이름이 같은 대상자', pick_body.replace(pick_sheet, same_sheet),
+      css=HOME_CSS + SHEET_CSS + '''
+.sheet .k small{display:block;font-size:var(--font-size-body-sm);font-weight:var(--font-weight-regular);color:var(--color-ink-muted);line-height:var(--font-line-height-normal)}
+''')
 
 # ------------------------------------------------------------------ SCR-006: 항목 안의 약 (1차 ItemForm에 '약' 부분을 더함)
 MEDS_LOGIC = ("class Component extends DCLogic {\n  renderVals() {\n    const err = (this.props.state ?? 'normal') === 'error';\n"
@@ -520,8 +600,9 @@ board('PersonEditCard', 'SCR-010 대상자 수정 · 건강 카드', '''
 
 # canvas layout for the 2차 boards (rows: card / entry·show·emergency·export / changed 1차 screens)
 rows = [['Card', 'Card200', 'CardRecopy', 'CardArchived', 'CardEmpty'],
-        ['CardEntry', 'CardEntry200', 'CardEntryError', 'CardShow', 'CardShow200', 'Emergency', 'EmergencyCopied', 'Export', 'ExportPages'],
-        ['HomeCard', 'HomeCard200', 'HomeCardPick', 'ItemFormMeds', 'ItemFormMedsError', 'ItemFormMeds200', 'SettingsFeedback', 'SettingsNoMail',
+        ['CardEntry', 'CardEntry200', 'CardEntryError', 'CardShow', 'CardShow200', 'Emergency', 'EmergencyCopied', 'Emergency200', 'Export',
+         'ExportPages'],
+        ['HomeCard', 'HomeCard200', 'HomeCardPick', 'HomeCardPickSame', 'ItemFormMeds', 'ItemFormMedsError', 'ItemFormMeds200', 'SettingsFeedback', 'SettingsNoMail',
          'PeopleCard', 'PeopleCard200', 'PersonEditCard']]
 meta = {n: (t, w, h) for n, t, w, h in BOARDS}
 assert sorted(meta) == sorted(sum(rows, [])), sorted(set(meta) ^ set(sum(rows, [])))

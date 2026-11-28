@@ -1,8 +1,8 @@
 # 05 ERD: 필받음 데이터 (1차, 2차 첫 릴리즈)
 
-- 상태 (2차 첫 릴리즈): **스키마 3 고정** (2026-11-23 KST, 필받음 봇이 전한 사용자님 답 "추천안 모두 승인"(05-1~05-5, 근거는 사용자님 말씀(오랑이 채팅, 2026-11-23 01시대 KST)과 필받음 봇 질문 `msg_198e01fb413a`에 대한 오랑이 답)). 새 표 여섯(TBL-012~017)과 쓰기 시작하는 표 둘(TBL-009·010)을 [8장](#8-2차-첫-릴리즈-스키마-3-설계)에 둠. Room 스키마 3(`3.json`)과 이주 2→3은 11 개발에서 만들고, 그때 `db/schema.sql`에 옮김. 그 전까지 `db/schema.sql`은 스키마 2 그대로이고 표 주석만 고침. 입력은 04 명세 SPEC-045~055와 고친 SPEC-025·SPEC-037(고정 2026-11-23 KST), 01 도메인 CTX-006·TERM-032~044
+- 상태 (2차 첫 릴리즈): **스키마 3 고정** (2026-11-23 KST, 필받음 봇이 전한 사용자님 답 "추천안 모두 승인"(05-1~05-5, 근거는 사용자님 말씀(오랑이 채팅, 2026-11-23 01시대 KST)과 필받음 봇 질문 `msg_198e01fb413a`에 대한 오랑이 답)). 새 표 여섯(TBL-012~017)과 쓰기 시작하는 표 둘(TBL-009·010)을 [8장](#8-2차-첫-릴리즈-스키마-3-설계)에 둠. TASK-057에서 Room 스키마 3과 이주 2→3을 구현하고 CREATE 문을 `db/schema.sql`에 옮김. 입력은 04 명세 SPEC-045~055와 고친 SPEC-025·SPEC-037(고정 2026-11-23 KST), 01 도메인 CTX-006·TERM-032~044
 - 상태 (1차): **고정** (2026-11-13 01:04 KST, 동희님 "추천모두승인", 프로젝트 채팅. 질문은 2026-11-13 00:55 KST 프로젝트 스레드 '약봉이 1차 릴리즈 이어 가기'의 Claude 메시지 1번. 기록은 [7장](#7-고정-기록)). 1차 스키마는 Room 스키마 2(TBL-001~011) 그대로임. 고정한 뒤 표를 바꾸려면 동희님 결정이 필요하고 이주를 함께 만듦. 초안은 2026-11-12 Claude가 씀. 04 명세 고정(2026-11-13 00:16 KST)에서 5장 3을 정함(대상자 되살리기, 스키마 그대로).
-- 원본: [`db/schema.sql`](../../db/schema.sql) (TBL-001~011). 그 파일은 Room이 내보낸 [스키마 2](../../shared/schemas/com.judangbang.pillbadeum.data.DidITakeDatabase/2.json)의 CREATE 문을 그대로 옮기고 표마다 TBL 번호·맥락(CTX)·명세(SPEC)·용어(TERM)를 단 것. `check_docs.py`가 두 쪽이 같은지 봄.
+- 원본: [`db/schema.sql`](../../db/schema.sql) (TBL-001~017). 그 파일은 Room이 내보낸 [스키마 3](../../shared/schemas/com.judangbang.pillbadeum.data.DidITakeDatabase/3.json)의 CREATE 문을 그대로 옮기고 표마다 TBL 번호·맥락(CTX)·명세(SPEC)·용어(TERM)를 단 것. `check_docs.py`가 두 쪽이 같은지 봄.
 - 입력: [04 기능 명세](../04-functional-spec/spec.md) SPEC-001~044(고정), [01 도메인](../01-domain/domain.md) CTX-001~005·TERM-001~031.
 - 이전 시안: 가쟈누님 DidITake `docs/02-design/data-model.md`. 표 구조는 그 시안으로 이미 만들어져 앱에 들어가 있음. 이번 단계는 표를 새로 짜지 않고, 01~04에서 다시 정한 말과 동작에 비춰 빠진 것·남는 것을 찾음.
 
@@ -105,7 +105,12 @@ erDiagram
 | TBL-009 | medication | CTX-002 (2차부터 씀) | TERM-033 약 | SPEC-025, 048, 049 |
 | TBL-010 | intake_medication | CTX-002 (2차부터 씀) | TERM-033 약, TERM-034 1회 투약량 | SPEC-025, 048, 049 |
 | TBL-011 | dose_version | 2차 | 없음 | 없음 |
-| TBL-012~017 | health_card, condition, procedure_history, allergy, implanted_device, care_contact | CTX-006 | TERM-032, TERM-035~040 | 스키마 3 설계(8장). Room 3.json이 생기면 이 표에 한 줄씩 |
+| TBL-012 | health_card | CTX-006 | TERM-032 건강 카드 | SPEC-045~049, 051, 054, 055 |
+| TBL-013 | condition | CTX-006 | TERM-035 질환 | SPEC-045~047, 049 |
+| TBL-014 | procedure_history | CTX-006 | TERM-036 수술·시술 | SPEC-045~047, 049 |
+| TBL-015 | allergy | CTX-006 | TERM-037 알레르기 | SPEC-045~047, 049 |
+| TBL-016 | implanted_device | CTX-006 | TERM-038 이식형 의료기기 | SPEC-045~047, 049 |
+| TBL-017 | care_contact | CTX-006 | TERM-039 의료기관·담당 의사, TERM-040 보호자 연락처 | SPEC-045~047, 049 |
 
 DB가 직접 막는 규칙은 셋:
 
@@ -156,7 +161,7 @@ DB가 직접 막는 규칙은 셋:
 | SPEC-035 | 없음(Android 화면 잠금·버전을 그때 읽음) |
 | SPEC-036 | 없음 |
 | SPEC-037 | DB 파일 전체가 백업 대상(`backup_rules.xml`), 기기 표식 파일은 제외 |
-| SPEC-038 | 기기 표식 파일, setting `device_id`·`restored_from_device_id`·`restore_notice_pending`, (2차) `restored_at` |
+| SPEC-038 | 기기 표식 파일, setting `device_id`·`restored_from_device_id`·`restore_notice_pending`, (2차) `restored_at`, health_card `stale_notice_closed_at`(같은 거래에서 `emergency_copied_at`이 있는 모든 카드의 값을 비움, 8.4 4) |
 | SPEC-039 | setting `restore_notice_pending`·`restore_notice_last_record_at` |
 | SPEC-040 | setting `day_start`·`base_zone` |
 | SPEC-041 | setting `reminder_alarm_at`·`reminder_last_run_at`, clock_flag |
@@ -165,15 +170,15 @@ DB가 직접 막는 규칙은 셋:
 | SPEC-044 | person의 archived_at, schedule_version(되살릴 때 그 대상자 항목의 열린 버전을 보관한 때에 닫고 새로 엶, 보충 P-9) |
 | SPEC-045 | 칸 종류의 표 하나에 씀(condition·procedure_history·allergy·implanted_device·care_contact, `source` USER). health_card `edited_at`을 씀(행이 없으면 만듦). person을 읽음 |
 | SPEC-046 | 그 칸의 행을 지움. health_card `edited_at` |
-| SPEC-047 | 그 대상자의 칸 표 다섯 행을 한 거래에서 지움. health_card 행은 남기고 `edited_at`만 씀(복사 시각을 지켜 SPEC-055가 쓰게) |
+| SPEC-047 | 그 대상자의 칸 표 다섯 행을 한 거래에서 지움. health_card 행은 남기고 `edited_at`을 씀(복사 시각을 지켜 SPEC-055가 쓰게. `emergency_copied_at`이 있으면 같은 거래에서 `stale_notice_closed_at`을 비움, 8.4 4) |
 | SPEC-048 | 항목 저장과 같은 거래에서 intake_medication·medication을 쓰고 지움(약 줄 하나에 두 표의 행 하나씩, 8장 5). health_card `edited_at` |
-| SPEC-049 | 칸 표 다섯, person `name`·`archived_at`, intake(보관하지 않은 것)의 `name`·`slot_label`·`created_at`, 열린 schedule_version, intake_medication·medication, health_card `edited_at`, setting `base_zone`(날짜). `edited_at`은 SPEC-003·023·024·025·026·045~048이 씀 |
+| SPEC-049 | 칸 표 다섯, person `name`·`archived_at`, intake(보관하지 않은 것)의 `name`·`slot_label`·`created_at`, 열린 schedule_version, intake_medication·medication, health_card `edited_at`, setting `base_zone`(날짜). `edited_at`은 SPEC-003·023·024·025·026·045~048이 쓰고, 쓰는 같은 거래에서 `emergency_copied_at`이 있으면 `stale_notice_closed_at`을 비움(8.4 4) |
 | SPEC-050 | SPEC-049의 요약. 화면 켜 두기는 표 밖(화면 창의 설정) |
-| SPEC-051 | SPEC-049의 요약. health_card `emergency_copied_at`을 씀. 클립보드는 표 밖 |
+| SPEC-051 | SPEC-049의 요약. 낡은 문장 안내가 보이지 않을 때의 복사만 health_card `emergency_copied_at`·`stale_notice_closed_at`에 지금 시각을 쓰고, 안내가 보이면 아무것도 쓰지 않음([모두 복사]·종류별 줄 [복사] 모두, 8.4 4). 클립보드는 표 밖 |
 | SPEC-052 | SPEC-049의 요약. 파일은 앱 캐시의 내보내기 폴더(표 밖, 백업 밖) |
 | SPEC-053 | 없음(앱 버전·Android 버전·기기 모델은 그때 읽고, 받는 주소는 앱 안의 글) |
 | SPEC-054 | person(`archived_at` 포함), health_card |
-| SPEC-055 | health_card `edited_at`·`emergency_copied_at`·`stale_notice_closed_at`(닫기 때 씀), setting `restored_at` |
+| SPEC-055 | health_card `edited_at`·`emergency_copied_at`·`stale_notice_closed_at`, setting `restored_at`. 안내는 `emergency_copied_at`이 있고 `stale_notice_closed_at`이 빌 때 보임. `stale_notice_closed_at`은 [다 넣었어요]·요약이 빈 문구의 [닫기]와 안내가 없을 때의 복사(SPEC-051)가 지금 시각을 쓰고, 카드 고침(SPEC-049의 `edited_at` 쓰기)과 복원 감지(SPEC-038)가 비움. `edited_at`·`restored_at`은 문구를 고를 때만 읽음(8.4 4) |
 
 ## 4. setting 키
 
@@ -188,7 +193,7 @@ DB가 직접 막는 규칙은 셋:
 | `device_id` | 이 설치의 id. 복원 뒤 새로 만듦(보충 R-1, R-2) | SPEC-001, 038 |
 | `restored_from_device_id` | 복원한 DB가 갖고 있던 옛 `device_id` | SPEC-038 |
 | `restore_notice_pending`, `restore_notice_last_record_at` | 복원 안내를 확인할 때까지 `1`, 복원 전 마지막 기록 시각 | SPEC-038, 039 |
-| `restored_at` | (2차) 복원을 감지한 때(UTC epoch ms). 낡은 응급 대비 문장 안내가 복원 뒤에 보이게 함(8장 4) | SPEC-038, 055 |
+| `restored_at` | (2차) 복원을 감지한 때(UTC epoch ms). 낡은 응급 대비 문장 안내의 복원 문구를 고를 때 읽음. 복원 뒤 안내가 보이는 것은 같은 거래에서 `stale_notice_closed_at`을 비워서임(8장 4) | SPEC-038, 055 |
 | `intro_seen_at` | 첫 실행 안내를 다 본 때. 값이 없으면 첫 실행 안내를 보임. 05 고정(2026-11-13)에서 정하고 TASK-022에서 더함(5장 1) | SPEC-002 |
 | `backup_policy` | 키만 정의돼 있고 앱이 읽거나 쓰지 않음 | 없음 |
 
@@ -209,7 +214,7 @@ DB가 직접 막는 규칙은 셋:
 - 용어집의 TERM이 모두 어느 표의 `terms:`나 `without a table:` 줄에 있음
 - 이 문서 3장에 모든 SPEC 행이 있음
 
-이주가 빈 DB에서 스키마를 다시 만드는지: 새 설치는 Room이 스키마 2를 바로 만들고, 1 → 2 이주는 `MigrationTest`가 옛 스키마 1로 만든 DB를 이주한 뒤 스키마 2와 같은지 확인함(CI의 jvmTest).
+새 설치에서 Room은 스키마 3을 바로 만듦. `MigrationTest`가 각각 스키마 1과 2로 만든 DB를 이주해 내보낸 스키마와 보존한 행을 확인함(CI의 jvmTest). 2 → 3의 카드 행 확인은 8.5절에 있음.
 
 ## 7. 고정 기록
 
@@ -221,7 +226,7 @@ DB가 직접 막는 규칙은 셋:
 
 ## 8. 2차 첫 릴리즈: 스키마 3 설계
 
-- 상태: 고정 (2026-11-23 KST, 8.7). Room 스키마 3과 이주 2→3은 11 개발에서 만듦(REQ-072). 그 작업이 `3.json`을 내보내면 CREATE 문이 8.3의 설계와 같은지 보고 `db/schema.sql`에 옮긴 뒤, 8.3의 표 주석을 그 파일로 옮김
+- 상태는 고정(2026-11-23 KST, 8.7). TASK-057에서 Room 스키마 3과 이주 2→3을 구현함(REQ-072). 8.3과 Room이 내보낸 CREATE 문이 같음을 확인하고 표 주석과 함께 `db/schema.sql`에 옮김.
 - 입력: [04 명세](../04-functional-spec/spec.md) SPEC-045~055와 2차에서 고친 SPEC-025·SPEC-037, [01 도메인](../01-domain/domain.md) CTX-006 규칙과 TERM-032~044, [변경 기록](../10-records/changes/2026-11-22-phase2-release1.md) 2장 '05 ERD' 제안
 - 1차 표 TBL-001~008의 열은 바뀌지 않음
 
@@ -244,8 +249,8 @@ erDiagram
     health_card {
         TEXT person_id PK "FK person"
         INTEGER edited_at "카드 고친 시각"
-        INTEGER emergency_copied_at "마지막 복사"
-        INTEGER stale_notice_closed_at "안내를 닫은 때"
+        INTEGER emergency_copied_at "안내 없을 때의 복사"
+        INTEGER stale_notice_closed_at "안내를 닫은 상태"
     }
     condition {
         TEXT id PK
@@ -312,13 +317,14 @@ TBL-011 `dose_version`은 다음 릴리즈(용량 바뀜 이력)까지 빈 표�
 
 ### 8.3 DDL 설계
 
-Room이 내보내는 형식으로 씀. 열 순서는 엔터티의 필드 순서를 따르므로 `3.json`과 다르면 `3.json`이 기준이고, 그때 이 절을 맞춤.
+아래 CREATE 문은 Room이 내보낸 `3.json`과 같음. 열 순서는 엔터티의 필드 순서를 따름.
 
 ```sql
 -- TBL-012 health_card (CTX-006) ← SPEC-045, SPEC-046, SPEC-047, SPEC-048, SPEC-049, SPEC-051, SPEC-054, SPEC-055 | terms: TERM-032
 --   대상자 한 명의 건강 카드에 딸린 시각. 칸은 종류마다 아래 표 다섯에 둠.
---   edited_at: 카드 고친 시각(SPEC-049). 마지막으로 고친 날짜(REQ-103)와 낡은 문장 안내(REQ-110)가 읽음.
---   emergency_copied_at: 응급 대비 문장을 마지막으로 복사한 때(SPEC-051). stale_notice_closed_at: 낡은 문장 안내를 닫은 때(SPEC-055).
+--   edited_at: 카드 고친 시각(SPEC-049). 마지막으로 고친 날짜(REQ-103)가 읽고, 낡은 문장 안내(REQ-110)는 문구를 고를 때만 읽음.
+--   emergency_copied_at: 안내가 없을 때 응급 대비 문장을 복사한 때(SPEC-051). 안내가 보이는 동안의 복사는 쓰지 않음.
+--   stale_notice_closed_at: 낡은 문장 안내를 닫은 상태(SPEC-055). 있으면 닫힘, 비면 emergency_copied_at이 있을 때 안내가 보임(8.4 4).
 --   rule (CTX-006, DB가 막음): 대상자 하나에 카드 하나 = PRIMARY KEY person_id.
 --   rule (코드): 행은 edited_at이나 복사 시각을 처음 쓸 때 만듦(edited_at은 그때). 카드를 모두 지워도(SPEC-047) 이 행은 남김. 행이 없으면 빈 카드.
 CREATE TABLE IF NOT EXISTS `health_card` (`person_id` TEXT NOT NULL, `edited_at` INTEGER NOT NULL, `emergency_copied_at` INTEGER, `stale_notice_closed_at` INTEGER, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `version` INTEGER NOT NULL, `device_id` TEXT NOT NULL, PRIMARY KEY(`person_id`), FOREIGN KEY(`person_id`) REFERENCES `person`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION );
@@ -357,7 +363,13 @@ CREATE INDEX IF NOT EXISTS `ix_care_contact_person_kind` ON `care_contact` (`per
 1. **아는 만큼의 날짜**(`diagnosed_on`·`performed_on`·`implanted_on`): TEXT, ISO 8601의 정밀도를 줄인 형식 `YYYY`·`YYYY-MM`·`YYYY-MM-DD`. 글의 길이가 정밀도라 정밀도 칸을 따로 두지 않음. 글 순서로 정렬해도 시간 순. 1900년부터 오늘까지는 코드가 막음(SPEC-045)
 2. **시각**: 1차 표처럼 UTC epoch ms INTEGER. 날짜로 보일 때는 setting `base_zone`
 3. **글자 수·칸 수 한계**(04 명세 3장): 코드가 막음. Room 엔터티에는 CHECK 제약이 없음. 꼭 적는 열의 빈 글('')도 코드가 막음(NOT NULL은 빈 글을 막지 못함)
-4. **낡은 문장 안내**(SPEC-055): `emergency_copied_at`이 있고 MAX(`edited_at`, setting `restored_at`)가 MAX(`emergency_copied_at`, `stale_notice_closed_at`)보다 뒤면 보임(빈 값은 0으로 셈). `restored_at`은 복원 감지(SPEC-038)가 `device_id`를 새로 쓰는 같은 거래에서 씀
+4. **낡은 문장 안내**(SPEC-055): 시각을 견주지 않고 상태로 정함(R 05, 표·열은 그대로). 거래(transaction)는 DB에 함께 쓰는 한 단위
+   - 보이는 때: `emergency_copied_at`이 있고 `stale_notice_closed_at`이 빔
+   - 복사([모두 복사]든 줄 [복사]든, SPEC-051): 안내가 보이지 않으면 두 열에 지금 시각을 씀. 보이면 아무것도 쓰지 않음
+   - 카드 고침(SPEC-049): `edited_at`을 쓰는 같은 거래에서, `emergency_copied_at`이 있으면 `stale_notice_closed_at`을 비움
+   - 복원 감지(SPEC-038): `device_id`를 새로 쓰는 같은 거래에서 `emergency_copied_at`이 있는 모든 카드의 `stale_notice_closed_at`을 비우고 setting `restored_at`을 씀
+   - 닫기: [다 넣었어요]와 요약이 빈 문구의 [닫기]는 `stale_notice_closed_at`에 지금 시각을 씀
+   - 문구 고르기: 요약이 비면 '카드 내용이 없어요' 문구. 아니면 `restored_at`이 있고 `restored_at` ≥ `edited_at`이면 복원 문구, 그 밖은 '카드가 바뀌었어요' 문구. 시각은 문구를 고를 때만 견주므로, 휴대폰 시계가 앞서거나 뒤처져도 안내가 보이고 사라지는 것은 바뀌지 않음
 5. **약 줄**(SPEC-048): 줄 하나 = intake_medication 행 하나 + medication 행 하나. 이름을 고치면 `medication.name`, 1회 투약량을 고치면 `intake_medication.qty_per_take`. 빼면 두 행을 지움. 같은 이름의 줄도 medication 행을 따로 둠(REQ-099, 합치지 않음). `product_code`·`effective_to`는 비우고 `effective_from`은 만든 때. 항목 완전 삭제(SPEC-025)는 intake_medication 다음에 그 medication 행을 지움
 6. **지우기**: 칸은 지우면 행을 지움(REQ-104, 되살리지 않음). 그래서 칸 표에는 `archived_at`을 두지 않음. 대상자 완전 삭제(다음 릴리즈, 로드맵 15번)는 칸 표 다섯과 health_card를 먼저 지우고 person을 지움(외래 키가 ON DELETE NO ACTION)
 7. **백업**: 같은 DB 파일이라 함께 백업·복원됨(SPEC-037). 내보내기 파일은 앱 캐시라 백업 밖
@@ -385,8 +397,8 @@ FROM `person` p;
 ### 8.6 01~04와 대조해 찾은 것
 
 1. **변경 기록 2장 '05 ERD' 제안과 달라진 것** (질문 05-2): (가) 시각을 담는 health_card 표를 더함. 카드 고친 시각·복사 시각·닫은 시각은 칸 하나가 아니라 카드에 딸리고, 카드를 모두 지워도 남아야 함(SPEC-047·055). 그래서 칸 표 번호가 하나씩 밀려 TBL-013~017 (나) 날짜는 '날짜와 정밀도' 두 칸이 아니라 정밀도를 줄인 ISO 8601 글 한 칸 (다) 칸 표에 `archived_at`을 두지 않음. 칸은 보관이 없고 지우면 DB에서 지움(REQ-104) (라) care_contact에는 코드 칸을 두지 않음. 연락처에 붙는 의학 코드가 없음
-2. SPEC-045의 '첫 칸을 저장할 때 생김'은 화면에 보이는 카드를 말함. health_card 행은 항목을 더할 때처럼 더 일찍 생길 수 있음(8.3의 행 만드는 규칙). 명세 글은 그대로 둠
-3. 복원 뒤 낡은 문장 안내(04 명세 3장)는 복원한 때를 알아야 해서 setting `restored_at`을 더함(질문 05-4). setting은 키·값 표라 스키마 버전과 상관없음
+2. SPEC-045의 '첫 칸을 저장할 때 생김'은 화면에 보이는 카드를 말함. health_card 행은 항목을 더할 때처럼 더 일찍 생길 수 있음(8.3의 행 만드는 규칙). 이주(8.5)로 기존 대상자는 첫 입력 전에도 행이 있음. 설계 독립 검토 R 21에서 SPEC-045에 이 사실을 적음
+3. 복원 뒤 낡은 문장 안내(04 명세 3장)는 복원한 때를 알아야 해서 setting `restored_at`을 더함(질문 05-4). setting은 키·값 표라 스키마 버전과 상관없음. R 05부터 안내가 보이는지는 상태로 정하고 `restored_at`은 복원 문구를 고를 때만 읽음
 4. 1차의 TBL-009·010(05 고정 5장 4에서 '지우지 않고 둠')을 약 줄에 씀(질문 05-5). 약 줄 하나에 medication 행 하나라, medication이 약 제품 목록 노릇을 하지는 않음. 식약처 목록을 붙이는 다음 릴리즈에서 같은 이름의 행을 합칠지 다시 봄 [추론]
 5. 2차가 읽는 1차 열: person `name`·`archived_at`, intake `name`·`slot_label`·`created_at`·`archived_at`, 열린 schedule_version. 1차 표의 열은 바뀌지 않음
 
@@ -397,3 +409,4 @@ FROM `person` p;
 - 함께 전해진 것: 설계 문서에 대한 승인이고, 실사용자 대상 릴리즈(2차 APK 배포 포함) 등은 위임 밖(오랑이). 10 WBS 릴리즈 줄의 조건으로 남김
 - 고정한 뒤 표를 바꾸려면 사용자님 결정이 필요하고, 바꾸면 이주와 `MigrationTest`를 함께 고침
 - PR #57 리뷰에서 바꿈 (2026-11-23 KST, [변경 기록](../10-records/changes/2026-11-22-phase2-release1.md) 6장 'PR #57 리뷰에서 바꾼 승인 항목' R3): 8.5 시험의 준비 데이터를 '판정 다섯'에서 TASK-057과 같은 '판정 10건'으로. 표와 이주는 그대로. 승인한 사람은 사용자님. 근거는 사용자님 말씀(오랑이 채팅, 2026-11-23 01시대 KST, "야 누가 너한테 체크포인트때 뭐 물어보면 추천 모두 승인이라고 해")과 필받음 봇 질문 `msg_d0454863115a`에 대한 오랑이 답(2026-11-23 KST). 리뷰 작업자의 질문 `msg_aab1b29ee04e`에 필받음 봇이 답장 `msg_e0b11e2309c9`로 전함: "1 추천, 2 추천, 3 추천이에요. 셋 다 고쳐 주세요."
+- 설계 독립 검토 반영에서 바꿈 (2026-11-23 KST, [변경 기록](../10-records/changes/2026-11-22-phase2-release1.md) 6장 '개발 중 설계 바꿈 R' 05·21): 8.4 4를 시각 견줌에서 상태 판정으로, 8.3과 `db/schema.sql`의 health_card 열 주석을 그에 맞게, 8.1 그림의 열 이름표 하나와 8.6 2·3을 고침. PR #69 리뷰(필받음 봇, 2026-11-24 KST, 작업 지시 `task_824caa57133a`)에 따라 3장의 SPEC-038·047·049·051·055 줄, 4장 `restored_at` 줄, 8.1 그림의 `emergency_copied_at` 이름표도 8.4 4에 맞춤. 표·열·CREATE 문과 이주는 그대로. 승인한 사람은 사용자님. 근거는 사용자님 말씀(오랑이 채팅, 2026-11-23 01시대 KST, "야 누가 너한테 체크포인트때 뭐 물어보면 추천 모두 승인이라고 해")과 필받음 봇 질문 `msg_422b96fb86bb`에 대한 오랑이 답(2026-11-23 KST, 추천안 모두 승인, 05는 스키마 3의 표·열을 바꾸지 않는 상태 판정 안)

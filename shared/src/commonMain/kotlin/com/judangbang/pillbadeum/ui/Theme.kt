@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
@@ -153,10 +154,10 @@ internal fun TopBar(
 
 /** A text button of the bar (box.css `.tb`): `[지난 기록]`, `[설정]`. */
 @Composable
-internal fun BarButton(label: String, onClick: () -> Unit) {
+internal fun BarButton(label: String, onClick: () -> Unit, sidePadding: Dp = 12.dp) {
     Box(
-        Modifier.heightIn(min = 48.dp).clip(Ui.ButtonShape).clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 12.dp),
+        Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).clip(Ui.ButtonShape).clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = sidePadding),
         contentAlignment = Alignment.Center,
     ) {
         Words(label, Ui.type(15, Ui.SemiBold, lineHeight = 1.25f))
@@ -202,6 +203,7 @@ internal fun ActionButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    spoken: String? = null,
     icon: (@Composable () -> Unit)? = null,
 ) {
     val shown = if (enabled) look else look.copy(fill = Ui.Sunken, ink = Ui.Muted, border = null)
@@ -216,7 +218,7 @@ internal fun ActionButton(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         icon?.invoke()
-        Words(label, Ui.type(16, shown.weight, shown.ink, lineHeight = 1.25f, center = true))
+        Words(label, Ui.type(16, shown.weight, shown.ink, lineHeight = 1.25f, center = true), spoken = spoken)
     }
 }
 
@@ -304,7 +306,15 @@ internal fun Modifier.dashedBorder(width: Dp, color: Color, radius: Dp, dash: Dp
 
 /** A question before a change ("기록을 취소할까요?"), with `[아니요]` and [confirm]. */
 @Composable
-internal fun ConfirmDialog(title: String, body: String, confirm: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+internal fun ConfirmDialog(
+    title: String,
+    body: String,
+    confirm: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    cancel: String = "아니요",
+    stackButtons: Boolean = false,
+) {
     Dialog(onDismissRequest = onDismiss) {
         Column(
             // Scrolls when large text makes it taller than the window, so the buttons stay reachable.
@@ -313,9 +323,16 @@ internal fun ConfirmDialog(title: String, body: String, confirm: String, onConfi
         ) {
             Words(title, Ui.type(18, Ui.ExtraBold, lineHeight = 1.3f), heading = true)
             Words(body, Ui.type(16, color = Ui.Muted))
-            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                ActionButton("아니요", ButtonLook.LineSmall, onDismiss)
-                ActionButton(confirm, ButtonLook.InkSmall, onConfirm)
+            if (stackButtons) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ActionButton(cancel, ButtonLook.Line, onDismiss)
+                    ActionButton(confirm, ButtonLook.Ink, onConfirm)
+                }
+            } else {
+                Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+                    ActionButton(cancel, ButtonLook.LineSmall, onDismiss)
+                    ActionButton(confirm, ButtonLook.InkSmall, onConfirm)
+                }
             }
         }
     }

@@ -12,6 +12,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
@@ -25,7 +26,9 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.judangbang.pillbadeum.DidITakeCore
 import com.judangbang.pillbadeum.MainActivity
@@ -200,7 +203,10 @@ class ItemReminderTest {
         runBlocking { assertTrue(core.reminders.saveRule(seed.morning, enabled = true, start = LocalTime(7, 30)) is SaveReminderResult.Saved) }
         open()
         compose.onAllNodes(editTile() and hasContentDescription("아침약", substring = true)).onFirst().performClick()
-        compose.onNodeWithText("07:30").performScrollTo().assertExists()
+        val firstTime = Labels.reminderStartSpoken(LocalTime(7, 30))
+        compose.waitUntil(10_000) { compose.onAllNodesWithContentDescription(firstTime).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription(firstTime).performScrollTo()
+        compose.onNodeWithText("07:30").assertExists()
 
         switch().performScrollTo().performClick()
         assertGone("07:30")
@@ -225,6 +231,50 @@ class ItemReminderTest {
         save("item-reminder-200")
     }
 
+    @Test
+    fun tc120_new_item_reveals_first_reminder_at_100_percent() = firstReminderAboveSave(1f, editing = false)
+
+    @Test
+    fun tc120_new_item_reveals_first_reminder_at_200_percent() = firstReminderAboveSave(2f, editing = false)
+
+    @Test
+    fun tc120_edited_item_reveals_first_reminder_at_100_percent() = firstReminderAboveSave(1f, editing = true)
+
+    @Test
+    fun tc120_edited_item_reveals_first_reminder_at_200_percent() = firstReminderAboveSave(2f, editing = true)
+
+    /** BUG-008: expose the switch at the foot of the viewport, then check without scrolling after the tap. */
+    private fun firstReminderAboveSave(scale: Float, editing: Boolean) {
+        RuntimeEnvironment.setFontScale(scale)
+        notificationsAllowed(true)
+        if (editing) {
+            app.seedWeek(family = false)
+            open()
+            compose.onAllNodes(editTile() and hasContentDescription("아침약", substring = true)).onFirst().performClick()
+            waitForText("항목 수정")
+        } else {
+            openNewItem()
+        }
+        val saveButton = compose.onNodeWithText("저장").fetchSemanticsNode()
+        val barTop = saveButton.positionInRoot.y - with(compose.density) { 12.dp.toPx() }
+        val toggle = switch().performScrollTo()
+        val gap = with(compose.density) { 24.dp.toPx() }
+        val offset = bottom(toggle) - (barTop - gap)
+        compose.onNode(hasScrollAction()).performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, offset) }
+        assertTrue("switch must be next to the save bar", barTop - bottom(toggle) in 0f..(gap + 1))
+
+        val firstTime = compose.onNodeWithContentDescription(Labels.reminderStartSpoken(LocalTime(8, 0)))
+        firstTime.assertDoesNotExist()
+        toggle.performClick()
+        val rowBottom = bottom(firstTime) + with(compose.density) { 8.dp.toPx() }
+        val mode = if (editing) "edit" else "new"
+        save("item-reminder-reveal-$mode-${(scale * 100).toInt()}")
+        assertTrue("first reminder row bottom $rowBottom exceeds save bar top $barTop", rowBottom <= barTop + 1)
+    }
+
+    private fun bottom(node: SemanticsNodeInteraction): Float =
+        node.fetchSemanticsNode().let { it.positionInRoot.y + it.size.height }
+
     // ---------------------------------------------------------------------------------------------------------------
 
     private fun open(): MainActivity {
@@ -236,7 +286,7 @@ class ItemReminderTest {
     private fun openNewItem(): MainActivity {
         val activity = open()
         compose.onNodeWithText("항목 추가").performClick()
-        compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction() and hasContentDescription("약 이름")).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10_000) { compose.onAllNodes(hasSetTextAction() and hasContentDescription("항목 이름")).fetchSemanticsNodes().isNotEmpty() }
         return activity
     }
 
@@ -255,7 +305,7 @@ class ItemReminderTest {
         compose.waitForIdle()
     }
 
-    private fun nameField(): SemanticsNodeInteraction = compose.onNode(hasSetTextAction() and hasContentDescription("약 이름"))
+    private fun nameField(): SemanticsNodeInteraction = compose.onNode(hasSetTextAction() and hasContentDescription("항목 이름"))
 
     /** `[알림 받기]`, the one switch of the item screen. */
     private fun switch(): SemanticsNodeInteraction = compose.onNode(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Switch))

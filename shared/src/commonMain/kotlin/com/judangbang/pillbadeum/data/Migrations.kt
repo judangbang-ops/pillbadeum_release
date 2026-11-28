@@ -6,6 +6,7 @@ import androidx.sqlite.execSQL
 import com.judangbang.pillbadeum.domain.ScheduleType
 import com.judangbang.pillbadeum.domain.WindowSettings
 import com.judangbang.pillbadeum.domain.firstVersionStart
+import kotlin.time.Clock
 import kotlin.time.Instant
 
 /**
@@ -40,7 +41,86 @@ object Migrations {
         }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2)
+    /** Adds the health-card tables and seeds timestamps for existing people (TASK-057, ERD 8.5). */
+    val MIGRATION_2_3: Migration = object : Migration(2, 3) {
+        override suspend fun migrate(connection: SQLiteConnection) {
+            // CREATE statements from the Room 3 export (ERD 8.3).
+            connection.execSQL(
+                "CREATE TABLE IF NOT EXISTS `health_card` (" +
+                    "`person_id` TEXT NOT NULL, `edited_at` INTEGER NOT NULL, `emergency_copied_at` INTEGER, " +
+                    "`stale_notice_closed_at` INTEGER, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, " +
+                    "`version` INTEGER NOT NULL, `device_id` TEXT NOT NULL, PRIMARY KEY(`person_id`), " +
+                    "FOREIGN KEY(`person_id`) REFERENCES `person`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+            )
+            connection.execSQL(
+                "CREATE TABLE IF NOT EXISTS `condition` (" +
+                    "`id` TEXT NOT NULL, `person_id` TEXT NOT NULL, `name` TEXT NOT NULL, `diagnosed_on` TEXT, " +
+                    "`note` TEXT, `code_system` TEXT, `code` TEXT, `source` TEXT NOT NULL, " +
+                    "`created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `version` INTEGER NOT NULL, " +
+                    "`device_id` TEXT NOT NULL, PRIMARY KEY(`id`), " +
+                    "FOREIGN KEY(`person_id`) REFERENCES `person`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+            )
+            connection.execSQL("CREATE INDEX IF NOT EXISTS `ix_condition_person` ON `condition` (`person_id`)")
+            connection.execSQL(
+                "CREATE TABLE IF NOT EXISTS `procedure_history` (" +
+                    "`id` TEXT NOT NULL, `person_id` TEXT NOT NULL, `name` TEXT NOT NULL, `performed_on` TEXT, " +
+                    "`place` TEXT, `code_system` TEXT, `code` TEXT, `source` TEXT NOT NULL, " +
+                    "`created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `version` INTEGER NOT NULL, " +
+                    "`device_id` TEXT NOT NULL, PRIMARY KEY(`id`), " +
+                    "FOREIGN KEY(`person_id`) REFERENCES `person`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+            )
+            connection.execSQL("CREATE INDEX IF NOT EXISTS `ix_procedure_history_person` ON `procedure_history` (`person_id`)")
+            connection.execSQL(
+                "CREATE TABLE IF NOT EXISTS `allergy` (" +
+                    "`id` TEXT NOT NULL, `person_id` TEXT NOT NULL, `substance` TEXT NOT NULL, `reaction` TEXT, " +
+                    "`code_system` TEXT, `code` TEXT, `source` TEXT NOT NULL, `created_at` INTEGER NOT NULL, " +
+                    "`updated_at` INTEGER NOT NULL, `version` INTEGER NOT NULL, `device_id` TEXT NOT NULL, " +
+                    "PRIMARY KEY(`id`), " +
+                    "FOREIGN KEY(`person_id`) REFERENCES `person`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+            )
+            connection.execSQL("CREATE INDEX IF NOT EXISTS `ix_allergy_person` ON `allergy` (`person_id`)")
+            connection.execSQL(
+                "CREATE TABLE IF NOT EXISTS `implanted_device` (" +
+                    "`id` TEXT NOT NULL, `person_id` TEXT NOT NULL, `name` TEXT NOT NULL, `implanted_on` TEXT, " +
+                    "`note` TEXT, `code_system` TEXT, `code` TEXT, `source` TEXT NOT NULL, " +
+                    "`created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `version` INTEGER NOT NULL, " +
+                    "`device_id` TEXT NOT NULL, PRIMARY KEY(`id`), " +
+                    "FOREIGN KEY(`person_id`) REFERENCES `person`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+            )
+            connection.execSQL("CREATE INDEX IF NOT EXISTS `ix_implanted_device_person` ON `implanted_device` (`person_id`)")
+            connection.execSQL(
+                "CREATE TABLE IF NOT EXISTS `care_contact` (" +
+                    "`id` TEXT NOT NULL, `person_id` TEXT NOT NULL, `kind` TEXT NOT NULL, `name` TEXT NOT NULL, " +
+                    "`department` TEXT, `doctor` TEXT, `relation` TEXT, `phone` TEXT, `source` TEXT NOT NULL, " +
+                    "`created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `version` INTEGER NOT NULL, " +
+                    "`device_id` TEXT NOT NULL, PRIMARY KEY(`id`), " +
+                    "FOREIGN KEY(`person_id`) REFERENCES `person`(`id`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+            )
+            connection.execSQL(
+                "CREATE INDEX IF NOT EXISTS `ix_care_contact_person_kind` ON `care_contact` (`person_id`, `kind`)",
+            )
+
+            val now = Clock.System.now().toEpochMilliseconds()
+            connection.prepare(
+                """
+                INSERT INTO health_card (
+                    person_id, edited_at, emergency_copied_at, stale_notice_closed_at,
+                    created_at, updated_at, version, device_id
+                )
+                SELECT p.id,
+                       MAX(p.updated_at, IFNULL((SELECT MAX(i.updated_at) FROM intake i WHERE i.person_id = p.id), 0)),
+                       NULL, NULL, ?1, ?1, 1,
+                       IFNULL((SELECT `value` FROM `setting` WHERE `key` = 'device_id'), p.device_id)
+                FROM person p
+                """.trimIndent(),
+            ).use { statement ->
+                statement.bindLong(1, now)
+                statement.step()
+            }
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
 
     /**
      * Supplement P-4 for databases made before schema 2: the earliest schedule version of each

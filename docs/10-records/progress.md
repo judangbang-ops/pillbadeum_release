@@ -825,7 +825,7 @@
 - **배포 보류**: main의 [릴리즈 빌드 46118755596](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/46118755596)과 [CI 46118755645](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/46118755645)는 성공했다. [릴리즈 변형 에뮬레이터 확인 46118755628](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/46118755628)은 백업·재설치 복원에서 데이터베이스와 기록이 없어 실패했다. 시스템 로그는 복원 에이전트가 끊겨 생성되지 않았다고 기록했으며 원인은 아직 확정하지 못했다.
 - [개인 APK 배포 46119757966](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/46119757966)은 선행 검사 실패로 건너뛰었다. 최신 공개 릴리즈는 여전히 `v0.1.0.297`이며 449 APK는 공개되지 않았다. main 커밋의 버전 코드는 449다.
 - **다음 행동**: 원인을 조사하고 복원 시험을 다시 통과시킨 뒤, 출시 게이트를 재평가한다. 공개 워크플로를 수동으로 실행해 실패를 우회하지 않는다. 실기기의 One UI·TalkBack과 실제 친구 기기의 업데이트도 미확인이다.
-- **同一コミットの再検査**: 自動公開を起動しない手動実行 [46119960135](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/46119960135)は API 34 の復元を含め成功した。連動する公開実行 [46120781606](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/46120781606)は手動検査からの起動のためスキップされた。最初のエージェント切断の原因は未確定で、再検査の成功だけでは最初の失敗を解消したとは判定しない。
+- **동일 커밋 재검사**: 자동 공개를 시작하지 않는 수동 실행 [46119960135](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/46119960135)는 API 34 복원을 포함해 성공했다. 연동 공개 실행 [46120781606](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/46120781606)은 수동 검사에서 시작돼 건너뛰었다. 최초 에이전트 연결 종료 원인은 미확정이므로 재검사 성공만으로 최초 실패가 해결됐다고 판정하지 않는다.
 
 ### 2026-11-28 · 항목 248 복원 실패 추가 조사
 

@@ -3,6 +3,7 @@ package com.judangbang.pillbadeum.ui
 import android.os.Looper
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.window.Dialog
@@ -16,6 +17,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -186,14 +188,14 @@ class JudgeScreenTest {
         compose.onNodeWithText("기록 취소").assertIsEnabled()
     }
 
-    /** A saved record must not leave stale actions enabled when the board refresh fails. */
+    /** A saved record refreshes its judgment even when the unrelated board refresh fails. */
     @Test
-    fun board_reload_failure_after_save_shows_retry_instead_of_stale_actions() {
+    fun board_reload_failure_after_save_refreshes_judgment_before_enabling_actions() {
         val seed = app.seedWeek(family = true)
         val failNextBoard = AtomicBoolean(false)
         val boardFailed = CompletableDeferred<Unit>()
-        val retryStarted = CompletableDeferred<Unit>()
-        val allowRetry = CompletableDeferred<Unit>()
+        val judgeStarted = CompletableDeferred<Unit>()
+        val releaseJudge = CompletableDeferred<Unit>()
         controller = Robolectric.buildActivity(MainActivity::class.java).setup()
         val activity = controller!!.get()
         activity.setContent {
@@ -206,11 +208,14 @@ class JudgeScreenTest {
                         boardFailed.complete(Unit)
                         throw IllegalStateException("test board read failure")
                     }
-                    if (boardFailed.isCompleted && !allowRetry.isCompleted) {
-                        retryStarted.complete(Unit)
-                        allowRetry.await()
-                    }
                     c.loadStatusBoard()
+                },
+                loadJudge = { c, intakeId, versionId, periodKey ->
+                    if (boardFailed.isCompleted && !releaseJudge.isCompleted) {
+                        judgeStarted.complete(Unit)
+                        releaseJudge.await()
+                    }
+                    c.loadJudgeCell(intakeId, versionId, periodKey)
                 },
             )
         }
@@ -219,14 +224,49 @@ class JudgeScreenTest {
         waitFor("오늘 기록")
         click("지금 먹었어")
         compose.waitUntil(10_000) { boardFailed.isCompleted }
-        waitFor("다시 시도")
-        assertEquals(0, compose.onAllNodesWithText("지금 먹었어").fetchSemanticsNodes().size)
-        compose.onNodeWithText("다시 시도").performClick()
-        compose.waitUntil(10_000) { retryStarted.isCompleted }
-        assertEquals(0, compose.onAllNodesWithText("지금 먹었어").fetchSemanticsNodes().size)
-        allowRetry.complete(Unit)
+        compose.waitUntil(10_000) { judgeStarted.isCompleted }
+        compose.onNodeWithText("지금 먹었어").assertIsNotEnabled()
+        releaseJudge.complete(Unit)
         waitFor("09:30에 먹음")
+        compose.onNodeWithText("기록 취소").assertIsEnabled()
         assertEquals(1, rows(seed.pressure!!).count { it.isActive && it.periodKey == "2026-11-12" })
+    }
+
+    /** A history cell remains editable when only the separate home board reload fails. */
+    @Test
+    fun history_judgment_can_open_when_only_board_refresh_fails() {
+        app.seedWeek(family = true)
+        val failNextBoard = AtomicBoolean(false)
+        val boardFailed = CompletableDeferred<Unit>()
+        val refresh = mutableIntStateOf(0)
+        controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val activity = controller!!.get()
+        activity.setContent {
+            App(
+                open = { app.container.core() },
+                onDataChanged = {},
+                phone = AndroidPhone(activity),
+                refreshKey = refresh.intValue,
+                loadBoard = { c ->
+                    if (failNextBoard.getAndSet(false)) {
+                        boardFailed.complete(Unit)
+                        throw IllegalStateException("test board read failure")
+                    }
+                    c.loadStatusBoard()
+                },
+            )
+        }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("지난 기록").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("지난 기록").performClick()
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithContentDescription("나 아침약, 08:02 먹음").fetchSemanticsNodes().isNotEmpty()
+        }
+        failNextBoard.set(true)
+        compose.runOnIdle { refresh.intValue++; Snapshot.sendApplyNotifications() }
+        compose.waitUntil(10_000) { boardFailed.isCompleted }
+        compose.onNodeWithContentDescription("나 아침약, 08:02 먹음").performClick()
+        waitFor("08:02에 먹음")
+        compose.onNodeWithText("기록 취소").assertIsEnabled()
     }
 
     /** A delayed successful cell read replaces the stale judgment before enabling its actions. */

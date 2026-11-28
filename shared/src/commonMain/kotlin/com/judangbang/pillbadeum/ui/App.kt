@@ -250,6 +250,8 @@ fun App(
     var emergencySeed by remember { mutableStateOf<HealthCardSummary?>(null) }
     // Counts the reads, so a screen with data of its own (SCR-007, SCR-008) reads it again after every read of the board.
     var reads by remember { mutableIntStateOf(0) }
+    // Judge cells must refresh after a failed board read too, without pretending the board succeeded.
+    var judgeRefreshes by remember { mutableIntStateOf(0) }
     // SCR-008 (TASK-019): the last month read, with the screen it was read for, and where its list was. Both stay while
     // SCR-007 is open on top, so back shows the same lines at the same place at once (and reads them again).
     var history by remember { mutableStateOf<Pair<Route.History, HistoryMonth>?>(null) }
@@ -299,6 +301,7 @@ fun App(
             throw e
         } catch (e: Exception) {
             failed = true
+            judgeRefreshes++
         }
     }
 
@@ -873,7 +876,7 @@ fun App(
             is Route.Judge -> key(current.key) {
                 var cell by remember { mutableStateOf<JudgeCell?>(null) }
                 // A previous cell stays visible during refresh, but must not accept writes for old data.
-                var cellRead by remember { mutableIntStateOf(-1) }
+                var cellRead by remember { mutableStateOf<Triple<Int, Int, Int>?>(null) }
                 var cellFailed by remember { mutableStateOf(false) }
                 var attempts by remember { mutableIntStateOf(0) }
                 // When this screen first read its cell. A screen opened on the current window closes when that window
@@ -883,9 +886,9 @@ fun App(
                 fun openedCurrent(shown: JudgeCell): Boolean =
                     openedAt?.let { Instant.fromEpochMilliseconds(it) in shown.window } == true
 
-                LaunchedEffect(core, reads, attempts) {
+                LaunchedEffect(core, reads, judgeRefreshes, attempts) {
                     val c = core ?: return@LaunchedEffect
-                    val requestedRead = reads
+                    val requestedRead = Triple(reads, judgeRefreshes, attempts)
                     val result = try {
                         loadJudge(c, current.intakeId, current.versionId, current.periodKey)
                     } catch (e: CancellationException) {
@@ -956,10 +959,11 @@ fun App(
 
                 val shown = cell
                 JudgeScreen(
-                    busy = busy || cellRead != reads,
+                    busy = busy || cellRead != Triple(reads, judgeRefreshes, attempts),
                     state = when {
-                        cellFailed || failed -> JudgeState.Failed
+                        cellFailed -> JudgeState.Failed
                         shown != null -> JudgeState.Ready(shown)
+                        failed -> JudgeState.Failed
                         else -> JudgeState.Loading
                     },
                     message = message,
@@ -968,7 +972,7 @@ fun App(
                     actions = JudgeActions(
                         back = { go(current.back) },
                         retry = {
-                            // Keep the error visible until a fresh board is loaded, rather than exposing an old cell.
+                            // Retry both reads; the old cell stays disabled until its own fresh read finishes.
                             retries++
                             attempts++
                         },

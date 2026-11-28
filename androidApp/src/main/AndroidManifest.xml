@@ -29,16 +29,6 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Pillbadeum">
 
-        <provider
-            android:name=".export.CardExportProvider"
-            android:authorities="${applicationId}.card-export"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/card_export_paths" />
-        </provider>
-
         <activity
             android:windowSoftInputMode="adjustResize"
             android:name=".MainActivity"

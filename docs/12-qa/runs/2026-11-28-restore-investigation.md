@@ -27,3 +27,29 @@ Android 14 AOSP의 [FullRestoreEngine](https://android.googlesource.com/platform
 실패 당시 OS 버전과 기기 조건을 고정해 여러 번 시험하고, 가능하면 같은 Android 버전 실기기와 Google 백업에서도 복원을 확인한다. Android의 삭제 완료 알림과 에이전트 기동 순서를 수집해 OS 동작인지 시험 전제인지 특정한 뒤, 적절한 수정과 독립 회귀 확인을 한다. 실데이터는 사용하지 않고 복원 실패 뒤 데이터 처리도 확인한다.
 
 배포 실행 [46119757966](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/46119757966)은 건너뛰었고 최신 공개판은 `v0.1.0.297`이다. 새 서명 APK와 실기기 업데이트는 미확인이다.
+
+## 1차 비교와 업데이트 경로 추가 조사 (2026-11-28)
+
+### 대상 백업과 업데이트
+
+`release_check.py`는 시험용 LocalTransport를 고르고 암호화 가능 플래그를 설정해 `bmgr backupnow`를 실행하며, 백업 DB와 WAL의 존재를 확인한다. 다음으로 `pm uninstall --user 0`, 2초 대기, `adb install -t`로 재설치하고 Android의 설치 시 복원 직후 DB를 읽는다. 이는 Android Auto Backup에 쓰는 DB 복원 시험이지 앱에서 백업 파일을 내보내고 가져오는 시험이 아니다. 설정의 백업은 설명 표시이며 DB를 수동으로 내보내고 가져오는 동작은 찾지 못했다. 건강 카드 PDF·PNG 공유는 데이터베이스 백업과 별개다.
+
+같은 보조 스크립트에 `bmgr restore`와 `pm clear`를 쓰는 다른 시험은 있지만, 이 RR-26 경로에서는 쓰지 않는다. Android 공식 [Auto Backup 문서](https://developer.android.com/identity/data/autobackup)는 신규 설치 후 앱을 열기 전에 복원한다고 설명한다. [bmgr 문서](https://developer.android.com/tools/bmgr)는 백업·복원 시험 도구와 암호화 백업에서의 `bmgr restore` 제한을 설명한다. LocalTransport의 `is_encrypted=true`는 암호화 가능 조건을 흉내 내는 시험 설정이며 Google 클라우드 암호화 백업 자체를 검사한 것이 아니다.
+
+1차→2차의 정상 업데이트는 앱을 삭제하지 않고 같은 서명의 APK를 덮어 설치한다. Android 공식 [adb 문서](https://developer.android.com/tools/adb)는 `install -r`이 기존 데이터를 보존한다고 설명한다. 참고한 [Android 14 AOSP 설치 코드](https://android.googlesource.com/platform/frameworks/base/+/android-14.0.0_r1/services/core/java/com/android/server/pm/InstallPackageHelper.java)는 일반 업데이트를 BackupManager의 설치 시 복원 대상에서 제외한다. 따라서 이 경로는 위의 삭제 후 복원과 다르고 기존 DB의 스키마 2→3 이주가 필요하다. 이 소스가 모든 제조사 기기의 구현과 동일하다고 검증한 것은 아니다. `upgrade_check.py`는 `install -r` 뒤 기록·설치 표식·위젯을 검증하며, TASK-068의 297→440 동일 시험 키 APK를 이용한 API 36 시험에서 기록과 위젯 선택이 유지됐다. 하지만 실제 배포 키의 449 APK와 실기기 업데이트는 확인하지 않았다. 업데이트에 실패해 앱을 지우거나 새 기기로 옮기면 Auto Backup 복원 위험이 남는다.
+
+### 에이전트와 경쟁 가능성
+
+매니페스트의 앱 고유 `android:backupAgent` 지정과 앱 자체 `BackupAgent` 구현은 찾지 못했다. `DidITakeApplication.onCreate`는 글꼴 배율을 읽고 `RescheduleReceiverKeeper.ensure`를 통해 WorkManager의 유일한 예약 작업을 요청한다. 이 두 구현은 1차와 2차에서 바뀌지 않았다. 컨테이너와 DB는 지연 생성되며 복원 판정 `CheckInstall`은 DB를 연 뒤 동작한다. 2차에서는 복원 판정 시 건강 카드 재확인 상태를 표시하는 처리가 더해졌다.
+
+실패 로그에서 OS는 복원 에이전트 연결을 기다리는 사이 `clearApplicationUserData`로 시작 중인 앱 프로세스를 종료했고, 프로세스는 `start not valid`로 기동이 취소됐다. 성공 로그에서는 삭제 처리 뒤 시스템 `android/FullBackupAgent`가 기동·연결됐다. 실패 시 에이전트가 연결되기 전에 OS가 프로세스 기동을 취소한 사실은 확인되나, `Application.onCreate`의 실행 여부나 WorkManager 초기화가 경쟁을 유발했는지는 계측하지 못해 단정하지 않는다.
+
+시험은 백업 직전에 홈으로 이동하고 1초, `am kill` 뒤 1초, 삭제 뒤 2초를 기다린다. 데이터 삭제와 에이전트 시작의 경쟁은 Android 내부 복원 중 일어났으며 고정 2초 대기나 이전 프로세스·작업 상태와 관계가 있을 수 있으나 입증되지 않았다. 대기를 늘리거나 재시도해 검사만 통과시키는 것은 실제 기기의 안전성을 보여 주지 않는다. 실기기의 데이터 복원과 기기 간 이전도 미확인이다.
+
+### 1차 반복 결과와 추천
+
+1차 태그 `v0.1.0.297`, 커밋 `406419ce9bd09d961888358152ffe859db56e905`의 기존 `release-emulator.yml`을 API 34 Google APIs 에뮬레이터에서 네 번 수동 실행했다. 실행 [46123745166](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/46123745166), [46124728155](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/46124728155), [46125543853](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/46125543853), [46126492491](https://github.com/judangbang-ops/pillbadeum_release/actions/runs/46126492491) 모두 전체 워크플로와 RR-26 복원·첫 실행 검사가 통과했다. 네 보고서에서 버전 297과 복원된 기록 1건을 확인했다. 네 번에서 같은 실패를 보지 못했으므로 1차에서 불가능하다거나 2차가 만든 회귀라고 결론낼 수 없다. 2차의 동일 커밋 네 실행은 1회 실패·3회 성공이었다. 표본이 작고 같은 날의 에뮬레이터여서 발생률이나 실기기 영향을 추정하지 않는다.
+
+복원 단계의 두 릴리즈 스크립트는 같고 워크플로·에뮬레이터 부팅 스크립트에도 차이가 없다. `release_check.py`의 차이는 뒤에 실행되는 알림 입력 방법이고, 공통 백업 헬퍼의 차이는 `log -t` 재시도 허용이다. 다만 1차·2차의 실제 앱 코드와 DB 스키마는 달라 완전히 동일한 실험 대상은 아니다.
+
+**추천: 고친 뒤 배포.** 일반적인 앱 덮어쓰기는 문제를 관찰한 삭제·복원 경로를 직접 통과하지 않지만, APK 449 배포 뒤에도 기기 교체나 앱 삭제 시 복원은 사용자의 기록을 지키는 경로다. 최초 실패에서 복원 DB가 없었고 원인이 환경 한정인지 확인되지 않았으며 1차에서도 같은 실패를 재현하지 못했다. 실기기에서 가상 데이터로 Google 백업·복원과 297→449 실서명 업데이트를 확인하고, 원인을 특정해 적절히 고친 뒤 독립적으로 다시 확인하기를 권한다. 449 실서명 APK는 아직 없으므로 해당 업데이트 검사는 진행하지 않았다.

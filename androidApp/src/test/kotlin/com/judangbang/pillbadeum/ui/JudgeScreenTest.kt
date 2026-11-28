@@ -186,6 +186,49 @@ class JudgeScreenTest {
         compose.onNodeWithText("기록 취소").assertIsEnabled()
     }
 
+    /** A saved record must not leave stale actions enabled when the board refresh fails. */
+    @Test
+    fun board_reload_failure_after_save_shows_retry_instead_of_stale_actions() {
+        val seed = app.seedWeek(family = true)
+        val failNextBoard = AtomicBoolean(false)
+        val boardFailed = CompletableDeferred<Unit>()
+        val retryStarted = CompletableDeferred<Unit>()
+        val allowRetry = CompletableDeferred<Unit>()
+        controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val activity = controller!!.get()
+        activity.setContent {
+            App(
+                open = { app.container.core() },
+                onDataChanged = { failNextBoard.set(true) },
+                phone = AndroidPhone(activity),
+                loadBoard = { c ->
+                    if (failNextBoard.getAndSet(false)) {
+                        boardFailed.complete(Unit)
+                        throw IllegalStateException("test board read failure")
+                    }
+                    if (boardFailed.isCompleted && !allowRetry.isCompleted) {
+                        retryStarted.complete(Unit)
+                        allowRetry.await()
+                    }
+                    c.loadStatusBoard()
+                },
+            )
+        }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("하루 시작", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("혈압약 판정 고치기").performClick()
+        waitFor("오늘 기록")
+        click("지금 먹었어")
+        compose.waitUntil(10_000) { boardFailed.isCompleted }
+        waitFor("다시 시도")
+        assertEquals(0, compose.onAllNodesWithText("지금 먹었어").fetchSemanticsNodes().size)
+        compose.onNodeWithText("다시 시도").performClick()
+        compose.waitUntil(10_000) { retryStarted.isCompleted }
+        assertEquals(0, compose.onAllNodesWithText("지금 먹었어").fetchSemanticsNodes().size)
+        allowRetry.complete(Unit)
+        waitFor("09:30에 먹음")
+        assertEquals(1, rows(seed.pressure!!).count { it.isActive && it.periodKey == "2026-11-12" })
+    }
+
     /** A delayed successful cell read replaces the stale judgment before enabling its actions. */
     @Test
     fun successful_delayed_judge_reload_enables_only_the_updated_actions() {

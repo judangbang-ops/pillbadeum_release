@@ -214,6 +214,7 @@ internal sealed interface Route {
  * @param protectCardRecents applies the platform's recents privacy setting while a health card screen is shown.
  * @param keepCardShowAwake keeps the platform screen on while the SCR-013 summary is displayed in the foreground.
  * @param loadJudge reads the judgment cell; injectable so tests can hold or fail a refresh.
+ * @param loadBoard reads the status board; injectable so tests can exercise refresh failures.
  */
 @Composable
 fun App(
@@ -231,6 +232,7 @@ fun App(
     loadJudge: suspend (DidITakeCore, String, String, String) -> JudgeLoad = { core, intakeId, versionId, periodKey ->
         core.loadJudgeCell(intakeId, versionId, periodKey)
     },
+    loadBoard: suspend (DidITakeCore) -> StatusBoard = { it.loadStatusBoard() },
 ) {
     val scope = rememberCoroutineScope()
     var core by remember { mutableStateOf<DidITakeCore?>(null) }
@@ -285,7 +287,7 @@ fun App(
             core = opened
         }
         people = c.people.list()
-        board = c.loadStatusBoard()
+        board = loadBoard(c)
         failed = false
         reads++
     }
@@ -956,9 +958,8 @@ fun App(
                 JudgeScreen(
                     busy = busy || cellRead != reads,
                     state = when {
-                        cellFailed -> JudgeState.Failed
+                        cellFailed || failed -> JudgeState.Failed
                         shown != null -> JudgeState.Ready(shown)
-                        failed -> JudgeState.Failed
                         else -> JudgeState.Loading
                     },
                     message = message,
@@ -967,7 +968,7 @@ fun App(
                     actions = JudgeActions(
                         back = { go(current.back) },
                         retry = {
-                            failed = false
+                            // Keep the error visible until a fresh board is loaded, rather than exposing an old cell.
                             retries++
                             attempts++
                         },

@@ -815,7 +815,9 @@ fun App(
                             }
                         },
                         onClose = { go(current.back) },
-                        onSave = { draft ->
+                        onSave = saveItem@ { draft ->
+                            // A queued activation from a form already left must not save it again.
+                            if (route !== current || quiet != null) return@saveItem
                             write(failure = "저장하지 못했어요. 다시 눌러 주세요") { c ->
                                 val id = current.intakeId
                                 val result = if (id == null) c.saveIntake.create(draft) else c.saveIntake.update(id, draft)

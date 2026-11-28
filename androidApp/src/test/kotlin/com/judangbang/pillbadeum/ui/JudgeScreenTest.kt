@@ -1,5 +1,11 @@
 package com.judangbang.pillbadeum.ui
 
+import android.os.Looper
+import androidx.activity.compose.setContent
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -7,13 +13,15 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
-import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.isEnabled
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
+import com.judangbang.pillbadeum.AndroidPhone
 import com.judangbang.pillbadeum.DidITakeCore
 import com.judangbang.pillbadeum.MainActivity
 import com.judangbang.pillbadeum.TestApp
@@ -25,7 +33,10 @@ import com.judangbang.pillbadeum.status.Labels
 import com.judangbang.pillbadeum.usecase.RecordResult
 import com.judangbang.pillbadeum.usecase.VoidReasons
 import kotlin.time.Instant
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalTime
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -40,6 +51,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.TimeZone as JavaTimeZone
 
 /**
@@ -70,6 +82,65 @@ class JudgeScreenTest {
     fun tearDown() {
         JavaTimeZone.setDefault(savedZone)
         RuntimeEnvironment.setFontScale(1f)
+    }
+
+    /** Background state changes still render an Android dialog on the UI thread. */
+    @Test
+    fun background_state_change_renders_dialog_on_main_thread() {
+        val showDialog = mutableStateOf(false)
+        val dialogShown = AtomicBoolean(false)
+        val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
+        activity.setContent {
+            if (showDialog.value) {
+                SideEffect {
+                    assertEquals("dialog composition must run on the Android main looper", Looper.getMainLooper(), Looper.myLooper())
+                    dialogShown.set(true)
+                }
+                Dialog(onDismissRequest = {}) {}
+            }
+        }
+        runBlocking {
+            withContext(Dispatchers.Default) {
+                showDialog.value = true
+                Snapshot.sendApplyNotifications()
+            }
+        }
+        compose.waitUntil(10_000) { dialogShown.get() }
+    }
+
+    /** A completed write keeps judge actions disabled until the remaining update work completes. */
+    @Test
+    fun judge_actions_are_disabled_while_write_updates_are_pending() {
+        app.seedWeek(family = true)
+        val updateStarted = CompletableDeferred<Unit>()
+        val finishUpdate = CompletableDeferred<Unit>()
+        controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val activity = controller!!.get()
+        activity.setContent {
+            App(
+                open = { app.container.core() },
+                onDataChanged = {
+                    updateStarted.complete(Unit)
+                    finishUpdate.await()
+                    app.container.afterWrite()
+                },
+                phone = AndroidPhone(activity),
+            )
+        }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("하루 시작", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("혈압약 판정 고치기").performClick()
+        waitFor("오늘 기록")
+        click("지금 먹었어")
+        compose.waitUntil(10_000) { updateStarted.isCompleted }
+        compose.onNodeWithText("지금 먹었어").assertIsNotEnabled()
+        compose.onNodeWithText("먹은 시각 고르기").assertIsNotEnabled()
+        compose.onNodeWithText("건너뜀").assertIsNotEnabled()
+        finishUpdate.complete(Unit)
+        waitFor("09:30에 먹음")
+        compose.waitUntil(10_000) {
+            compose.onAllNodes(hasText("기록 취소") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("기록 취소").assertIsEnabled()
     }
 
     /** SCR-007#normal in today's window: [지금 먹었어] records now (REQ-006), and a time edit to yesterday moves the dose. */
@@ -376,6 +447,7 @@ class JudgeScreenTest {
         compose.waitUntil(10_000) { compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
 
     private fun click(text: String) {
+        compose.waitUntil(10_000) { compose.onAllNodes(hasText(text) and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText(text).performScrollTo().performClick()
     }
 

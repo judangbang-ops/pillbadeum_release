@@ -314,6 +314,7 @@ internal fun ConfirmDialog(
     onDismiss: () -> Unit,
     cancel: String = "아니요",
     stackButtons: Boolean = false,
+    confirmEnabled: Boolean = true,
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Column(
@@ -326,12 +327,12 @@ internal fun ConfirmDialog(
             if (stackButtons) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     ActionButton(cancel, ButtonLook.Line, onDismiss)
-                    ActionButton(confirm, ButtonLook.Ink, onConfirm)
+                    ActionButton(confirm, ButtonLook.Ink, onConfirm, enabled = confirmEnabled)
                 }
             } else {
                 Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
                     ActionButton(cancel, ButtonLook.LineSmall, onDismiss)
-                    ActionButton(confirm, ButtonLook.InkSmall, onConfirm)
+                    ActionButton(confirm, ButtonLook.InkSmall, onConfirm, enabled = confirmEnabled)
                 }
             }
         }

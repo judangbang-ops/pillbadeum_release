@@ -946,6 +946,7 @@ fun App(
 
                 val shown = cell
                 JudgeScreen(
+                    busy = busy,
                     state = when {
                         shown != null -> JudgeState.Ready(shown)
                         cellFailed || failed -> JudgeState.Failed

@@ -213,6 +213,7 @@ internal sealed interface Route {
  *   `[건강 카드]` and from SCR-010 (TASK-061).
  * @param protectCardRecents applies the platform's recents privacy setting while a health card screen is shown.
  * @param keepCardShowAwake keeps the platform screen on while the SCR-013 summary is displayed in the foreground.
+ * @param loadJudge reads the judgment cell; injectable so tests can hold or fail a refresh.
  */
 @Composable
 fun App(
@@ -227,6 +228,9 @@ fun App(
     protectCardRecents: @Composable (visible: Boolean) -> Unit = {},
     keepCardShowAwake: @Composable () -> Unit = {},
     cardExporter: CardExporter? = null,
+    loadJudge: suspend (DidITakeCore, String, String, String) -> JudgeLoad = { core, intakeId, versionId, periodKey ->
+        core.loadJudgeCell(intakeId, versionId, periodKey)
+    },
 ) {
     val scope = rememberCoroutineScope()
     var core by remember { mutableStateOf<DidITakeCore?>(null) }
@@ -866,6 +870,8 @@ fun App(
 
             is Route.Judge -> key(current.key) {
                 var cell by remember { mutableStateOf<JudgeCell?>(null) }
+                // A previous cell stays visible during refresh, but must not accept writes for old data.
+                var cellRead by remember { mutableIntStateOf(-1) }
                 var cellFailed by remember { mutableStateOf(false) }
                 var attempts by remember { mutableIntStateOf(0) }
                 // When this screen first read its cell. A screen opened on the current window closes when that window
@@ -877,8 +883,9 @@ fun App(
 
                 LaunchedEffect(core, reads, attempts) {
                     val c = core ?: return@LaunchedEffect
+                    val requestedRead = reads
                     val result = try {
-                        c.loadJudgeCell(current.intakeId, current.versionId, current.periodKey)
+                        loadJudge(c, current.intakeId, current.versionId, current.periodKey)
                     } catch (e: CancellationException) {
                         throw e
                     } catch (_: Exception) {
@@ -901,6 +908,7 @@ fun App(
                                 message = Labels.DAY_CHANGED
                             } else {
                                 cell = read
+                                cellRead = requestedRead
                             }
                         }
                     }
@@ -946,10 +954,11 @@ fun App(
 
                 val shown = cell
                 JudgeScreen(
-                    busy = busy,
+                    busy = busy || cellRead != reads,
                     state = when {
+                        cellFailed -> JudgeState.Failed
                         shown != null -> JudgeState.Ready(shown)
-                        cellFailed || failed -> JudgeState.Failed
+                        failed -> JudgeState.Failed
                         else -> JudgeState.Loading
                     },
                     message = message,

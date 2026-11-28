@@ -227,6 +227,10 @@ jobs:
           {
             echo "필받음 개인 APK $VERSION_NAME (versionCode $CODE, 커밋 ${SHA:0:7})."
             echo
+            echo "건강 카드를 만들고 공유할 수 있고, 복용 항목에 약을 적거나 의견을 보낼 수 있어요. 판정 기록을 처리할 때 버튼 상태도 알기 쉽게 고쳤어요."
+            echo
+            echo "업데이트는 지금 앱 위에 그대로 설치해 주세요. 앱을 지우면 기록이 사라질 수 있어요. 새 폰으로 옮기기 전에는 먼저 알려 주세요."
+            echo
             echo "- 앱 서명 키로 서명함. 인증서 SHA-256 \`$APP_SIGNING_CERT_SHA256\`"
             echo "- APK 파일 SHA-256 \`$file_sha\`"
             echo "- 같은 키로 서명한 앞 버전 위에 덮어 깔면 기록이 남음. 다른 키로 서명한 APK가 깔린 폰에는 깔리지 않음"

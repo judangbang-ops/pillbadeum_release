@@ -42,6 +42,9 @@ jobs:
           { echo "### 문서 대조"; echo; echo '```'; cat "$RUNNER_TEMP/check_docs.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
 
+      - name: 공개 릴리스 노트 안전 안내 확인
+        run: python3 .github/scripts/test_publish_notes.py
+
       - name: 판정 쓰기 경로 (.github/scripts/check_writes.py, REQ-003)
         shell: bash
         run: |

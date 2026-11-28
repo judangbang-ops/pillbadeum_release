@@ -306,7 +306,7 @@ private fun TimePicker(
         if (dates.size > 1) {
             PickLabel("날짜")
             PickGrid(dates, columns = if (large) 1 else 2) { d, modifier ->
-                TimeCell(Labels.date(d), Labels.longDate(d), d == date, enabled = true, modifier) {
+                TimeCell(Labels.date(d), Labels.longDate(d), d == date, enabled = !busy, modifier) {
                     dateText = d.toString()
                     if (hour !in range.hours(d)) hour = NONE
                     if (hour == NONE || minute !in range.minutes(d, hour)) minute = NONE
@@ -315,7 +315,7 @@ private fun TimePicker(
         }
         PickLabel("시")
         PickGrid(hours, columns = if (large) 4 else 6) { h, modifier ->
-            TimeCell(two(h), "${h}시", h == hour, enabled = true, modifier) {
+            TimeCell(two(h), "${h}시", h == hour, enabled = !busy, modifier) {
                 hour = h
                 if (minute !in range.minutes(date, h)) minute = NONE
             }
@@ -324,7 +324,7 @@ private fun TimePicker(
         PickGrid(PickRange.MINUTES, columns = if (large) 4 else 6) { m, modifier ->
             // Before an hour is chosen every minute can be; afterwards only that hour's.
             val allowed = hour == NONE || m in minutes
-            TimeCell(two(m), "${m}분", m == minute, enabled = allowed, modifier) { minute = m }
+            TimeCell(two(m), "${m}분", m == minute, enabled = !busy && allowed, modifier) { minute = m }
         }
         Column(Modifier.fillMaxWidth().padding(top = 8.dp, start = 4.dp, end = 4.dp)) {
             Words("고른 시각", Ui.type(14, color = Ui.Muted))

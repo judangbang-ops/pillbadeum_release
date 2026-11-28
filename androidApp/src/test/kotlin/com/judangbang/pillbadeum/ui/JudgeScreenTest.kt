@@ -43,6 +43,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalTime
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -267,6 +268,107 @@ class JudgeScreenTest {
         compose.onNodeWithContentDescription("나 아침약, 08:02 먹음").performClick()
         waitFor("08:02에 먹음")
         compose.onNodeWithText("기록 취소").assertIsEnabled()
+    }
+
+    @Test
+    fun review_resume_does_not_enable_old_judgment_during_delayed_board_read() {
+        val seed = app.seedWeek(family = true)
+        val holdBoard = AtomicBoolean(false)
+        val boardStarted = CompletableDeferred<Unit>()
+        val releaseBoard = CompletableDeferred<Unit>()
+        val refresh = mutableIntStateOf(0)
+        controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val activity = controller!!.get()
+        activity.setContent {
+            App(
+                open = { app.container.core() },
+                onDataChanged = {},
+                phone = AndroidPhone(activity),
+                refreshKey = refresh.intValue,
+                loadBoard = { c ->
+                    if (holdBoard.get()) {
+                        boardStarted.complete(Unit)
+                        releaseBoard.await()
+                    }
+                    c.loadStatusBoard()
+                },
+            )
+        }
+        waitFor("지난 기록")
+        compose.onNodeWithContentDescription("혈압약 판정 고치기").performClick()
+        waitFor("오늘 기록")
+        compose.onNodeWithText("지금 먹었어").assertIsEnabled()
+        runBlocking { assertTrue(core.record(seed.pressure!!, DoseSource.WIDGET, "2026-11-12") is RecordResult.Recorded) }
+        holdBoard.set(true)
+        compose.runOnIdle { refresh.intValue++; Snapshot.sendApplyNotifications() }
+        try {
+            compose.waitUntil(10_000) { boardStarted.isCompleted }
+            assertEquals(
+                "old no-dose action must not be usable after refresh begins",
+                0,
+                compose.onAllNodes(hasText("지금 먹었어") and isEnabled()).fetchSemanticsNodes().size,
+            )
+        } finally {
+            releaseBoard.complete(Unit)
+        }
+    }
+
+    @Test
+    fun review_retry_does_not_lock_fresh_judgment_again_when_board_fails_later() {
+        app.seedWeek(family = true)
+        val failFirstJudge = AtomicBoolean(true)
+        val holdBoard = AtomicBoolean(false)
+        val boardStarted = CompletableDeferred<Unit>()
+        val releaseBoard = CompletableDeferred<Unit>()
+        val boardFailed = CompletableDeferred<Unit>()
+        val judgeRepeated = CompletableDeferred<Unit>()
+        val releaseJudge = CompletableDeferred<Unit>()
+        controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val activity = controller!!.get()
+        activity.setContent {
+            App(
+                open = { app.container.core() },
+                onDataChanged = {},
+                phone = AndroidPhone(activity),
+                loadBoard = { c ->
+                    if (holdBoard.get()) {
+                        boardStarted.complete(Unit)
+                        releaseBoard.await()
+                        boardFailed.complete(Unit)
+                        throw IllegalStateException("test unrelated board read failure")
+                    }
+                    c.loadStatusBoard()
+                },
+                loadJudge = { c, intakeId, versionId, periodKey ->
+                    if (failFirstJudge.getAndSet(false)) throw IllegalStateException("test initial cell read failure")
+                    if (releaseBoard.isCompleted) {
+                        judgeRepeated.complete(Unit)
+                        releaseJudge.await()
+                    }
+                    c.loadJudgeCell(intakeId, versionId, periodKey)
+                },
+            )
+        }
+        waitFor("지난 기록")
+        compose.onNodeWithContentDescription("아침약 판정 고치기").performClick()
+        waitFor("다시 시도")
+        holdBoard.set(true)
+        compose.onNodeWithText("다시 시도").performClick()
+        try {
+            compose.waitUntil(10_000) { boardStarted.isCompleted }
+            waitFor("08:02에 먹음")
+            compose.onNodeWithText("기록 취소").assertIsEnabled()
+            releaseBoard.complete(Unit)
+            compose.waitUntil(10_000) { boardFailed.isCompleted }
+            compose.waitForIdle()
+            compose.mainClock.advanceTimeBy(100)
+            compose.waitForIdle()
+            assertFalse("board completion must not request another cell read", judgeRepeated.isCompleted)
+            compose.onNodeWithText("기록 취소").assertIsEnabled()
+        } finally {
+            releaseBoard.complete(Unit)
+            releaseJudge.complete(Unit)
+        }
     }
 
     /** A delayed successful cell read replaces the stale judgment before enabling its actions. */

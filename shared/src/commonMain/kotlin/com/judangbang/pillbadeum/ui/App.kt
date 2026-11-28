@@ -250,7 +250,7 @@ fun App(
     var emergencySeed by remember { mutableStateOf<HealthCardSummary?>(null) }
     // Counts the reads, so a screen with data of its own (SCR-007, SCR-008) reads it again after every read of the board.
     var reads by remember { mutableIntStateOf(0) }
-    // Judge cells must refresh after a failed board read too, without pretending the board succeeded.
+    // Invalidate a judge cell when a write or a stale result requires a new independent read.
     var judgeRefreshes by remember { mutableIntStateOf(0) }
     // SCR-008 (TASK-019): the last month read, with the screen it was read for, and where its list was. Both stay while
     // SCR-007 is open on top, so back shows the same lines at the same place at once (and reads them again).
@@ -294,14 +294,15 @@ fun App(
         reads++
     }
 
-    suspend fun reloadOrFail() {
+    suspend fun reloadOrFail(invalidateJudge: Boolean = false) {
         try {
             reload()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             failed = true
-            judgeRefreshes++
+        } finally {
+            if (invalidateJudge) judgeRefreshes++
         }
     }
 
@@ -314,7 +315,8 @@ fun App(
         } catch (_: Exception) {
             // The widget redraws on its own next time; the record itself is saved.
         }
-        reloadOrFail()
+        // This read is requested on success or failure, before write() unlocks its actions.
+        reloadOrFail(invalidateJudge = true)
     }
 
     /**
@@ -431,7 +433,7 @@ fun App(
             delay(left.coerceAtMost(1.minutes))
         }
         message = null
-        reloadOrFail()
+        reloadOrFail(invalidateJudge = true)
     }
     backHandler(route.back != null) { route.back?.let(::go) }
     protectCardRecents(route is Route.HealthCardRoute)
@@ -886,9 +888,9 @@ fun App(
                 fun openedCurrent(shown: JudgeCell): Boolean =
                     openedAt?.let { Instant.fromEpochMilliseconds(it) in shown.window } == true
 
-                LaunchedEffect(core, reads, judgeRefreshes, attempts) {
+                LaunchedEffect(core, refreshKey, judgeRefreshes, attempts) {
                     val c = core ?: return@LaunchedEffect
-                    val requestedRead = Triple(reads, judgeRefreshes, attempts)
+                    val requestedRead = Triple(refreshKey, judgeRefreshes, attempts)
                     val result = try {
                         loadJudge(c, current.intakeId, current.versionId, current.periodKey)
                     } catch (e: CancellationException) {
@@ -924,7 +926,7 @@ fun App(
                     when (after) {
                         is JudgeAfter.Stay -> {
                             message = after.message
-                            if (after.wrote) afterWrite() else reloadOrFail()
+                            if (after.wrote) afterWrite() else reloadOrFail(invalidateJudge = true)
                         }
                         is JudgeAfter.Move -> {
                             message = after.message
@@ -943,7 +945,7 @@ fun App(
                             } else {
                                 message = Labels.RELOADED
                             }
-                            reloadOrFail()
+                            reloadOrFail(invalidateJudge = true)
                         }
                     }
                 }
@@ -959,7 +961,7 @@ fun App(
 
                 val shown = cell
                 JudgeScreen(
-                    busy = busy || cellRead != Triple(reads, judgeRefreshes, attempts),
+                    busy = busy || cellRead != Triple(refreshKey, judgeRefreshes, attempts),
                     state = when {
                         cellFailed -> JudgeState.Failed
                         shown != null -> JudgeState.Ready(shown)

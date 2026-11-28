@@ -1,19 +1,30 @@
 package com.judangbang.pillbadeum.ui
 
+import android.os.Looper
+import androidx.activity.compose.setContent
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
-import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.isEnabled
+import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
+import com.judangbang.pillbadeum.AndroidPhone
 import com.judangbang.pillbadeum.DidITakeCore
 import com.judangbang.pillbadeum.MainActivity
 import com.judangbang.pillbadeum.TestApp
@@ -25,10 +36,14 @@ import com.judangbang.pillbadeum.status.Labels
 import com.judangbang.pillbadeum.usecase.RecordResult
 import com.judangbang.pillbadeum.usecase.VoidReasons
 import kotlin.time.Instant
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalTime
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -40,6 +55,7 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.TimeZone as JavaTimeZone
 
 /**
@@ -70,6 +86,382 @@ class JudgeScreenTest {
     fun tearDown() {
         JavaTimeZone.setDefault(savedZone)
         RuntimeEnvironment.setFontScale(1f)
+    }
+
+    /** Background state changes still render an Android dialog on the UI thread. */
+    @Test
+    fun background_state_change_renders_dialog_on_main_thread() {
+        val showDialog = mutableStateOf(false)
+        val dialogShown = AtomicBoolean(false)
+        val initialApplied = AtomicBoolean(false)
+        val activity = Robolectric.buildActivity(MainActivity::class.java).setup().get()
+        activity.setContent {
+            if (!showDialog.value) SideEffect { initialApplied.set(true) }
+            if (showDialog.value) {
+                SideEffect {
+                    assertEquals("dialog composition must run on the Android main looper", Looper.getMainLooper(), Looper.myLooper())
+                    dialogShown.set(true)
+                }
+                Dialog(onDismissRequest = {}) {}
+            }
+        }
+        compose.waitUntil(10_000) { initialApplied.get() }
+        runBlocking {
+            withContext(Dispatchers.Default) {
+                showDialog.value = true
+                Snapshot.sendApplyNotifications()
+            }
+        }
+        compose.waitUntil(10_000) { dialogShown.get() }
+    }
+
+    /** A completed write keeps judge actions disabled until the remaining update work completes. */
+    @Test
+    fun judge_actions_are_disabled_while_write_updates_are_pending() {
+        app.seedWeek(family = true)
+        val updateStarted = CompletableDeferred<Unit>()
+        val finishUpdate = CompletableDeferred<Unit>()
+        controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val activity = controller!!.get()
+        activity.setContent {
+            App(
+                open = { app.container.core() },
+                onDataChanged = {
+                    updateStarted.complete(Unit)
+                    finishUpdate.await()
+                    app.container.afterWrite()
+                },
+                phone = AndroidPhone(activity),
+            )
+        }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("하루 시작", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("혈압약 판정 고치기").performClick()
+        waitFor("오늘 기록")
+        click("지금 먹었어")
+        compose.waitUntil(10_000) { updateStarted.isCompleted }
+        compose.onNodeWithText("지금 먹었어").assertIsNotEnabled()
+        compose.onNodeWithText("먹은 시각 고르기").assertIsNotEnabled()
+        compose.onNodeWithText("건너뜀").assertIsNotEnabled()
+        finishUpdate.complete(Unit)
+        waitFor("09:30에 먹음")
+        compose.waitUntil(10_000) {
+            compose.onAllNodes(hasText("기록 취소") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithText("기록 취소").assertIsEnabled()
+    }
+
+    /** A saved judgment remains unavailable until its own refresh completes, and recovers after a read error. */
+    @Test
+    fun stale_judge_actions_stay_disabled_during_reload_and_error_can_retry() {
+        app.seedWeek(family = true)
+        val shouldHold = AtomicBoolean(false)
+        val started = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val failOnce = AtomicBoolean(true)
+        controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val activity = controller!!.get()
+        activity.setContent {
+            App(
+                open = { app.container.core() },
+                onDataChanged = { shouldHold.set(true) },
+                phone = AndroidPhone(activity),
+                loadJudge = { c, intakeId, versionId, periodKey ->
+                    if (shouldHold.get()) {
+                        started.complete(Unit)
+                        release.await()
+                        if (failOnce.getAndSet(false)) throw IllegalStateException("test read failure")
+                    }
+                    c.loadJudgeCell(intakeId, versionId, periodKey)
+                },
+            )
+        }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("하루 시작", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("혈압약 판정 고치기").performClick()
+        waitFor("오늘 기록")
+        click("지금 먹었어")
+        compose.waitUntil(10_000) { started.isCompleted }
+        compose.onNodeWithText("지금 먹었어").assertIsNotEnabled()
+        release.complete(Unit)
+        waitFor("다시 시도")
+        assertEquals(0, compose.onAllNodesWithText("지금 먹었어").fetchSemanticsNodes().size)
+        compose.onNodeWithText("다시 시도").performClick()
+        waitFor("09:30에 먹음")
+        compose.onNodeWithText("기록 취소").assertIsEnabled()
+    }
+
+    /** A saved record refreshes its judgment even when the unrelated board refresh fails. */
+    @Test
+    fun board_reload_failure_after_save_refreshes_judgment_before_enabling_actions() {
+        val seed = app.seedWeek(family = true)
+        val failNextBoard = AtomicBoolean(false)
+        val boardFailed = CompletableDeferred<Unit>()
+        val judgeStarted = CompletableDeferred<Unit>()
+        val releaseJudge = CompletableDeferred<Unit>()
+        controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val activity = controller!!.get()
+        activity.setContent {
+            App(
+                open = { app.container.core() },
+                onDataChanged = { failNextBoard.set(true) },
+                phone = AndroidPhone(activity),
+                loadBoard = { c ->
+                    if (failNextBoard.getAndSet(false)) {
+                        boardFailed.complete(Unit)
+                        throw IllegalStateException("test board read failure")
+                    }
+                    c.loadStatusBoard()
+                },
+                loadJudge = { c, intakeId, versionId, periodKey ->
+                    if (boardFailed.isCompleted && !releaseJudge.isCompleted) {
+                        judgeStarted.complete(Unit)
+                        releaseJudge.await()
+                    }
+                    c.loadJudgeCell(intakeId, versionId, periodKey)
+                },
+            )
+        }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("하루 시작", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("혈압약 판정 고치기").performClick()
+        waitFor("오늘 기록")
+        click("지금 먹었어")
+        compose.waitUntil(10_000) { boardFailed.isCompleted }
+        compose.waitUntil(10_000) { judgeStarted.isCompleted }
+        compose.onNodeWithText("지금 먹었어").assertIsNotEnabled()
+        releaseJudge.complete(Unit)
+        waitFor("09:30에 먹음")
+        compose.onNodeWithText("기록 취소").assertIsEnabled()
+        assertEquals(1, rows(seed.pressure!!).count { it.isActive && it.periodKey == "2026-11-12" })
+    }
+
+    /** A history cell remains editable when only the separate home board reload fails. */
+    @Test
+    fun history_judgment_can_open_when_only_board_refresh_fails() {
+        app.seedWeek(family = true)
+        val failNextBoard = AtomicBoolean(false)
+        val boardFailed = CompletableDeferred<Unit>()
+        val refresh = mutableIntStateOf(0)
+        controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val activity = controller!!.get()
+        activity.setContent {
+            App(
+                open = { app.container.core() },
+                onDataChanged = {},
+                phone = AndroidPhone(activity),
+                refreshKey = refresh.intValue,
+                loadBoard = { c ->
+                    if (failNextBoard.getAndSet(false)) {
+                        boardFailed.complete(Unit)
+                        throw IllegalStateException("test board read failure")
+                    }
+                    c.loadStatusBoard()
+                },
+            )
+        }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("지난 기록").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("지난 기록").performClick()
+        compose.waitUntil(10_000) {
+            compose.onAllNodesWithContentDescription("나 아침약, 08:02 먹음").fetchSemanticsNodes().isNotEmpty()
+        }
+        failNextBoard.set(true)
+        compose.runOnIdle { refresh.intValue++; Snapshot.sendApplyNotifications() }
+        compose.waitUntil(10_000) { boardFailed.isCompleted }
+        compose.onNodeWithContentDescription("나 아침약, 08:02 먹음").performClick()
+        waitFor("08:02에 먹음")
+        compose.onNodeWithText("기록 취소").assertIsEnabled()
+    }
+
+    @Test
+    fun review_resume_does_not_enable_old_judgment_during_delayed_board_read() {
+        val seed = app.seedWeek(family = true)
+        val holdBoard = AtomicBoolean(false)
+        val boardStarted = CompletableDeferred<Unit>()
+        val releaseBoard = CompletableDeferred<Unit>()
+        val refresh = mutableIntStateOf(0)
+        controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val activity = controller!!.get()
+        activity.setContent {
+            App(
+                open = { app.container.core() },
+                onDataChanged = {},
+                phone = AndroidPhone(activity),
+                refreshKey = refresh.intValue,
+                loadBoard = { c ->
+                    if (holdBoard.get()) {
+                        boardStarted.complete(Unit)
+                        releaseBoard.await()
+                    }
+                    c.loadStatusBoard()
+                },
+            )
+        }
+        waitFor("지난 기록")
+        compose.onNodeWithContentDescription("혈압약 판정 고치기").performClick()
+        waitFor("오늘 기록")
+        compose.onNodeWithText("지금 먹었어").assertIsEnabled()
+        runBlocking { assertTrue(core.record(seed.pressure!!, DoseSource.WIDGET, "2026-11-12") is RecordResult.Recorded) }
+        holdBoard.set(true)
+        compose.runOnIdle { refresh.intValue++; Snapshot.sendApplyNotifications() }
+        try {
+            compose.waitUntil(10_000) { boardStarted.isCompleted }
+            assertEquals(
+                "old no-dose action must not be usable after refresh begins",
+                0,
+                compose.onAllNodes(hasText("지금 먹었어") and isEnabled()).fetchSemanticsNodes().size,
+            )
+        } finally {
+            releaseBoard.complete(Unit)
+        }
+    }
+
+    @Test
+    fun review_retry_does_not_lock_fresh_judgment_again_when_board_fails_later() {
+        app.seedWeek(family = true)
+        val failFirstJudge = AtomicBoolean(true)
+        val holdBoard = AtomicBoolean(false)
+        val boardStarted = CompletableDeferred<Unit>()
+        val releaseBoard = CompletableDeferred<Unit>()
+        val boardFailed = CompletableDeferred<Unit>()
+        val judgeRepeated = CompletableDeferred<Unit>()
+        val releaseJudge = CompletableDeferred<Unit>()
+        controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val activity = controller!!.get()
+        activity.setContent {
+            App(
+                open = { app.container.core() },
+                onDataChanged = {},
+                phone = AndroidPhone(activity),
+                loadBoard = { c ->
+                    if (holdBoard.get()) {
+                        boardStarted.complete(Unit)
+                        releaseBoard.await()
+                        boardFailed.complete(Unit)
+                        throw IllegalStateException("test unrelated board read failure")
+                    }
+                    c.loadStatusBoard()
+                },
+                loadJudge = { c, intakeId, versionId, periodKey ->
+                    if (failFirstJudge.getAndSet(false)) throw IllegalStateException("test initial cell read failure")
+                    if (releaseBoard.isCompleted) {
+                        judgeRepeated.complete(Unit)
+                        releaseJudge.await()
+                    }
+                    c.loadJudgeCell(intakeId, versionId, periodKey)
+                },
+            )
+        }
+        waitFor("지난 기록")
+        compose.onNodeWithContentDescription("아침약 판정 고치기").performClick()
+        waitFor("다시 시도")
+        holdBoard.set(true)
+        compose.onNodeWithText("다시 시도").performClick()
+        try {
+            compose.waitUntil(10_000) { boardStarted.isCompleted }
+            waitFor("08:02에 먹음")
+            compose.onNodeWithText("기록 취소").assertIsEnabled()
+            releaseBoard.complete(Unit)
+            compose.waitUntil(10_000) { boardFailed.isCompleted }
+            compose.waitForIdle()
+            compose.mainClock.advanceTimeBy(100)
+            compose.waitForIdle()
+            assertFalse("board completion must not request another cell read", judgeRepeated.isCompleted)
+            compose.onNodeWithText("기록 취소").assertIsEnabled()
+        } finally {
+            releaseBoard.complete(Unit)
+            releaseJudge.complete(Unit)
+        }
+    }
+
+    /** A delayed successful cell read replaces the stale judgment before enabling its actions. */
+    @Test
+    fun successful_delayed_judge_reload_enables_only_the_updated_actions() {
+        val seed = app.seedWeek(family = true)
+        val hold = AtomicBoolean(false)
+        val started = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val activity = controller!!.get()
+        activity.setContent {
+            App(
+                open = { app.container.core() },
+                onDataChanged = { hold.set(true) },
+                phone = AndroidPhone(activity),
+                loadJudge = { c, intakeId, versionId, periodKey ->
+                    if (hold.get()) { started.complete(Unit); release.await() }
+                    c.loadJudgeCell(intakeId, versionId, periodKey)
+                },
+            )
+        }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("하루 시작", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("혈압약 판정 고치기").performClick()
+        waitFor("오늘 기록")
+        click("지금 먹었어")
+        compose.waitUntil(10_000) { started.isCompleted }
+        compose.onNodeWithText("지금 먹었어").assertIsNotEnabled()
+        release.complete(Unit)
+        waitFor("09:30에 먹음")
+        compose.onNodeWithText("기록 취소").assertIsEnabled()
+        assertEquals(1, rows(seed.pressure!!).count { it.isActive && it.periodKey == "2026-11-12" })
+    }
+
+    /** Once a chosen time is submitted, the picker keeps that choice until the write finishes. */
+    @Test
+    fun picker_cannot_change_while_the_write_is_pending() {
+        app.seedWeek(family = true)
+        val started = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val activity = controller!!.get()
+        activity.setContent {
+            App(
+                open = { app.container.core() },
+                onDataChanged = { started.complete(Unit); release.await() },
+                phone = AndroidPhone(activity),
+            )
+        }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("하루 시작", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("혈압약 판정 고치기").performClick()
+        waitFor("오늘 기록")
+        click("먹은 시각 고르기")
+        pick("8시")
+        pick("40분")
+        click("이 시각으로 기록")
+        compose.waitUntil(10_000) { started.isCompleted }
+        cell("8시").assertIsNotEnabled()
+        cell("45분").assertIsNotEnabled()
+        compose.onNodeWithText("이 시각으로 기록").assertIsNotEnabled()
+        release.complete(Unit)
+        waitFor("08:40에 먹음")
+    }
+
+    /** A time edit that offers two dates keeps its date choice fixed while saving. */
+    @Test
+    fun picker_date_cannot_change_while_the_write_is_pending() {
+        app.seedWeek(family = false)
+        val started = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val activity = controller!!.get()
+        activity.setContent {
+            App(
+                open = { app.container.core() },
+                onDataChanged = { started.complete(Unit); release.await() },
+                phone = AndroidPhone(activity),
+            )
+        }
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("하루 시작", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("아침약 판정 고치기").performClick()
+        waitFor("08:02에 먹음")
+        click("먹은 시각 고치기")
+        waitFor("이 시각으로 고치기")
+        pick("40분")
+        click("이 시각으로 고치기")
+        compose.waitUntil(10_000) { started.isCompleted }
+        cell("11월 11일 수요일").assertIsNotEnabled()
+        cell("8시").assertIsNotEnabled()
+        cell("45분").assertIsNotEnabled()
+        compose.onNodeWithText("이 시각으로 고치기").assertIsNotEnabled()
+        release.complete(Unit)
+        waitFor("08:40에 먹음")
     }
 
     /** SCR-007#normal in today's window: [지금 먹었어] records now (REQ-006), and a time edit to yesterday moves the dose. */
@@ -342,6 +734,8 @@ class JudgeScreenTest {
         waitFor("이 시각으로 기록")
         cell("8시").assertIsSelected()
         cell("40분").assertIsSelected()
+        // At 200% the confirm button can sit beneath the system navigation area; scroll the following button into view first.
+        compose.onNodeWithText("취소").performScrollTo()
         click("이 시각으로 기록")
         waitFor("08:40에 먹음")
     }
@@ -376,7 +770,10 @@ class JudgeScreenTest {
         compose.waitUntil(10_000) { compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
 
     private fun click(text: String) {
-        compose.onNodeWithText(text).performScrollTo().performClick()
+        compose.waitUntil(10_000) { compose.onAllNodes(hasText(text) and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText(text).performScrollTo()
+        compose.waitForIdle()
+        compose.onNodeWithText(text).assertIsDisplayed().performClick()
     }
 
     /** A date, hour or minute of the picker, by what TalkBack reads (`21시`, `40분`, `11월 11일 수요일`). */

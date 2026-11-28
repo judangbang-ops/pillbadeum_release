@@ -79,7 +79,7 @@ private enum class Picking { RECORD, EDIT, CHANGE }
  * the app's clock: the picker offers times up to when it opened.
  */
 @Composable
-internal fun JudgeScreen(state: JudgeState, message: String?, zone: TimeZone, clock: () -> Instant, actions: JudgeActions) {
+internal fun JudgeScreen(state: JudgeState, message: String?, zone: TimeZone, clock: () -> Instant, actions: JudgeActions, busy: Boolean) {
     val cell = (state as? JudgeState.Ready)?.cell
     Column(Modifier.fillMaxSize()) {
         TopBar(cell?.let(Labels::judgeTitle) ?: "판정 고치기", navigation = { BarIconButton("뒤로", close = false, actions.back) })
@@ -96,7 +96,7 @@ internal fun JudgeScreen(state: JudgeState, message: String?, zone: TimeZone, cl
                 )
                 ActionButton("다시 시도", ButtonLook.Ink, actions.retry)
             }
-            is JudgeState.Ready -> JudgeBody(state.cell, message, zone, clock, actions)
+            is JudgeState.Ready -> JudgeBody(state.cell, message, zone, clock, actions, busy)
         }
     }
 }
@@ -106,7 +106,7 @@ internal fun JudgeScreen(state: JudgeState, message: String?, zone: TimeZone, cl
  * and starts again when the cell's judgment changes: a write that landed closes the picker and the question.
  */
 @Composable
-private fun JudgeBody(cell: JudgeCell, message: String?, zone: TimeZone, clock: () -> Instant, actions: JudgeActions) {
+private fun JudgeBody(cell: JudgeCell, message: String?, zone: TimeZone, clock: () -> Instant, actions: JudgeActions, busy: Boolean) {
     val judgment = cell.judgment
     val judgmentKey = judgment?.id ?: ""
     var picking by rememberSaveable(judgmentKey) { mutableStateOf<String?>(null) }
@@ -134,6 +134,7 @@ private fun JudgeBody(cell: JudgeCell, message: String?, zone: TimeZone, clock: 
                     preferLast = cell.current,
                     solid = personLook(cell.person.color).solid,
                     large = large,
+                    busy = busy,
                     onConfirm = { time ->
                         when (kind) {
                             Picking.RECORD -> actions.recordAt(time)
@@ -148,6 +149,7 @@ private fun JudgeBody(cell: JudgeCell, message: String?, zone: TimeZone, clock: 
                     cell = cell,
                     zone = zone,
                     actions = actions,
+                    busy = busy,
                     onPick = {
                         pickOpenedAt = clock().toEpochMilliseconds()
                         picking = it.name
@@ -172,6 +174,7 @@ private fun JudgeBody(cell: JudgeCell, message: String?, zone: TimeZone, clock: 
                     "기록은 지워지지 않고 이력에 남아요."
             },
             confirm = if (skip && !clockQuestion) "건너뜀 취소" else "기록 취소",
+            confirmEnabled = !busy,
             onConfirm = {
                 ask = null
                 if (clockQuestion) actions.cancelClock() else actions.void()
@@ -217,14 +220,14 @@ private fun JudgeTile(cell: JudgeCell, zone: TimeZone) {
 
 /** The buttons for the cell's judgment (screens.md SCR-007 table, 09 Judge and JudgeTaken, TASK-044 drawings). */
 @Composable
-private fun Choices(cell: JudgeCell, zone: TimeZone, actions: JudgeActions, onPick: (Picking) -> Unit, onAsk: (String) -> Unit) {
+private fun Choices(cell: JudgeCell, zone: TimeZone, actions: JudgeActions, busy: Boolean, onPick: (Picking) -> Unit, onAsk: (String) -> Unit) {
     val solid = personLook(cell.person.color).solid
     val judgment = cell.judgment
     // SCR-007#future (REQ-009, supplement C-3): the warning and its two answers; a locked cell keeps only [그대로 두기].
     if (cell.clockWarning && judgment != null) {
         Band(Labels.clockWarning(judgment, zone), Modifier.padding(top = 20.dp)) {
-            ActionButton("그대로 두기", ButtonLook.InkSmall, actions.keepClock)
-            if (!cell.locked) ActionButton("기록 취소", ButtonLook.LineSmall, { onAsk(ASK_CLOCK) })
+            ActionButton("그대로 두기", ButtonLook.InkSmall, actions.keepClock, enabled = !busy)
+            if (!cell.locked) ActionButton("기록 취소", ButtonLook.LineSmall, { onAsk(ASK_CLOCK) }, enabled = !busy)
         }
     }
     if (cell.locked) {
@@ -236,14 +239,14 @@ private fun Choices(cell: JudgeCell, zone: TimeZone, actions: JudgeActions, onPi
     Column(Modifier.fillMaxWidth().padding(top = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         when {
             judgment == null -> {
-                if (cell.current) ActionButton("지금 먹었어", ButtonLook.person(solid), actions.recordNow)
-                ActionButton("먹은 시각 고르기", if (cell.current) ButtonLook.Line else ButtonLook.person(solid), { onPick(Picking.RECORD) })
-                ActionButton("건너뜀", ButtonLook.Line, actions.skip)
+                if (cell.current) ActionButton("지금 먹었어", ButtonLook.person(solid), actions.recordNow, enabled = !busy)
+                ActionButton("먹은 시각 고르기", if (cell.current) ButtonLook.Line else ButtonLook.person(solid), { onPick(Picking.RECORD) }, enabled = !busy)
+                ActionButton("건너뜀", ButtonLook.Line, actions.skip, enabled = !busy)
             }
             cell.isTaken -> {
-                ActionButton("먹은 시각 고치기", ButtonLook.Line, { onPick(Picking.EDIT) })
+                ActionButton("먹은 시각 고치기", ButtonLook.Line, { onPick(Picking.EDIT) }, enabled = !busy)
                 // With a clock warning the band's [기록 취소] is the one (C-3).
-                if (!cell.clockWarning) ActionButton("기록 취소", ButtonLook.Danger, { onAsk(ASK_VOID) })
+                if (!cell.clockWarning) ActionButton("기록 취소", ButtonLook.Danger, { onAsk(ASK_VOID) }, enabled = !busy)
             }
             else -> {
                 // A cut cell's window is the new version's: its skip can only be cancelled (P-8).
@@ -252,9 +255,10 @@ private fun Choices(cell: JudgeCell, zone: TimeZone, actions: JudgeActions, onPi
                         "먹었어로 바꾸기",
                         ButtonLook.person(solid),
                         { if (cell.current) actions.takeInstead(null) else onPick(Picking.CHANGE) },
+                        enabled = !busy,
                     )
                 }
-                if (!cell.clockWarning) ActionButton("건너뜀 취소", ButtonLook.Danger, { onAsk(ASK_VOID) })
+                if (!cell.clockWarning) ActionButton("건너뜀 취소", ButtonLook.Danger, { onAsk(ASK_VOID) }, enabled = !busy)
             }
         }
         Note(Labels.judgeNote(cell, zone), Modifier.padding(top = 4.dp).padding(horizontal = 4.dp))
@@ -275,6 +279,7 @@ private fun TimePicker(
     preferLast: Boolean,
     solid: Color,
     large: Boolean,
+    busy: Boolean,
     onConfirm: (Instant) -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -301,7 +306,7 @@ private fun TimePicker(
         if (dates.size > 1) {
             PickLabel("날짜")
             PickGrid(dates, columns = if (large) 1 else 2) { d, modifier ->
-                TimeCell(Labels.date(d), Labels.longDate(d), d == date, enabled = true, modifier) {
+                TimeCell(Labels.date(d), Labels.longDate(d), d == date, enabled = !busy, modifier) {
                     dateText = d.toString()
                     if (hour !in range.hours(d)) hour = NONE
                     if (hour == NONE || minute !in range.minutes(d, hour)) minute = NONE
@@ -310,7 +315,7 @@ private fun TimePicker(
         }
         PickLabel("시")
         PickGrid(hours, columns = if (large) 4 else 6) { h, modifier ->
-            TimeCell(two(h), "${h}시", h == hour, enabled = true, modifier) {
+            TimeCell(two(h), "${h}시", h == hour, enabled = !busy, modifier) {
                 hour = h
                 if (minute !in range.minutes(date, h)) minute = NONE
             }
@@ -319,7 +324,7 @@ private fun TimePicker(
         PickGrid(PickRange.MINUTES, columns = if (large) 4 else 6) { m, modifier ->
             // Before an hour is chosen every minute can be; afterwards only that hour's.
             val allowed = hour == NONE || m in minutes
-            TimeCell(two(m), "${m}분", m == minute, enabled = allowed, modifier) { minute = m }
+            TimeCell(two(m), "${m}분", m == minute, enabled = !busy && allowed, modifier) { minute = m }
         }
         Column(Modifier.fillMaxWidth().padding(top = 8.dp, start = 4.dp, end = 4.dp)) {
             Words("고른 시각", Ui.type(14, color = Ui.Muted))
@@ -334,7 +339,7 @@ private fun TimePicker(
             Picking.EDIT -> "이 시각으로 고치기"
             Picking.CHANGE -> "이 시각으로 바꾸기"
         }
-        ActionButton(confirm, ButtonLook.person(solid), { chosen?.takeUnless { unchanged }?.let(onConfirm) }, enabled = chosen != null && !unchanged)
+        ActionButton(confirm, ButtonLook.person(solid), { chosen?.takeUnless { unchanged }?.let(onConfirm) }, enabled = !busy && chosen != null && !unchanged)
         ActionButton("취소", ButtonLook.Line, onCancel)
     }
 }

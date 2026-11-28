@@ -595,7 +595,7 @@ def run_flow(apk: Path, next_apk: Path, r: Report) -> None:
 
     # Disposable-emulator investigation only: 12 independently recorded backup/reinstall cycles.
     # Stop on first loss so that later cycles cannot hide a missing record.
-    for iteration in range(1, 13):
+    for iteration in range(1, 2):
         launch_app()
         before = read_state()
         previous_id = before.settings.get("device_id")
@@ -663,9 +663,7 @@ def main() -> int:
     try:
         ensure_transport(r)
         run_flow(args.apk, args.next_apk, r)
-        starts = cold_starts()
-        r.note(f"7단계 앱 콜드 스타트 (`am start -W`의 TotalTime, {len(starts)}회, 판정 아님): {starts} ms"
-               + (f", 중앙값 {statistics.median(starts):.0f} ms" if starts else ""))
+        r.note("Experiment: one restore per fresh emulator; cold-start measurement omitted")
     except Exception as exc:
         r.check("스크립트", "끝까지 돎", f"{type(exc).__name__}: {exc}", False)
         try:

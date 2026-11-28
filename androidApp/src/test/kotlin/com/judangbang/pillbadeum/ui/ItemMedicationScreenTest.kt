@@ -194,6 +194,26 @@ class ItemMedicationScreenTest {
     }
 
     @Test
+    fun stale_save_callback_after_navigation_does_not_create_a_second_item() {
+        openWithItem()
+        text("항목 추가").performClick()
+        compose.onNode(hasSetTextAction() and hasContentDescription("항목 이름")).performTextReplacement("저녁약")
+        text("약 더하기").performScrollTo().performClick()
+        name(1).performTextReplacement("예시정")
+        text("저장").performSemanticsAction(SemanticsActions.OnClick) { save ->
+            save()
+            compose.waitUntil(10_000) { compose.spokenTexts().any { it.contains("저녁약") } }
+            // Keep the original callback to model a delayed second activation of the departed form.
+            save()
+        }
+        compose.waitForIdle()
+        val items = runBlocking { core.db.intakeDao().listActive() }
+        assertEquals(2, items.size)
+        val created = items.single { it.name == "저녁약" }
+        assertEquals(listOf("예시정"), stored(created.id).map { it.name })
+    }
+
+    @Test
     fun pasting_over_the_limits_keeps_whole_code_points_and_explains_the_limit() {
         val id = openWithItem()
         edit()
